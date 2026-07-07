@@ -21,12 +21,12 @@ Frameless, always-on-top, draggable vertical strip, 320×640 (resizable 280–42
 
 ## Areas & Monsters (10 monsters, 4 tiers)
 
-| Area | Monsters | Gate |
-|---|---|---|
-| Lumbry Meadows | Chicken, Cow, Goblin | none |
+| Area            | Monsters                     | Gate             |
+| --------------- | ---------------------------- | ---------------- |
+| Lumbry Meadows  | Chicken, Cow, Goblin         | none             |
 | Darkroot Forest | Wolf, Goblin Warrior, Bandit | ~cmb 10 / bronze |
-| Old Sewers | Giant Rat, Zombie, Skeleton | ~cmb 25 / iron |
-| Bone Crypt | Crypt Shade (mini-boss) | ~cmb 40 / steel |
+| Old Sewers      | Giant Rat, Zombie, Skeleton  | ~cmb 25 / iron   |
+| Bone Crypt      | Crypt Shade (mini-boss)      | ~cmb 40 / steel  |
 
 Each tier roughly doubles Monster HP/damage. Locked Areas stay visible (the carrot).
 
@@ -34,7 +34,7 @@ Each tier roughly doubles Monster HP/damage. Locked Areas stay visible (the carr
 
 - Five Gear Slots: weapon, shield, head, body, legs. Bonuses: attack / strength / defence.
 - Gear Tiers: bronze → iron → steel → mithril, sourced from Drop Tables by Area tier.
-- Drop Table bands per Monster: guaranteed (bones → gold), common (gold, Food), uncommon (Equipment), rare (uniques ~1/128–1/512, e.g. Crypt Shade's *Shade Blade*). Rare Drops get a visual flash + Loot Feed highlight.
+- Drop Table bands per Monster: guaranteed (bones → gold), common (gold, Food), uncommon (Equipment), rare (uniques ~1/128–1/512, e.g. Crypt Shade's _Shade Blade_). Rare Drops get a visual flash + Loot Feed highlight.
 - Inventory list, equip-on-click, auto-sell-duplicates toggle. Gold has no sink in v1 (shop is v2).
 
 ## UI layout (top → bottom)

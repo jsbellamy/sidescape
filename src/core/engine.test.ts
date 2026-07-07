@@ -232,11 +232,7 @@ describe("save/load", () => {
     for (let i = 0; i < 500; i++) original.tick();
     const saved = original.snapshot();
 
-    const restored = createEngine(
-      fixtureContent,
-      seededRng(1),
-      JSON.parse(JSON.stringify(saved)),
-    );
+    const restored = createEngine(fixtureContent, seededRng(1), JSON.parse(JSON.stringify(saved)));
     const snap = restored.snapshot();
     expect(snap.player.skills).toEqual(saved.player.skills);
     expect(snap.player.equipment).toEqual(saved.player.equipment);

@@ -12,16 +12,20 @@ const xpTable: number[] = (() => {
 
 /** Total XP required to reach `level` (RuneScape curve). */
 export function xpForLevel(level: number): number {
-  if (level < 1 || level > MAX_LEVEL) {
-    throw new RangeError(`level must be 1..${MAX_LEVEL}, got ${level}`);
+  if (!Number.isInteger(level) || level < 1 || level > MAX_LEVEL) {
+    throw new RangeError(`level must be an integer 1..${MAX_LEVEL}, got ${level}`);
   }
-  return xpTable[level];
+  const xp = xpTable[level];
+  if (xp === undefined) throw new RangeError(`no XP entry for level ${level}`);
+  return xp;
 }
 
 /** Level (1–99) for a given total XP amount. */
 export function levelForXp(xp: number): number {
   let level = 1;
-  while (level < MAX_LEVEL && xp >= xpTable[level + 1]) {
+  while (level < MAX_LEVEL) {
+    const next = xpTable[level + 1];
+    if (next === undefined || xp < next) break;
     level++;
   }
   return level;

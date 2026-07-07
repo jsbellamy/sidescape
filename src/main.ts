@@ -78,7 +78,10 @@ function render(): void {
     .join("");
 
   el("#equipment").innerHTML = Object.entries(player.equipment)
-    .map(([slot, itemId]) => `<li><span class="slot">${slot}</span> ${itemId ? itemName(itemId) : "—"}</li>`)
+    .map(
+      ([slot, itemId]) =>
+        `<li><span class="slot">${slot}</span> ${itemId ? itemName(itemId) : "—"}</li>`,
+    )
     .join("");
 }
 
@@ -125,7 +128,9 @@ window.addEventListener("DOMContentLoaded", () => {
       <ul id="feed"></ul>
     </section>`;
 
-  engine.on("kill", (e) => feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`));
+  engine.on("kill", (e) =>
+    feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`),
+  );
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));
   engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
@@ -133,7 +138,7 @@ window.addEventListener("DOMContentLoaded", () => {
   engine.on("levelup", () => buildPicker()); // gate flags may change
 
   el("#picker").addEventListener("click", (event) => {
-    const id = (event.target as HTMLElement).dataset.monster;
+    const id = (event.target as HTMLElement).dataset["monster"];
     if (id) {
       engine.selectMonster(id);
       render();
@@ -141,7 +146,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   el("#inventory").addEventListener("click", (event) => {
-    const itemId = (event.target as HTMLElement).closest("li")?.dataset.item;
+    const itemId = (event.target as HTMLElement).closest("li")?.dataset["item"];
     const def = content.items.find((i) => i.id === itemId);
     if (itemId && def?.kind === "equipment") {
       engine.equip(itemId);
