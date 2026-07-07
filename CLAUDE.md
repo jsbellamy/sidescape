@@ -22,7 +22,7 @@ Read `CONTEXT.md` for the domain language (Area, Monster, Drop Table, Tick, …)
 
 ### Issue tracker
 
-Issues live as local markdown under `.scratch/<feature>/` (solo project, no remote). See `docs/agents/issue-tracker.md`.
+Issues live on GitHub (`jsbellamy/sidescape`) via the `gh` CLI; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
