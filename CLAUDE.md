@@ -18,6 +18,15 @@ Read `CONTEXT.md` for the domain language (Area, Monster, Drop Table, Tick, …)
 - `src/ui/` — DOM renderers subscribed to core events. CSS animations for damage splats / toasts.
 - Game loop: `setInterval` driving 600ms core Ticks.
 
+## Working conventions
+
+- **Test-first.** Every Engine change goes through /tdd at its interface (`createEngine` → tick/commands/snapshot/events) with fixture Content + seeded Rng; pure math with independent worked examples may keep direct unit tests (ADR-0001). UI behavior is verified by DOM integration tests.
+- **Branch per issue**: `issue-<N>-<slug>` off `main`. Finish with a PR whose body includes `Closes #<N>`; CI (typecheck + tests) must be green before merge. Never bypass the pre-commit hook (`--no-verify` is not acceptable).
+- **Run before pushing**: `npm run typecheck` and `npm test`.
+- **Toolchain**: `npm test`/`typecheck` need only Node. `npm run tauri dev` also needs Rust (`source ~/.cargo/env` if `cargo` is missing). If `gh` isn't on PATH, it's at `/opt/homebrew/bin/gh`.
+- **Subagents**: spawn implementation subagents as the `issue-implementer` agent type (pinned to Sonnet, effort ≤ high). Never run a subagent on Fable or above high effort.
+- **Assets** must be CC0 with provenance recorded in `docs/assets.md`.
+
 ## Agent skills
 
 ### Issue tracker
