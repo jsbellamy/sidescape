@@ -2,6 +2,7 @@ import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./co
 import { levelForXp, xpForLevel } from "./xp";
 import type {
   EquipmentDef,
+  FoodDef,
   MonsterDef,
   CombatStyle,
   Content,
@@ -23,6 +24,7 @@ interface State {
   respawnTicksLeft: number;
   playerCooldown: number;
   monsterCooldown: number;
+  regenTicks: number;
 }
 
 type EventHandler<T extends EngineEvent["type"]> = (
@@ -34,12 +36,15 @@ export interface Engine {
   selectMonster(monsterId: string): void;
   setCombatStyle(style: CombatStyle): void;
   equip(itemId: string): void;
+  eatFood(itemId: string): void;
   snapshot(): Snapshot;
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
 }
 
 const UNARMED_SPEED = 4;
 const RESPAWN_TICKS = 8;
+/** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
+const REGEN_TICKS = 10;
 
 export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
   const state: State = {
@@ -62,6 +67,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     respawnTicksLeft: 0,
     playerCooldown: 0,
     monsterCooldown: 0,
+    regenTicks: 0,
   };
 
   const handlers = new Map<string, ((event: EngineEvent) => void)[]>();
@@ -209,22 +215,44 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.hp = Math.max(0, state.hp - damage);
   }
 
+  /** Eats one unit of `food`, healing without overheal; returns HP restored. */
+  function eat(food: FoodDef): number {
+    const healed = Math.min(food.heals, maxHp() - state.hp);
+    state.hp += healed;
+    const remaining = (state.inventory.get(food.id) ?? 0) - 1;
+    if (remaining > 0) state.inventory.set(food.id, remaining);
+    else state.inventory.delete(food.id);
+    emit({ type: "food-eaten", itemId: food.id, healed });
+    return healed;
+  }
+
   function autoEat(): void {
     while (state.hp < maxHp() / 2) {
       const food = content.items.find(
         (item) => item.kind === "food" && (state.inventory.get(item.id) ?? 0) > 0,
       );
       if (!food || food.kind !== "food") return;
-      const healed = Math.min(food.heals, maxHp() - state.hp);
-      state.hp += healed;
-      const remaining = (state.inventory.get(food.id) ?? 0) - 1;
-      if (remaining > 0) state.inventory.set(food.id, remaining);
-      else state.inventory.delete(food.id);
-      emit({ type: "food-eaten", itemId: food.id, healed });
+      eat(food);
+    }
+  }
+
+  /** Passive regen: 1 HP per REGEN_TICKS while below max HP; paused during Respawn. */
+  function regen(): void {
+    if (state.respawnTicksLeft > 0) return;
+    if (state.hp >= maxHp()) {
+      state.regenTicks = 0;
+      return;
+    }
+    state.regenTicks += 1;
+    if (state.regenTicks >= REGEN_TICKS) {
+      state.regenTicks = 0;
+      state.hp = Math.min(maxHp(), state.hp + 1);
     }
   }
 
   function tick(): void {
+    regen();
+
     if (state.selectedMonsterId === null) return;
 
     if (state.respawnTicksLeft > 0) {
@@ -289,6 +317,14 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         state.inventory.set(previous, (state.inventory.get(previous) ?? 0) + 1);
       }
       state.equipment[def.slot] = itemId;
+    },
+    eatFood(itemId) {
+      const def = content.items.find((i) => i.id === itemId);
+      if (!def) throw new Error(`unknown item: ${itemId}`);
+      if (def.kind !== "food") throw new Error(`${def.name} is not Food`);
+      const owned = state.inventory.get(itemId) ?? 0;
+      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+      eat(def);
     },
     on(type, handler) {
       const list = handlers.get(type) ?? [];
