@@ -4,7 +4,6 @@ import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
-import { xpForLevel } from "../core/xp";
 import { mountApp } from "./app";
 
 function mount(seed: number) {
