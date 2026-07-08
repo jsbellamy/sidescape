@@ -353,6 +353,126 @@ describe("Auto-eat threshold selector", () => {
   });
 });
 
+describe("XP progress bars", () => {
+  it("shows a fill bar at 0% right at a level threshold", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
+    expect(fill?.style.width).toBe("0%");
+  });
+
+  it("shows a fill bar approaching 100% just below the next level threshold", () => {
+    const nextFloor = xpForLevel(11);
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { hitpoints: { level: 10, xp: nextFloor - 1 } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
+    expect(fill?.style.width).toBe("99%");
+  });
+
+  it("bar fill changes after XP-granting Ticks", () => {
+    const { engine, root, app } = mount(7);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    const before = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill')
+      ?.style.width;
+
+    for (let i = 0; i < 400; i++) engine.tick();
+    app.render();
+
+    const after = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill')?.style
+      .width;
+    expect(after).not.toBe(before);
+  });
+
+  it("shows exact XP in a tooltip on the Skill chip", () => {
+    const { engine, root } = mount(1);
+    const xp = Math.floor(engine.snapshot().player.skills.attack.xp);
+
+    const attackSkill = root.querySelector<HTMLElement>('[data-skill="attack"]');
+    expect(attackSkill?.title).toBe(`attack: ${xp} xp`);
+  });
+});
+
+describe("Panel tabs", () => {
+  function tabButtons(root: HTMLElement) {
+    return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
+  }
+
+  it("renders one tab per panel — Loot Feed, Equipment, Inventory — Loot Feed active by default", () => {
+    const { root } = mount(1);
+    const buttons = tabButtons(root);
+    expect(buttons.map((b) => b.textContent)).toEqual(["Loot Feed", "Equipment", "Inventory"]);
+
+    const active = buttons.filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["tab"]).toBe("loot");
+  });
+
+  it("only the active tab's panel is visible on mount", () => {
+    const { root } = mount(1);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="equipment"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
+  });
+
+  it("clicking a tab swaps the visible panel and highlights the clicked tab", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-tab="equipment"]')?.click();
+
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="equipment"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
+
+    const active = tabButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["tab"]).toBe("equipment");
+  });
+
+  it("the active tab persists visually across re-renders", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-tab="inventory"]')?.click();
+
+    engine.tick();
+    app.render();
+
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(false);
+    const active = tabButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active[0]?.dataset["tab"]).toBe("inventory");
+  });
+
+  it("existing panel content (Equipment, Inventory, Loot Feed) still renders inside its tab panel", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#equipment")).not.toBeNull();
+    expect(root.querySelector("#inventory")).not.toBeNull();
+    expect(root.querySelector("#feed")).not.toBeNull();
+    expect(root.querySelector("#gold")).not.toBeNull();
+  });
+});
+
 describe("Fishing", () => {
   it("renders a 🎣 Fishing Spot button under each Area, disabled when locked", () => {
     const { root } = mount(1);

@@ -1,6 +1,13 @@
 import type { Engine } from "../core/engine";
 import { SKILL_NAMES } from "../core/types";
-import type { AutoEatThreshold, CombatStyle, Content, DropTableEntry } from "../core/types";
+import type {
+  AutoEatThreshold,
+  CombatStyle,
+  Content,
+  DropTableEntry,
+  SkillSnapshot,
+} from "../core/types";
+import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
 
 /** Renders a per-kill chance as a short human-readable fraction (e.g. "1/24") when the chance
@@ -27,6 +34,28 @@ const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
   0.75: "75%",
 };
 
+/** Fraction (0..1) of the way a Skill's XP is from its current level's threshold to the next
+ * level's threshold. Skills at MAX_LEVEL have no next threshold, so the bar reads full. */
+function skillProgress(skill: SkillSnapshot): number {
+  if (skill.level >= MAX_LEVEL) return 1;
+  const floor = xpForLevel(skill.level);
+  const ceil = xpForLevel(skill.level + 1);
+  return (skill.xp - floor) / (ceil - floor);
+}
+
+/**
+ * One entry per panel tab. The tab strip, click handling, and show/hide logic below are generic
+ * over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28) means
+ * adding an entry here plus a matching `[data-tab-panel]` section in the `#tab-panels` markup;
+ * no other code in this file needs to change.
+ */
+const TABS = [
+  { id: "loot", label: "Loot Feed" },
+  { id: "equipment", label: "Equipment" },
+  { id: "inventory", label: "Inventory" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
 export interface MountedApp {
   /** Re-renders the scene from the Engine's current Snapshot. Call after every `engine.tick()`. */
@@ -39,6 +68,18 @@ export interface MountedApp {
  * calls the returned `render()` to reflect the new Snapshot.
  */
 export function mountApp(engine: Engine, root: HTMLElement, content: Content): MountedApp {
+  let activeTab: TabId = TABS[0].id;
+
+  /** Shows the active tab's panel and hides the rest; highlights the matching tab button. */
+  function renderTabs(): void {
+    root.querySelectorAll<HTMLButtonElement>("#tab-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["tab"] === activeTab);
+    });
+    root.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset["tabPanel"] !== activeTab;
+    });
+  }
+
   function itemName(itemId: string): string {
     return content.items.find((i) => i.id === itemId)?.name ?? itemId;
   }
@@ -134,13 +175,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       monsterStats.textContent = "";
     }
 
-    el("#xp-row").innerHTML = SKILL_NAMES.map(
-      (skill) =>
-        `<div class="skill" title="${skill}: ${Math.floor(player.skills[skill].xp)} xp">
+    el("#xp-row").innerHTML = SKILL_NAMES.map((skill) => {
+      const s = player.skills[skill];
+      const pct = Math.floor(skillProgress(s) * 100);
+      return `<div class="skill" data-skill="${skill}" title="${skill}: ${Math.floor(s.xp)} xp">
              <span class="skill-abbr">${skill.slice(0, 3).toUpperCase()}</span>
-             <span class="skill-level">${player.skills[skill].level}</span>
-           </div>`,
-    ).join("");
+             <span class="skill-level">${s.level}</span>
+             <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
+           </div>`;
+    }).join("");
 
     const gold = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
     el("#gold").textContent = `🪙 ${gold}`;
@@ -217,12 +260,22 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     <section id="xp-row"></section>
     <section id="picker"></section>
     <section id="panels">
-      <p class="panel-title">Equipment <span id="gold"></span></p>
-      <ul id="equipment"></ul>
-      <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
-      <ul id="inventory"></ul>
-      <p class="panel-title">Loot Feed</p>
-      <ul id="feed"></ul>
+      <div id="tab-row" class="tab-row">
+        ${TABS.map((tab) => `<button data-tab="${tab.id}">${tab.label}</button>`).join("")}
+      </div>
+      <div id="tab-panels">
+        <div data-tab-panel="loot" class="tab-panel">
+          <ul id="feed"></ul>
+        </div>
+        <div data-tab-panel="equipment" class="tab-panel">
+          <p class="panel-title">Equipment <span id="gold"></span></p>
+          <ul id="equipment"></ul>
+        </div>
+        <div data-tab-panel="inventory" class="tab-panel">
+          <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
+          <ul id="inventory"></ul>
+        </div>
+      </div>
     </section>`;
 
   engine.on("kill", (e) =>
@@ -249,6 +302,14 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     if (raw !== undefined) {
       engine.setAutoEatThreshold(Number(raw) as AutoEatThreshold);
       render();
+    }
+  });
+
+  el("#tab-row").addEventListener("click", (event) => {
+    const tab = (event.target as HTMLElement).dataset["tab"] as TabId | undefined;
+    if (tab) {
+      activeTab = tab;
+      renderTabs();
     }
   });
 
@@ -291,6 +352,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   buildPicker();
   render();
+  renderTabs();
 
   return { render };
 }
