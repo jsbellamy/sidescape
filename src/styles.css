@@ -152,6 +152,33 @@ body {
   text-shadow: 0 1px 2px #000;
 }
 
+.style-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.style-row button {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.style-row button:hover {
+  border-color: var(--accent);
+}
+
+.style-row button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
 #xp-row {
   display: flex;
   gap: 4px;
