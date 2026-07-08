@@ -119,6 +119,12 @@ body {
   color: var(--accent);
 }
 
+#monster-stats {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: -4px 0 6px;
+}
+
 .bar {
   position: relative;
   height: 16px;

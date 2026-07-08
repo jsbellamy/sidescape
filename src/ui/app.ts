@@ -1,7 +1,15 @@
 import type { Engine } from "../core/engine";
 import { SKILL_NAMES } from "../core/types";
-import type { AutoEatThreshold, CombatStyle, Content } from "../core/types";
+import type { AutoEatThreshold, CombatStyle, Content, DropTableEntry } from "../core/types";
 import { monsterSprite, playerSprite } from "./sprites";
+
+/** Renders a per-kill chance as a short human-readable fraction (e.g. "1/24") when the chance
+ * is (near enough) an exact reciprocal, falling back to a percentage otherwise (e.g. "30%"). */
+function formatChance(chance: number): string {
+  const inverse = 1 / chance;
+  const rounded = Math.round(inverse);
+  return Math.abs(inverse - rounded) < 0.01 ? `1/${rounded}` : `${Math.round(chance * 100)}%`;
+}
 
 /** Combat Style segmented control labels — Object.entries drives the buttons, so
  * widening `CombatStyle` (issue #7) is a compile error here, not a silent gap. */
@@ -41,6 +49,19 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     return def && def.kind !== "currency" ? def.value : undefined;
   }
 
+  /** One tooltip line per Drop Table entry: item name, quantity, band, and human-readable chance. */
+  function dropEntryLine(entry: DropTableEntry): string {
+    const chanceLabel =
+      entry.band === "guaranteed" ? "always" : `${entry.band} ${formatChance(entry.chance)}`;
+    return `${itemName(entry.itemId)} ×${entry.qty} — ${chanceLabel}`;
+  }
+
+  /** `title` tooltip text previewing a Monster's full Drop Table. */
+  function dropTableTooltip(monsterId: string): string {
+    const def = content.monsters.find((m) => m.id === monsterId);
+    return def ? def.dropTable.map(dropEntryLine).join("\n") : "";
+  }
+
   function el<T extends HTMLElement>(selector: string): T {
     return root.querySelector(selector) as T;
   }
@@ -73,15 +94,27 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
+    const monsterStats = el<HTMLElement>("#monster-stats");
     if (fishing) {
       el("#monster-name").textContent = `🎣 Fishing at ${fishing.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
+      monsterStats.hidden = true;
+      monsterStats.textContent = "";
     } else if (monster) {
       monsterBar.hidden = false;
       el("#monster-name").textContent = monster.name;
       el("#monster-hp-fill").style.width = `${(monster.hp / monster.maxHp) * 100}%`;
       el("#monster-hp-text").textContent = `${monster.hp}/${monster.maxHp}`;
+
+      const def = content.monsters.find((m) => m.id === monster.id);
+      if (def) {
+        monsterStats.textContent = `Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t`;
+        monsterStats.hidden = false;
+      } else {
+        monsterStats.textContent = "";
+        monsterStats.hidden = true;
+      }
 
       const sprite = monsterSprite(monster.id);
       if (sprite) {
@@ -97,6 +130,8 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       el("#monster-hp-fill").style.width = "0%";
       el("#monster-hp-text").textContent = "";
       monsterImg.hidden = true;
+      monsterStats.hidden = true;
+      monsterStats.textContent = "";
     }
 
     el("#xp-row").innerHTML = SKILL_NAMES.map(
@@ -141,7 +176,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         const monsterButtons = area.monsterIds
           .map((id) => {
             const def = content.monsters.find((m) => m.id === id);
-            return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"}>${def?.name ?? id}</button>`;
+            return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"} title="${dropTableTooltip(id)}">${def?.name ?? id}</button>`;
           })
           .join("");
         const spotButtons = area.fishingSpots
@@ -165,6 +200,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
       </div>
       <p id="monster-name"></p>
+      <p id="monster-stats" hidden></p>
       <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
       <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
       <div id="style-row" class="style-row">
