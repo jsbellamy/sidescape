@@ -1,5 +1,6 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
+import { validateContent } from "./validate-content";
 import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AutoEatThreshold,
@@ -63,10 +64,18 @@ function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
 }
 
 export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
+  // Fail loud on malformed Content (ADR-0001 extended to construction): every
+  // violation is collected and reported together, not just the first.
+  const violations = validateContent(content);
+  if (violations.length > 0) {
+    throw new Error(`Invalid Content:\n${violations.map((v) => `  - ${v}`).join("\n")}`);
+  }
+
   // Located once here, never by a hard-coded id: whichever Item Content declares as currency.
-  const currencyDef: CurrencyDef | undefined = content.items.find(
+  // Non-null: validateContent guarantees exactly one currency item.
+  const currencyDef: CurrencyDef = content.items.find(
     (i): i is CurrencyDef => i.kind === "currency",
-  );
+  )!;
 
   // Loads are tolerant (ADR-0001): an unrecognised or missing saved threshold falls back silently.
   const loadedThreshold = saved?.player.autoEatThreshold ?? DEFAULT_AUTO_EAT_THRESHOLD;
@@ -425,7 +434,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       eat(def);
     },
     sell(itemId, qty = 1) {
-      if (!currencyDef) throw new Error("Content defines no currency item");
+      // currencyDef is guaranteed present by validateContent (exactly one currency item).
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
       const def = content.items.find((i) => i.id === itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
