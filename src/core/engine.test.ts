@@ -1909,3 +1909,320 @@ describe("Dungeons", () => {
     });
   });
 });
+
+/** fixtureContent's Smithing fixtures: material "bar", recipe "test-sword" (1 bar -> bronze-sword,
+ * lvl 1, xp 10, craftTicks 3), and recipe "test-charm" (3 bar -> lucky-charm, lvl 20, xp 40,
+ * craftTicks 5) for gate tests independent of the level-1 recipe. */
+function smithingSnapshot(barQty: number, smithingLevel = 1, smithingXp = 0) {
+  return makeSnapshot({
+    player: {
+      inventory: [{ itemId: "bar", qty: barQty }],
+      skills: { smithing: { level: smithingLevel, xp: smithingXp } },
+    },
+  });
+}
+
+describe("Smithing", () => {
+  it("selectRecipe crafts repeatedly: consumes inputs at completion, grants output + Smithing XP, emits one item-crafted per craft, and auto-stops to idle when inputs run out", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(2));
+    const crafted: { recipeId: string; itemId: string }[] = [];
+    engine.on("item-crafted", (e) => crafted.push({ recipeId: e.recipeId, itemId: e.itemId }));
+
+    engine.selectRecipe("test-sword");
+    expect(engine.snapshot().smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" });
+
+    for (let i = 0; i < 3; i++) engine.tick(); // test-sword.craftTicks === 3
+    expect(crafted).toEqual([{ recipeId: "test-sword", itemId: "bronze-sword" }]);
+    let snap = engine.snapshot();
+    expect(snap.player.inventory.find((s) => s.itemId === "bar")?.qty).toBe(1);
+    expect(snap.player.inventory.find((s) => s.itemId === "bronze-sword")?.qty).toBe(1);
+    expect(snap.player.skills.smithing.xp).toBe(10);
+    expect(snap.smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" }); // 1 bar left: re-armed
+
+    for (let i = 0; i < 3; i++) engine.tick();
+    expect(crafted).toHaveLength(2);
+    snap = engine.snapshot();
+    expect(snap.player.inventory.find((s) => s.itemId === "bar")).toBeUndefined();
+    expect(snap.player.inventory.find((s) => s.itemId === "bronze-sword")?.qty).toBe(2);
+    expect(snap.player.skills.smithing.xp).toBe(20);
+    expect(snap.smithing).toBeNull(); // no bars left for another craft: auto-stopped to idle
+  });
+
+  it("throws on an unknown Recipe id", () => {
+    expect(() => freshEngine().selectRecipe("mithril-scimitar")).toThrow(/unknown/i);
+  });
+
+  it("throws for insufficient Smithing level", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+    expect(() => engine.selectRecipe("test-charm")).toThrow(/smithing level 20/i);
+  });
+
+  it("throws for insufficient inputs to craft even once", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(0));
+    expect(() => engine.selectRecipe("test-sword")).toThrow(/insufficient/i);
+  });
+
+  it("succeeds once Smithing level and inputs are both sufficient", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      smithingSnapshot(5, 20, xpForLevel(20)),
+    );
+    expect(() => engine.selectRecipe("test-charm")).not.toThrow();
+    expect(engine.snapshot().smithing).toEqual({ recipeId: "test-charm", name: "Test Charm" });
+  });
+
+  it("succeeds mid-Respawn: cancels it and floors hp to at least 1, mirroring selectMonster/selectFishingSpot/enterDungeon", () => {
+    const engine = createEngine(
+      fiercerDummyContent(),
+      seededRng(42),
+      makeSnapshot({ player: { inventory: [{ itemId: "bar", qty: 5 }] } }),
+    );
+    engine.selectMonster("dummy");
+    let died = false;
+    engine.on("death", () => {
+      died = true;
+    });
+    for (let i = 0; i < 5000 && !died; i++) engine.tick();
+    expect(died).toBe(true);
+    expect(engine.snapshot().player.respawning).toBe(true);
+    expect(engine.snapshot().player.hp).toBe(0);
+
+    engine.selectRecipe("test-sword");
+    const player = engine.snapshot().player;
+    expect(player.respawning).toBe(false);
+    expect(player.hp).toBeGreaterThanOrEqual(1);
+    expect(engine.snapshot().monster).toBeNull();
+    expect(engine.snapshot().smithing).not.toBeNull();
+  });
+
+  it("Smithing XP never moves combatLevel() or Area unlocks", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(200));
+    const before = engine.snapshot();
+    engine.selectRecipe("test-sword");
+    for (let i = 0; i < 3000; i++) engine.tick();
+    const after = engine.snapshot();
+
+    expect(after.player.skills.smithing.xp).toBeGreaterThan(0);
+    expect(after.player.combatLevel).toBe(before.player.combatLevel);
+    expect(after.areas.find((a) => a.id === "crypt")?.unlocked).toBe(
+      before.areas.find((a) => a.id === "crypt")?.unlocked,
+    );
+  });
+
+  describe("pinned decisions while smithing", () => {
+    function damagedSmithingSnapshot(hp: number) {
+      return makeSnapshot({
+        player: {
+          hp,
+          maxHp: 10,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          inventory: [
+            { itemId: "bar", qty: 100 },
+            { itemId: "meat", qty: 5 },
+          ],
+        },
+      });
+    }
+
+    it("passive regen continues while smithing (downtime heals)", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedSmithingSnapshot(5));
+      engine.selectRecipe("test-sword");
+      for (let i = 0; i < 9; i++) engine.tick();
+      expect(engine.snapshot().player.hp).toBe(5);
+      engine.tick();
+      expect(engine.snapshot().player.hp).toBe(6);
+    });
+
+    it("auto-eat never fires while smithing, even below the threshold with Food owned", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedSmithingSnapshot(2));
+      let ate = 0;
+      engine.on("food-eaten", () => ate++);
+      engine.selectRecipe("test-sword");
+      for (let i = 0; i < 100; i++) engine.tick();
+      expect(ate).toBe(0);
+    });
+
+    it("death cannot occur while smithing, even starting at 1 HP", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedSmithingSnapshot(1));
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      engine.selectRecipe("test-sword");
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(died).toBe(false);
+      expect(engine.snapshot().player.hp).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Four-way mutual exclusion (#28)", () => {
+    it("selecting a Recipe clears an active Monster, Fishing Spot, or Dungeon run", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+
+      engine.selectMonster("dummy");
+      expect(engine.snapshot().monster).not.toBeNull();
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().monster).toBeNull();
+      expect(engine.snapshot().smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" });
+
+      engine.selectFishingSpot("pond");
+      expect(engine.snapshot().smithing).toBeNull();
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().fishing).toBeNull();
+      expect(engine.snapshot().smithing).not.toBeNull();
+
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().smithing).toBeNull();
+      expect(engine.snapshot().dungeon).not.toBeNull();
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().dungeon).toBeNull();
+      expect(engine.snapshot().smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" });
+    });
+
+    it("selecting a Monster, a Fishing Spot, or a Dungeon each clear an active Smithing Recipe", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().smithing).not.toBeNull();
+      engine.selectMonster("dummy");
+      expect(engine.snapshot().smithing).toBeNull();
+
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().smithing).not.toBeNull();
+      engine.selectFishingSpot("pond");
+      expect(engine.snapshot().smithing).toBeNull();
+
+      engine.selectRecipe("test-sword");
+      expect(engine.snapshot().smithing).not.toBeNull();
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().smithing).toBeNull();
+    });
+  });
+
+  describe("save/load", () => {
+    it("a pre-feature save (no smithing key anywhere) loads at Smithing level 1 / 0 XP with a prior Fishing activity resumed unchanged", () => {
+      const legacySave = {
+        player: {
+          hp: 3,
+          maxHp: 3,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+            fishing: { level: 1, xp: 0 },
+            // no smithing key: simulates a save written before this feature shipped
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+        },
+        monster: null,
+        fishing: { spotId: "pond", name: "Test Pond" },
+        // no top-level smithing key either
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      const snap = restored.snapshot();
+      expect(snap.player.skills.smithing).toEqual({ level: 1, xp: 0 });
+      expect(snap.smithing).toBeNull();
+      expect(snap.fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+    });
+
+    it("a save made while smithing resumes smithing on load, re-arming the cooldown to craftTicks", () => {
+      const original = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+      original.selectRecipe("test-sword");
+      original.tick(); // 1 tick into a 3-tick cooldown; not yet due for a craft
+      const saved = original.snapshot();
+      expect(saved.smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" });
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(7),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot().smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" });
+
+      const crafted: unknown[] = [];
+      restored.on("item-crafted", (e) => crafted.push(e));
+      restored.tick();
+      restored.tick();
+      expect(crafted).toHaveLength(0); // re-armed to craftTicks (3), not resumed at 2 remaining
+      restored.tick();
+      expect(crafted).toHaveLength(1);
+    });
+
+    it("a save whose smithing names an unknown recipe id loads idle instead of throwing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ smithing: { recipeId: "mithril-scimitar", name: "?" } }),
+      );
+      expect(engine.snapshot().smithing).toBeNull();
+    });
+
+    it("a save whose smithing recipe is now under-leveled falls back to idle", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            inventory: [{ itemId: "bar", qty: 5 }],
+            skills: { smithing: { level: 1, xp: 0 } },
+          },
+          smithing: { recipeId: "test-charm", name: "Test Charm" }, // levelReq 20
+        }),
+      );
+      expect(engine.snapshot().smithing).toBeNull();
+    });
+
+    it("a save whose smithing recipe's inputs are no longer sufficient falls back to idle", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { inventory: [], skills: { smithing: { level: 1, xp: 0 } } },
+          smithing: { recipeId: "test-sword", name: "Test Sword" },
+        }),
+      );
+      expect(engine.snapshot().smithing).toBeNull();
+    });
+
+    it("a corrupted save with both a Monster and a Smithing Recipe set resumes only the Monster (mutual exclusion on load)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { inventory: [{ itemId: "bar", qty: 5 }] },
+          monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },
+          smithing: { recipeId: "test-sword", name: "Test Sword" },
+        }),
+      );
+      const snap = engine.snapshot();
+      expect(snap.monster).not.toBeNull();
+      expect(snap.smithing).toBeNull();
+    });
+
+    it("a valid Smithing Snapshot still round-trips unchanged", () => {
+      const original = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+      original.selectRecipe("test-sword");
+      for (let i = 0; i < 5; i++) original.tick();
+      const saved = original.snapshot();
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot()).toEqual(saved);
+    });
+  });
+});

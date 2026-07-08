@@ -48,6 +48,7 @@ export const content: Content = {
         { itemId: "cooked-meat", qty: 1, chance: 0.5, band: "common" },
         { itemId: "leather-body", qty: 1, chance: 1 / 20, band: "uncommon" },
         { itemId: "bronze-sword", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "bronze-bar", qty: 1, chance: 0.2, band: "common" },
       ],
     },
     {
@@ -63,6 +64,7 @@ export const content: Content = {
         { itemId: "cooked-meat", qty: 1, chance: 0.25, band: "common" },
         { itemId: "bronze-shield", qty: 1, chance: 1 / 24, band: "uncommon" },
         { itemId: "goblin-charm", qty: 1, chance: 1 / 128, band: "rare" },
+        { itemId: "bronze-bar", qty: 1, chance: 0.25, band: "common" },
       ],
     },
     {
@@ -91,6 +93,7 @@ export const content: Content = {
         { itemId: "gold", qty: 20, chance: 1, band: "guaranteed" },
         { itemId: "cooked-trout", qty: 1, chance: 0.3, band: "common" },
         { itemId: "iron-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "iron-bar", qty: 1, chance: 0.25, band: "common" },
       ],
     },
     {
@@ -106,6 +109,7 @@ export const content: Content = {
         { itemId: "cooked-trout", qty: 1, chance: 0.28, band: "common" },
         { itemId: "iron-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "iron-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
+        { itemId: "iron-bar", qty: 1, chance: 0.3, band: "common" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "meadow-depths".
@@ -229,6 +233,9 @@ export const content: Content = {
     },
     // Append-only: autoEat eats the first owned Food in this order, so never reorder above.
     { kind: "food", id: "cooked-shrimp", name: "Cooked Shrimp", heals: 3, value: 2 },
+    // Smithing materials (#28): dropped by Monsters above, consumed by recipes below.
+    { kind: "material", id: "bronze-bar", name: "Bronze Bar", value: 8 },
+    { kind: "material", id: "iron-bar", name: "Iron Bar", value: 20 },
   ],
   fishingSpots: [
     {
@@ -262,6 +269,53 @@ export const content: Content = {
         { itemId: "bronze-sword", qty: 1, chance: 1 / 3, band: "common" },
         { itemId: "goblin-charm", qty: 1, chance: 1 / 16, band: "rare" },
       ],
+    },
+  ],
+  recipes: [
+    {
+      id: "bronze-dagger",
+      name: "Bronze Dagger",
+      levelReq: 1,
+      inputs: [{ itemId: "bronze-bar", qty: 1 }],
+      outputItemId: "bronze-dagger",
+      xp: 12,
+      craftTicks: 8,
+    },
+    {
+      id: "bronze-shield",
+      name: "Bronze Shield",
+      levelReq: 5,
+      inputs: [{ itemId: "bronze-bar", qty: 2 }],
+      outputItemId: "bronze-shield",
+      xp: 25,
+      craftTicks: 10,
+    },
+    {
+      id: "bronze-sword",
+      name: "Bronze Sword",
+      levelReq: 8,
+      inputs: [{ itemId: "bronze-bar", qty: 2 }],
+      outputItemId: "bronze-sword",
+      xp: 30,
+      craftTicks: 10,
+    },
+    {
+      id: "iron-dagger",
+      name: "Iron Dagger",
+      levelReq: 15,
+      inputs: [{ itemId: "iron-bar", qty: 2 }],
+      outputItemId: "iron-dagger",
+      xp: 50,
+      craftTicks: 12,
+    },
+    {
+      id: "iron-chainbody",
+      name: "Iron Chainbody",
+      levelReq: 20,
+      inputs: [{ itemId: "iron-bar", qty: 3 }],
+      outputItemId: "iron-chainbody",
+      xp: 80,
+      craftTicks: 15,
     },
   ],
 };

@@ -35,6 +35,7 @@ function baseSnapshot(): Snapshot {
     defence: { level: 1, xp: 0 },
     hitpoints: { level: 1, xp: 0 },
     fishing: { level: 1, xp: 0 },
+    smithing: { level: 1, xp: 0 },
   };
   const combatLevel = Math.floor(
     (skills.attack.level + skills.strength.level + skills.defence.level + skills.hitpoints.level) /
@@ -61,6 +62,7 @@ function baseSnapshot(): Snapshot {
     monster: null,
     fishing: null,
     dungeon: null,
+    smithing: null,
     bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
     areas: fixtureContent.areas.map((area) => {
       // completedDungeonIds is always [] here (base defaults, before `overrides` is merged in by

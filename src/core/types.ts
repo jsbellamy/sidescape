@@ -1,5 +1,12 @@
 /** Ordered list of Skills; order is load-bearing for the XP row render order. */
-export const SKILL_NAMES = ["attack", "strength", "defence", "hitpoints", "fishing"] as const;
+export const SKILL_NAMES = [
+  "attack",
+  "strength",
+  "defence",
+  "hitpoints",
+  "fishing",
+  "smithing",
+] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
@@ -43,7 +50,33 @@ export interface CurrencyDef {
   name: string;
 }
 
-export type ItemDef = EquipmentDef | FoodDef | CurrencyDef;
+/** A Smithing input/output ingredient (e.g. a Bar). Stackable, unequippable, uneatable; sellable
+ * when it carries a `value` and always bankable, same as Food/Equipment. NOT a currency-kind
+ * item: `content.items.find(i => i.kind === "currency")` resolves THE currency, so a second
+ * currency-kind item would silently corrupt the sell-credit target. */
+export interface MaterialDef {
+  kind: "material";
+  id: string;
+  name: string;
+  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  value?: number;
+}
+
+export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef;
+
+export interface RecipeDef {
+  id: string;
+  name: string;
+  /** Smithing level required to select this Recipe. */
+  levelReq: number;
+  inputs: { itemId: string; qty: number }[];
+  /** Item produced per craft; always qty 1 (see the item-crafted event). */
+  outputItemId: string;
+  /** Smithing XP per craft. */
+  xp: number;
+  /** Ticks per craft. */
+  craftTicks: number;
+}
 
 export interface DropTableEntry {
   itemId: string;
@@ -107,6 +140,7 @@ export interface Content {
   items: ItemDef[];
   fishingSpots: FishingSpotDef[];
   dungeons: DungeonDef[];
+  recipes: RecipeDef[];
 }
 
 export type EngineEvent =
@@ -117,6 +151,7 @@ export type EngineEvent =
   | { type: "food-eaten"; itemId: string; healed: number }
   | { type: "item-sold"; itemId: string; qty: number; gold: number }
   | { type: "fish-caught"; spotId: string; itemId: string; qty: number }
+  | { type: "item-crafted"; recipeId: string; itemId: string }
   | { type: "equipped"; itemId: string }
   /** wave = 1-based cleared count (e.g. clearing the 2nd of 3 waves emits wave: 2). */
   | { type: "wave-cleared"; dungeonId: string; wave: number; totalWaves: number }
@@ -154,6 +189,9 @@ export interface Snapshot {
    * existing HP-bar rendering works untouched. 1-based wave, mid-run only — never persisted
    * across a reload (a reload is an abandon, see engine.ts's loadState). */
   dungeon: { id: string; name: string; wave: number; totalWaves: number } | null;
+  /** Sibling to monster/fishing/dungeon; at most one of the four is non-null at a time (#28's
+   * four-way mutual exclusion). Unlike dungeon, Smithing RESUMES on load like fishing does. */
+  smithing: { recipeId: string; name: string } | null;
   bank: {
     items: { itemId: string; qty: number }[];
     capacity: number;

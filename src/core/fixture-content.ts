@@ -83,6 +83,7 @@ export const fixtureContent: Content = {
       defBonus: 1,
       value: 100,
     },
+    { kind: "material", id: "bar", name: "Test Bar", value: 5 },
   ],
   fishingSpots: [
     // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting.
@@ -118,6 +119,28 @@ export const fixtureContent: Content = {
         { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
         { itemId: "bronze-sword", qty: 1, chance: 0.5, band: "common" },
       ],
+    },
+  ],
+  recipes: [
+    // Cheap and fast: 1 bar, no level gate, so most Engine tests can craft immediately.
+    {
+      id: "test-sword",
+      name: "Test Sword",
+      levelReq: 1,
+      inputs: [{ itemId: "bar", qty: 1 }],
+      outputItemId: "bronze-sword",
+      xp: 10,
+      craftTicks: 3,
+    },
+    // Behind a Smithing level gate, for gate tests independent of the level-1 recipe above.
+    {
+      id: "test-charm",
+      name: "Test Charm",
+      levelReq: 20,
+      inputs: [{ itemId: "bar", qty: 3 }],
+      outputItemId: "lucky-charm",
+      xp: 40,
+      craftTicks: 5,
     },
   ],
 };

@@ -80,6 +80,7 @@ const TABS = [
   { id: "character", label: "Character" },
   { id: "inventory", label: "Inventory" },
   { id: "bank", label: "Bank" },
+  { id: "smithing", label: "Smithing" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -147,7 +148,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   function render(): void {
     const snap = engine.snapshot();
-    const { player, monster, fishing, dungeon, bank } = snap;
+    const { player, monster, fishing, dungeon, smithing, bank } = snap;
 
     const dungeonHeader = el<HTMLElement>("#dungeon-header");
     if (dungeon) {
@@ -174,7 +175,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
-    if (fishing) {
+    if (smithing) {
+      el("#monster-name").textContent = `🔨 Smithing: ${smithing.name}`;
+      monsterImg.hidden = true;
+      monsterBar.hidden = true;
+      monsterStats.hidden = true;
+      monsterStats.textContent = "";
+    } else if (fishing) {
       el("#monster-name").textContent = `🎣 Fishing at ${fishing.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
@@ -238,7 +245,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       .map((s) => {
         const def = content.items.find((i) => i.id === s.itemId);
         const cls =
-          def?.kind === "equipment" ? "equippable" : def?.kind === "food" ? "eatable" : "";
+          def?.kind === "equipment"
+            ? "equippable"
+            : def?.kind === "food"
+              ? "eatable"
+              : def?.kind === "material"
+                ? "material"
+                : "";
         const price = sellPrice(s.itemId);
         const sellBtn =
           price !== undefined
@@ -276,6 +289,24 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           `<li data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}
              <button class="withdraw-btn" data-withdraw="${s.itemId}">Withdraw</button></li>`,
       )
+      .join("");
+
+    const owned = (itemId: string) => player.inventory.find((s) => s.itemId === itemId)?.qty ?? 0;
+    const smithingLevel = player.skills.smithing.level;
+    el("#smithing-recipes").innerHTML = content.recipes
+      .map((recipe) => {
+        const inputsLine = recipe.inputs
+          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
+          .join(", ");
+        const underLeveled = smithingLevel < recipe.levelReq;
+        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
+        const disabled = underLeveled || shortOnInputs;
+        return `<li data-recipe-row="${recipe.id}">
+                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
+                  <p class="recipe-inputs">${inputsLine}</p>
+                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
+                </li>`;
+      })
       .join("");
   }
 
@@ -371,6 +402,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           </p>
           <ul id="bank"></ul>
         </div>
+        <div data-tab-panel="smithing" class="tab-panel">
+          <p class="panel-title">Smithing</p>
+          <ul id="smithing-recipes"></ul>
+        </div>
       </div>
     </section>`;
 
@@ -383,6 +418,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
+  engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${itemName(e.itemId)}`, "craft"));
   engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
   engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
   engine.on("dungeon-completed", (e) => {
@@ -502,6 +538,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   el("#buy-slots-btn").addEventListener("click", () => {
     engine.buyBankSlots();
     feedLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
+    render();
+  });
+
+  el("#smithing-recipes").addEventListener("click", (event) => {
+    const recipeId = (event.target as HTMLElement).dataset["recipe"];
+    if (!recipeId) return;
+    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
     render();
   });
 
