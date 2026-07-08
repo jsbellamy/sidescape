@@ -1,4 +1,5 @@
 import type { Engine } from "../core/engine";
+import { SKILL_NAMES } from "../core/types";
 import type { AutoEatThreshold, CombatStyle, Content } from "../core/types";
 import { monsterSprite, playerSprite } from "./sprites";
 
@@ -98,15 +99,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       monsterImg.hidden = true;
     }
 
-    el("#xp-row").innerHTML = (["attack", "strength", "defence", "hitpoints", "fishing"] as const)
-      .map(
-        (skill) =>
-          `<div class="skill" title="${skill}: ${Math.floor(player.skills[skill].xp)} xp">
+    el("#xp-row").innerHTML = SKILL_NAMES.map(
+      (skill) =>
+        `<div class="skill" title="${skill}: ${Math.floor(player.skills[skill].xp)} xp">
              <span class="skill-abbr">${skill.slice(0, 3).toUpperCase()}</span>
              <span class="skill-level">${player.skills[skill].level}</span>
            </div>`,
-      )
-      .join("");
+    ).join("");
 
     const gold = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
     el("#gold").textContent = `🪙 ${gold}`;

@@ -1,4 +1,6 @@
-export type SkillName = "attack" | "strength" | "defence" | "hitpoints" | "fishing";
+/** Ordered list of Skills; order is load-bearing for the XP row render order. */
+export const SKILL_NAMES = ["attack", "strength", "defence", "hitpoints", "fishing"] as const;
+export type SkillName = (typeof SKILL_NAMES)[number];
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
