@@ -76,6 +76,35 @@ body {
   padding: 10px;
 }
 
+#sprite-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 24px;
+  padding: 6px 0 10px;
+}
+
+.sprite {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  animation: sprite-idle 1.8s ease-in-out infinite;
+}
+
+.sprite[hidden] {
+  display: none;
+}
+
+@keyframes sprite-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 #monster-name {
   font-weight: 600;
   margin-bottom: 6px;
