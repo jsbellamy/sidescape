@@ -109,6 +109,27 @@ export const content: Content = {
         { itemId: "iron-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
       ],
     },
+    // Dungeon-only: absent from every Area's monsterIds, fought only inside "meadow-depths".
+    {
+      id: "goblin-brute",
+      name: "Goblin Brute",
+      hp: 15,
+      attackLevel: 8,
+      defenceLevel: 5,
+      maxHit: 3,
+      attackSpeed: 4,
+      dropTable: [{ itemId: "gold", qty: 12, chance: 1, band: "guaranteed" }],
+    },
+    {
+      id: "goblin-chief",
+      name: "Goblin Chief",
+      hp: 30,
+      attackLevel: 12,
+      defenceLevel: 8,
+      maxHit: 4,
+      attackSpeed: 4,
+      dropTable: [{ itemId: "gold", qty: 20, chance: 1, band: "guaranteed" }],
+    },
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
@@ -228,6 +249,20 @@ export const content: Content = {
       xp: 50,
       catchTicks: 5,
       catchChance: 0.5,
+    },
+  ],
+  dungeons: [
+    {
+      id: "meadow-depths",
+      name: "Meadow Depths",
+      areaId: "lumbry-meadows",
+      waves: ["goblin", "goblin-brute", "goblin-chief"],
+      chest: [
+        { itemId: "gold", qty: 75, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-meat", qty: 3, chance: 1, band: "guaranteed" },
+        { itemId: "bronze-sword", qty: 1, chance: 1 / 3, band: "common" },
+        { itemId: "goblin-charm", qty: 1, chance: 1 / 16, band: "rare" },
+      ],
     },
   ],
 };

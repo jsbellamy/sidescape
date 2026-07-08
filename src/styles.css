@@ -113,6 +113,12 @@ body {
   }
 }
 
+#dungeon-header {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
 #monster-name {
   font-weight: 600;
   margin-bottom: 6px;
@@ -443,6 +449,12 @@ body {
 
 #feed .death {
   color: #d66;
+}
+
+#feed .dungeon-completed,
+#feed .chest-header {
+  color: #e6c35c;
+  font-weight: 700;
 }
 
 .hint {

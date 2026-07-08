@@ -867,3 +867,85 @@ describe("Sorting the Inventory and Bank lists (#26)", () => {
     expect(engine.snapshot().player.inventory.find((s) => s.itemId === "lucky-charm")?.qty).toBe(1); // untouched neighbor row
   });
 });
+
+describe("Dungeons", () => {
+  it("renders a ⚔ dungeon button under its Area's picker section, disabled when the Area is locked", () => {
+    const lockedDungeonContent = {
+      ...fixtureContent,
+      dungeons: [
+        ...fixtureContent.dungeons,
+        {
+          id: "crypt-dungeon",
+          name: "Crypt Dungeon",
+          areaId: "crypt",
+          waves: ["dummy"],
+          chest: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" as const }],
+        },
+      ],
+    };
+    const engine = createEngine(lockedDungeonContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, lockedDungeonContent);
+
+    const gauntletBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]');
+    expect(gauntletBtn?.textContent).toBe("⚔ The Gauntlet");
+    expect(gauntletBtn?.disabled).toBe(false); // meadow is unlocked
+
+    const cryptBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="crypt-dungeon"]');
+    expect(cryptBtn?.textContent).toBe("⚔ Crypt Dungeon");
+    expect(cryptBtn?.disabled).toBe(true); // Test Crypt requires combat level 40
+  });
+
+  it("the dungeon header is absent (hidden, no text) outside a run", () => {
+    const { root } = mount(1);
+    const header = root.querySelector<HTMLElement>("#dungeon-header");
+    expect(header?.hidden).toBe(true);
+    expect(header?.textContent).toBe("");
+  });
+
+  it("clicking a dungeon button enters it and shows the wave header above the Monster name", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]')?.click();
+
+    const header = root.querySelector<HTMLElement>("#dungeon-header");
+    expect(header?.hidden).toBe(false);
+    expect(header?.textContent).toBe("⚔ The Gauntlet — Wave 1/3");
+    expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
+  });
+
+  it("logs a 'Wave i/N cleared' feed line as each wave advances", () => {
+    const { engine, root, app } = mount(5);
+    root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]')?.click();
+
+    for (let i = 0; i < 5000 && engine.snapshot().dungeon?.wave !== 2; i++) engine.tick();
+    app.render();
+
+    expect(root.querySelector("#dungeon-header")?.textContent).toBe("⚔ The Gauntlet — Wave 2/3");
+    const feedTexts = [...root.querySelectorAll("#feed li")].map((li) => li.textContent);
+    expect(feedTexts).toContain("Wave 1/3 cleared");
+  });
+
+  it("logs dungeon-completed and chest-opened feed lines on the Boss kill, with a band-styled line per Chest item, then ejects to idle", () => {
+    const { engine, root, app } = mount(5);
+    root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]')?.click();
+
+    let completed = false;
+    engine.on("dungeon-completed", () => {
+      completed = true;
+    });
+    for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+    app.render();
+
+    const feedItems = [...root.querySelectorAll("#feed li")];
+    const feedTexts = feedItems.map((li) => li.textContent);
+    expect(feedTexts.some((t) => /the gauntlet.*cleared/i.test(t ?? ""))).toBe(true);
+    expect(feedTexts).toContain("📦 Chest opened!");
+    // The Chest's guaranteed 50 gold always lands and is band-styled like a normal Drop.
+    const goldLine = feedItems.find((li) => li.textContent?.includes("Gold"));
+    expect(goldLine?.className).toBe("drop-guaranteed");
+
+    // Ejected to idle: no more Dungeon, no Monster selected.
+    expect(root.querySelector<HTMLElement>("#dungeon-header")?.hidden).toBe(true);
+    expect(root.querySelector("#monster-name")?.textContent).toBe("Pick a monster ↓");
+  });
+});

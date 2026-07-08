@@ -56,9 +56,11 @@ function baseSnapshot(): Snapshot {
       bonuses: { atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 },
       inventory: [],
       respawning: false,
+      completedDungeonIds: [],
     },
     monster: null,
     fishing: null,
+    dungeon: null,
     bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
     areas: fixtureContent.areas.map((area) => {
       const unlocked = combatLevel >= area.combatLevelReq;
@@ -80,9 +82,9 @@ function baseSnapshot(): Snapshot {
  * Builds a complete, valid Snapshot for tests, so call sites state only the fields their
  * scenario cares about instead of hand-building the whole shape. `overrides` deep-merges onto
  * sensible defaults (full HP at level 1 across every Skill, no Gear, empty inventory, nothing
- * selected) for plain nested objects (`player`, `player.skills`, `player.equipment`); arrays
- * (`inventory`, `areas`) and nullable objects (`monster`, `fishing`) are replaced wholesale
- * when supplied.
+ * selected, no Dungeon completed) for plain nested objects (`player`, `player.skills`,
+ * `player.equipment`); arrays (`inventory`, `areas`, `completedDungeonIds`) and nullable objects
+ * (`monster`, `fishing`, `dungeon`) are replaced wholesale when supplied.
  */
 export function makeSnapshot(overrides?: DeepPartial<Snapshot>): Snapshot {
   return mergeUnknown(baseSnapshot(), overrides) as Snapshot;

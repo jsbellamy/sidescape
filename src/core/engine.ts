@@ -5,6 +5,8 @@ import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AutoEatThreshold,
   CurrencyDef,
+  DropBand,
+  DungeonDef,
   EquipmentDef,
   FishingSpotDef,
   FoodDef,
@@ -36,6 +38,8 @@ interface State {
   playerCooldown: number;
   monsterCooldown: number;
   regenTicks: number;
+  dungeonRun: { dungeonId: string; waveIndex: number } | null;
+  completedDungeonIds: Set<string>;
 }
 
 type EventHandler<T extends EngineEvent["type"]> = (
@@ -46,6 +50,7 @@ export interface Engine {
   tick(): void;
   selectMonster(monsterId: string): void;
   selectFishingSpot(spotId: string): void;
+  enterDungeon(dungeonId: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   equip(itemId: string): void;
@@ -118,6 +123,8 @@ function freshState(_content: Content): State {
     playerCooldown: 0,
     monsterCooldown: 0,
     regenTicks: 0,
+    dungeonRun: null,
+    completedDungeonIds: new Set(),
   };
 }
 
@@ -199,6 +206,16 @@ function loadBankCapacity(saved: Snapshot): number {
   return typeof raw === "number" && Number.isFinite(raw) ? raw : BANK_START_CAPACITY;
 }
 
+/** Completed-dungeon ids: keeps only entries that are strings naming a real DungeonDef, dropping
+ * anything else (unknown/renamed ids, stray non-strings) — mirrors loadInventory/loadBank's
+ * filter-to-known-ids pattern. A pre-feature save has no `completedDungeonIds` key at all. */
+function loadCompletedDungeonIds(saved: Snapshot, content: Content): Set<string> {
+  const dungeonIds = new Set(content.dungeons.map((d) => d.id));
+  const raw: unknown = saved.player?.completedDungeonIds;
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.filter((id): id is string => typeof id === "string" && dungeonIds.has(id)));
+}
+
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
  * unlike malformed Content or invalid COMMANDS). A corrupted or schema-drifted save still loads
  * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
@@ -208,8 +225,13 @@ function loadState(saved: Snapshot, content: Content): State {
   const maxHp = levelForXp(xp.hitpoints);
   const equipment = loadEquipment(saved, content);
 
+  // Mid-run Dungeon state is NEVER persisted: a reload is an abandon. A save captured mid-run
+  // ignores BOTH saved.dungeon and saved.monster — the naive path (spawnMonster(saved.monster.id))
+  // would turn a dungeon-only boss into an infinitely farmable open-world Monster.
+  const dungeonActive = saved.dungeon != null;
+
   // Activity resume: an unknown saved monster/fishing id resumes idle instead of throwing.
-  const monsterId: unknown = saved.monster?.id;
+  const monsterId: unknown = dungeonActive ? undefined : saved.monster?.id;
   const monster =
     typeof monsterId === "string" ? content.monsters.find((m) => m.id === monsterId) : undefined;
   const spotId: unknown = !monster ? saved.fishing?.spotId : undefined;
@@ -240,6 +262,8 @@ function loadState(saved: Snapshot, content: Content): State {
     playerCooldown: monster ? weaponSpeedFor(equipment.weapon, content) : 0,
     monsterCooldown: monster ? monster.attackSpeed : 0,
     regenTicks: 0,
+    dungeonRun: null,
+    completedDungeonIds: loadCompletedDungeonIds(saved, content),
   };
 }
 
@@ -280,6 +304,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   function fishingSpotDef(id: string): FishingSpotDef {
     const def = content.fishingSpots.find((s) => s.id === id);
     if (!def) throw new Error(`unknown fishing spot: ${id}`);
+    return def;
+  }
+
+  function dungeonDef(id: string): DungeonDef {
+    const def = content.dungeons.find((d) => d.id === id);
+    if (!def) throw new Error(`unknown dungeon: ${id}`);
     return def;
   }
 
@@ -326,6 +356,47 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.monsterCooldown = monsterDef(id).attackSpeed;
   }
 
+  /** Rolls every Chest entry independently (multi-roll, unlike a Drop Table's per-kill roll):
+   * adds each landed item straight to the inventory and returns it for chest-opened. No per-item
+   * `drop` events fire — Chest contents are reported only via chest-opened (mirrors fishing's
+   * single fish-caught event instead of per-item drops). */
+  function rollChest(dungeon: DungeonDef): { itemId: string; qty: number; band: DropBand }[] {
+    const items: { itemId: string; qty: number; band: DropBand }[] = [];
+    for (const entry of dungeon.chest) {
+      if (entry.chance < 1 && rng.next() >= entry.chance) continue;
+      state.inventory.set(entry.itemId, (state.inventory.get(entry.itemId) ?? 0) + entry.qty);
+      items.push({ itemId: entry.itemId, qty: entry.qty, band: entry.band });
+    }
+    return items;
+  }
+
+  /** Called from playerAttack's kill branch when a Dungeon run is active: advances to the next
+   * Wave, or — on the Boss (the last Wave) — rolls the Chest, marks the Dungeon completed, and
+   * ejects the player to idle (dungeonRun and selectedMonsterId both null). */
+  function handleDungeonKill(run: { dungeonId: string; waveIndex: number }): void {
+    const dungeon = dungeonDef(run.dungeonId);
+    const clearedWave = run.waveIndex + 1; // 1-based cleared count
+    if (clearedWave < dungeon.waves.length) {
+      state.dungeonRun = { dungeonId: run.dungeonId, waveIndex: clearedWave };
+      emit({
+        type: "wave-cleared",
+        dungeonId: dungeon.id,
+        wave: clearedWave,
+        totalWaves: dungeon.waves.length,
+      });
+      spawnMonster(dungeon.waves[clearedWave] as string);
+      return;
+    }
+    // Boss killed: the Chest is on top of the boss's own Drop Table (already rolled by the caller).
+    const items = rollChest(dungeon);
+    state.completedDungeonIds.add(dungeon.id);
+    state.dungeonRun = null;
+    state.selectedMonsterId = null;
+    state.monsterHp = 0;
+    emit({ type: "dungeon-completed", dungeonId: dungeon.id });
+    emit({ type: "chest-opened", dungeonId: dungeon.id, items });
+  }
+
   const STYLE_SKILL: Record<CombatStyle, SkillName> = {
     accurate: "attack",
     aggressive: "strength",
@@ -360,8 +431,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     awardCombatXp(damage);
     if (state.monsterHp <= 0) {
       emit({ type: "kill", monsterId: monster.id });
-      rollDrops(monster);
-      spawnMonster(monster.id);
+      rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
+      if (state.dungeonRun) {
+        handleDungeonKill(state.dungeonRun);
+      } else {
+        spawnMonster(monster.id);
+      }
     }
   }
 
@@ -382,6 +457,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
     const monsterDef = content.monsters.find((m) => m.id === state.selectedMonsterId);
     const spotDef = content.fishingSpots.find((s) => s.id === state.selectedSpotId);
+    const dungeonRunDef = state.dungeonRun ? dungeonDef(state.dungeonRun.dungeonId) : undefined;
     return {
       player: {
         hp: state.hp,
@@ -399,11 +475,21 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         },
         inventory: [...state.inventory].map(([itemId, qty]) => ({ itemId, qty })),
         respawning: state.respawnTicksLeft > 0,
+        completedDungeonIds: [...state.completedDungeonIds],
       },
       monster: monsterDef
         ? { id: monsterDef.id, name: monsterDef.name, hp: state.monsterHp, maxHp: monsterDef.hp }
         : null,
       fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
+      dungeon:
+        state.dungeonRun && dungeonRunDef
+          ? {
+              id: dungeonRunDef.id,
+              name: dungeonRunDef.name,
+              wave: state.dungeonRun.waveIndex + 1,
+              totalWaves: dungeonRunDef.waves.length,
+            }
+          : null,
       bank: {
         items: [...state.bank].map(([itemId, qty]) => ({ itemId, qty })),
         capacity: state.bankCapacity,
@@ -492,16 +578,20 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       return;
     }
 
-    if (state.selectedMonsterId === null) return;
-
+    // Respawn is checked ahead of the "nothing selected" guard below: a Dungeon death clears
+    // selectedMonsterId (see the death branch at the bottom of this function) so Respawn can
+    // still count down to completion with no Monster selected — it just completes to idle
+    // instead of auto-resuming. The spawn on completion is guarded accordingly.
     if (state.respawnTicksLeft > 0) {
       state.respawnTicksLeft -= 1;
       if (state.respawnTicksLeft === 0) {
         state.hp = maxHp();
-        spawnMonster(state.selectedMonsterId);
+        if (state.selectedMonsterId !== null) spawnMonster(state.selectedMonsterId);
       }
       return;
     }
+
+    if (state.selectedMonsterId === null) return;
 
     const monster = monsterDef(state.selectedMonsterId);
     state.playerCooldown -= 1;
@@ -517,6 +607,13 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     autoEat();
     if (state.hp <= 0) {
       state.respawnTicksLeft = RESPAWN_TICKS;
+      // Death ejects the player from a Dungeon run (all-or-nothing): clear dungeonRun AND
+      // selectedMonsterId now, before Respawn starts, so Respawn completes to idle instead of
+      // auto-resuming on the dungeon-only boss/wave Monster. Re-entry always restarts at wave 1.
+      if (state.dungeonRun) {
+        state.dungeonRun = null;
+        state.selectedMonsterId = null;
+      }
       emit({ type: "death" });
     }
   }
@@ -536,6 +633,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       state.selectedSpotId = null; // at most one of Monster / Fishing Spot selected
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
+      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
       spawnMonster(monsterId);
     },
     selectFishingSpot(spotId) {
@@ -550,8 +648,21 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       state.selectedMonsterId = null; // at most one of Monster / Fishing Spot selected
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
+      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
       state.selectedSpotId = spotId;
       state.catchCooldown = spot.catchTicks;
+    },
+    enterDungeon(dungeonId) {
+      const dungeon = dungeonDef(dungeonId); // throws on unknown id
+      const area = content.areas.find((a) => a.id === dungeon.areaId);
+      if (area && combatLevel() < area.combatLevelReq) {
+        throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
+      }
+      state.selectedSpotId = null; // clears any Fishing Spot
+      state.respawnTicksLeft = 0; // clears Respawn
+      state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
+      state.dungeonRun = { dungeonId, waveIndex: 0 };
+      spawnMonster(dungeon.waves[0] as string);
     },
     setCombatStyle(style) {
       state.combatStyle = style;

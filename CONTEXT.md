@@ -63,6 +63,22 @@ _Avoid_: fishing node, resource node
 The **Food** produced by a successful attempt at a **Fishing Spot**, rolled once per its cooldown at a flat per-spot chance. Immediately edible ("cooked catch") — v1 has no Cooking Skill in between.
 _Avoid_: loot (for fish)
 
+**Dungeon**:
+A fixed sequence of Monster **Waves** ending in a **Boss**, hosted inside one **Area** (entering it requires that Area unlocked). Clearing the Boss awards a **Chest**; dying mid-run abandons it, and re-entry always restarts at Wave 1 — all-or-nothing, unlike ordinary farming.
+_Avoid_: instance, raid
+
+**Wave**:
+One Monster fought in sequence within a **Dungeon** run; killing it advances to the next Wave, or to the **Boss** if it was the last one before the Boss.
+_Avoid_: stage, room
+
+**Boss**:
+The final, toughest Monster in a **Dungeon**'s Wave sequence; killing it completes the Dungeon and opens its **Chest**.
+_Avoid_: final boss (redundant)
+
+**Chest**:
+A **Dungeon**'s completion reward: every entry in its reward table is rolled independently (multi-roll) rather than the single per-kill roll a **Drop Table** makes.
+_Avoid_: loot box
+
 **Loot Feed**:
 The scrolling UI log of kills, **Drops**, and level-ups.
 
@@ -75,7 +91,7 @@ An immutable view of the **Engine**'s state at a point in time — what the UI r
 _Avoid_: state (as an interface term), view model
 
 **Respawn**:
-The brief post-death state during which the player cannot act; combat auto-resumes on the same **Monster** when it ends.
+The brief post-death state during which the player cannot act; combat auto-resumes on the same **Monster** when it ends — except during a **Dungeon** run, which death abandons, so Respawn ends idle instead.
 _Avoid_: death screen, grave
 
 ## Relationships
@@ -89,3 +105,4 @@ _Avoid_: death screen, grave
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot**, separate from the carried inventory
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
+- An **Area** may also host a **Dungeon**: an ordered sequence of **Waves** ending in a **Boss**, rewarding a **Chest** on completion; entering one cancels any selected Monster or Fishing Spot, and vice versa

@@ -88,11 +88,24 @@ export interface AreaDef {
   fishingSpotIds?: string[];
 }
 
+export interface DungeonDef {
+  id: string;
+  name: string;
+  /** Area whose picker section hosts this dungeon; entry requires that Area unlocked. */
+  areaId: string;
+  /** MonsterDef ids fought in order; the last entry is the boss. Length >= 1. */
+  waves: string[];
+  /** Chest reward table: every entry rolled independently per completion (multi-roll);
+   * chance 1 = guaranteed. Reuses DropTableEntry — same semantics as rollDrops. */
+  chest: DropTableEntry[];
+}
+
 export interface Content {
   areas: AreaDef[];
   monsters: MonsterDef[];
   items: ItemDef[];
   fishingSpots: FishingSpotDef[];
+  dungeons: DungeonDef[];
 }
 
 export type EngineEvent =
@@ -103,7 +116,15 @@ export type EngineEvent =
   | { type: "food-eaten"; itemId: string; healed: number }
   | { type: "item-sold"; itemId: string; qty: number; gold: number }
   | { type: "fish-caught"; spotId: string; itemId: string; qty: number }
-  | { type: "equipped"; itemId: string };
+  | { type: "equipped"; itemId: string }
+  /** wave = 1-based cleared count (e.g. clearing the 2nd of 3 waves emits wave: 2). */
+  | { type: "wave-cleared"; dungeonId: string; wave: number; totalWaves: number }
+  | { type: "dungeon-completed"; dungeonId: string }
+  | {
+      type: "chest-opened";
+      dungeonId: string;
+      items: { itemId: string; qty: number; band: DropBand }[];
+    };
 
 export interface SkillSnapshot {
   level: number;
@@ -124,9 +145,14 @@ export interface Snapshot {
     bonuses: { atkBonus: number; strBonus: number; defBonus: number; attackSpeed: number };
     inventory: { itemId: string; qty: number }[];
     respawning: boolean;
+    completedDungeonIds: string[];
   };
   monster: { id: string; name: string; hp: number; maxHp: number } | null;
   fishing: { spotId: string; name: string } | null;
+  /** Sibling to monster/fishing; monster stays populated with the current wave Monster so the
+   * existing HP-bar rendering works untouched. 1-based wave, mid-run only — never persisted
+   * across a reload (a reload is an abandon, see engine.ts's loadState). */
+  dungeon: { id: string; name: string; wave: number; totalWaves: number } | null;
   bank: {
     items: { itemId: string; qty: number }[];
     capacity: number;

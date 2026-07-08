@@ -147,7 +147,16 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   function render(): void {
     const snap = engine.snapshot();
-    const { player, monster, fishing, bank } = snap;
+    const { player, monster, fishing, dungeon, bank } = snap;
+
+    const dungeonHeader = el<HTMLElement>("#dungeon-header");
+    if (dungeon) {
+      dungeonHeader.textContent = `⚔ ${dungeon.name} — Wave ${dungeon.wave}/${dungeon.totalWaves}`;
+      dungeonHeader.hidden = false;
+    } else {
+      dungeonHeader.textContent = "";
+      dungeonHeader.hidden = true;
+    }
 
     el("#player-hp-fill").style.width = `${(player.hp / player.maxHp) * 100}%`;
     el("#player-hp-text").textContent = player.respawning
@@ -286,10 +295,18 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
             return `<button data-spot="${id}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
           })
           .join("");
+        const dungeonButtons = content.dungeons
+          .filter((d) => d.areaId === area.id)
+          .map(
+            (d) =>
+              `<button data-dungeon="${d.id}" ${area.unlocked ? "" : "disabled"}>⚔ ${d.name}</button>`,
+          )
+          .join("");
         return `
           <p class="area-name">${area.name}${area.unlocked ? "" : " 🔒"}</p>
           <div class="monster-buttons">${monsterButtons}</div>
-          ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}`;
+          ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}
+          ${dungeonButtons ? `<div class="monster-buttons dungeon-buttons">${dungeonButtons}</div>` : ""}`;
       })
       .join("");
   }
@@ -300,6 +317,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         <img id="monster-sprite" class="sprite pixel" alt="" hidden />
         <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
       </div>
+      <p id="dungeon-header" hidden></p>
       <p id="monster-name"></p>
       <p id="monster-stats" hidden></p>
       <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
@@ -357,6 +375,19 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
   engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
+  engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
+  engine.on("dungeon-completed", (e) => {
+    const def = content.dungeons.find((d) => d.id === e.dungeonId);
+    feedLine(`🏰 ${def?.name ?? e.dungeonId} cleared!`, "dungeon-completed");
+  });
+  engine.on("chest-opened", (e) => {
+    // feedLine prepends, so the newest call ends up on top: insert items in reverse, then the
+    // header last, so the visual (top-to-bottom) order reads header followed by items in order.
+    for (const item of [...e.items].reverse()) {
+      feedLine(`+${item.qty} ${itemName(item.itemId)}`, `drop-${item.band}`);
+    }
+    feedLine("📦 Chest opened!", "chest-header");
+  });
   engine.on("levelup", () => buildPicker()); // gate flags may change
 
   el("#style-row").addEventListener("click", (event) => {
@@ -403,6 +434,12 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const spotId = target.dataset["spot"];
     if (spotId) {
       engine.selectFishingSpot(spotId);
+      render();
+      return;
+    }
+    const dungeonId = target.dataset["dungeon"];
+    if (dungeonId) {
+      engine.enterDungeon(dungeonId);
       render();
     }
   });

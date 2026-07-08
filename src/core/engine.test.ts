@@ -1446,3 +1446,349 @@ describe("Fishing", () => {
     });
   });
 });
+
+/** "gauntlet" (fixtureContent): meadow-hosted, waves ["dummy", "dummy", "boss-dummy"], chest
+ * [gold ×50 guaranteed, bronze-sword 50% chance]. */
+function dungeonEngine(seed = 1) {
+  return createEngine(fixtureContent, seededRng(seed));
+}
+
+describe("Dungeons", () => {
+  describe("enterDungeon", () => {
+    it("throws on an unknown dungeon id", () => {
+      expect(() => dungeonEngine().enterDungeon("nonexistent")).toThrow(/unknown dungeon/i);
+    });
+
+    it("throws when the host Area is locked", () => {
+      const lockedDungeonContent = {
+        ...fixtureContent,
+        dungeons: [
+          ...fixtureContent.dungeons,
+          {
+            id: "crypt-dungeon",
+            name: "Crypt Dungeon",
+            areaId: "crypt",
+            waves: ["dummy"],
+            chest: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" as const }],
+          },
+        ],
+      };
+      expect(() =>
+        createEngine(lockedDungeonContent, seededRng(1)).enterDungeon("crypt-dungeon"),
+      ).toThrow(/combat level 40/i);
+    });
+
+    it("spawns the first Wave at full HP and populates the dungeon Snapshot (1-based wave)", () => {
+      const engine = dungeonEngine();
+      engine.enterDungeon("gauntlet");
+      const snap = engine.snapshot();
+      expect(snap.dungeon).toEqual({
+        id: "gauntlet",
+        name: "The Gauntlet",
+        wave: 1,
+        totalWaves: 3,
+      });
+      expect(snap.monster).toEqual({ id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 });
+    });
+
+    it("clears any selected Fishing Spot on entry", () => {
+      const engine = dungeonEngine();
+      engine.selectFishingSpot("pond");
+      expect(engine.snapshot().fishing).not.toBeNull();
+
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().fishing).toBeNull();
+      expect(engine.snapshot().monster?.id).toBe("dummy");
+    });
+
+    it("succeeds mid-Respawn: cancels it and floors hp to at least 1, mirroring selectMonster", () => {
+      const engine = createEngine(fiercerDummyContent(), seededRng(42));
+      engine.selectMonster("dummy");
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      for (let i = 0; i < 5000 && !died; i++) engine.tick();
+      expect(died).toBe(true);
+      expect(engine.snapshot().player.respawning).toBe(true);
+      expect(engine.snapshot().player.hp).toBe(0);
+
+      engine.enterDungeon("gauntlet");
+      const player = engine.snapshot().player;
+      expect(player.respawning).toBe(false);
+      expect(player.hp).toBeGreaterThanOrEqual(1);
+      expect(engine.snapshot().dungeon).toEqual({
+        id: "gauntlet",
+        name: "The Gauntlet",
+        wave: 1,
+        totalWaves: 3,
+      });
+    });
+  });
+
+  describe("abandoning a run", () => {
+    it("selectMonster abandons an active Dungeon run, leaving dungeon null", () => {
+      const engine = dungeonEngine();
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().dungeon).not.toBeNull();
+
+      engine.selectMonster("dummy");
+      expect(engine.snapshot().dungeon).toBeNull();
+      expect(engine.snapshot().monster?.id).toBe("dummy");
+    });
+
+    it("selectFishingSpot abandons an active Dungeon run, leaving dungeon null", () => {
+      const engine = dungeonEngine();
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().dungeon).not.toBeNull();
+
+      engine.selectFishingSpot("pond");
+      expect(engine.snapshot().dungeon).toBeNull();
+      expect(engine.snapshot().fishing).not.toBeNull();
+    });
+  });
+
+  describe("Wave progression", () => {
+    it("killing each wave advances with correct wave-cleared i/N events; wave Monsters still roll their normal Drop Table", () => {
+      const engine = dungeonEngine(5);
+      const waveCleared: { dungeonId: string; wave: number; totalWaves: number }[] = [];
+      const kills: string[] = [];
+      engine.on("wave-cleared", (e) =>
+        waveCleared.push({ dungeonId: e.dungeonId, wave: e.wave, totalWaves: e.totalWaves }),
+      );
+      engine.on("kill", (e) => kills.push(e.monsterId));
+      engine.enterDungeon("gauntlet");
+
+      for (let i = 0; i < 5000 && waveCleared.length < 2; i++) engine.tick();
+
+      expect(waveCleared).toEqual([
+        { dungeonId: "gauntlet", wave: 1, totalWaves: 3 },
+        { dungeonId: "gauntlet", wave: 2, totalWaves: 3 },
+      ]);
+      expect(kills).toEqual(["dummy", "dummy"]);
+      const snap = engine.snapshot();
+      expect(snap.dungeon).toEqual({
+        id: "gauntlet",
+        name: "The Gauntlet",
+        wave: 3,
+        totalWaves: 3,
+      });
+      expect(snap.monster).toEqual({ id: "boss-dummy", name: "Boss Dummy", hp: 5, maxHp: 5 });
+      // wave Monsters still roll their normal Drop Table (guaranteed gold ×5 lands on every kill).
+      const gold = snap.player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+      expect(gold).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  describe("Boss kill and the Chest", () => {
+    it("rolls the Chest, adds items to inventory, fires dungeon-completed then chest-opened exactly once each, marks the dungeon completed, and ejects to idle", () => {
+      const engine = dungeonEngine(5);
+      const order: string[] = [];
+      let chestItems: { itemId: string; qty: number; band: string }[] = [];
+      let completedCount = 0;
+      let chestOpenedCount = 0;
+      engine.on("dungeon-completed", (e) => {
+        completedCount++;
+        order.push(`completed:${e.dungeonId}`);
+      });
+      engine.on("chest-opened", (e) => {
+        chestOpenedCount++;
+        chestItems = e.items;
+        order.push(`chest:${e.dungeonId}`);
+      });
+      engine.enterDungeon("gauntlet");
+
+      for (let i = 0; i < 5000 && completedCount === 0; i++) engine.tick();
+
+      expect(completedCount).toBe(1);
+      expect(chestOpenedCount).toBe(1);
+      expect(order).toEqual(["completed:gauntlet", "chest:gauntlet"]);
+      expect(chestItems).toContainEqual({ itemId: "gold", qty: 50, band: "guaranteed" });
+      // No per-item `drop` events fire for the Chest — only chest-opened reports its contents.
+
+      const snap = engine.snapshot();
+      expect(snap.player.completedDungeonIds).toEqual(["gauntlet"]);
+      expect(snap.monster).toBeNull();
+      expect(snap.dungeon).toBeNull();
+      const gold = snap.player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+      expect(gold).toBeGreaterThanOrEqual(50); // the Chest's guaranteed 50 gold landed
+    });
+
+    it("Chest rolls do not emit per-item drop events (unlike each wave kill's own Drop Table roll)", () => {
+      const engine = dungeonEngine(5);
+      const goldDrops: number[] = [];
+      engine.on("drop", (e) => {
+        if (e.itemId === "gold") goldDrops.push(e.qty);
+      });
+      let completed = false;
+      engine.on("dungeon-completed", () => {
+        completed = true;
+      });
+      engine.enterDungeon("gauntlet");
+      for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+      expect(completed).toBe(true);
+
+      // 3 kills total (2 "dummy" waves + the "boss-dummy" boss) each still roll their own Drop
+      // Table and emit a `drop` (guaranteed gold: 5, 5, then 10) — but the Chest's own guaranteed
+      // 50 gold lands with no matching `drop` event.
+      expect(goldDrops).toEqual([5, 5, 10]);
+      const goldQty = engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+      expect(goldQty).toBeGreaterThanOrEqual(5 + 5 + 10 + 50);
+    });
+
+    it("the Chest's chance entry (50%) rolls independently of the guaranteed entry across many completions", () => {
+      const engine = dungeonEngine(777);
+      let completions = 0;
+      let swordCount = 0;
+      engine.on("chest-opened", (e) => {
+        completions++;
+        if (e.items.some((i) => i.itemId === "bronze-sword")) swordCount++;
+        expect(e.items.some((i) => i.itemId === "gold" && i.qty === 50)).toBe(true); // guaranteed, every time
+      });
+      engine.enterDungeon("gauntlet");
+      for (let i = 0; i < 400_000 && completions < 80; i++) {
+        engine.tick();
+        const snap = engine.snapshot();
+        if (snap.dungeon === null && snap.monster === null) engine.enterDungeon("gauntlet");
+      }
+
+      expect(completions).toBeGreaterThanOrEqual(80);
+      const rate = swordCount / completions;
+      expect(rate).toBeGreaterThan(0.3);
+      expect(rate).toBeLessThan(0.7);
+    });
+  });
+
+  describe("Death mid-run", () => {
+    /** A near-lethal "dummy" (gauntlet's wave 1/2 Monster) so the player dies well inside wave 1,
+     * long before the Dungeon could otherwise complete — fiercerDummyContent's milder boost (used
+     * for open-world combat tests) is too slow to guarantee that here. */
+    function lethalDungeonContent() {
+      return {
+        ...fixtureContent,
+        monsters: fixtureContent.monsters.map((m) =>
+          m.id === "dummy" ? { ...m, attackLevel: 99, maxHit: 20, attackSpeed: 1 } : m,
+        ),
+      };
+    }
+
+    it("death fires, the run is abandoned immediately, Respawn completes to idle with no auto-resume, and re-entry restarts at wave 1", () => {
+      const engine = createEngine(lethalDungeonContent(), seededRng(42));
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      engine.enterDungeon("gauntlet");
+
+      for (let i = 0; i < 5000 && !died; i++) engine.tick();
+      expect(died).toBe(true);
+      // abandoned in the very same Tick as death, before Respawn even starts counting down.
+      expect(engine.snapshot().dungeon).toBeNull();
+      expect(engine.snapshot().monster).toBeNull();
+      expect(engine.snapshot().player.respawning).toBe(true);
+
+      // Respawn still counts down to completion (guarded spawn: no Monster selected to resume);
+      // RESPAWN_TICKS is 8, so 10 more Ticks is enough to see it through.
+      for (let i = 0; i < 10; i++) engine.tick();
+      const snap = engine.snapshot();
+      expect(snap.player.respawning).toBe(false);
+      expect(snap.player.hp).toBe(snap.player.maxHp);
+      expect(snap.monster).toBeNull();
+      expect(snap.dungeon).toBeNull();
+
+      // Re-entering restarts at wave 1 regardless of progress before death (all-or-nothing).
+      engine.enterDungeon("gauntlet");
+      expect(engine.snapshot().dungeon).toEqual({
+        id: "gauntlet",
+        name: "The Gauntlet",
+        wave: 1,
+        totalWaves: 3,
+      });
+      expect(engine.snapshot().monster?.id).toBe("dummy");
+    });
+  });
+
+  describe("save/load", () => {
+    it("a save captured mid-run loads ejected/idle: the dungeon-only Boss never spawns from a save", () => {
+      const engine = dungeonEngine(3);
+      const waveCleared: number[] = [];
+      engine.on("wave-cleared", (e) => waveCleared.push(e.wave));
+      engine.enterDungeon("gauntlet");
+      for (let i = 0; i < 5000 && waveCleared.length < 2; i++) engine.tick();
+      expect(waveCleared).toEqual([1, 2]);
+
+      // Freshly spawned this same Tick: the naive load path (spawnMonster(saved.monster.id))
+      // would turn this dungeon-only Boss into an infinitely farmable open-world Monster.
+      const saved = engine.snapshot();
+      expect(saved.dungeon).toEqual({
+        id: "gauntlet",
+        name: "The Gauntlet",
+        wave: 3,
+        totalWaves: 3,
+      });
+      expect(saved.monster?.id).toBe("boss-dummy");
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      const restoredSnap = restored.snapshot();
+      expect(restoredSnap.dungeon).toBeNull();
+      expect(restoredSnap.monster).toBeNull();
+      expect(restoredSnap.player.respawning).toBe(false);
+      expect(restoredSnap.player.hp).toBeGreaterThan(0);
+    });
+
+    it("completedDungeonIds round-trips through save/load", () => {
+      const engine = dungeonEngine(5);
+      let completed = false;
+      engine.on("dungeon-completed", () => {
+        completed = true;
+      });
+      engine.enterDungeon("gauntlet");
+      for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+      expect(engine.snapshot().player.completedDungeonIds).toEqual(["gauntlet"]);
+
+      const saved = engine.snapshot();
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot().player.completedDungeonIds).toEqual(["gauntlet"]);
+    });
+
+    it("a pre-feature save (no dungeon/completedDungeonIds keys at all) loads with none completed", () => {
+      const legacySave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+          // no completedDungeonIds key: simulates a save written before this feature shipped
+        },
+        monster: null,
+        areas: [],
+        // no dungeon key either
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      expect(restored.snapshot().player.completedDungeonIds).toEqual([]);
+      expect(restored.snapshot().dungeon).toBeNull();
+    });
+  });
+});

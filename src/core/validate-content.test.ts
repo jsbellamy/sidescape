@@ -171,6 +171,7 @@ describe("validateContent", () => {
       monsters: [],
       items: fixtureContent.items,
       fishingSpots: [],
+      dungeons: [],
     };
     expect(validateContent(content)).toEqual([]);
   });
