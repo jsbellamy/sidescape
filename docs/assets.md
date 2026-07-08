@@ -28,6 +28,50 @@ scene.
   front-facing idle animation. Confirmed CC0 on the OpenGameArt submission
   page.
 
+### Darkroot Forest, Old Sewers, and Bone Crypt Monsters (#12)
+
+Sprites for the seven remaining Monsters (Wolf, Goblin Warrior, Bandit, Giant
+Rat, Zombie, Skeleton, Crypt Shade), sourced from four more CC0 packs. As
+above, native resolutions vary (16×16 up to 64×64); the combat scene's shared
+on-screen size and `image-rendering: pixelated` keep them reading as one
+scene.
+
+| Sprite                           | Pack                  | Author          | License | Source                                              |
+| -------------------------------- | --------------------- | --------------- | ------- | --------------------------------------------------- |
+| Wolf                             | Wolf (walk cycle)     | carnageddon     | CC0     | https://opengameart.org/content/wolf-3              |
+| Goblin Warrior, Zombie, Skeleton | Tiny Creatures        | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures      |
+| Bandit                           | Bandit Sprite [16x16] | One Man Army    | CC0     | https://opengameart.org/content/bandit-sprite-16x16 |
+| Crypt Shade                      | Wraith [48x48]        | One Man Army    | CC0     | https://opengameart.org/content/wraith-48x48        |
+| Giant Rat                        | Mouse                 | allen yatsura   | CC0     | https://opengameart.org/content/mouse-0             |
+
+- **Wolf** (carnageddon, CC0 — "feel free to credit me or not, it's up to
+  you"): a 128×192 six-frame running-wolf sheet (2 columns × 3 rows, 64×64
+  cells); `src/assets/sprites/wolf.png` is the middle-row, left-column frame,
+  a clean side-on running pose. Confirmed CC0 on the OpenGameArt submission
+  page.
+- **Tiny Creatures** (Clint Bellanger, CC0 1.0 Universal — public domain
+  dedication, made with Kenney's explicit permission as an expansion of Tiny
+  Dungeon/Tiny Town): a 170×306 packed tilemap of 16×16 monster/animal tiles
+  (1px spacing, 10 columns), bundled with a `License.txt` confirming CC0.
+  `src/assets/sprites/goblin-warrior.png` (tile index 10, armored green
+  goblin), `zombie.png` (tile index 0), and `skeleton.png` (tile index 1) are
+  untouched single-tile crops.
+- **Bandit Sprite [16x16]** (One Man Army, CC0 — "completely free to use...
+  no credit required"): a 36×18 two-frame sheet; `src/assets/sprites/bandit.png`
+  is the first (left) 18×18 frame. Confirmed CC0 on the OpenGameArt
+  submission page.
+- **Wraith [48x48]** (One Man Army, CC0): a single 48×48 frame used as-is for
+  `src/assets/sprites/crypt-shade.png` — Crypt Shade is the endgame Area
+  boss, and this pack's largest native canvas reads as appropriately more
+  imposing than the other Monster sprites. Confirmed CC0 on the OpenGameArt
+  submission page.
+- **Mouse** (allen yatsura, CC0 — "can be used in free and commercial
+  projects... credit is not necessary but is greatly appreciated"): an
+  animated idle/walk GIF pair; `src/assets/sprites/giant-rat.png` is the
+  first frame of the idle animation, cropped to its opaque bounding box (the
+  source frame is otherwise padded to a 128×128 canvas). Confirmed CC0 on the
+  OpenGameArt submission page.
+
 ## Audio packs
 
 Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs, both licensed CC0 1.0 Universal:
