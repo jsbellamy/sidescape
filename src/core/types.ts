@@ -123,6 +123,12 @@ export interface Snapshot {
   };
   monster: { id: string; name: string; hp: number; maxHp: number } | null;
   fishing: { spotId: string; name: string } | null;
+  bank: {
+    items: { itemId: string; qty: number }[];
+    capacity: number;
+    /** Derived, not stored: the gold cost of the next `buyBankSlots()` call. */
+    nextSlotsPrice: number;
+  };
   areas: {
     id: string;
     name: string;

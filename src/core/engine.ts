@@ -29,6 +29,8 @@ interface State {
   selectedSpotId: string | null;
   catchCooldown: number;
   inventory: Map<string, number>;
+  bank: Map<string, number>;
+  bankCapacity: number;
   equipment: Record<GearSlot, string | null>;
   respawnTicksLeft: number;
   playerCooldown: number;
@@ -49,6 +51,9 @@ export interface Engine {
   equip(itemId: string): void;
   eatFood(itemId: string): void;
   sell(itemId: string, qty?: number): void;
+  deposit(itemId: string, qty?: number): void;
+  withdraw(itemId: string, qty?: number): void;
+  buyBankSlots(): void;
   snapshot(): Snapshot;
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
 }
@@ -58,6 +63,22 @@ const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
 const DEFAULT_AUTO_EAT_THRESHOLD: AutoEatThreshold = 0.5;
+
+/** Bank Slot capacity: 1 slot = 1 item stack, regardless of stack quantity. */
+const BANK_START_CAPACITY = 100;
+/** Tuning default: how many Bank Slots one `buyBankSlots()` purchase grants. */
+const BANK_SLOTS_PER_PURCHASE = 10;
+const BANK_FIRST_PRICE = 1000;
+const BANK_PRICE_STEP = 500;
+
+/** The gold cost of the next `buyBankSlots()` purchase, always derived from current capacity
+ * (never stored): 1000, 1500, 2000, … as capacity grows past BANK_START_CAPACITY. */
+function nextBankSlotsPrice(capacity: number): number {
+  return (
+    BANK_FIRST_PRICE +
+    BANK_PRICE_STEP * ((capacity - BANK_START_CAPACITY) / BANK_SLOTS_PER_PURCHASE)
+  );
+}
 
 function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
   return (AUTO_EAT_THRESHOLDS as readonly unknown[]).includes(value);
@@ -90,6 +111,8 @@ function freshState(_content: Content): State {
     selectedSpotId: null,
     catchCooldown: 0,
     inventory: new Map(),
+    bank: new Map(),
+    bankCapacity: BANK_START_CAPACITY,
     equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
     respawnTicksLeft: 0,
     playerCooldown: 0,
@@ -154,6 +177,28 @@ function loadInventory(saved: Snapshot, content: Content): Map<string, number> {
   return inventory;
 }
 
+/** Drops Bank entries whose itemId isn't in Content, or whose qty isn't a positive integer;
+ * keeps the rest. Mirrors loadInventory — the Bank is a second, separate item store. */
+function loadBank(saved: Snapshot, content: Content): Map<string, number> {
+  const itemIds = new Set(content.items.map((i) => i.id));
+  const bank = new Map<string, number>();
+  for (const entry of saved.bank?.items ?? []) {
+    const itemId: unknown = entry?.itemId;
+    const qty: unknown = entry?.qty;
+    if (typeof itemId !== "string" || !itemIds.has(itemId)) continue;
+    if (typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) continue;
+    bank.set(itemId, qty);
+  }
+  return bank;
+}
+
+/** Bank capacity coerced to a finite number; a missing/non-numeric value falls back to
+ * BANK_START_CAPACITY (a pre-feature save has no `bank` key at all). */
+function loadBankCapacity(saved: Snapshot): number {
+  const raw: unknown = saved.bank?.capacity;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : BANK_START_CAPACITY;
+}
+
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
  * unlike malformed Content or invalid COMMANDS). A corrupted or schema-drifted save still loads
  * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
@@ -188,6 +233,8 @@ function loadState(saved: Snapshot, content: Content): State {
     selectedSpotId: spot?.id ?? null,
     catchCooldown: spot ? spot.catchTicks : 0,
     inventory: loadInventory(saved, content),
+    bank: loadBank(saved, content),
+    bankCapacity: loadBankCapacity(saved),
     equipment,
     respawnTicksLeft: 0,
     playerCooldown: monster ? weaponSpeedFor(equipment.weapon, content) : 0,
@@ -351,6 +398,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         ? { id: monsterDef.id, name: monsterDef.name, hp: state.monsterHp, maxHp: monsterDef.hp }
         : null,
       fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
+      bank: {
+        items: [...state.bank].map(([itemId, qty]) => ({ itemId, qty })),
+        capacity: state.bankCapacity,
+        nextSlotsPrice: nextBankSlotsPrice(state.bankCapacity),
+      },
       areas: content.areas.map((area) => {
         const unlocked = combatLevel() >= area.combatLevelReq;
         return {
@@ -543,6 +595,48 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       const gold = value * qty;
       state.inventory.set(currencyDef.id, (state.inventory.get(currencyDef.id) ?? 0) + gold);
       emit({ type: "item-sold", itemId, qty, gold });
+    },
+    deposit(itemId, qty = 1) {
+      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid deposit quantity: ${qty}`);
+      const def = content.items.find((i) => i.id === itemId);
+      if (!def) throw new Error(`unknown item: ${itemId}`);
+      const owned = state.inventory.get(itemId) ?? 0;
+      if (owned < qty) throw new Error(`you do not own ${qty} ${def.name}`);
+      // Only a brand-new stack consumes a Bank Slot; topping up an existing one always fits.
+      const isNewStack = !state.bank.has(itemId);
+      if (isNewStack && state.bank.size >= state.bankCapacity) {
+        throw new Error("bank is full");
+      }
+
+      const remaining = owned - qty;
+      if (remaining > 0) state.inventory.set(itemId, remaining);
+      else state.inventory.delete(itemId);
+      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+    },
+    withdraw(itemId, qty = 1) {
+      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid withdraw quantity: ${qty}`);
+      const def = content.items.find((i) => i.id === itemId);
+      if (!def) throw new Error(`unknown item: ${itemId}`);
+      const banked = state.bank.get(itemId) ?? 0;
+      if (banked < qty) throw new Error(`bank does not hold ${qty} ${def.name}`);
+
+      // Carried inventory stays unlimited in v1: withdraw is never capacity-checked.
+      const remaining = banked - qty;
+      if (remaining > 0) state.bank.set(itemId, remaining);
+      else state.bank.delete(itemId);
+      state.inventory.set(itemId, (state.inventory.get(itemId) ?? 0) + qty);
+    },
+    buyBankSlots() {
+      // Purchases spend carried gold only (currencyDef, never a hard-coded id); gold itself
+      // is bankable as an ordinary stack, so the Bank's own gold is not spendable here.
+      const price = nextBankSlotsPrice(state.bankCapacity);
+      const carried = state.inventory.get(currencyDef.id) ?? 0;
+      if (carried < price) throw new Error(`not enough gold: need ${price}`);
+
+      const remaining = carried - price;
+      if (remaining > 0) state.inventory.set(currencyDef.id, remaining);
+      else state.inventory.delete(currencyDef.id);
+      state.bankCapacity += BANK_SLOTS_PER_PURCHASE;
     },
     on(type, handler) {
       const list = handlers.get(type) ?? [];
