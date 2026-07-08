@@ -36,6 +36,30 @@ function grindFor(engine: ReturnType<typeof freshEngine>, itemId: string, maxTic
   throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
 }
 
+describe("Content validation at construction", () => {
+  it("throws a single Error joining every violation when Content is malformed in several ways", () => {
+    const invalidContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.filter((i) => i.kind !== "currency"),
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [
+                ...m.dropTable,
+                { itemId: "gold-bar", qty: 1, chance: 1, band: "rare" as const },
+              ],
+            }
+          : m,
+      ),
+    };
+
+    expect(() => createEngine(invalidContent, seededRng(1))).toThrow(
+      /no currency item[\s\S]*gold-bar/,
+    );
+  });
+});
+
 describe("fresh engine", () => {
   it("starts a level-1 player with Hitpoints 10, full HP, nothing selected", () => {
     const snap = freshEngine().snapshot();
@@ -609,15 +633,12 @@ describe("Selling items", () => {
     expect(() => engine.sell("bronze-sword")).toThrow(/own/i);
   });
 
-  it("throws if Content defines no currency, with no hard-coded currency id in the Engine", () => {
+  it("throws at construction if Content defines no currency, with no hard-coded currency id in the Engine", () => {
     const noCurrencyContent = {
       ...fixtureContent,
       items: fixtureContent.items.filter((i) => i.kind !== "currency"),
     };
-    const engine = createEngine(noCurrencyContent, seededRng(1));
-    engine.selectMonster("dummy");
-    grindFor(engine, "meat");
-    expect(() => engine.sell("meat")).toThrow();
+    expect(() => createEngine(noCurrencyContent, seededRng(1))).toThrow(/currency/i);
   });
 });
 
