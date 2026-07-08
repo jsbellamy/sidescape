@@ -3,6 +3,10 @@ export type CombatStyle = "accurate" | "aggressive" | "defensive";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
 
+/** Fraction of max HP below which `autoEat` kicks in; 0 disables it entirely. */
+export const AUTO_EAT_THRESHOLDS = [0, 0.25, 0.5, 0.75] as const;
+export type AutoEatThreshold = (typeof AUTO_EAT_THRESHOLDS)[number];
+
 /** Source of randomness; next() returns a float in [0, 1). */
 export interface Rng {
   next(): number;
@@ -91,6 +95,7 @@ export interface Snapshot {
     maxHp: number;
     combatLevel: number;
     combatStyle: CombatStyle;
+    autoEatThreshold: AutoEatThreshold;
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     inventory: { itemId: string; qty: number }[];

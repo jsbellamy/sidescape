@@ -75,6 +75,7 @@ function meadowsGraduateSave(): Snapshot {
       maxHp: 16,
       combatLevel: 13,
       combatStyle: "aggressive",
+      autoEatThreshold: 0.5,
       skills: {
         attack: { level: 13, xp: xpForLevel(13) },
         strength: { level: 15, xp: xpForLevel(15) },

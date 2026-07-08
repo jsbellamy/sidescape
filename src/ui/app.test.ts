@@ -85,6 +85,7 @@ describe("mountApp", () => {
         maxHp: 10,
         combatLevel: 3,
         combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 1, xp: 0 },
           strength: { level: 1, xp: 0 },
@@ -190,6 +191,7 @@ describe("Combat Style selector", () => {
         maxHp: 10,
         combatLevel: 3,
         combatStyle: "defensive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 1, xp: 0 },
           strength: { level: 1, xp: 0 },
@@ -232,5 +234,65 @@ describe("Combat Style selector", () => {
     expect(skills.attack.xp).toBeGreaterThan(0);
     expect(skills.strength.xp).toBe(0);
     expect(skills.hitpoints.xp).toBeGreaterThan(xpForLevel(10));
+  });
+});
+
+describe("Auto-eat threshold selector", () => {
+  function thresholdButtons(root: HTMLElement) {
+    return [...root.querySelectorAll<HTMLButtonElement>("#autoeat-row button")];
+  }
+
+  it("renders one button per threshold, generated from the label map (not hard-coded)", () => {
+    const { root } = mount(1);
+    const buttons = thresholdButtons(root);
+    expect(buttons).toHaveLength(4);
+    const labels = buttons.map((b) => b.textContent);
+    expect(labels).toEqual(["Off", "25%", "50%", "75%"]);
+  });
+
+  it("the active button reflects the Engine's default threshold (50%) on mount", () => {
+    const { root } = mount(1);
+    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["threshold"]).toBe("0.5");
+  });
+
+  it("highlights a non-default threshold when mounted from a saved Snapshot", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        autoEatThreshold: 0.25,
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["threshold"]).toBe("0.25");
+  });
+
+  it("clicking a threshold updates the active button and calls setAutoEatThreshold on the Engine", () => {
+    const { engine, root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
+
+    expect(engine.snapshot().player.autoEatThreshold).toBe(0);
+    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["threshold"]).toBe("0");
   });
 });

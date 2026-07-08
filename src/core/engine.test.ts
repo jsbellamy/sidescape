@@ -3,6 +3,8 @@ import { createEngine } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
+import { AUTO_EAT_THRESHOLDS } from "./types";
+import type { AutoEatThreshold } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -188,6 +190,153 @@ describe("taking damage, Food, death and Respawn", () => {
   });
 });
 
+describe("Configurable auto-eat threshold", () => {
+  function thresholdEngine(
+    threshold: AutoEatThreshold,
+    invSeed: { itemId: string; qty: number }[],
+  ) {
+    return createEngine(fiercerDummyContent(), seededRng(42), {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        autoEatThreshold: threshold,
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: invSeed,
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+  }
+
+  it("accepts exactly {0, 0.25, 0.5, 0.75} and throws on any other value", () => {
+    const engine = freshEngine();
+    for (const threshold of AUTO_EAT_THRESHOLDS) {
+      expect(() => engine.setAutoEatThreshold(threshold)).not.toThrow();
+      expect(engine.snapshot().player.autoEatThreshold).toBe(threshold);
+    }
+    expect(() => engine.setAutoEatThreshold(0.1 as AutoEatThreshold)).toThrow();
+    expect(() => engine.setAutoEatThreshold(1 as AutoEatThreshold)).toThrow();
+    expect(() => engine.setAutoEatThreshold(-0.5 as AutoEatThreshold)).toThrow();
+  });
+
+  it("defaults to 0.5 for a fresh engine, and the default appears in the Snapshot", () => {
+    const engine = freshEngine();
+    expect(engine.snapshot().player.autoEatThreshold).toBe(0.5);
+  });
+
+  it("at Off (0), auto-eat never fires even at low HP with Food owned; the player can die, and manual eatFood still works", () => {
+    const engine = thresholdEngine(0, [{ itemId: "meat", qty: 20 }]);
+    let ate = 0;
+    engine.on("food-eaten", () => ate++);
+    let died = false;
+    engine.on("death", () => {
+      died = true;
+    });
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 5000 && !died; i++) engine.tick();
+
+    expect(died).toBe(true);
+    expect(ate).toBe(0);
+
+    engine.eatFood("meat"); // manual eat is unaffected by the auto-eat threshold
+    const meat = engine.snapshot().player.inventory.find((s) => s.itemId === "meat");
+    expect(meat?.qty).toBe(19);
+  });
+
+  it("at 0.75, auto-eat triggers as soon as HP first drops below 75% of max", () => {
+    const engine = thresholdEngine(0.75, [{ itemId: "meat", qty: 20 }]);
+    let firstEatPreHp: number | undefined;
+    engine.on("food-eaten", (e) => {
+      if (firstEatPreHp === undefined) firstEatPreHp = engine.snapshot().player.hp - e.healed;
+    });
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 2000 && firstEatPreHp === undefined; i++) engine.tick();
+
+    expect(firstEatPreHp).toBeDefined();
+    expect(firstEatPreHp as number).toBeLessThan(7.5); // below 75% of maxHp 10
+    // and strictly earlier than the old hard-coded half-HP trigger would have allowed
+    expect(firstEatPreHp as number).toBeGreaterThanOrEqual(6);
+  });
+
+  it("falls back to 0.5 when a saved threshold is not a recognised value (tolerant load)", () => {
+    const corrupted = {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        autoEatThreshold: 0.9,
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    };
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(corrupted)),
+    );
+    expect(engine.snapshot().player.autoEatThreshold).toBe(0.5);
+  });
+
+  it("a pre-feature save missing autoEatThreshold loads at 50%, and the value round-trips through save/load", () => {
+    const legacySave = {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        // no autoEatThreshold: simulates a save written before this feature shipped
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    };
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(legacySave)),
+    );
+    expect(restored.snapshot().player.autoEatThreshold).toBe(0.5);
+
+    restored.setAutoEatThreshold(0.25);
+    const saved = restored.snapshot();
+    expect(saved.player.autoEatThreshold).toBe(0.25);
+
+    const roundTripped = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(saved)),
+    );
+    expect(roundTripped.snapshot().player.autoEatThreshold).toBe(0.25);
+  });
+});
+
 describe("Passive HP regen", () => {
   function damagedEngine(hp: number, seed = 1) {
     return createEngine(fixtureContent, seededRng(seed), {
@@ -196,6 +345,7 @@ describe("Passive HP regen", () => {
         maxHp: 10,
         combatLevel: 3,
         combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 1, xp: 0 },
           strength: { level: 1, xp: 0 },
@@ -245,6 +395,7 @@ describe("Passive HP regen", () => {
         maxHp: 60,
         combatLevel: 45,
         combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 60, xp: xpForLevel(60) },
           strength: { level: 60, xp: xpForLevel(60) },
@@ -291,6 +442,7 @@ describe("Manual eat command", () => {
         maxHp: 10,
         combatLevel: 3,
         combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 1, xp: 0 },
           strength: { level: 1, xp: 0 },
@@ -516,6 +668,7 @@ describe("save/load", () => {
         maxHp: 45,
         combatLevel: 45,
         combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
         skills: {
           attack: { level: 45, xp: xpForLevel(45) },
           strength: { level: 45, xp: xpForLevel(45) },

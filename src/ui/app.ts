@@ -1,5 +1,5 @@
 import type { Engine } from "../core/engine";
-import type { CombatStyle, Content } from "../core/types";
+import type { AutoEatThreshold, CombatStyle, Content } from "../core/types";
 import { monsterSprite, playerSprite } from "./sprites";
 
 /** Combat Style segmented control labels — Object.entries drives the buttons, so
@@ -8,6 +8,14 @@ const STYLE_LABELS: Record<CombatStyle, string> = {
   accurate: "Accurate",
   aggressive: "Aggressive",
   defensive: "Defensive",
+};
+
+/** Auto-eat threshold segmented control labels, keyed by the Engine's AutoEatThreshold union. */
+const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
+  0: "Off",
+  0.25: "25%",
+  0.5: "50%",
+  0.75: "75%",
 };
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
@@ -56,6 +64,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
     root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
+      btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
     });
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
@@ -148,6 +160,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
           .join("")}
       </div>
+      <div id="autoeat-row" class="style-row">
+        ${Object.entries(AUTO_EAT_LABELS)
+          .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
+          .join("")}
+      </div>
     </section>
     <section id="xp-row"></section>
     <section id="picker"></section>
@@ -174,6 +191,14 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
     if (style) {
       engine.setCombatStyle(style);
+      render();
+    }
+  });
+
+  el("#autoeat-row").addEventListener("click", (event) => {
+    const raw = (event.target as HTMLElement).dataset["threshold"];
+    if (raw !== undefined) {
+      engine.setAutoEatThreshold(Number(raw) as AutoEatThreshold);
       render();
     }
   });
