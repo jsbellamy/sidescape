@@ -195,7 +195,7 @@ body {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 3px 0;
+  padding: 3px 4px;
   text-align: center;
   font-size: 11px;
 }
@@ -208,6 +208,20 @@ body {
 .skill-level {
   color: var(--accent);
   font-weight: 700;
+}
+
+.skill-bar {
+  margin-top: 3px;
+  height: 4px;
+  background: #111;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.skill-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
 }
 
 .area-name {
@@ -245,6 +259,45 @@ body {
   flex: 1;
   overflow-y: auto;
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tab-row {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.tab-row button {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.tab-row button:hover {
+  border-color: var(--accent);
+}
+
+.tab-row button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+#tab-panels {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tab-panel[hidden] {
+  display: none;
 }
 
 .panel-title {
