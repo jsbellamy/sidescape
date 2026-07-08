@@ -102,7 +102,8 @@ export type EngineEvent =
   | { type: "death" }
   | { type: "food-eaten"; itemId: string; healed: number }
   | { type: "item-sold"; itemId: string; qty: number; gold: number }
-  | { type: "fish-caught"; spotId: string; itemId: string; qty: number };
+  | { type: "fish-caught"; spotId: string; itemId: string; qty: number }
+  | { type: "equipped"; itemId: string };
 
 export interface SkillSnapshot {
   level: number;
@@ -118,6 +119,9 @@ export interface Snapshot {
     autoEatThreshold: AutoEatThreshold;
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
+    /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed
+     * fresh each snapshot from `content.items` — harmless to persist in a save, ignored on load. */
+    bonuses: { atkBonus: number; strBonus: number; defBonus: number; attackSpeed: number };
     inventory: { itemId: string; qty: number }[];
     respawning: boolean;
   };

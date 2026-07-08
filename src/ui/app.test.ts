@@ -1,11 +1,42 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
+
+/** Pump Ticks until `itemId` is owned (or fail the test), mirroring core/engine.test.ts's grindFor. */
+function grindFor(engine: ReturnType<typeof createEngine>, itemId: string, maxTicks = 20_000) {
+  for (let i = 0; i < maxTicks; i++) {
+    engine.tick();
+    if (engine.snapshot().player.inventory.some((s) => s.itemId === itemId)) return;
+  }
+  throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
+}
+
+/**
+ * happy-dom's localStorage getter doesn't resolve reliably under Vitest's global-population
+ * strategy (mirrors the stub in ui/sfx.test.ts).
+ */
+function stubLocalStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+}
 
 function mount(seed: number) {
   const engine = createEngine(fixtureContent, seededRng(seed));
@@ -422,12 +453,12 @@ describe("Panel tabs", () => {
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Loot Feed, Equipment, Inventory, Bank — Loot Feed active by default", () => {
+  it("renders one tab per panel — Loot Feed, Character, Inventory, Bank — Loot Feed active by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
       "Loot Feed",
-      "Equipment",
+      "Character",
       "Inventory",
       "Bank",
     ]);
@@ -440,22 +471,22 @@ describe("Panel tabs", () => {
   it("only the active tab's panel is visible on mount", () => {
     const { root } = mount(1);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="equipment"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
   });
 
   it("clicking a tab swaps the visible panel and highlights the clicked tab", () => {
     const { root } = mount(1);
-    root.querySelector<HTMLButtonElement>('[data-tab="equipment"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
 
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="equipment"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
 
     const active = tabButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["tab"]).toBe("equipment");
+    expect(active[0]?.dataset["tab"]).toBe("character");
   });
 
   it("the active tab persists visually across re-renders", () => {
@@ -470,9 +501,9 @@ describe("Panel tabs", () => {
     expect(active[0]?.dataset["tab"]).toBe("inventory");
   });
 
-  it("existing panel content (Equipment, Inventory, Loot Feed) still renders inside its tab panel", () => {
+  it("existing panel content (Character, Inventory, Loot Feed) still renders inside its tab panel", () => {
     const { root } = mount(1);
-    expect(root.querySelector("#equipment")).not.toBeNull();
+    expect(root.querySelector("#character-slots")).not.toBeNull();
     expect(root.querySelector("#inventory")).not.toBeNull();
     expect(root.querySelector("#feed")).not.toBeNull();
     expect(root.querySelector("#gold")).not.toBeNull();
@@ -612,5 +643,227 @@ describe("Fishing", () => {
     expect(root.querySelector("#feed li")?.textContent).toMatch(/caught.*meat/i);
     expect(engine.snapshot().player.skills.fishing.xp).toBeGreaterThan(0);
     expect(engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(1);
+  });
+});
+
+describe("Character panel (#26)", () => {
+  it("shows — for every empty Gear Slot on a fresh engine", () => {
+    const { root } = mount(1);
+    for (const slot of ["weapon", "shield", "head", "body", "legs"]) {
+      expect(root.querySelector(`[data-slot="${slot}"] .slot-item`)?.textContent).toBe("—");
+    }
+  });
+
+  it("shows the totals row at all zero with the unarmed attack speed (4t) when nothing is equipped", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#character-totals")?.textContent).toBe("+0 atk +0 str def 0 spd 4t");
+  });
+
+  it("shows a weapon's own atk/str/speed on its slot row", () => {
+    const { engine, root, app } = mount(1);
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    engine.equip("bronze-sword");
+    app.render();
+
+    const weaponRow = root.querySelector('[data-slot="weapon"]');
+    expect(weaponRow?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
+    expect(weaponRow?.querySelector(".slot-stats")?.textContent).toBe("+10 atk +30 str spd 4t");
+  });
+
+  it("shows an armor piece's def bonus only (no atk/str/speed line noise)", () => {
+    const { engine, root, app } = mount(1);
+    engine.selectMonster("dummy");
+    grindFor(engine, "lucky-charm");
+    engine.equip("lucky-charm");
+    app.render();
+
+    const headRow = root.querySelector('[data-slot="head"]');
+    expect(headRow?.querySelector(".slot-item")?.textContent).toBe("Lucky Charm");
+    expect(headRow?.querySelector(".slot-stats")?.textContent).toBe("def 1");
+  });
+
+  it("totals row matches snapshot().player.bonuses and updates when Gear is equipped", () => {
+    const { engine, root, app } = mount(1);
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    app.render();
+    expect(root.querySelector("#character-totals")?.textContent).toBe("+0 atk +0 str def 0 spd 4t");
+
+    engine.equip("bronze-sword");
+    app.render();
+
+    const b = engine.snapshot().player.bonuses;
+    expect(b).toEqual({ atkBonus: 10, strBonus: 30, defBonus: 0, attackSpeed: 4 });
+    expect(root.querySelector("#character-totals")?.textContent).toBe(
+      `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`,
+    );
+  });
+});
+
+describe("Equip via Inventory click emits the equipped event (#26)", () => {
+  it("clicking an equippable Inventory item equips it and logs its feed line via the equipped subscription", () => {
+    const { engine, root, app } = mount(1);
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    app.render();
+
+    const swordLi = root.querySelector<HTMLLIElement>('#inventory li[data-item="bronze-sword"]');
+    expect(swordLi).not.toBeNull();
+    swordLi?.click();
+
+    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/equipped.*bronze sword/i);
+  });
+
+  it("equip emits exactly one equipped event carrying the item's id, exercised through the UI", () => {
+    const { engine, root, app } = mount(1);
+    const equipped: string[] = [];
+    engine.on("equipped", (e) => equipped.push(e.itemId));
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    app.render();
+
+    root.querySelector<HTMLLIElement>('#inventory li[data-item="bronze-sword"]')?.click();
+
+    expect(equipped).toEqual(["bronze-sword"]);
+  });
+});
+
+describe("Sorting the Inventory and Bank lists (#26)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function seededInventory() {
+    return makeSnapshot({
+      player: {
+        inventory: [
+          { itemId: "gold", qty: 50 },
+          { itemId: "meat", qty: 3 },
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "lucky-charm", qty: 1 },
+        ],
+      },
+    });
+  }
+
+  it("renders a Kind | Value | Name control row above the Inventory list", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("#sort-row button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Kind", "Value", "Name"]);
+  });
+
+  it("sorting by Value orders the Inventory by def.value descending, ties broken by name", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), seededInventory());
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+
+    // lucky-charm 100g, bronze-sword 20g, meat 3g (gold is excluded from the Inventory list).
+    const ids = [...root.querySelectorAll<HTMLLIElement>("#inventory li")].map(
+      (li) => li.dataset["item"],
+    );
+    expect(ids).toEqual(["lucky-charm", "bronze-sword", "meat"]);
+  });
+
+  it("sorting by Kind groups equipment before food, ties broken by name", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), seededInventory());
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>('[data-sort="kind"]')?.click();
+
+    // equipment (Bronze Sword, Lucky Charm — alphabetical) before food (Cooked Meat).
+    const ids = [...root.querySelectorAll<HTMLLIElement>("#inventory li")].map(
+      (li) => li.dataset["item"],
+    );
+    expect(ids).toEqual(["bronze-sword", "lucky-charm", "meat"]);
+  });
+
+  it("sorting by Name orders the Inventory alphabetically by display name", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), seededInventory());
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>('[data-sort="name"]')?.click();
+
+    // Bronze Sword, Cooked Meat, Lucky Charm — alphabetical.
+    const ids = [...root.querySelectorAll<HTMLLIElement>("#inventory li")].map(
+      (li) => li.dataset["item"],
+    );
+    expect(ids).toEqual(["bronze-sword", "meat", "lucky-charm"]);
+  });
+
+  it("the same sort choice reorders the Bank list identically, via the same comparator module", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "meat", qty: 1 },
+            { itemId: "bronze-sword", qty: 1 },
+            { itemId: "lucky-charm", qty: 1 },
+          ],
+          capacity: 100,
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+
+    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+
+    const ids = [...root.querySelectorAll<HTMLLIElement>("#bank li")].map(
+      (li) => li.dataset["item"],
+    );
+    expect(ids).toEqual(["lucky-charm", "bronze-sword", "meat"]);
+  });
+
+  it("the sort choice survives a remount via localStorage and is never written into the save", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), seededInventory());
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+    expect(localStorage.getItem("sidescape-ui-sort")).toBe("value");
+
+    // Simulate an app restart: a fresh mount against the same Engine reads the persisted choice.
+    const root2 = document.createElement("main");
+    mountApp(engine, root2, fixtureContent);
+    const ids = [...root2.querySelectorAll<HTMLLIElement>("#inventory li")].map(
+      (li) => li.dataset["item"],
+    );
+    expect(ids).toEqual(["lucky-charm", "bronze-sword", "meat"]);
+
+    // Presentation-only: never part of the Snapshot/save (same boundary as the SFX mute, #20).
+    expect(JSON.stringify(engine.snapshot())).not.toMatch(/sort/i);
+  });
+
+  it("sell/equip/deposit click handling still targets the right item after sorting (data attributes, not row index)", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), seededInventory());
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+    // sorted order is now: lucky-charm, bronze-sword, meat — bronze-sword sits in the middle row.
+
+    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="bronze-sword"]');
+    expect(sellBtn).not.toBeNull();
+    sellBtn?.click();
+
+    expect(engine.snapshot().player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false);
+    expect(engine.snapshot().player.equipment.weapon).toBeNull(); // sold, not equipped
+    expect(engine.snapshot().player.inventory.find((s) => s.itemId === "lucky-charm")?.qty).toBe(1); // untouched neighbor row
   });
 });

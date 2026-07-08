@@ -535,6 +535,66 @@ describe("Equipment and gates", () => {
   it("selectMonster throws for a Monster behind a locked Area gate", () => {
     expect(() => freshEngine().selectMonster("brute")).toThrow(/combat level 40/i);
   });
+
+  it("equip emits exactly one equipped event carrying the equipped item's id", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    const equipped: string[] = [];
+    engine.on("equipped", (e) => equipped.push(e.itemId));
+
+    engine.equip("bronze-sword");
+
+    expect(equipped).toEqual(["bronze-sword"]);
+  });
+});
+
+describe("Snapshot player.bonuses (#26)", () => {
+  it("is all zero, with the unarmed attack speed fallback, on a fresh engine with nothing equipped", () => {
+    const snap = freshEngine().snapshot();
+    expect(snap.player.bonuses).toEqual({ atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 });
+  });
+
+  it("sums bonuses across every equipped Gear Slot and reflects the weapon's own speed", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    grindFor(engine, "lucky-charm");
+    engine.equip("bronze-sword"); // weapon: atk 10, str 30, def 0, speed 4
+    engine.equip("lucky-charm"); // head: atk 0, str 0, def 1
+
+    expect(engine.snapshot().player.bonuses).toEqual({
+      atkBonus: 10,
+      strBonus: 30,
+      defBonus: 1,
+      attackSpeed: 4,
+    });
+  });
+
+  it("falls back to unarmed attack speed 4 when no weapon is equipped, even with other Gear worn", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "lucky-charm");
+    engine.equip("lucky-charm"); // head only, no weapon
+
+    expect(engine.snapshot().player.bonuses).toEqual({
+      atkBonus: 0,
+      strBonus: 0,
+      defBonus: 1,
+      attackSpeed: 4,
+    });
+  });
+
+  it("updates immediately after equip, in the same snapshot the UI would re-render from", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    expect(engine.snapshot().player.bonuses.atkBonus).toBe(0);
+
+    engine.equip("bronze-sword");
+
+    expect(engine.snapshot().player.bonuses.atkBonus).toBe(10);
+  });
 });
 
 describe("Selling items", () => {
