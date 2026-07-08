@@ -42,12 +42,20 @@ describe("Ranged and Magic starter weapons (#7)", () => {
   });
 
   it("every other weapon in Content leaves combatMode unset, defaulting to melee", () => {
+    // Ranged/Magic weapons across #7 (starter tier) and #13 (iron/steel/mithril tiers) — every
+    // other weapon in Content must leave combatMode unset.
+    const rangedAndMagicWeaponIds = new Set([
+      "shortbow",
+      "apprentice-staff",
+      "iron-shortbow",
+      "iron-staff",
+      "steel-shortbow",
+      "steel-staff",
+      "mithril-shortbow",
+      "mithril-staff",
+    ]);
     const otherWeapons = content.items.filter(
-      (i) =>
-        i.kind === "equipment" &&
-        i.slot === "weapon" &&
-        i.id !== "shortbow" &&
-        i.id !== "apprentice-staff",
+      (i) => i.kind === "equipment" && i.slot === "weapon" && !rangedAndMagicWeaponIds.has(i.id),
     );
     expect(otherWeapons.length).toBeGreaterThan(0);
     for (const weapon of otherWeapons) {
