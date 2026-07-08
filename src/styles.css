@@ -368,6 +368,10 @@ body {
   text-decoration: underline;
 }
 
+#inventory .material {
+  color: var(--text-dim);
+}
+
 .sell-btn {
   float: right;
   background: var(--bg-panel);
@@ -457,7 +461,57 @@ body {
   font-weight: 700;
 }
 
+#feed .craft {
+  color: #d4a8e0;
+}
+
 .hint {
   text-transform: none;
   letter-spacing: 0;
+}
+
+#smithing-recipes {
+  list-style: none;
+}
+
+#smithing-recipes li {
+  padding: 6px 0;
+  border-bottom: 1px solid #221c15;
+}
+
+.recipe-name {
+  font-weight: 600;
+}
+
+.recipe-level {
+  float: right;
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.recipe-inputs {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 2px 0 4px;
+}
+
+.craft-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.craft-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.craft-btn:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+  opacity: 0.5;
 }

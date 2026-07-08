@@ -13,6 +13,7 @@ import type {
   FoodDef,
   ItemDef,
   MonsterDef,
+  RecipeDef,
   CombatStyle,
   Content,
   EngineEvent,
@@ -31,6 +32,7 @@ interface State {
   monsterHp: number;
   selectedSpotId: string | null;
   catchCooldown: number;
+  smithing: { recipeId: string; craftCooldown: number } | null;
   inventory: Map<string, number>;
   bank: Map<string, number>;
   bankCapacity: number;
@@ -52,6 +54,7 @@ export interface Engine {
   selectMonster(monsterId: string): void;
   selectFishingSpot(spotId: string): void;
   enterDungeon(dungeonId: string): void;
+  selectRecipe(recipeId: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   equip(itemId: string): void;
@@ -108,7 +111,7 @@ function weaponSpeedFor(weaponId: string | null, content: Content): number {
 /** The no-save defaults: a level-1 player (Hitpoints 10, per ADR), full HP, nothing selected. */
 function freshState(_content: Content): State {
   return {
-    xp: { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0 },
+    xp: { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0, smithing: 0 },
     hp: 10,
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
@@ -116,6 +119,7 @@ function freshState(_content: Content): State {
     monsterHp: 0,
     selectedSpotId: null,
     catchCooldown: 0,
+    smithing: null,
     inventory: new Map(),
     bank: new Map(),
     bankCapacity: BANK_START_CAPACITY,
@@ -240,6 +244,34 @@ function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Conte
   return completed;
 }
 
+/** Whether `inventory` covers at least one craft of `recipe` (mirrors the Engine's own
+ * canCraftRecipe, duplicated here because loadState runs before the Engine's closures exist). */
+function canCraftFromInventory(recipe: RecipeDef, inventory: Map<string, number>): boolean {
+  return recipe.inputs.every((input) => (inventory.get(input.itemId) ?? 0) >= input.qty);
+}
+
+/** Resolves a resumable Smithing activity: `blocked` is true when a Monster or Fishing Spot
+ * already claimed the resume slot (mirrors the monster > fishing priority above; Smithing is
+ * lowest priority since Content's construction order and Dungeon's all-or-nothing rule both
+ * predate it). An unknown recipe id, an under-leveled recipe, or one short on inputs all resume
+ * idle instead of throwing (tolerant load, same as an unknown monster/fishing spot id) — the
+ * cooldown always re-arms to `craftTicks` on resume, per #28. */
+function loadSmithing(
+  saved: Snapshot,
+  content: Content,
+  inventory: Map<string, number>,
+  smithingLevel: number,
+  blocked: boolean,
+): { recipeId: string; craftCooldown: number } | null {
+  const recipeId: unknown = blocked ? undefined : saved.smithing?.recipeId;
+  const recipe =
+    typeof recipeId === "string" ? content.recipes.find((r) => r.id === recipeId) : undefined;
+  if (!recipe) return null;
+  if (smithingLevel < recipe.levelReq) return null;
+  if (!canCraftFromInventory(recipe, inventory)) return null;
+  return { recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+}
+
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
  * unlike malformed Content or invalid COMMANDS). A corrupted or schema-drifted save still loads
  * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
@@ -248,6 +280,7 @@ function loadState(saved: Snapshot, content: Content): State {
   const xp = loadXp(saved);
   const maxHp = levelForXp(xp.hitpoints);
   const equipment = loadEquipment(saved, content);
+  const inventory = loadInventory(saved, content);
 
   // Mid-run Dungeon state is NEVER persisted: a reload is an abandon. A save captured mid-run
   // ignores BOTH saved.dungeon and saved.monster — the naive path (spawnMonster(saved.monster.id))
@@ -262,6 +295,13 @@ function loadState(saved: Snapshot, content: Content): State {
   const spot =
     typeof spotId === "string" ? content.fishingSpots.find((s) => s.id === spotId) : undefined;
   const savedMonsterHp: unknown = saved.monster?.hp;
+  const smithing = loadSmithing(
+    saved,
+    content,
+    inventory,
+    levelForXp(xp.smithing),
+    dungeonActive || monster !== undefined || spot !== undefined,
+  );
 
   return {
     xp,
@@ -278,7 +318,8 @@ function loadState(saved: Snapshot, content: Content): State {
       : 0,
     selectedSpotId: spot?.id ?? null,
     catchCooldown: spot ? spot.catchTicks : 0,
-    inventory: loadInventory(saved, content),
+    smithing,
+    inventory,
     bank: loadBank(saved, content),
     bankCapacity: loadBankCapacity(saved),
     equipment,
@@ -335,6 +376,17 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     const def = content.dungeons.find((d) => d.id === id);
     if (!def) throw new Error(`unknown dungeon: ${id}`);
     return def;
+  }
+
+  function recipeDef(id: string): RecipeDef {
+    const def = content.recipes.find((r) => r.id === id);
+    if (!def) throw new Error(`unknown recipe: ${id}`);
+    return def;
+  }
+
+  /** Whether the carried inventory covers at least one craft of `recipe`. */
+  function canCraftRecipe(recipe: RecipeDef): boolean {
+    return recipe.inputs.every((input) => (state.inventory.get(input.itemId) ?? 0) >= input.qty);
   }
 
   /** An Area with no gating Dungeon is unlocked from the start; a gated Area unlocks the instant
@@ -489,6 +541,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     const monsterDef = content.monsters.find((m) => m.id === state.selectedMonsterId);
     const spotDef = content.fishingSpots.find((s) => s.id === state.selectedSpotId);
     const dungeonRunDef = state.dungeonRun ? dungeonDef(state.dungeonRun.dungeonId) : undefined;
+    const smithingRecipeDef = state.smithing ? recipeDef(state.smithing.recipeId) : undefined;
     return {
       player: {
         hp: state.hp,
@@ -520,6 +573,10 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
               wave: state.dungeonRun.waveIndex + 1,
               totalWaves: dungeonRunDef.waves.length,
             }
+          : null,
+      smithing:
+        state.smithing && smithingRecipeDef
+          ? { recipeId: smithingRecipeDef.id, name: smithingRecipeDef.name }
           : null,
       bank: {
         items: [...state.bank].map(([itemId, qty]) => ({ itemId, qty })),
@@ -601,11 +658,44 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
   }
 
+  /** Decrements the craft cooldown; at completion consumes `recipe.inputs` (never lost to an
+   * earlier interruption — see selectRecipe/the other select* commands, which only ever swap
+   * `state.smithing` wholesale, never mid-craft), adds the output Item, grants Smithing XP, and
+   * emits item-crafted. Auto-repeats (re-arms the cooldown) while inputs still cover another
+   * craft; otherwise clears Smithing back to idle with no extra event — the Snapshot shows it. */
+  function smithingTick(): void {
+    const smithing = state.smithing as { recipeId: string; craftCooldown: number };
+    const recipe = recipeDef(smithing.recipeId);
+    smithing.craftCooldown -= 1;
+    if (smithing.craftCooldown > 0) return;
+
+    for (const input of recipe.inputs) {
+      const owned = state.inventory.get(input.itemId) ?? 0;
+      const remaining = owned - input.qty;
+      if (remaining > 0) state.inventory.set(input.itemId, remaining);
+      else state.inventory.delete(input.itemId);
+    }
+    state.inventory.set(recipe.outputItemId, (state.inventory.get(recipe.outputItemId) ?? 0) + 1);
+    grantXp("smithing", recipe.xp);
+    emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
+
+    if (canCraftRecipe(recipe)) {
+      smithing.craftCooldown = recipe.craftTicks;
+    } else {
+      state.smithing = null;
+    }
+  }
+
   function tick(): void {
     regen();
 
     if (state.selectedSpotId !== null) {
       fishingTick();
+      return;
+    }
+
+    if (state.smithing !== null) {
+      smithingTick();
       return;
     }
 
@@ -662,10 +752,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         const dungeon = dungeonDef(area.unlockedByDungeonId as string);
         throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
       }
-      state.selectedSpotId = null; // at most one of Monster / Fishing Spot selected
+      state.selectedSpotId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
+      state.smithing = null;
       spawnMonster(monsterId);
     },
     selectFishingSpot(spotId) {
@@ -678,10 +769,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       if (level("fishing") < spot.levelReq) {
         throw new Error(`${spot.name} requires Fishing level ${spot.levelReq}`);
       }
-      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot selected
+      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
+      state.smithing = null;
       state.selectedSpotId = spotId;
       state.catchCooldown = spot.catchTicks;
     },
@@ -695,8 +787,24 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       state.selectedSpotId = null; // clears any Fishing Spot
       state.respawnTicksLeft = 0; // clears Respawn
       state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
+      state.smithing = null; // clears any Smithing activity
       state.dungeonRun = { dungeonId, waveIndex: 0 };
       spawnMonster(dungeon.waves[0] as string);
+    },
+    selectRecipe(recipeId) {
+      const recipe = recipeDef(recipeId); // throws on unknown id
+      if (level("smithing") < recipe.levelReq) {
+        throw new Error(`${recipe.name} requires Smithing level ${recipe.levelReq}`);
+      }
+      if (!canCraftRecipe(recipe)) {
+        throw new Error(`insufficient materials for ${recipe.name}`);
+      }
+      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
+      state.selectedSpotId = null;
+      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
+      state.respawnTicksLeft = 0;
+      state.hp = Math.max(state.hp, 1);
+      state.smithing = { recipeId: recipe.id, craftCooldown: recipe.craftTicks };
     },
     setCombatStyle(style) {
       state.combatStyle = style;

@@ -456,7 +456,7 @@ describe("Panel tabs", () => {
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Loot Feed, Character, Inventory, Bank — Loot Feed active by default", () => {
+  it("renders one tab per panel — Loot Feed, Character, Inventory, Bank, Smithing — Loot Feed active by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
@@ -464,6 +464,7 @@ describe("Panel tabs", () => {
       "Character",
       "Inventory",
       "Bank",
+      "Smithing",
     ]);
 
     const active = buttons.filter((b) => b.classList.contains("active"));
@@ -477,6 +478,7 @@ describe("Panel tabs", () => {
     expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="smithing"]')?.hidden).toBe(true);
   });
 
   it("clicking a tab swaps the visible panel and highlights the clicked tab", () => {
@@ -612,10 +614,10 @@ describe("Fishing", () => {
     expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
-  it("XP row shows 5 chips, including a FIS chip for Fishing", () => {
+  it("XP row shows 6 chips, including a FIS chip for Fishing", () => {
     const { root } = mount(1);
     const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
-    expect(abbrs).toEqual(["ATT", "STR", "DEF", "HIT", "FIS"]);
+    expect(abbrs).toEqual(["ATT", "STR", "DEF", "HIT", "FIS", "SMI"]);
   });
 
   it("selecting a Fishing Spot shows the fishing scene, hiding the Monster HP bar and sprite", () => {
@@ -1000,5 +1002,113 @@ describe("Dungeons", () => {
       p.textContent?.startsWith("Test Crypt"),
     );
     expect(cryptLabelAfter?.textContent).toBe("Test Crypt");
+  });
+});
+
+describe("Smithing (#28)", () => {
+  function mountWithBars(barQty: number, seed = 1) {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(seed),
+      makeSnapshot({ player: { inventory: [{ itemId: "bar", qty: barQty }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent);
+    return { engine, root, app };
+  }
+
+  it("XP row shows a SMI chip for Smithing, alongside the existing five (6 chips at 320px)", () => {
+    const { root } = mount(1);
+    const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
+    expect(abbrs).toHaveLength(6);
+    expect(abbrs).toContain("SMI");
+  });
+
+  it("renders one recipe row per Content.recipes, with level req and owned counts for each input", () => {
+    const { root } = mountWithBars(0);
+    const swordRow = root.querySelector('[data-recipe-row="test-sword"]');
+    expect(swordRow?.textContent).toContain("Test Sword");
+    expect(swordRow?.textContent).toContain("Lvl 1");
+    expect(swordRow?.textContent).toContain("1× Test Bar (have 0)");
+
+    const charmRow = root.querySelector('[data-recipe-row="test-charm"]');
+    expect(charmRow?.textContent).toContain("Test Charm");
+    expect(charmRow?.textContent).toContain("Lvl 20");
+    expect(charmRow?.textContent).toContain("3× Test Bar (have 0)");
+  });
+
+  it("the owned count in a recipe row updates as the carried inventory changes", () => {
+    const { root } = mountWithBars(5);
+    const swordRow = root.querySelector('[data-recipe-row="test-sword"]');
+    expect(swordRow?.textContent).toContain("1× Test Bar (have 5)");
+  });
+
+  it("disables the Craft button when short on inputs, enables it once inputs are sufficient", () => {
+    const short = mountWithBars(0);
+    expect(
+      short.root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.disabled,
+    ).toBe(true);
+
+    const enough = mountWithBars(1);
+    expect(
+      enough.root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.disabled,
+    ).toBe(false);
+  });
+
+  it("disables the Craft button when under-leveled, even with enough inputs", () => {
+    const { root } = mountWithBars(5); // fresh player is Smithing level 1; test-charm needs 20
+    expect(root.querySelector<HTMLButtonElement>('[data-recipe="test-charm"]')?.disabled).toBe(
+      true,
+    );
+  });
+
+  it("clicking Craft starts the Recipe, showing the Smithing scene and hiding the Monster HP bar/sprite", () => {
+    const { root } = mountWithBars(5);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("🔨 Smithing: Test Sword");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector("#monster-sprite") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("selecting a Monster afterwards restores the normal combat scene", () => {
+    const { root } = mountWithBars(5);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("logs a feed line and grants Smithing XP when a craft completes (item-crafted)", () => {
+    const { engine, root, app } = mountWithBars(5);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.click();
+
+    for (let i = 0; i < 3; i++) engine.tick(); // test-sword.craftTicks === 3
+    app.render();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/crafted.*bronze sword/i);
+    expect(engine.snapshot().player.skills.smithing.xp).toBeGreaterThan(0);
+    expect(engine.snapshot().player.inventory.find((s) => s.itemId === "bronze-sword")?.qty).toBe(
+      1,
+    );
+  });
+
+  it("a Material inventory row is neither equippable nor eatable, but still sellable/bankable", () => {
+    const { engine, root, app } = mountWithBars(2);
+    app.render();
+    const barLi = root.querySelector('#inventory li[data-item="bar"]');
+    expect(barLi?.classList.contains("equippable")).toBe(false);
+    expect(barLi?.classList.contains("eatable")).toBe(false);
+    expect(barLi?.classList.contains("material")).toBe(true);
+    expect(barLi?.querySelector('[data-sell="bar"]')?.textContent).toBe("Sell 5g");
+    expect(barLi?.querySelector('[data-deposit="bar"]')).not.toBeNull();
+
+    // Clicking the row itself (not a button) neither equips nor eats it — no HP change, no
+    // equipped/food-eaten feed line, and the Material still sits in the carried inventory.
+    const hpBefore = engine.snapshot().player.hp;
+    (barLi as HTMLElement)?.click();
+    expect(engine.snapshot().player.hp).toBe(hpBefore);
+    expect(engine.snapshot().player.inventory.find((s) => s.itemId === "bar")?.qty).toBe(2);
   });
 });

@@ -95,6 +95,32 @@ describe("validateContent", () => {
     expect(validateContent(content)).toContain('fishingSpot "pond" itemId "gold" is not a Food');
   });
 
+  it("reports a dangling recipe inputs itemId reference", () => {
+    const content: Content = {
+      ...fixtureContent,
+      recipes: fixtureContent.recipes.map((r) =>
+        r.id === "test-sword" ? { ...r, inputs: [{ itemId: "no-such-bar", qty: 1 }] } : r,
+      ),
+    };
+    const violations = validateContent(content);
+    expect(violations.some((v) => v.includes("no-such-bar") && v.includes("test-sword"))).toBe(
+      true,
+    );
+  });
+
+  it("reports a dangling recipe outputItemId reference", () => {
+    const content: Content = {
+      ...fixtureContent,
+      recipes: fixtureContent.recipes.map((r) =>
+        r.id === "test-sword" ? { ...r, outputItemId: "no-such-output" } : r,
+      ),
+    };
+    const violations = validateContent(content);
+    expect(violations.some((v) => v.includes("no-such-output") && v.includes("test-sword"))).toBe(
+      true,
+    );
+  });
+
   it("reports a duplicate id within a collection", () => {
     const meat = fixtureContent.items.find((i) => i.id === "meat")!;
     const content: Content = {
@@ -172,6 +198,7 @@ describe("validateContent", () => {
       items: fixtureContent.items,
       fishingSpots: [],
       dungeons: [],
+      recipes: [],
     };
     expect(validateContent(content)).toEqual([]);
   });

@@ -25,6 +25,7 @@ export function validateContent(content: Content): string[] {
   violations.push(...duplicateIds(content.monsters, "monsters"));
   violations.push(...duplicateIds(content.areas, "areas"));
   violations.push(...duplicateIds(content.fishingSpots, "fishingSpots"));
+  violations.push(...duplicateIds(content.recipes, "recipes"));
 
   // Invariant 2: dropTable itemId -> items.
   for (const monster of content.monsters) {
@@ -58,6 +59,18 @@ export function validateContent(content: Content): string[] {
       violations.push(`fishingSpot "${spot.id}" itemId "${spot.itemId}" not found`);
     } else if (item.kind !== "food") {
       violations.push(`fishingSpot "${spot.id}" itemId "${spot.itemId}" is not a Food`);
+    }
+  }
+
+  // Invariant 2: recipe.inputs itemId -> items, recipe.outputItemId -> items.
+  for (const recipe of content.recipes) {
+    for (const input of recipe.inputs) {
+      if (!itemIds.has(input.itemId)) {
+        violations.push(`recipe "${recipe.id}" inputs itemId "${input.itemId}" not found`);
+      }
+    }
+    if (!itemIds.has(recipe.outputItemId)) {
+      violations.push(`recipe "${recipe.id}" outputItemId "${recipe.outputItemId}" not found`);
     }
   }
 

@@ -13,7 +13,7 @@ An enemy inside an **Area** that the player farms. Has HP, attack/defence stats,
 _Avoid_: mob, enemy, NPC
 
 **Skill**:
-Attack (hit chance), Strength (max hit), Defence (damage avoidance), and Hitpoints (HP pool) — the four combat Skills — plus Fishing, the first non-combat Skill. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
+Attack (hit chance), Strength (max hit), Defence (damage avoidance), and Hitpoints (HP pool) — the four combat Skills — plus Fishing and Smithing, the non-combat Skills. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
 _Avoid_: stat, attribute
 
 **Combat Style**:
@@ -33,7 +33,7 @@ A concrete **Item** (with quantity) produced by rolling a **Drop Table**.
 _Avoid_: loot (as a noun for a single item)
 
 **Item**:
-Anything obtainable: **Equipment**, **Food**, or Gold.
+Anything obtainable: **Equipment**, **Food**, **Material**, or Gold.
 
 **Equipment**:
 An **Item** worn in one of five **Gear Slots**, granting attack / strength / defence bonuses.
@@ -47,6 +47,17 @@ Equipment progression rank: bronze → iron → steel → mithril. Area gating r
 
 **Food**:
 An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP.
+
+**Material**:
+An **Item** consumed as a **Recipe** input — stackable, unequippable, uneatable; sellable when it carries a value and always bankable, same as any other Item. A **Bar** is the only Material in v1.
+_Avoid_: resource, ingredient (as the general term)
+
+**Bar**:
+A metal Material dropped by certain Monsters (e.g. Bronze Bar, Iron Bar) and smithed into Equipment via a **Recipe**.
+
+**Recipe**:
+A Smithing-level-gated conversion of Materials into one Equipment Item, trained via the Smithing Skill. Selecting a Recipe crafts it repeatedly on a per-craft cooldown (mirroring a Fishing Spot's Catch cooldown) for as long as its inputs hold out, consuming them and granting Smithing XP at each completion.
+_Avoid_: blueprint, formula
 
 **Bank**:
 A player's storage separate from the carried inventory; deposited **Items** don't count against anything carried, and can't be worn or auto-eaten until withdrawn. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending carried gold, a gold sink.
@@ -106,3 +117,4 @@ _Avoid_: death screen, grave
 - The **Bank** holds one Item stack per **Bank Slot**, separate from the carried inventory
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
 - An **Area** may also host a **Dungeon**: an ordered sequence of **Waves** ending in a **Boss**, rewarding a **Chest** on completion; entering one cancels any selected Monster or Fishing Spot, and vice versa
+- A **Recipe** converts Materials into an Equipment Item, training Smithing; at most one of a Monster, a Fishing Spot, a Dungeon run, or a Recipe is active at a time — selecting/entering any one of the four cancels whichever of the other three was active
