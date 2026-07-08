@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
+import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
-import type { Snapshot } from "../core/types";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 
@@ -68,35 +68,20 @@ describe("Darkroot Forest content", () => {
 });
 
 /** A saved Snapshot for a player who just graduated Lumbry Meadows: combat level 13, bronze-geared. */
-function meadowsGraduateSave(): Snapshot {
-  return {
+function meadowsGraduateSave() {
+  return makeSnapshot({
     player: {
       hp: 16,
       maxHp: 16,
-      combatLevel: 13,
-      combatStyle: "aggressive",
-      autoEatThreshold: 0.5,
       skills: {
         attack: { level: 13, xp: xpForLevel(13) },
         strength: { level: 15, xp: xpForLevel(15) },
         defence: { level: 10, xp: xpForLevel(10) },
         hitpoints: { level: 16, xp: xpForLevel(16) },
-        fishing: { level: 1, xp: 0 },
       },
-      equipment: {
-        weapon: "bronze-sword",
-        shield: "bronze-shield",
-        head: null,
-        body: null,
-        legs: null,
-      },
-      inventory: [],
-      respawning: false,
+      equipment: { weapon: "bronze-sword", shield: "bronze-shield" },
     },
-    monster: null,
-    fishing: null,
-    areas: [],
-  };
+  });
 }
 
 describe("Darkroot Forest tier balance", () => {

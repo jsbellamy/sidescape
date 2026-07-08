@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
+import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
@@ -79,31 +80,21 @@ describe("mountApp", () => {
         return rest;
       }),
     };
-    const engine = createEngine(noValueContent, seededRng(1), {
-      player: {
-        hp: 10,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
+    const engine = createEngine(
+      noValueContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          inventory: [
+            { itemId: "meat", qty: 1 },
+            { itemId: "lucky-charm", qty: 1 },
+          ],
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [
-          { itemId: "meat", qty: 1 },
-          { itemId: "lucky-charm", qty: 1 },
-        ],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
     const root = document.createElement("main");
     mountApp(engine, root, noValueContent);
 
@@ -187,28 +178,18 @@ describe("Combat Style selector", () => {
   });
 
   it("highlights a non-default Combat Style when mounted from a saved Snapshot", () => {
-    const engine = createEngine(fixtureContent, seededRng(1), {
-      player: {
-        hp: 10,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "defensive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatStyle: "defensive",
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
     const root = document.createElement("main");
     mountApp(engine, root, fixtureContent);
 
@@ -262,28 +243,18 @@ describe("Auto-eat threshold selector", () => {
   });
 
   it("highlights a non-default threshold when mounted from a saved Snapshot", () => {
-    const engine = createEngine(fixtureContent, seededRng(1), {
-      player: {
-        hp: 10,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.25,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          autoEatThreshold: 0.25,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
     const root = document.createElement("main");
     mountApp(engine, root, fixtureContent);
 

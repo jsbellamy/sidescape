@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "./engine";
 import { fixtureContent } from "./fixture-content";
+import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
-import type { AutoEatThreshold, Snapshot } from "./types";
+import type { AutoEatThreshold } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -207,28 +208,20 @@ describe("Configurable auto-eat threshold", () => {
     threshold: AutoEatThreshold,
     invSeed: { itemId: string; qty: number }[],
   ) {
-    return createEngine(fiercerDummyContent(), seededRng(42), {
-      player: {
-        hp: 10,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "aggressive",
-        autoEatThreshold: threshold,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
+    return createEngine(
+      fiercerDummyContent(),
+      seededRng(42),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatStyle: "aggressive",
+          autoEatThreshold: threshold,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          inventory: invSeed,
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: invSeed,
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
   }
 
   it("accepts exactly {0, 0.25, 0.5, 0.75} and throws on any other value", () => {
@@ -353,28 +346,13 @@ describe("Configurable auto-eat threshold", () => {
 
 describe("Passive HP regen", () => {
   function damagedEngine(hp: number, seed = 1) {
-    return createEngine(fixtureContent, seededRng(seed), {
-      player: {
-        hp,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
-        },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+    return createEngine(
+      fixtureContent,
+      seededRng(seed),
+      makeSnapshot({
+        player: { hp, maxHp: 10, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
+      }),
+    );
   }
 
   it("gains exactly 1 HP every 10 Ticks while below max HP", () => {
@@ -405,29 +383,24 @@ describe("Passive HP regen", () => {
   });
 
   it("does not regen during Respawn", () => {
-    const veteran = createEngine(fixtureContent, seededRng(3), {
-      player: {
-        hp: 60,
-        maxHp: 60,
-        combatLevel: 45,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 60, xp: xpForLevel(60) },
-          strength: { level: 60, xp: xpForLevel(60) },
-          // weak Defence so the gated, hard-hitting brute can actually land a kill
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 60, xp: xpForLevel(60) },
-          fishing: { level: 1, xp: 0 },
+    const veteran = createEngine(
+      fixtureContent,
+      seededRng(3),
+      makeSnapshot({
+        player: {
+          hp: 60,
+          maxHp: 60,
+          combatStyle: "aggressive",
+          skills: {
+            attack: { level: 60, xp: xpForLevel(60) },
+            strength: { level: 60, xp: xpForLevel(60) },
+            // weak Defence so the gated, hard-hitting brute can actually land a kill
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 60, xp: xpForLevel(60) },
+          },
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
     veteran.selectMonster("brute");
     let died = false;
     veteran.on("death", () => {
@@ -454,28 +427,18 @@ describe("Passive HP regen", () => {
 describe("Manual eat command", () => {
   it("heals from Food, consumes it, emits food-eaten, and never overheals", () => {
     // meat heals 4, but only 2 HP of headroom is available below max — must cap there
-    const engine = createEngine(fixtureContent, seededRng(1), {
-      player: {
-        hp: 8,
-        maxHp: 10,
-        combatLevel: 3,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 1, xp: 0 },
-          strength: { level: 1, xp: 0 },
-          defence: { level: 1, xp: 0 },
-          hitpoints: { level: 10, xp: xpForLevel(10) },
-          fishing: { level: 1, xp: 0 },
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 8,
+          maxHp: 10,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          inventory: [{ itemId: "meat", qty: 2 }],
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [{ itemId: "meat", qty: 2 }],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
 
     const events: { itemId: string; healed: number }[] = [];
     engine.on("food-eaten", (e) => events.push({ itemId: e.itemId, healed: e.healed }));
@@ -682,28 +645,22 @@ describe("save/load", () => {
   });
 
   it("a high-level save unlocks the Crypt gate", () => {
-    const veteran = createEngine(fixtureContent, seededRng(1), {
-      player: {
-        hp: 45,
-        maxHp: 45,
-        combatLevel: 45,
-        combatStyle: "aggressive",
-        autoEatThreshold: 0.5,
-        skills: {
-          attack: { level: 45, xp: xpForLevel(45) },
-          strength: { level: 45, xp: xpForLevel(45) },
-          defence: { level: 45, xp: xpForLevel(45) },
-          hitpoints: { level: 45, xp: xpForLevel(45) },
-          fishing: { level: 1, xp: 0 },
+    const veteran = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 45,
+          maxHp: 45,
+          skills: {
+            attack: { level: 45, xp: xpForLevel(45) },
+            strength: { level: 45, xp: xpForLevel(45) },
+            defence: { level: 45, xp: xpForLevel(45) },
+            hitpoints: { level: 45, xp: xpForLevel(45) },
+          },
         },
-        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-        inventory: [],
-        respawning: false,
-      },
-      monster: null,
-      fishing: null,
-      areas: [],
-    });
+      }),
+    );
     expect(veteran.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(true);
     expect(() => veteran.selectMonster("brute")).not.toThrow();
   });
@@ -729,14 +686,11 @@ describe("Drop Table convergence", () => {
 });
 
 /** A combat-level-45 veteran (Area gates all open) with a configurable Fishing level/XP. */
-function veteranSnapshot(fishingLevel = 1, fishingXp = 0): Snapshot {
-  return {
+function veteranSnapshot(fishingLevel = 1, fishingXp = 0) {
+  return makeSnapshot({
     player: {
       hp: 45,
       maxHp: 45,
-      combatLevel: 45,
-      combatStyle: "aggressive",
-      autoEatThreshold: 0.5,
       skills: {
         attack: { level: 45, xp: xpForLevel(45) },
         strength: { level: 45, xp: xpForLevel(45) },
@@ -744,14 +698,8 @@ function veteranSnapshot(fishingLevel = 1, fishingXp = 0): Snapshot {
         hitpoints: { level: 45, xp: xpForLevel(45) },
         fishing: { level: fishingLevel, xp: fishingXp },
       },
-      equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-      inventory: [],
-      respawning: false,
     },
-    monster: null,
-    fishing: null,
-    areas: [],
-  };
+  });
 }
 
 describe("Fishing", () => {
@@ -868,29 +816,15 @@ describe("Fishing", () => {
   });
 
   describe("pinned decisions while fishing", () => {
-    function damagedFishingSnapshot(hp: number): Snapshot {
-      return {
+    function damagedFishingSnapshot(hp: number) {
+      return makeSnapshot({
         player: {
           hp,
           maxHp: 10,
-          combatLevel: 3,
-          combatStyle: "aggressive",
-          autoEatThreshold: 0.5,
-          skills: {
-            attack: { level: 1, xp: 0 },
-            strength: { level: 1, xp: 0 },
-            defence: { level: 1, xp: 0 },
-            hitpoints: { level: 10, xp: xpForLevel(10) },
-            fishing: { level: 1, xp: 0 },
-          },
-          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
           inventory: [{ itemId: "meat", qty: 5 }],
-          respawning: false,
         },
-        monster: null,
-        fishing: null,
-        areas: [],
-      };
+      });
     }
 
     it("passive regen continues while fishing (downtime heals)", () => {
