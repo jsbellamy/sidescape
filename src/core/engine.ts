@@ -3,6 +3,7 @@ import { levelForXp, xpForLevel } from "./xp";
 import { validateContent } from "./validate-content";
 import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
+  AreaDef,
   AutoEatThreshold,
   CurrencyDef,
   DropBand,
@@ -208,12 +209,35 @@ function loadBankCapacity(saved: Snapshot): number {
 
 /** Completed-dungeon ids: keeps only entries that are strings naming a real DungeonDef, dropping
  * anything else (unknown/renamed ids, stray non-strings) — mirrors loadInventory/loadBank's
- * filter-to-known-ids pattern. A pre-feature save has no `completedDungeonIds` key at all. */
+ * filter-to-known-ids pattern. If the key is present (even as []), it is trusted as-is: this is
+ * a post-#24 save that has already gone through migration once, so re-deriving from saved.areas
+ * would be wrong (a player could have entered a still-locked Area's Dungeon and abandoned it,
+ * which never sets areas[].unlocked but also must never re-migrate to "completed"). */
 function loadCompletedDungeonIds(saved: Snapshot, content: Content): Set<string> {
   const dungeonIds = new Set(content.dungeons.map((d) => d.id));
   const raw: unknown = saved.player?.completedDungeonIds;
-  if (!Array.isArray(raw)) return new Set();
-  return new Set(raw.filter((id): id is string => typeof id === "string" && dungeonIds.has(id)));
+  if (Array.isArray(raw)) {
+    return new Set(raw.filter((id): id is string => typeof id === "string" && dungeonIds.has(id)));
+  }
+  return migrateCompletedDungeonIdsFromAreaGates(saved, content);
+}
+
+/** Migration (#24): a save with no `completedDungeonIds` key predates Dungeon-boss gating —
+ * either a pre-#23 save (Dungeons didn't exist yet) or a pre-#24 save (Areas were still gated by
+ * combat level). Defaulting to an empty Set would re-lock every Area a player already earned, so
+ * instead this derives completion from the old gate flags the save already persisted: Snapshot
+ * doubles as save format, so `saved.areas[].unlocked` survives untouched from that old world.
+ * Tolerant of unknown/missing/malformed area ids and a missing/malformed `areas` array. */
+function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Content): Set<string> {
+  const completed = new Set<string>();
+  for (const savedArea of saved.areas ?? []) {
+    if (savedArea?.unlocked !== true) continue;
+    const areaId: unknown = savedArea?.id;
+    if (typeof areaId !== "string") continue;
+    const area = content.areas.find((a) => a.id === areaId);
+    if (area?.unlockedByDungeonId) completed.add(area.unlockedByDungeonId);
+  }
+  return completed;
 }
 
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
@@ -311,6 +335,13 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     const def = content.dungeons.find((d) => d.id === id);
     if (!def) throw new Error(`unknown dungeon: ${id}`);
     return def;
+  }
+
+  /** An Area with no gating Dungeon is unlocked from the start; a gated Area unlocks the instant
+   * its `unlockedByDungeonId` appears in `completedDungeonIds` — combat level gates nothing here
+   * (#24: Dungeon-boss gating replaced combat-level Area gating). */
+  function areaUnlocked(area: AreaDef): boolean {
+    return !area.unlockedByDungeonId || state.completedDungeonIds.has(area.unlockedByDungeonId);
   }
 
   function equippedDefs(): EquipmentDef[] {
@@ -496,7 +527,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         nextSlotsPrice: nextBankSlotsPrice(state.bankCapacity),
       },
       areas: content.areas.map((area) => {
-        const unlocked = combatLevel() >= area.combatLevelReq;
+        const unlocked = areaUnlocked(area);
         return {
           id: area.id,
           name: area.name,
@@ -627,8 +658,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     selectMonster(monsterId) {
       monsterDef(monsterId); // throws on unknown id
       const area = content.areas.find((a) => a.monsterIds.includes(monsterId));
-      if (area && combatLevel() < area.combatLevelReq) {
-        throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
+      if (area && !areaUnlocked(area)) {
+        const dungeon = dungeonDef(area.unlockedByDungeonId as string);
+        throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
       }
       state.selectedSpotId = null; // at most one of Monster / Fishing Spot selected
       state.respawnTicksLeft = 0;
@@ -639,8 +671,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     selectFishingSpot(spotId) {
       const spot = fishingSpotDef(spotId); // throws on unknown id
       const area = content.areas.find((a) => a.fishingSpotIds?.includes(spotId));
-      if (area && combatLevel() < area.combatLevelReq) {
-        throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
+      if (area && !areaUnlocked(area)) {
+        const dungeon = dungeonDef(area.unlockedByDungeonId as string);
+        throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
       }
       if (level("fishing") < spot.levelReq) {
         throw new Error(`${spot.name} requires Fishing level ${spot.levelReq}`);
@@ -655,8 +688,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     enterDungeon(dungeonId) {
       const dungeon = dungeonDef(dungeonId); // throws on unknown id
       const area = content.areas.find((a) => a.id === dungeon.areaId);
-      if (area && combatLevel() < area.combatLevelReq) {
-        throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
+      if (area && !areaUnlocked(area)) {
+        const gatingDungeon = dungeonDef(area.unlockedByDungeonId as string);
+        throw new Error(`${area.name} is locked — defeat ${gatingDungeon.name}`);
       }
       state.selectedSpotId = null; // clears any Fishing Spot
       state.respawnTicksLeft = 0; // clears Respawn

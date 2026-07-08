@@ -83,7 +83,8 @@ export interface FishingSpotDef {
 export interface AreaDef {
   id: string;
   name: string;
-  combatLevelReq: number;
+  /** DungeonDef id whose completion unlocks this Area; absent = unlocked from the start. */
+  unlockedByDungeonId?: string;
   monsterIds: string[];
   fishingSpotIds?: string[];
 }

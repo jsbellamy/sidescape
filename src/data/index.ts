@@ -9,14 +9,13 @@ export const content: Content = {
     {
       id: "lumbry-meadows",
       name: "Lumbry Meadows",
-      combatLevelReq: 0,
       monsterIds: ["chicken", "cow", "goblin"],
       fishingSpotIds: ["shrimp-pool"],
     },
     {
       id: "darkroot-forest",
       name: "Darkroot Forest",
-      combatLevelReq: 10,
+      unlockedByDungeonId: "meadow-depths",
       monsterIds: ["wolf", "goblin-warrior", "bandit"],
       fishingSpotIds: ["trout-run"],
     },

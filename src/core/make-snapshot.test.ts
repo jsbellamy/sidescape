@@ -30,13 +30,13 @@ describe("makeSnapshot", () => {
     expect(snap.fishing).toBeNull();
   });
 
-  it("derives areas from the fixture Content, gated by the default combat/Fishing level", () => {
+  it("derives areas from the fixture Content, gated by the default (empty) completedDungeonIds", () => {
     const snap = makeSnapshot();
     expect(snap.areas.map((a) => a.id)).toEqual(["meadow", "crypt"]);
     const meadow = snap.areas.find((a) => a.id === "meadow");
     const crypt = snap.areas.find((a) => a.id === "crypt");
-    expect(meadow?.unlocked).toBe(true); // meadow requires combat level 0
-    expect(crypt?.unlocked).toBe(false); // crypt requires combat level 40
+    expect(meadow?.unlocked).toBe(true); // meadow has no unlockedByDungeonId
+    expect(crypt?.unlocked).toBe(false); // crypt requires the "gauntlet" Dungeon completed
   });
 
   it("deep-merges a player override: only the stated field changes, everything else keeps its default", () => {

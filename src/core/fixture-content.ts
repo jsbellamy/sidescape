@@ -2,21 +2,21 @@ import type { Content } from "./types";
 
 /**
  * Minimal two-Area world for Engine tests. "dummy" barely fights back;
- * "brute" hits hard and sits behind a combat-level gate.
+ * "brute" hits hard and sits behind "meadow"'s own "gauntlet" Dungeon
+ * (#24: Area gates are Dungeon-boss gates, not combat-level gates).
  */
 export const fixtureContent: Content = {
   areas: [
     {
       id: "meadow",
       name: "Test Meadow",
-      combatLevelReq: 0,
       monsterIds: ["dummy"],
       fishingSpotIds: ["pond"],
     },
     {
       id: "crypt",
       name: "Test Crypt",
-      combatLevelReq: 40,
+      unlockedByDungeonId: "gauntlet",
       monsterIds: ["brute"],
       fishingSpotIds: ["deep-pond"],
     },

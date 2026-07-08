@@ -73,7 +73,7 @@ describe("fresh engine", () => {
     expect(snap.monster).toBeNull();
   });
 
-  it("exposes Area gate flags: meadow unlocked, crypt locked at combat level 3", () => {
+  it("exposes Area gate flags: meadow unlocked from the start, crypt locked until its gating Dungeon (gauntlet) completes", () => {
     const snap = freshEngine().snapshot();
     // combat level = floor((atk + str + def + hp) / 4) = floor(13/4) = 3
     expect(snap.player.combatLevel).toBe(3);
@@ -422,6 +422,7 @@ describe("Passive HP regen", () => {
             defence: { level: 1, xp: 0 },
             hitpoints: { level: 60, xp: xpForLevel(60) },
           },
+          completedDungeonIds: ["gauntlet"], // Crypt's gating Dungeon, so "brute" is selectable
         },
       }),
     );
@@ -533,7 +534,34 @@ describe("Equipment and gates", () => {
   });
 
   it("selectMonster throws for a Monster behind a locked Area gate", () => {
-    expect(() => freshEngine().selectMonster("brute")).toThrow(/combat level 40/i);
+    expect(() => freshEngine().selectMonster("brute")).toThrow(
+      /Test Crypt is locked — defeat The Gauntlet/,
+    );
+  });
+
+  it("combat leveling alone never unlocks a gated Area, even far past the old combat-level requirement", () => {
+    const veteran = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 99,
+          maxHp: 99,
+          skills: {
+            attack: { level: 99, xp: xpForLevel(99) },
+            strength: { level: 99, xp: xpForLevel(99) },
+            defence: { level: 99, xp: xpForLevel(99) },
+            hitpoints: { level: 99, xp: xpForLevel(99) },
+          },
+          // completedDungeonIds deliberately left empty: "gauntlet" was never completed.
+        },
+      }),
+    );
+    expect(veteran.snapshot().player.combatLevel).toBe(99);
+    expect(veteran.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(false);
+    expect(() => veteran.selectMonster("brute")).toThrow(
+      /Test Crypt is locked — defeat The Gauntlet/,
+    );
   });
 
   it("equip emits exactly one equipped event carrying the equipped item's id", () => {
@@ -960,21 +988,12 @@ describe("save/load", () => {
     expect(kills).toBeGreaterThan(0);
   });
 
-  it("a high-level save unlocks the Crypt gate", () => {
+  it("a save with the gating Dungeon already in completedDungeonIds unlocks the Crypt gate", () => {
     const veteran = createEngine(
       fixtureContent,
       seededRng(1),
       makeSnapshot({
-        player: {
-          hp: 45,
-          maxHp: 45,
-          skills: {
-            attack: { level: 45, xp: xpForLevel(45) },
-            strength: { level: 45, xp: xpForLevel(45) },
-            defence: { level: 45, xp: xpForLevel(45) },
-            hitpoints: { level: 45, xp: xpForLevel(45) },
-          },
-        },
+        player: { completedDungeonIds: ["gauntlet"] },
       }),
     );
     expect(veteran.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(true);
@@ -1209,7 +1228,9 @@ describe("Drop Table convergence", () => {
   });
 });
 
-/** A combat-level-45 veteran (Area gates all open) with a configurable Fishing level/XP. */
+/** A veteran with the Crypt's gating Dungeon ("gauntlet") already completed — so its Area gate
+ * is open — and a configurable Fishing level/XP. Combat level is incidental (#24: leveling alone
+ * never opens an Area gate), kept high only because these fixtures predate the Dungeon gate. */
 function veteranSnapshot(fishingLevel = 1, fishingXp = 0) {
   return makeSnapshot({
     player: {
@@ -1222,6 +1243,7 @@ function veteranSnapshot(fishingLevel = 1, fishingXp = 0) {
         hitpoints: { level: 45, xp: xpForLevel(45) },
         fishing: { level: fishingLevel, xp: fishingXp },
       },
+      completedDungeonIds: ["gauntlet"],
     },
   });
 }
@@ -1252,7 +1274,9 @@ describe("Fishing", () => {
   });
 
   it("throws when the containing Area is locked, even before checking Fishing level", () => {
-    expect(() => freshEngine().selectFishingSpot("deep-pond")).toThrow(/combat level 40/i);
+    expect(() => freshEngine().selectFishingSpot("deep-pond")).toThrow(
+      /Test Crypt is locked — defeat The Gauntlet/,
+    );
   });
 
   it("throws for insufficient Fishing level once the Area gate is already open", () => {
@@ -1475,7 +1499,7 @@ describe("Dungeons", () => {
       };
       expect(() =>
         createEngine(lockedDungeonContent, seededRng(1)).enterDungeon("crypt-dungeon"),
-      ).toThrow(/combat level 40/i);
+      ).toThrow(/Test Crypt is locked — defeat The Gauntlet/);
     });
 
     it("spawns the first Wave at full HP and populates the dungeon Snapshot (1-based wave)", () => {
@@ -1789,6 +1813,99 @@ describe("Dungeons", () => {
       );
       expect(restored.snapshot().player.completedDungeonIds).toEqual([]);
       expect(restored.snapshot().dungeon).toBeNull();
+    });
+
+    it("a pre-#24 save (no completedDungeonIds key, crypt unlocked:true in saved areas[]) migrates gauntlet into completedDungeonIds", () => {
+      const preWaveSave = {
+        player: {
+          hp: 45,
+          maxHp: 45,
+          combatLevel: 45,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 45, xp: xpForLevel(45) },
+            strength: { level: 45, xp: xpForLevel(45) },
+            defence: { level: 45, xp: xpForLevel(45) },
+            hitpoints: { level: 45, xp: xpForLevel(45) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+          // no completedDungeonIds key: this save predates Dungeon-boss gating (#24), back when
+          // the Crypt's `unlocked` flag was derived from combat level instead.
+        },
+        monster: null,
+        areas: [
+          {
+            id: "meadow",
+            name: "Test Meadow",
+            unlocked: true,
+            monsterIds: ["dummy"],
+            fishingSpots: [{ id: "pond", unlocked: true }],
+          },
+          {
+            id: "crypt",
+            name: "Test Crypt",
+            unlocked: true,
+            monsterIds: ["brute"],
+            fishingSpots: [{ id: "deep-pond", unlocked: true }],
+          },
+        ],
+        // no dungeon key either
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(preWaveSave)),
+      );
+      expect(restored.snapshot().player.completedDungeonIds).toEqual(["gauntlet"]);
+      expect(restored.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(true);
+    });
+
+    it("a pre-#24 save with crypt unlocked:false in saved areas[] stays locked (nothing migrated)", () => {
+      const preWaveSave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+        },
+        monster: null,
+        areas: [
+          {
+            id: "meadow",
+            name: "Test Meadow",
+            unlocked: true,
+            monsterIds: ["dummy"],
+            fishingSpots: [{ id: "pond", unlocked: true }],
+          },
+          {
+            id: "crypt",
+            name: "Test Crypt",
+            unlocked: false,
+            monsterIds: ["brute"],
+            fishingSpots: [{ id: "deep-pond", unlocked: false }],
+          },
+        ],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(preWaveSave)),
+      );
+      expect(restored.snapshot().player.completedDungeonIds).toEqual([]);
+      expect(restored.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(false);
     });
   });
 });
