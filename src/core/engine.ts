@@ -1,6 +1,6 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
-import { AUTO_EAT_THRESHOLDS } from "./types";
+import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AutoEatThreshold,
   CurrencyDef,
@@ -220,7 +220,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
   function snapshot(): Snapshot {
     const skills = {} as Snapshot["player"]["skills"];
-    for (const skill of ["attack", "strength", "defence", "hitpoints", "fishing"] as const) {
+    for (const skill of SKILL_NAMES) {
       skills[skill] = { level: level(skill), xp: state.xp[skill] };
     }
     const monsterDef = content.monsters.find((m) => m.id === state.selectedMonsterId);
