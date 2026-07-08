@@ -1,6 +1,14 @@
 import type { Engine } from "../core/engine";
-import type { Content } from "../core/types";
+import type { CombatStyle, Content } from "../core/types";
 import { monsterSprite, playerSprite } from "./sprites";
+
+/** Combat Style segmented control labels — Object.entries drives the buttons, so
+ * widening `CombatStyle` (issue #7) is a compile error here, not a silent gap. */
+const STYLE_LABELS: Record<CombatStyle, string> = {
+  accurate: "Accurate",
+  aggressive: "Aggressive",
+  defensive: "Defensive",
+};
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
 export interface MountedApp {
@@ -39,6 +47,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     el("#player-hp-text").textContent = player.respawning
       ? "Respawning…"
       : `HP ${player.hp}/${player.maxHp}`;
+
+    root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
+    });
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     if (monster) {
@@ -120,6 +132,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       <p id="monster-name"></p>
       <div class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
       <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
+      <div id="style-row" class="style-row">
+        ${Object.entries(STYLE_LABELS)
+          .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
+          .join("")}
+      </div>
     </section>
     <section id="xp-row"></section>
     <section id="picker"></section>
@@ -140,6 +157,14 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("levelup", () => buildPicker()); // gate flags may change
+
+  el("#style-row").addEventListener("click", (event) => {
+    const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
+    if (style) {
+      engine.setCombatStyle(style);
+      render();
+    }
+  });
 
   el("#picker").addEventListener("click", (event) => {
     const id = (event.target as HTMLElement).dataset["monster"];
