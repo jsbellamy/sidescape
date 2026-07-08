@@ -1112,3 +1112,125 @@ describe("Smithing (#28)", () => {
     expect(engine.snapshot().player.inventory.find((s) => s.itemId === "bar")?.qty).toBe(2);
   });
 });
+
+describe("Combat feedback (#4)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Pumps `ticks` engine Ticks, calling `app.render()` after each — the documented contract for
+   * `MountedApp.render()` — without advancing fake timers, so every splat/toast fired along the
+   * way is still present in the DOM afterwards for assertions. */
+  function pump(engine: ReturnType<typeof createEngine>, app: { render(): void }, ticks: number) {
+    for (let i = 0; i < ticks; i++) {
+      engine.tick();
+      app.render();
+    }
+  }
+
+  it("shows a red hit splat with the damage number over the Monster as the player's attacks land", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    // dummy's low defence gives the level-1 player's melee attack ~50% hit chance (worked in the
+    // issue investigation from combat.ts's formulas) — 400 Ticks (~100 attacks at speed 4) all but
+    // guarantees both a hit and a miss land on both sides.
+    pump(engine, app, 400);
+
+    const hitSplats = [...root.querySelectorAll("#monster-splats .splat-hit")];
+    expect(hitSplats.length).toBeGreaterThan(0);
+    expect(hitSplats.every((el) => /^[1-9]\d*$/.test(el.textContent ?? ""))).toBe(true);
+  });
+
+  it("shows a blue '0' miss splat over the Monster when the player's attack misses", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 400);
+
+    const missSplats = [...root.querySelectorAll("#monster-splats .splat-miss")];
+    expect(missSplats.length).toBeGreaterThan(0);
+    expect(missSplats.every((el) => el.textContent === "0")).toBe(true);
+  });
+
+  it("shows both hit and miss splats over the Player as the Monster's attacks land", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 400);
+
+    expect(root.querySelectorAll("#player-splats .splat-hit").length).toBeGreaterThan(0);
+    expect(root.querySelectorAll("#player-splats .splat-miss").length).toBeGreaterThan(0);
+  });
+
+  it("fades a damage splat out of the DOM after its animation duration", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 20); // enough for at least one attack (dummy attackSpeed === 4)
+
+    const before = root.querySelectorAll("#monster-splats .splat, #player-splats .splat").length;
+    expect(before).toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(1000); // > the splat fade duration
+    const after = root.querySelectorAll("#monster-splats .splat, #player-splats .splat").length;
+    expect(after).toBe(0);
+  });
+
+  it("shows a level-up toast on the levelup event that auto-dismisses on its own after a delay", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    const startLevel = engine.snapshot().player.skills.strength.level;
+
+    let i = 0;
+    for (; i < 5000 && engine.snapshot().player.skills.strength.level === startLevel; i++) {
+      engine.tick();
+    }
+    app.render();
+    expect(engine.snapshot().player.skills.strength.level).toBeGreaterThan(startLevel);
+
+    const toast = root.querySelector("#toast-container .toast");
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/level/i);
+
+    vi.advanceTimersByTime(5000); // > the toast's auto-dismiss delay
+    expect(root.querySelector("#toast-container .toast")).toBeNull();
+  });
+
+  it("flashes the screen and highlights the Loot Feed line when a rare Drop lands, then clears", () => {
+    const rareDropContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [{ itemId: "lucky-charm", qty: 1, chance: 1, band: "rare" as const }],
+            }
+          : m,
+      ),
+    };
+    const engine = createEngine(rareDropContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, rareDropContent);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    let i = 0;
+    for (
+      ;
+      i < 2000 && !engine.snapshot().player.inventory.some((s) => s.itemId === "lucky-charm");
+      i++
+    ) {
+      engine.tick();
+    }
+    app.render();
+    expect(engine.snapshot().player.inventory.some((s) => s.itemId === "lucky-charm")).toBe(true);
+
+    expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(true);
+    const feedLine = root.querySelector("#feed li.drop-rare");
+    expect(feedLine?.textContent).toMatch(/lucky charm/i);
+
+    vi.advanceTimersByTime(1000); // > the flash duration
+    expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(false);
+  });
+});

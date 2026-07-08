@@ -8,6 +8,7 @@ import type {
   EquipmentDef,
   GearSlot,
   SkillSnapshot,
+  Snapshot,
 } from "../core/types";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
@@ -24,6 +25,14 @@ const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs"]
 
 /** Sort control labels, in `SORT_KEYS` order — "Kind | Value | Name". */
 const SORT_LABELS: Record<SortKey, string> = { kind: "Kind", value: "Value", name: "Name" };
+
+/** Damage-splat fade duration (#4); mirrors styles.css's `splat-fade` keyframes so the DOM node is
+ * removed right as the CSS animation finishes. */
+const SPLAT_FADE_MS = 700;
+/** Level-up toast auto-dismiss delay (#4). */
+const TOAST_DISMISS_MS = 2500;
+/** Rare-Drop screen-flash duration (#4); mirrors styles.css's `rare-flash` keyframes. */
+const FLASH_DURATION_MS = 400;
 
 /** One line per non-zero stat on `def` (e.g. "+4 atk", "+3 str", "def 4"), plus the weapon's own
  * speed for weapon-slot items. Empty-stat gear (e.g. a Charm with only a name) yields []. */
@@ -103,6 +112,23 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
 
+  // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
+  // reacts to Snapshot deltas and the Engine's own events, adding no new Engine state (ADR-0001:
+  // Snapshot is the only continuous state the UI reads, and there is no hit/miss Engine event to
+  // react to instead). `fx*` tracks a mirror of the Engine's own attack cooldowns — sized from the
+  // Snapshot's public `player.bonuses.attackSpeed` and the Monster's own `attackSpeed` — so a real
+  // miss (an attack landed for 0 damage) can be told apart from a quiet Tick where nobody swung.
+  // It advances once per `render()` call, which the caller pairs 1:1 with `engine.tick()` in
+  // production (see main.ts's interval); a `render()` from an unrelated click (e.g. selling an
+  // Item) can nudge the cadence by a beat — a cosmetic approximation acceptable for feedback FX
+  // that never touches core combat resolution.
+  let fxMonsterId: string | null = null;
+  let fxMonsterHp = 0;
+  let fxPlayerHp = engine.snapshot().player.hp;
+  let fxPlayerCd = 0;
+  let fxMonsterCd = 0;
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
   /** Shows the active tab's panel and hides the rest; highlights the matching tab button. */
   function renderTabs(): void {
     root.querySelectorAll<HTMLButtonElement>("#tab-row button").forEach((btn) => {
@@ -149,8 +175,88 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     while (feed.children.length > 40) feed.lastChild?.remove();
   }
 
+  /** Appends a damage splat (a red hit for `amount > 0`, a blue "0" miss otherwise) to `layer`,
+   * removing it after SPLAT_FADE_MS — long enough for styles.css's `splat-fade` animation to play.
+   * Each splat owns its own timer so overlapping splats (both combatants landing an attack the
+   * same Tick) fade independently. */
+  function showSplat(layer: HTMLElement, amount: number): void {
+    const splat = document.createElement("span");
+    splat.className = amount > 0 ? "splat splat-hit" : "splat splat-miss";
+    splat.textContent = String(amount);
+    layer.appendChild(splat);
+    setTimeout(() => splat.remove(), SPLAT_FADE_MS);
+  }
+
+  /** Advances the combat-fx cooldown mirror from the latest Snapshot and shows a damage splat over
+   * whichever side(s) attacked this call — see the `fx*` declarations above for why this mirrors
+   * (rather than reads) attack cadence. No-ops whenever combat isn't actually happening (no
+   * Monster selected, or the player is mid-Respawn), keeping the baselines fresh so the next real
+   * engagement starts from a clean reading instead of a stale delta. */
+  function advanceCombatFx(snap: Snapshot): void {
+    const { player, monster } = snap;
+    if (!monster || player.respawning) {
+      fxMonsterId = monster?.id ?? null;
+      fxMonsterHp = monster?.hp ?? 0;
+      fxPlayerHp = player.hp;
+      return;
+    }
+
+    const monsterSpeed = content.monsters.find((m) => m.id === monster.id)?.attackSpeed ?? 1;
+    // Monster HP only ever resets to max via the Engine's own spawnMonster (new selection, a kill
+    // respawning the same Monster, a wave change, or resuming play after the player's own death) —
+    // every one of those also re-arms the Engine's real cooldowns, so mirroring that same signal
+    // here keeps our cooldown mirror in lockstep instead of drifting across those transitions.
+    const freshSpawn =
+      monster.id !== fxMonsterId || (monster.hp === monster.maxHp && fxMonsterHp < monster.maxHp);
+
+    if (freshSpawn) {
+      fxPlayerCd = player.bonuses.attackSpeed;
+      fxMonsterCd = monsterSpeed;
+    } else {
+      fxPlayerCd -= 1;
+      if (fxPlayerCd <= 0) {
+        fxPlayerCd = player.bonuses.attackSpeed;
+        showSplat(el("#monster-splats"), Math.max(0, fxMonsterHp - monster.hp));
+      }
+      fxMonsterCd -= 1;
+      if (fxMonsterCd <= 0) {
+        fxMonsterCd = monsterSpeed;
+        // Player HP can also move the same Tick from regen/auto-eat, which can mask (or invert) a
+        // hit's true delta — an accepted approximation, same as the cadence mirror above.
+        showSplat(el("#player-splats"), Math.max(0, fxPlayerHp - player.hp));
+      }
+    }
+
+    fxMonsterId = monster.id;
+    fxMonsterHp = monster.hp;
+    fxPlayerHp = player.hp;
+  }
+
+  /** Appends a level-up toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each
+   * toast owns its own timer so multiple same-Tick level-ups (e.g. a kill's damage XP and its
+   * trickle of Hitpoints XP both crossing a level boundary) stack and dismiss independently. */
+  function showLevelUpToast(text: string): void {
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.textContent = text;
+    el<HTMLElement>("#toast-container").appendChild(toast);
+    setTimeout(() => toast.remove(), TOAST_DISMISS_MS);
+  }
+
+  /** Briefly flashes the whole scene on a rare Drop; re-triggers the CSS animation (via a forced
+   * reflow) if a second rare Drop lands before the previous flash finished. */
+  function triggerRareFlash(): void {
+    const overlay = el<HTMLElement>("#flash-overlay");
+    overlay.classList.remove("flash-rare");
+    void overlay.offsetWidth; // force reflow so re-adding the class restarts the animation
+    overlay.classList.add("flash-rare");
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => overlay.classList.remove("flash-rare"), FLASH_DURATION_MS);
+  }
+
   function render(): void {
     const snap = engine.snapshot();
+    advanceCombatFx(snap);
     const { player, monster, fishing, dungeon, smithing, bank } = snap;
 
     const dungeonHeader = el<HTMLElement>("#dungeon-header");
@@ -355,10 +461,18 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   }
 
   root.innerHTML = `
+    <div id="flash-overlay"></div>
     <section id="scene">
+      <div id="toast-container"></div>
       <div id="sprite-row">
-        <img id="monster-sprite" class="sprite pixel" alt="" hidden />
-        <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+        <div id="monster-sprite-wrap" class="sprite-wrap">
+          <img id="monster-sprite" class="sprite pixel" alt="" hidden />
+          <div id="monster-splats" class="splat-layer"></div>
+        </div>
+        <div id="player-sprite-wrap" class="sprite-wrap">
+          <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+          <div id="player-splats" class="splat-layer"></div>
+        </div>
       </div>
       <p id="dungeon-header" hidden></p>
       <p id="monster-name"></p>
@@ -416,7 +530,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`),
   );
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));
+  engine.on("drop", (e) => {
+    if (e.band === "rare") triggerRareFlash();
+  });
   engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
+  engine.on("levelup", (e) => showLevelUpToast(`⭐ ${e.skill} level ${e.level}!`));
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));

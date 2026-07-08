@@ -78,6 +78,7 @@ body {
 }
 
 #scene {
+  position: relative; /* anchors #toast-container */
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -110,6 +111,104 @@ body {
   }
   50% {
     transform: translateY(-3px);
+  }
+}
+
+/* Combat feedback (#4): damage splats, level-up toast, rare-Drop flash. */
+
+.sprite-wrap {
+  position: relative;
+}
+
+.splat-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.splat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px #000;
+  animation: splat-fade 700ms ease-out forwards;
+}
+
+.splat-hit {
+  color: #e04a3f;
+}
+
+.splat-miss {
+  color: #4a90d9;
+}
+
+@keyframes splat-fade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -85%) scale(1.2);
+  }
+}
+
+#toast-container {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  animation: toast-in 150ms ease-out;
+}
+
+@keyframes toast-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#flash-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+}
+
+#flash-overlay.flash-rare {
+  animation: rare-flash 400ms ease-out;
+}
+
+@keyframes rare-flash {
+  0% {
+    background: rgba(212, 160, 23, 0.55);
+  }
+  100% {
+    background: rgba(212, 160, 23, 0);
   }
 }
 
