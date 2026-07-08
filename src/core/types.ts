@@ -1,4 +1,5 @@
-/** Ordered list of Skills; order is load-bearing for the XP row render order. */
+/** Ordered list of Skills; order is load-bearing for the XP row render order. Ranged and Magic
+ * (#7) are appended, never inserted earlier — mirrors items.ts's own append-only convention. */
 export const SKILL_NAMES = [
   "attack",
   "strength",
@@ -6,9 +7,18 @@ export const SKILL_NAMES = [
   "hitpoints",
   "fishing",
   "smithing",
+  "ranged",
+  "magic",
 ] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
+/** A weapon's Combat Mode (#7) — deliberately NOT a widening of CombatStyle: CombatStyle is the
+ * player's melee training selector (Accurate/Aggressive/Defensive), while Combat Mode is which of
+ * Attack's three families a weapon belongs to. A melee weapon's damage XP still routes through
+ * CombatStyle (STYLE_SKILL in engine.ts); a ranged or magic weapon routes straight to its own
+ * Skill instead, bypassing Combat Style entirely. See ADR-0002 for why STYLE_SKILL/STYLE_BOOST
+ * stay separate maps — this type is orthogonal to both. */
+export type CombatMode = "melee" | "ranged" | "magic";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
 
@@ -31,6 +41,9 @@ export interface EquipmentDef {
   defBonus: number;
   /** Weapons only: Ticks between player attacks. */
   attackSpeed?: number;
+  /** Weapons only: which Combat Mode this weapon trains; omitted means "melee" (every pre-#7
+   * weapon in data/index.ts relies on this default rather than declaring it explicitly). */
+  combatMode?: CombatMode;
   /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
   value?: number;
 }

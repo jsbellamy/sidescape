@@ -5,6 +5,7 @@ import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AreaDef,
   AutoEatThreshold,
+  CombatMode,
   CurrencyDef,
   DropBand,
   DungeonDef,
@@ -108,10 +109,28 @@ function weaponSpeedFor(weaponId: string | null, content: Content): number {
   return def?.kind === "equipment" ? (def.attackSpeed ?? UNARMED_SPEED) : UNARMED_SPEED;
 }
 
+/** Combat Mode for `weaponId` (#7); unarmed, an unresolvable/non-equipment id, or an equipment
+ * weapon that doesn't declare one all default to "melee" — mirrors weaponSpeedFor's fallback
+ * pattern above, including being pure for the same load-before-closures reason. */
+function weaponCombatModeFor(weaponId: string | null, content: Content): CombatMode {
+  if (weaponId === null) return "melee";
+  const def = content.items.find((i) => i.id === weaponId);
+  return def?.kind === "equipment" ? (def.combatMode ?? "melee") : "melee";
+}
+
 /** The no-save defaults: a level-1 player (Hitpoints 10, per ADR), full HP, nothing selected. */
 function freshState(_content: Content): State {
   return {
-    xp: { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0, smithing: 0 },
+    xp: {
+      attack: 0,
+      strength: 0,
+      defence: 0,
+      hitpoints: xpForLevel(10),
+      fishing: 0,
+      smithing: 0,
+      ranged: 0,
+      magic: 0,
+    },
     hp: 10,
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
@@ -493,9 +512,22 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     if (after > before) emit({ type: "levelup", skill, level: after });
   }
 
+  /** Which Skill an attack's damage XP trains (#7): the equipped weapon's Combat Mode decides —
+   * melee keeps the existing Combat Style routing via STYLE_SKILL unchanged, while a ranged or
+   * magic weapon routes straight to its own Skill instead. Accuracy/damage math (attackRoll,
+   * maxHit, effectiveLevel below) intentionally stays keyed off Attack/Strength + Combat Style
+   * regardless of weapon mode — issue #7 scopes only XP routing and combat level's display
+   * formula, not a ranged/magic-specific hit/damage model. */
+  function combatXpSkill(): SkillName {
+    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    if (mode === "ranged") return "ranged";
+    if (mode === "magic") return "magic";
+    return STYLE_SKILL[state.combatStyle];
+  }
+
   function awardCombatXp(damage: number): void {
     if (damage <= 0) return;
-    grantXp(STYLE_SKILL[state.combatStyle], 4 * damage);
+    grantXp(combatXpSkill(), 4 * damage);
     grantXp("hitpoints", (4 / 3) * damage);
   }
 
@@ -523,10 +555,21 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
   }
 
+  /** RS-flavored combat level (#7): display-only since #24 replaced combat-level Area gating
+   * with Dungeon-boss gating, so it no longer gates anything. Defence + Hitpoints are always
+   * counted (the shared "durability" half); the other half is the best of three modes — melee
+   * (Attack + Strength combined), Ranged, or Magic (each doubled to weigh the same as melee's
+   * two combined Skills) — mirroring OSRS's own melee/ranged/magic combat-level split. At equal
+   * Skill levels across the board this reduces to the pre-#7 formula unchanged (worked examples
+   * in engine.test.ts pin this). */
   function combatLevel(): number {
-    return Math.floor(
-      (level("attack") + level("strength") + level("defence") + level("hitpoints")) / 4,
+    const base = level("defence") + level("hitpoints");
+    const top = Math.max(
+      level("attack") + level("strength"),
+      2 * level("ranged"),
+      2 * level("magic"),
     );
+    return Math.floor((base + top) / 4);
   }
 
   function maxHp(): number {

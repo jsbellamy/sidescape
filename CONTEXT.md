@@ -13,12 +13,16 @@ An enemy inside an **Area** that the player farms. Has HP, attack/defence stats,
 _Avoid_: mob, enemy, NPC
 
 **Skill**:
-Attack (hit chance), Strength (max hit), Defence (damage avoidance), and Hitpoints (HP pool) — the four combat Skills — plus Fishing and Smithing, the non-combat Skills. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
+Attack (hit chance), Strength (max hit), Defence (damage avoidance), Hitpoints (HP pool), Ranged, and Magic — the six combat Skills — plus Fishing and Smithing, the non-combat Skills. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
 _Avoid_: stat, attribute
 
 **Combat Style**:
-The player's training selector — Accurate / Aggressive / Defensive — which decides whether kill XP goes to Attack, Strength, or Defence. Hitpoints XP always trickles.
+The player's training selector — Accurate / Aggressive / Defensive — which decides whether melee kill XP goes to Attack, Strength, or Defence. Applies only while the equipped weapon's Combat Mode is melee; Hitpoints XP always trickles regardless of mode.
 _Avoid_: stance, mode
+
+**Combat Mode**:
+Melee, Ranged, or Magic — the family a weapon belongs to, fixed by the weapon itself (e.g. a sword is melee, a Shortbow is Ranged, an Apprentice Staff is Magic). Decides which Skill an attack's kill XP trains: melee routes through Combat Style, while Ranged and Magic each train their own Skill directly. Orthogonal to Combat Style — picking a Combat Style never changes Combat Mode, and vice versa.
+_Avoid_: stance, style (reserved for Combat Style)
 
 **Tick**:
 The 600ms unit of game time. All combat timing (attack speeds, regen) is expressed in Ticks.
@@ -111,7 +115,8 @@ _Avoid_: death screen, grave
 - A **Monster** has exactly one **Drop Table**
 - A **Drop Table** roll yields **Drops** (quantities of **Items**)
 - A piece of **Equipment** occupies one **Gear Slot** and has one **Gear Tier**
-- Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the active **Combat Style**
+- A weapon's **Combat Mode** decides which **Skill** an attack's XP trains: melee routes through the active **Combat Style**, Ranged and Magic each train their own Skill
+- Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the equipped weapon's **Combat Mode** (and, for melee, the active **Combat Style**)
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot**, separate from the carried inventory

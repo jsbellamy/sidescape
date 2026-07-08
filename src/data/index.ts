@@ -63,6 +63,8 @@ export const content: Content = {
         { itemId: "leather-body", qty: 1, chance: 1 / 20, band: "uncommon" },
         { itemId: "bronze-sword", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "bronze-bar", qty: 1, chance: 0.2, band: "common" },
+        // Ranged and Magic starter weapons (#7): demoable from Lumbry Meadows' own Monsters.
+        { itemId: "apprentice-staff", qty: 1, chance: 1 / 28, band: "uncommon" },
       ],
     },
     {
@@ -79,6 +81,8 @@ export const content: Content = {
         { itemId: "bronze-shield", qty: 1, chance: 1 / 24, band: "uncommon" },
         { itemId: "goblin-charm", qty: 1, chance: 1 / 128, band: "rare" },
         { itemId: "bronze-bar", qty: 1, chance: 0.25, band: "common" },
+        // Ranged starter weapon (#7): demoable from Lumbry Meadows' own Monsters.
+        { itemId: "shortbow", qty: 1, chance: 1 / 28, band: "uncommon" },
       ],
     },
     {
@@ -437,6 +441,34 @@ export const content: Content = {
       defBonus: 0,
       attackSpeed: 3,
       value: 1000,
+    },
+    // Ranged and Magic starter weapons (#7): the only two Equipment in Content that declare a
+    // non-default `combatMode` — every weapon above this line trains melee (the omitted default).
+    // Dropped by Lumbry Meadows Monsters (see goblin/cow dropTable above) so the two new Skills
+    // are demoable from the very first Area. Append-only — after shade-blade, never earlier.
+    {
+      kind: "equipment",
+      id: "shortbow",
+      name: "Shortbow",
+      slot: "weapon",
+      atkBonus: 5,
+      strBonus: 4,
+      defBonus: 0,
+      attackSpeed: 5,
+      combatMode: "ranged",
+      value: 25,
+    },
+    {
+      kind: "equipment",
+      id: "apprentice-staff",
+      name: "Apprentice Staff",
+      slot: "weapon",
+      atkBonus: 4,
+      strBonus: 5,
+      defBonus: 0,
+      attackSpeed: 6,
+      combatMode: "magic",
+      value: 25,
     },
   ],
   fishingSpots: [

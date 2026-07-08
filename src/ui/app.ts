@@ -44,8 +44,11 @@ function formatChance(chance: number): string {
   return Math.abs(inverse - rounded) < 0.01 ? `1/${rounded}` : `${Math.round(chance * 100)}%`;
 }
 
-/** Combat Style segmented control labels — Object.entries drives the buttons, so
- * widening `CombatStyle` (issue #7) is a compile error here, not a silent gap. */
+/** Combat Style segmented control labels — Object.entries drives the buttons, so a future
+ * widening of `CombatStyle` is a compile error here, not a silent gap. Issue #7 (Ranged/Magic)
+ * deliberately did NOT widen this union: a weapon's Combat Mode (melee/ranged/magic) is a
+ * separate concept that decides XP routing, while Combat Style (Accurate/Aggressive/Defensive)
+ * stays the player's melee-only training selector — see CombatMode in core/types.ts. */
 const STYLE_LABELS: Record<CombatStyle, string> = {
   accurate: "Accurate",
   aggressive: "Aggressive",

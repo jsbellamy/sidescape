@@ -36,6 +36,8 @@ function baseSnapshot(): Snapshot {
     hitpoints: { level: 1, xp: 0 },
     fishing: { level: 1, xp: 0 },
     smithing: { level: 1, xp: 0 },
+    ranged: { level: 1, xp: 0 },
+    magic: { level: 1, xp: 0 },
   };
   const combatLevel = Math.floor(
     (skills.attack.level + skills.strength.level + skills.defence.level + skills.hitpoints.level) /

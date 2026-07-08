@@ -2226,3 +2226,253 @@ describe("Smithing", () => {
     });
   });
 });
+
+describe("Ranged and Magic Skills (#7)", () => {
+  describe("weapon-driven XP routing", () => {
+    it("melee combat (no weapon, or a melee weapon) never touches Ranged or Magic XP", () => {
+      const engine = freshEngine();
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.strength.xp).toBeGreaterThan(0); // unchanged: default aggressive style
+      expect(skills.ranged.xp).toBe(0);
+      expect(skills.magic.xp).toBe(0);
+    });
+
+    it("equipping the ranged Test Bow routes attack XP to Ranged instead of Attack/Strength/Defence, bypassing Combat Style; Hitpoints still trickles", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({ player: { combatStyle: "aggressive", equipment: { weapon: "bow" } } }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.ranged.xp).toBeGreaterThan(0);
+      expect(skills.attack.xp).toBe(0);
+      expect(skills.strength.xp).toBe(0);
+      expect(skills.defence.xp).toBe(0);
+      expect(skills.magic.xp).toBe(0);
+      // makeSnapshot's fixture default starts Hitpoints at level 1 / 0 xp (unlike freshState's
+      // level-10 default), so no baseline subtraction is needed here.
+      expect(skills.hitpoints.xp).toBeCloseTo(skills.ranged.xp / 3, 6);
+    });
+
+    it("equipping the magic Test Staff routes attack XP to Magic instead of Attack/Strength/Defence, bypassing Combat Style; Hitpoints still trickles", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({ player: { combatStyle: "accurate", equipment: { weapon: "staff" } } }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.magic.xp).toBeGreaterThan(0);
+      expect(skills.attack.xp).toBe(0);
+      expect(skills.strength.xp).toBe(0);
+      expect(skills.defence.xp).toBe(0);
+      expect(skills.ranged.xp).toBe(0);
+      // makeSnapshot's fixture default starts Hitpoints at level 1 / 0 xp (unlike freshState's
+      // level-10 default), so no baseline subtraction is needed here.
+      expect(skills.hitpoints.xp).toBeCloseTo(skills.magic.xp / 3, 6);
+    });
+
+    it("switching from a ranged weapon back to unarmed resumes ordinary Combat Style routing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "defensive",
+            inventory: [{ itemId: "bronze-sword", qty: 1 }],
+            equipment: { weapon: "bow" },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(engine.snapshot().player.skills.ranged.xp).toBeGreaterThan(0);
+
+      // Unequipping isn't a command (v1 has no "remove"), so swap to a melee weapon instead —
+      // the fixture's bronze-sword — to exercise the mode falling back to Combat Style routing.
+      engine.equip("bronze-sword");
+      const before = engine.snapshot().player.skills;
+      for (let i = 0; i < 200; i++) engine.tick();
+      const after = engine.snapshot().player.skills;
+      expect(after.defence.xp).toBeGreaterThan(before.defence.xp); // defensive style, now melee
+      expect(after.ranged.xp).toBe(before.ranged.xp); // no further Ranged XP once swapped off
+    });
+  });
+
+  describe("combat level: best of melee / Ranged / Magic (display-only since #24)", () => {
+    function combatLevelSnapshot(skills: {
+      attack: number;
+      strength: number;
+      defence: number;
+      hitpoints: number;
+      ranged: number;
+      magic: number;
+    }) {
+      return makeSnapshot({
+        player: {
+          skills: {
+            attack: { level: skills.attack, xp: xpForLevel(skills.attack) },
+            strength: { level: skills.strength, xp: xpForLevel(skills.strength) },
+            defence: { level: skills.defence, xp: xpForLevel(skills.defence) },
+            hitpoints: { level: skills.hitpoints, xp: xpForLevel(skills.hitpoints) },
+            ranged: { level: skills.ranged, xp: xpForLevel(skills.ranged) },
+            magic: { level: skills.magic, xp: xpForLevel(skills.magic) },
+          },
+        },
+      });
+    }
+
+    it("at equal levels across the board, the formula matches the pre-#7 melee-only formula unchanged", () => {
+      // base (def+hp) = 1+10 = 11; top = max(atk+str=2, 2*ranged=2, 2*magic=2) = 2
+      // combatLevel = floor((11 + 2) / 4) = floor(13/4) = 3 — same as freshEngine()'s combatLevel.
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        combatLevelSnapshot({
+          attack: 1,
+          strength: 1,
+          defence: 1,
+          hitpoints: 10,
+          ranged: 1,
+          magic: 1,
+        }),
+      );
+      expect(engine.snapshot().player.combatLevel).toBe(3);
+    });
+
+    it("a melee-heavy build: melee's combined Attack+Strength wins over Ranged/Magic", () => {
+      // base (def+hp) = 5+10 = 15; top = max(atk+str=20, 2*ranged=2, 2*magic=2) = 20
+      // combatLevel = floor((15 + 20) / 4) = floor(35/4) = 8
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        combatLevelSnapshot({
+          attack: 10,
+          strength: 10,
+          defence: 5,
+          hitpoints: 10,
+          ranged: 1,
+          magic: 1,
+        }),
+      );
+      expect(engine.snapshot().player.combatLevel).toBe(8);
+    });
+
+    it("a Ranged-heavy build: doubled Ranged level wins over a low melee/Magic total", () => {
+      // base (def+hp) = 5+10 = 15; top = max(atk+str=2, 2*ranged=40, 2*magic=2) = 40
+      // combatLevel = floor((15 + 40) / 4) = floor(55/4) = 13
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        combatLevelSnapshot({
+          attack: 1,
+          strength: 1,
+          defence: 5,
+          hitpoints: 10,
+          ranged: 20,
+          magic: 1,
+        }),
+      );
+      expect(engine.snapshot().player.combatLevel).toBe(13);
+    });
+
+    it("a Magic-heavy build: doubled Magic level wins over a low melee/Ranged total", () => {
+      // base (def+hp) = 1+10 = 11; top = max(atk+str=2, 2*ranged=2, 2*magic=30) = 30
+      // combatLevel = floor((11 + 30) / 4) = floor(41/4) = 10
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        combatLevelSnapshot({
+          attack: 1,
+          strength: 1,
+          defence: 1,
+          hitpoints: 10,
+          ranged: 1,
+          magic: 15,
+        }),
+      );
+      expect(engine.snapshot().player.combatLevel).toBe(10);
+    });
+
+    it("still never gates an Area unlock — combat level is display-only since #24", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        combatLevelSnapshot({
+          attack: 1,
+          strength: 1,
+          defence: 1,
+          hitpoints: 10,
+          ranged: 99,
+          magic: 99,
+        }),
+      );
+      const snap = engine.snapshot();
+      expect(snap.player.combatLevel).toBeGreaterThan(50);
+      expect(snap.areas.find((a) => a.id === "crypt")?.unlocked).toBe(false);
+    });
+  });
+
+  describe("save/load", () => {
+    it("a pre-migration save (only the original six Skills, no ranged/magic keys) loads with both at level 1 / 0 XP", () => {
+      const legacySave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+            fishing: { level: 1, xp: 0 },
+            smithing: { level: 1, xp: 0 },
+            // no ranged/magic keys: simulates a save written before this feature shipped
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+        },
+        monster: null,
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      const snap = restored.snapshot();
+      expect(snap.player.skills.ranged).toEqual({ level: 1, xp: 0 });
+      expect(snap.player.skills.magic).toEqual({ level: 1, xp: 0 });
+      // the rest of the sweep is untouched by this migration
+      expect(snap.player.skills.attack).toEqual({ level: 1, xp: 0 });
+      expect(snap.player.skills.hitpoints).toEqual({ level: 10, xp: xpForLevel(10) });
+    });
+
+    it("a valid Snapshot carrying Ranged/Magic XP round-trips unchanged", () => {
+      const original = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({ player: { equipment: { weapon: "bow" } } }),
+      );
+      original.selectMonster("dummy");
+      for (let i = 0; i < 200; i++) original.tick();
+      const saved = original.snapshot();
+      expect(saved.player.skills.ranged.xp).toBeGreaterThan(0);
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot()).toEqual(saved);
+    });
+  });
+});
