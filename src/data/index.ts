@@ -97,6 +97,8 @@ export const content: Content = {
         { itemId: "gold", qty: 15, chance: 1, band: "guaranteed" },
         { itemId: "cooked-trout", qty: 1, chance: 0.35, band: "common" },
         { itemId: "iron-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
+        // Ranged tier progression (#13): iron-tier bow, demoable from Darkroot Forest's own Monsters.
+        { itemId: "iron-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
     {
@@ -112,6 +114,8 @@ export const content: Content = {
         { itemId: "cooked-trout", qty: 1, chance: 0.3, band: "common" },
         { itemId: "iron-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "iron-bar", qty: 1, chance: 0.25, band: "common" },
+        // Magic tier progression (#13): iron-tier staff, demoable from Darkroot Forest's own Monsters.
+        { itemId: "iron-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
     {
@@ -165,6 +169,8 @@ export const content: Content = {
         { itemId: "gold", qty: 30, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.35, band: "common" },
         { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
+        // Ranged tier progression (#13): steel-tier bow, demoable from Old Sewers' own Monsters.
+        { itemId: "steel-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
     {
@@ -179,6 +185,8 @@ export const content: Content = {
         { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "steel-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
+        // Magic tier progression (#13): steel-tier staff, demoable from Old Sewers' own Monsters.
+        { itemId: "steel-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
     {
@@ -238,6 +246,10 @@ export const content: Content = {
         { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 34, band: "uncommon" },
         { itemId: "mithril-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         { itemId: "shade-blade", qty: 1, chance: 1 / 512, band: "rare" },
+        // Ranged/Magic tier progression (#13): mithril-tier bow and staff — Bone Crypt has only
+        // the one Monster, so both land on Crypt Shade's own Drop Table.
+        { itemId: "mithril-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "mithril-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
   ],
@@ -469,6 +481,82 @@ export const content: Content = {
       attackSpeed: 6,
       combatMode: "magic",
       value: 25,
+    },
+    // Ranged/Magic tier progression (#13): iron/steel/mithril bows and staves, mirroring the
+    // dagger's atk/str progression (iron 9/7, steel 14/11, mithril 19/15) with the same
+    // bow-leans-atk / staff-leans-str skew the starter shortbow/apprentice-staff pair set.
+    // Append-only — after apprentice-staff, never earlier.
+    {
+      kind: "equipment",
+      id: "iron-shortbow",
+      name: "Iron Shortbow",
+      slot: "weapon",
+      atkBonus: 10,
+      strBonus: 8,
+      defBonus: 0,
+      attackSpeed: 5,
+      combatMode: "ranged",
+      value: 40,
+    },
+    {
+      kind: "equipment",
+      id: "iron-staff",
+      name: "Iron Staff",
+      slot: "weapon",
+      atkBonus: 8,
+      strBonus: 10,
+      defBonus: 0,
+      attackSpeed: 6,
+      combatMode: "magic",
+      value: 40,
+    },
+    {
+      kind: "equipment",
+      id: "steel-shortbow",
+      name: "Steel Shortbow",
+      slot: "weapon",
+      atkBonus: 16,
+      strBonus: 13,
+      defBonus: 0,
+      attackSpeed: 5,
+      combatMode: "ranged",
+      value: 80,
+    },
+    {
+      kind: "equipment",
+      id: "steel-staff",
+      name: "Steel Staff",
+      slot: "weapon",
+      atkBonus: 13,
+      strBonus: 16,
+      defBonus: 0,
+      attackSpeed: 6,
+      combatMode: "magic",
+      value: 80,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-shortbow",
+      name: "Mithril Shortbow",
+      slot: "weapon",
+      atkBonus: 22,
+      strBonus: 18,
+      defBonus: 0,
+      attackSpeed: 5,
+      combatMode: "ranged",
+      value: 150,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-staff",
+      name: "Mithril Staff",
+      slot: "weapon",
+      atkBonus: 18,
+      strBonus: 22,
+      defBonus: 0,
+      attackSpeed: 6,
+      combatMode: "magic",
+      value: 150,
     },
   ],
   fishingSpots: [
