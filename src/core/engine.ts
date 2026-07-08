@@ -63,6 +63,139 @@ function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
   return (AUTO_EAT_THRESHOLDS as readonly unknown[]).includes(value);
 }
 
+const COMBAT_STYLES: readonly CombatStyle[] = ["accurate", "aggressive", "defensive"];
+
+function isCombatStyle(value: unknown): value is CombatStyle {
+  return (COMBAT_STYLES as readonly unknown[]).includes(value);
+}
+
+/** Ticks between player attacks for `weaponId`; unarmed (or an unresolvable/non-equipment id)
+ * falls back to UNARMED_SPEED. Pure so it can size a resumed fight's cooldown during load,
+ * before the Engine's closures (which call this with `state.equipment.weapon`) exist yet. */
+function weaponSpeedFor(weaponId: string | null, content: Content): number {
+  if (weaponId === null) return UNARMED_SPEED;
+  const def = content.items.find((i) => i.id === weaponId);
+  return def?.kind === "equipment" ? (def.attackSpeed ?? UNARMED_SPEED) : UNARMED_SPEED;
+}
+
+/** The no-save defaults: a level-1 player (Hitpoints 10, per ADR), full HP, nothing selected. */
+function freshState(_content: Content): State {
+  return {
+    xp: { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0 },
+    hp: 10,
+    combatStyle: "aggressive",
+    autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
+    selectedMonsterId: null,
+    monsterHp: 0,
+    selectedSpotId: null,
+    catchCooldown: 0,
+    inventory: new Map(),
+    equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+    respawnTicksLeft: 0,
+    playerCooldown: 0,
+    monsterCooldown: 0,
+    regenTicks: 0,
+  };
+}
+
+/** Every Skill's xp coerced to a finite number >= 0; anything else (missing, NaN, negative,
+ * non-numeric) falls back to the fresh default for that Skill. */
+function loadXp(saved: Snapshot): Record<SkillName, number> {
+  const xp = {} as Record<SkillName, number>;
+  for (const skill of SKILL_NAMES) {
+    const raw: unknown = saved.player?.skills?.[skill]?.xp;
+    const fresh = skill === "hitpoints" ? xpForLevel(10) : 0;
+    xp[skill] = typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : fresh;
+  }
+  return xp;
+}
+
+/** hp coerced to a finite number and clamped to [1, maxHp]; a non-numeric/non-finite value
+ * falls back to full HP before clamping. */
+function loadHp(saved: Snapshot, maxHp: number): number {
+  const raw: unknown = saved.player?.hp;
+  const hp = typeof raw === "number" && Number.isFinite(raw) ? raw : maxHp;
+  return Math.min(maxHp, Math.max(1, hp));
+}
+
+/** Per GearSlot, keeps the saved itemId only if it resolves to an EquipmentDef whose `slot`
+ * matches that slot; otherwise the slot loads empty. Closes both dangling and wrong-slot refs. */
+function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, string | null> {
+  const equipment: Record<GearSlot, string | null> = {
+    weapon: null,
+    shield: null,
+    head: null,
+    body: null,
+    legs: null,
+  };
+  const savedEquipment: Partial<Record<GearSlot, unknown>> | undefined = saved.player?.equipment;
+  if (!savedEquipment) return equipment;
+  for (const slot of Object.keys(equipment) as GearSlot[]) {
+    const itemId = savedEquipment[slot];
+    if (typeof itemId !== "string") continue;
+    const def = content.items.find((i) => i.id === itemId);
+    if (def?.kind === "equipment" && def.slot === slot) equipment[slot] = itemId;
+  }
+  return equipment;
+}
+
+/** Drops inventory entries whose itemId isn't in Content, or whose qty isn't a positive
+ * integer; keeps the rest. */
+function loadInventory(saved: Snapshot, content: Content): Map<string, number> {
+  const itemIds = new Set(content.items.map((i) => i.id));
+  const inventory = new Map<string, number>();
+  for (const entry of saved.player?.inventory ?? []) {
+    const itemId: unknown = entry?.itemId;
+    const qty: unknown = entry?.qty;
+    if (typeof itemId !== "string" || !itemIds.has(itemId)) continue;
+    if (typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) continue;
+    inventory.set(itemId, qty);
+  }
+  return inventory;
+}
+
+/** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
+ * unlike malformed Content or invalid COMMANDS). A corrupted or schema-drifted save still loads
+ * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
+ * the save. A clean Snapshot round-trips through this unchanged. */
+function loadState(saved: Snapshot, content: Content): State {
+  const xp = loadXp(saved);
+  const maxHp = levelForXp(xp.hitpoints);
+  const equipment = loadEquipment(saved, content);
+
+  // Activity resume: an unknown saved monster/fishing id resumes idle instead of throwing.
+  const monsterId: unknown = saved.monster?.id;
+  const monster =
+    typeof monsterId === "string" ? content.monsters.find((m) => m.id === monsterId) : undefined;
+  const spotId: unknown = !monster ? saved.fishing?.spotId : undefined;
+  const spot =
+    typeof spotId === "string" ? content.fishingSpots.find((s) => s.id === spotId) : undefined;
+  const savedMonsterHp: unknown = saved.monster?.hp;
+
+  return {
+    xp,
+    hp: loadHp(saved, maxHp),
+    combatStyle: isCombatStyle(saved.player?.combatStyle) ? saved.player.combatStyle : "aggressive",
+    autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
+      ? saved.player.autoEatThreshold
+      : DEFAULT_AUTO_EAT_THRESHOLD,
+    selectedMonsterId: monster?.id ?? null,
+    monsterHp: monster
+      ? typeof savedMonsterHp === "number" && Number.isFinite(savedMonsterHp)
+        ? savedMonsterHp
+        : monster.hp
+      : 0,
+    selectedSpotId: spot?.id ?? null,
+    catchCooldown: spot ? spot.catchTicks : 0,
+    inventory: loadInventory(saved, content),
+    equipment,
+    respawnTicksLeft: 0,
+    playerCooldown: monster ? weaponSpeedFor(equipment.weapon, content) : 0,
+    monsterCooldown: monster ? monster.attackSpeed : 0,
+    regenTicks: 0,
+  };
+}
+
 export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
   // Fail loud on malformed Content (ADR-0001 extended to construction): every
   // violation is collected and reported together, not just the first.
@@ -77,38 +210,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     (i): i is CurrencyDef => i.kind === "currency",
   )!;
 
-  // Loads are tolerant (ADR-0001): an unrecognised or missing saved threshold falls back silently.
-  const loadedThreshold = saved?.player.autoEatThreshold ?? DEFAULT_AUTO_EAT_THRESHOLD;
-
-  const state: State = {
-    xp: saved
-      ? {
-          attack: saved.player.skills.attack.xp,
-          strength: saved.player.skills.strength.xp,
-          defence: saved.player.skills.defence.xp,
-          hitpoints: saved.player.skills.hitpoints.xp,
-          // Old saves lack the key entirely: pre-feature players start Fishing at 1/0 XP.
-          fishing: saved.player.skills.fishing?.xp ?? 0,
-        }
-      : { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0 },
-    hp: saved ? saved.player.hp : 10,
-    combatStyle: saved?.player.combatStyle ?? "aggressive",
-    autoEatThreshold: isAutoEatThreshold(loadedThreshold)
-      ? loadedThreshold
-      : DEFAULT_AUTO_EAT_THRESHOLD,
-    selectedMonsterId: null,
-    monsterHp: 0,
-    selectedSpotId: null,
-    catchCooldown: 0,
-    inventory: new Map(saved?.player.inventory.map((s) => [s.itemId, s.qty])),
-    equipment: saved
-      ? { ...saved.player.equipment }
-      : { weapon: null, shield: null, head: null, body: null, legs: null },
-    respawnTicksLeft: 0,
-    playerCooldown: 0,
-    monsterCooldown: 0,
-    regenTicks: 0,
-  };
+  // Loads are tolerant (ADR-0001, extended to a full field-by-field sweep by loadState): a
+  // corrupted or schema-drifted save still loads and keeps the player's progress.
+  const state: State = saved ? loadState(saved, content) : freshState(content);
 
   const handlers = new Map<string, ((event: EngineEvent) => void)[]>();
 
@@ -152,10 +256,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   }
 
   function weaponSpeed(): number {
-    const weaponId = state.equipment.weapon;
-    if (weaponId === null) return UNARMED_SPEED;
-    const def = content.items.find((i) => i.id === weaponId);
-    return def?.kind === "equipment" ? (def.attackSpeed ?? UNARMED_SPEED) : UNARMED_SPEED;
+    return weaponSpeedFor(state.equipment.weapon, content);
   }
 
   function rollDamage(chance: number, max: number): number {
@@ -362,15 +463,8 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
   }
 
-  if (saved?.monster) {
-    spawnMonster(saved.monster.id);
-    state.monsterHp = saved.monster.hp;
-  } else if (saved?.fishing) {
-    // Cooldown isn't part of the Snapshot: re-arm to catchTicks, like monster cooldowns do.
-    const spot = fishingSpotDef(saved.fishing.spotId);
-    state.selectedSpotId = spot.id;
-    state.catchCooldown = spot.catchTicks;
-  }
+  // Activity resume (monster/fishing selection, cooldowns, monster HP) is already folded into
+  // loadState/freshState above — nothing left to do here.
 
   return {
     tick,
