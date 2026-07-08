@@ -156,6 +156,85 @@ describe("mountApp", () => {
   });
 });
 
+describe("Monster stats line", () => {
+  it("shows attack level, defence level, max hit, and attack speed for the selected Monster", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    const stats = root.querySelector<HTMLElement>("#monster-stats");
+    expect(stats?.hidden).toBe(false);
+    expect(stats?.textContent).toBe("Atk 1 · Def 1 · Max hit 1 · Speed 4t");
+  });
+
+  it("updates the stats line when a different Monster is selected", () => {
+    // Test Crypt requires combat level 40 (avg of attack/strength/defence/hitpoints), so raise
+    // all four to unlock the "brute" button.
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 40,
+          maxHp: 40,
+          skills: {
+            attack: { level: 40, xp: xpForLevel(40) },
+            strength: { level: 40, xp: xpForLevel(40) },
+            defence: { level: 40, xp: xpForLevel(40) },
+            hitpoints: { level: 40, xp: xpForLevel(40) },
+          },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+    root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
+
+    expect(root.querySelector("#monster-stats")?.textContent).toBe(
+      "Atk 40 · Def 40 · Max hit 8 · Speed 4t",
+    );
+  });
+
+  it("is absent (hidden, no text) before any Monster is selected", () => {
+    const { root } = mount(1);
+    const stats = root.querySelector<HTMLElement>("#monster-stats");
+    expect(stats?.hidden).toBe(true);
+    expect(stats?.textContent).toBe("");
+  });
+
+  it("is absent while Fishing", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+
+    const stats = root.querySelector<HTMLElement>("#monster-stats");
+    expect(stats?.hidden).toBe(true);
+    expect(stats?.textContent).toBe("");
+  });
+});
+
+describe("Monster picker Drop Table tooltip", () => {
+  it("lists every Drop Table entry with its band and a human-readable chance", () => {
+    const { root } = mount(1);
+    const dummyBtn = root.querySelector<HTMLButtonElement>('[data-monster="dummy"]');
+
+    expect(dummyBtn?.title).toBe(
+      [
+        "Gold ×5 — always",
+        "Cooked Meat ×1 — common 1/4",
+        "Bronze Sword ×1 — uncommon 1/16",
+        "Lucky Charm ×1 — rare 1/128",
+      ].join("\n"),
+    );
+  });
+
+  it("gives each Monster its own tooltip, keyed off its Drop Table", () => {
+    const { root } = mount(1);
+    const bruteBtn = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
+
+    expect(bruteBtn?.title).toBe("Gold ×200 — always");
+  });
+});
+
 describe("Combat Style selector", () => {
   function styleButtons(root: HTMLElement) {
     return [...root.querySelectorAll<HTMLButtonElement>("#style-row button")];
