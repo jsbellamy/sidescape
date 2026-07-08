@@ -391,6 +391,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         autoEatThreshold: state.autoEatThreshold,
         skills,
         equipment: { ...state.equipment },
+        bonuses: {
+          atkBonus: gearBonus("atkBonus"),
+          strBonus: gearBonus("strBonus"),
+          defBonus: gearBonus("defBonus"),
+          attackSpeed: weaponSpeed(),
+        },
         inventory: [...state.inventory].map(([itemId, qty]) => ({ itemId, qty })),
         respawning: state.respawnTicksLeft > 0,
       },
@@ -570,6 +576,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         state.inventory.set(previous, (state.inventory.get(previous) ?? 0) + 1);
       }
       state.equipment[def.slot] = itemId;
+      emit({ type: "equipped", itemId });
     },
     eatFood(itemId) {
       const def = content.items.find((i) => i.id === itemId);

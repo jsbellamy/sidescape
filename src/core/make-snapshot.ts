@@ -51,6 +51,9 @@ function baseSnapshot(): Snapshot {
       autoEatThreshold: 0,
       skills,
       equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+      // Derived output, ignored on load (#26); the fixture default matches a fresh, unarmed
+      // player — mirrors engine.ts's own unarmed attack-speed fallback of 4 Ticks.
+      bonuses: { atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 },
       inventory: [],
       respawning: false,
     },

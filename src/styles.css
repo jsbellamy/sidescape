@@ -310,16 +310,38 @@ body {
   justify-content: space-between;
 }
 
-#equipment,
+#character-slots,
 #inventory,
 #feed {
   list-style: none;
 }
 
-#equipment .slot {
+#character-slots .slot {
   display: inline-block;
   width: 52px;
   color: var(--text-dim);
+}
+
+#character-slots .slot-item {
+  color: var(--text);
+}
+
+#character-slots .slot-stats {
+  float: right;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.totals-row {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+#sort-row {
+  margin-bottom: 4px;
 }
 
 #inventory .equippable {

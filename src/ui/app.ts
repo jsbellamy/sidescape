@@ -5,10 +5,36 @@ import type {
   CombatStyle,
   Content,
   DropTableEntry,
+  EquipmentDef,
+  GearSlot,
   SkillSnapshot,
 } from "../core/types";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
+import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
+import type { SortKey } from "./sort";
+
+/** Mirrors engine.ts's own UNARMED_SPEED: the Character panel shows a weapon's own speed if it
+ * declares one, otherwise the same unarmed fallback the Engine uses for the totals row. */
+const UNARMED_SPEED = 4;
+
+/** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
+ * key order (a plain object, not guaranteed stable across engines/serialization). */
+const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs"];
+
+/** Sort control labels, in `SORT_KEYS` order — "Kind | Value | Name". */
+const SORT_LABELS: Record<SortKey, string> = { kind: "Kind", value: "Value", name: "Name" };
+
+/** One line per non-zero stat on `def` (e.g. "+4 atk", "+3 str", "def 4"), plus the weapon's own
+ * speed for weapon-slot items. Empty-stat gear (e.g. a Charm with only a name) yields []. */
+function equipmentStatParts(def: EquipmentDef): string[] {
+  const parts: string[] = [];
+  if (def.atkBonus !== 0) parts.push(`+${def.atkBonus} atk`);
+  if (def.strBonus !== 0) parts.push(`+${def.strBonus} str`);
+  if (def.defBonus !== 0) parts.push(`def ${def.defBonus}`);
+  if (def.slot === "weapon") parts.push(`spd ${def.attackSpeed ?? UNARMED_SPEED}t`);
+  return parts;
+}
 
 /** Renders a per-kill chance as a short human-readable fraction (e.g. "1/24") when the chance
  * is (near enough) an exact reciprocal, falling back to a percentage otherwise (e.g. "30%"). */
@@ -51,7 +77,7 @@ function skillProgress(skill: SkillSnapshot): number {
  */
 const TABS = [
   { id: "loot", label: "Loot Feed" },
-  { id: "equipment", label: "Equipment" },
+  { id: "character", label: "Character" },
   { id: "inventory", label: "Inventory" },
   { id: "bank", label: "Bank" },
 ] as const;
@@ -70,6 +96,8 @@ export interface MountedApp {
  */
 export function mountApp(engine: Engine, root: HTMLElement, content: Content): MountedApp {
   let activeTab: TabId = TABS[0].id;
+  // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
+  let sortKey: SortKey = loadSortKey();
 
   /** Shows the active tab's panel and hides the rest; highlights the matching tab button. */
   function renderTabs(): void {
@@ -189,8 +217,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const gold = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
     el("#gold").textContent = `🪙 ${gold}`;
 
-    el("#inventory").innerHTML = player.inventory
-      .filter((s) => s.itemId !== "gold")
+    root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
+    });
+
+    el("#inventory").innerHTML = sortStacks(
+      player.inventory.filter((s) => s.itemId !== "gold"),
+      sortKey,
+      content,
+    )
       .map((s) => {
         const def = content.items.find((i) => i.id === s.itemId);
         const cls =
@@ -206,12 +241,19 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       })
       .join("");
 
-    el("#equipment").innerHTML = Object.entries(player.equipment)
-      .map(
-        ([slot, itemId]) =>
-          `<li><span class="slot">${slot}</span> ${itemId ? itemName(itemId) : "—"}</li>`,
-      )
-      .join("");
+    el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
+      const itemId = player.equipment[slot];
+      const def = itemId ? content.items.find((i) => i.id === itemId) : undefined;
+      const label = def ? def.name : "—";
+      const stats = def && def.kind === "equipment" ? equipmentStatParts(def).join(" ") : "";
+      return `<li data-slot="${slot}"><span class="slot">${slot}</span> <span class="slot-item">${label}</span>${
+        stats ? ` <span class="slot-stats">${stats}</span>` : ""
+      }</li>`;
+    }).join("");
+
+    const b = player.bonuses;
+    el("#character-totals").textContent =
+      `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`;
 
     const used = bank.items.length;
     el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
@@ -219,7 +261,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     buySlotsBtn.textContent = `Buy +10 slots (${bank.nextSlotsPrice}g)`;
     buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
 
-    el("#bank").innerHTML = bank.items
+    el("#bank").innerHTML = sortStacks(bank.items, sortKey, content)
       .map(
         (s) =>
           `<li data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}
@@ -283,12 +325,16 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
         </div>
-        <div data-tab-panel="equipment" class="tab-panel">
-          <p class="panel-title">Equipment <span id="gold"></span></p>
-          <ul id="equipment"></ul>
+        <div data-tab-panel="character" class="tab-panel">
+          <p class="panel-title">Character <span id="gold"></span></p>
+          <ul id="character-slots"></ul>
+          <p id="character-totals" class="totals-row"></p>
         </div>
         <div data-tab-panel="inventory" class="tab-panel">
           <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
+          <div id="sort-row" class="style-row">
+            ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
+          </div>
           <ul id="inventory"></ul>
         </div>
         <div data-tab-panel="bank" class="tab-panel">
@@ -310,6 +356,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
+  engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
   engine.on("levelup", () => buildPicker()); // gate flags may change
 
   el("#style-row").addEventListener("click", (event) => {
@@ -324,6 +371,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const raw = (event.target as HTMLElement).dataset["threshold"];
     if (raw !== undefined) {
       engine.setAutoEatThreshold(Number(raw) as AutoEatThreshold);
+      render();
+    }
+  });
+
+  el("#sort-row").addEventListener("click", (event) => {
+    const key = (event.target as HTMLElement).dataset["sort"] as SortKey | undefined;
+    if (key) {
+      sortKey = key;
+      saveSortKey(key);
       render();
     }
   });
@@ -377,8 +433,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const def = content.items.find((i) => i.id === itemId);
     if (!itemId || !def) return;
     if (def.kind === "equipment") {
-      engine.equip(itemId);
-      feedLine(`Equipped ${def.name}`);
+      engine.equip(itemId); // logs its own feed line via the equipped listener above
       render();
     } else if (def.kind === "food") {
       engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
