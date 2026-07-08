@@ -614,10 +614,10 @@ describe("Fishing", () => {
     expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
-  it("XP row shows 6 chips, including a FIS chip for Fishing", () => {
+  it("XP row shows all 8 chips, including a FIS chip for Fishing", () => {
     const { root } = mount(1);
     const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
-    expect(abbrs).toEqual(["ATT", "STR", "DEF", "HIT", "FIS", "SMI"]);
+    expect(abbrs).toEqual(["ATT", "STR", "DEF", "HIT", "FIS", "SMI", "RAN", "MAG"]);
   });
 
   it("selecting a Fishing Spot shows the fishing scene, hiding the Monster HP bar and sprite", () => {
@@ -1017,10 +1017,10 @@ describe("Smithing (#28)", () => {
     return { engine, root, app };
   }
 
-  it("XP row shows a SMI chip for Smithing, alongside the existing five (6 chips at 320px)", () => {
+  it("XP row shows a SMI chip for Smithing, alongside the other seven (8 chips at 320px)", () => {
     const { root } = mount(1);
     const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
-    expect(abbrs).toHaveLength(6);
+    expect(abbrs).toHaveLength(8);
     expect(abbrs).toContain("SMI");
   });
 

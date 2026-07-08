@@ -191,13 +191,16 @@ body {
   font-weight: 700;
 }
 
+/* 8 Skill chips (#7 added Ranged/Magic, on top of #36's original 6): a single flex row at 320px
+   squeezed each chip below its readable minimum, so this wraps into a 4-column grid (2 rows of 4)
+   instead of shrinking every chip further. */
 #xp-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
 
 .skill {
-  flex: 1;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;

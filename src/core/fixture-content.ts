@@ -84,6 +84,32 @@ export const fixtureContent: Content = {
       value: 100,
     },
     { kind: "material", id: "bar", name: "Test Bar", value: 5 },
+    // Ranged/Magic fixtures (#7): same atk/str/speed as bronze-sword above, so XP-routing tests
+    // can swap weapons without also changing the damage math being exercised.
+    {
+      kind: "equipment",
+      id: "bow",
+      name: "Test Bow",
+      slot: "weapon",
+      atkBonus: 10,
+      strBonus: 30,
+      defBonus: 0,
+      attackSpeed: 4,
+      combatMode: "ranged",
+      value: 20,
+    },
+    {
+      kind: "equipment",
+      id: "staff",
+      name: "Test Staff",
+      slot: "weapon",
+      atkBonus: 10,
+      strBonus: 30,
+      defBonus: 0,
+      attackSpeed: 4,
+      combatMode: "magic",
+      value: 20,
+    },
   ],
   fishingSpots: [
     // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting.
