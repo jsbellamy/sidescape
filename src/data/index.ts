@@ -25,6 +25,14 @@ export const content: Content = {
       unlockedByDungeonId: "darkroot-hollow",
       monsterIds: ["giant-rat", "zombie", "skeleton"],
     },
+    // Bone Crypt (#11): endgame Area holding the single boss-tier Crypt Shade, gated by the
+    // Sewer King Dungeon (hosted in Old Sewers) rather than an Old Sewers Monster.
+    {
+      id: "bone-crypt",
+      name: "Bone Crypt",
+      unlockedByDungeonId: "sewer-king",
+      monsterIds: ["crypt-shade"],
+    },
   ],
   monsters: [
     {
@@ -195,6 +203,39 @@ export const content: Content = {
       attackSpeed: 4,
       dropTable: [{ itemId: "gold", qty: 30, chance: 1, band: "guaranteed" }],
     },
+    // Sewer King Dungeon (#11): dungeon-only boss hosted in Old Sewers, absent from every Area's
+    // monsterIds, fought only inside "sewer-king". Roughly Old-Sewers-boss-tier, above Skeleton.
+    {
+      id: "sewer-king",
+      name: "Sewer King",
+      hp: 70,
+      attackLevel: 36,
+      defenceLevel: 28,
+      maxHit: 12,
+      attackSpeed: 4,
+      dropTable: [{ itemId: "gold", qty: 70, chance: 1, band: "guaranteed" }],
+    },
+    // Bone Crypt (#11): the endgame Area's single boss-tier Monster, roughly double Old Sewers'
+    // top stats (Skeleton: hp 48 / maxHit 10). Open-world Area boss, NOT a dungeon boss — the
+    // Shade Blade sits in its normal Drop Table at a ~1/512 rare band.
+    {
+      id: "crypt-shade",
+      name: "Crypt Shade",
+      hp: 110,
+      attackLevel: 60,
+      defenceLevel: 44,
+      maxHit: 22,
+      attackSpeed: 5,
+      dropTable: [
+        { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "mithril-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
+        { itemId: "mithril-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 34, band: "uncommon" },
+        { itemId: "mithril-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
+        { itemId: "shade-blade", qty: 1, chance: 1 / 512, band: "rare" },
+      ],
+    },
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
@@ -342,6 +383,61 @@ export const content: Content = {
       value: 140,
     },
     { kind: "food", id: "cooked-pike", name: "Cooked Pike", heals: 12, value: 15 },
+    // Bone Crypt (#11): the mithril Equipment tier and the Shade Blade, the best weapon in the
+    // game. Append-only — see the autoEat-ordering comment above cooked-shrimp; these go after
+    // cooked-pike, never earlier.
+    {
+      kind: "equipment",
+      id: "mithril-dagger",
+      name: "Mithril Dagger",
+      slot: "weapon",
+      atkBonus: 19,
+      strBonus: 15,
+      defBonus: 0,
+      attackSpeed: 4,
+      value: 140,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-chainbody",
+      name: "Mithril Chainbody",
+      slot: "body",
+      atkBonus: 0,
+      strBonus: 0,
+      defBonus: 20,
+      value: 160,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-kiteshield",
+      name: "Mithril Kiteshield",
+      slot: "shield",
+      atkBonus: 0,
+      strBonus: 0,
+      defBonus: 18,
+      value: 140,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-full-helm",
+      name: "Mithril Full Helm",
+      slot: "head",
+      atkBonus: 3,
+      strBonus: 3,
+      defBonus: 10,
+      value: 220,
+    },
+    {
+      kind: "equipment",
+      id: "shade-blade",
+      name: "Shade Blade",
+      slot: "weapon",
+      atkBonus: 40,
+      strBonus: 34,
+      defBonus: 0,
+      attackSpeed: 3,
+      value: 1000,
+    },
   ],
   fishingSpots: [
     {
@@ -389,6 +485,22 @@ export const content: Content = {
         { itemId: "iron-full-helm", qty: 1, chance: 1 / 2, band: "common" },
         { itemId: "steel-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
         { itemId: "steel-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
+      ],
+    },
+    // Sewer King (#11): Old-Sewers-Monster waves plus the dungeon-only Sewer King boss, hosted
+    // in Old Sewers. Its Chest bridges the steel -> mithril transition (a steel item at common,
+    // mithril at uncommon/rare), and clearing it is what gates Bone Crypt.
+    {
+      id: "sewer-king",
+      name: "Sewer King",
+      areaId: "old-sewers",
+      waves: ["giant-rat", "zombie", "skeleton", "sewer-king"],
+      chest: [
+        { itemId: "gold", qty: 300, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 3, chance: 1, band: "guaranteed" },
+        { itemId: "steel-full-helm", qty: 1, chance: 1 / 2, band: "common" },
+        { itemId: "mithril-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
+        { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
       ],
     },
   ],
