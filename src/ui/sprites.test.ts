@@ -20,6 +20,42 @@ describe("sprites", () => {
     expect(urls.size).toBe(3);
   });
 
+  it("maps every Darkroot Forest, Old Sewers, and Bone Crypt Monster to a distinct sprite URL", () => {
+    const ids = [
+      "wolf",
+      "goblin-warrior",
+      "bandit",
+      "giant-rat",
+      "zombie",
+      "skeleton",
+      "crypt-shade",
+    ];
+    const urls = ids.map(monsterSprite);
+
+    for (const url of urls) {
+      expect(url).toEqual(expect.any(String));
+    }
+    expect(new Set(urls).size).toBe(ids.length);
+  });
+
+  it("gives every Monster a sprite distinct from every other Monster's", () => {
+    const allIds = [
+      "chicken",
+      "cow",
+      "goblin",
+      "wolf",
+      "goblin-warrior",
+      "bandit",
+      "giant-rat",
+      "zombie",
+      "skeleton",
+      "crypt-shade",
+    ];
+    const urls = allIds.map(monsterSprite);
+
+    expect(new Set(urls).size).toBe(allIds.length);
+  });
+
   it("returns undefined for a Monster with no sprite (e.g. test fixtures)", () => {
     expect(monsterSprite("dummy")).toBeUndefined();
     expect(monsterSprite("some-unmapped-monster")).toBeUndefined();
