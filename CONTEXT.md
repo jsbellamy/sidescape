@@ -5,7 +5,7 @@ A taskbar-sized incremental idle game, thematically similar to RuneScape. The pl
 ## Language
 
 **Area**:
-A themed location the player selects (e.g. Lumbry Meadows, Bone Crypt). Holds several **Monsters** and may be gated by a combat-level or Gear Tier requirement.
+A themed location the player selects (e.g. Lumbry Meadows, Bone Crypt). Holds several **Monsters** and may be gated behind completing another Area's **Dungeon**; the first Area is open from the start.
 _Avoid_: zone, map, region
 
 **Monster**:
@@ -56,7 +56,7 @@ _Avoid_: storage, chest, warehouse
 One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
 
 **Fishing Spot**:
-A location inside an **Area** where the player fishes instead of fighting, gated by the Area's combat-level requirement and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
+A location inside an **Area** where the player fishes instead of fighting, gated by the Area's own gate (see **Area**) and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
 _Avoid_: fishing node, resource node
 
 **Catch**:

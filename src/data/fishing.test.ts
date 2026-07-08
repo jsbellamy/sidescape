@@ -26,7 +26,7 @@ describe("Fishing content", () => {
     expect(() => fresh.selectFishingSpot("shrimp-pool")).not.toThrow();
   });
 
-  it("Trout Run sits in Darkroot Forest, gated by both the Area's combat level and its own Fishing level 20", () => {
+  it("Trout Run sits in Darkroot Forest, gated by both the Area's Dungeon-completion gate and its own Fishing level 20", () => {
     const spot = content.fishingSpots.find((s) => s.id === "trout-run");
     expect(spot).toEqual({
       id: "trout-run",
@@ -45,7 +45,9 @@ describe("Fishing content", () => {
     expect(fresh.snapshot().areas.find((a) => a.id === "darkroot-forest")?.fishingSpots).toEqual([
       { id: "trout-run", unlocked: false },
     ]);
-    expect(() => fresh.selectFishingSpot("trout-run")).toThrow(/combat level 10/i);
+    expect(() => fresh.selectFishingSpot("trout-run")).toThrow(
+      /Darkroot Forest is locked — defeat Meadow Depths/,
+    );
   });
 
   it("cooked-shrimp is an edible, sellable Food appended after existing items (autoEat order preserved)", () => {

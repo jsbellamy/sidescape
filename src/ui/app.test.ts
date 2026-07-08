@@ -52,7 +52,20 @@ describe("mountApp", () => {
     const bruteBtn = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
     expect(dummyBtn?.textContent).toBe("Training Dummy");
     expect(dummyBtn?.disabled).toBe(false);
-    expect(bruteBtn?.disabled).toBe(true); // Test Crypt requires combat level 40
+    expect(bruteBtn?.disabled).toBe(true); // Test Crypt is locked until "gauntlet" is cleared
+  });
+
+  it("shows a locked Area's picker label as '🔒 Clear <dungeon name>'", () => {
+    const { root } = mount(1);
+    const cryptLabel = [...root.querySelectorAll(".area-name")].find((p) =>
+      p.textContent?.startsWith("Test Crypt"),
+    );
+    expect(cryptLabel?.textContent).toBe("Test Crypt 🔒 Clear The Gauntlet");
+
+    const meadowLabel = [...root.querySelectorAll(".area-name")].find((p) =>
+      p.textContent?.startsWith("Test Meadow"),
+    );
+    expect(meadowLabel?.textContent).toBe("Test Meadow"); // unlocked from the start, no lock suffix
   });
 
   it("selecting a Monster renders its name and a full HP bar", () => {
@@ -198,22 +211,12 @@ describe("Monster stats line", () => {
   });
 
   it("updates the stats line when a different Monster is selected", () => {
-    // Test Crypt requires combat level 40 (avg of attack/strength/defence/hitpoints), so raise
-    // all four to unlock the "brute" button.
+    // Test Crypt is gated by the "gauntlet" Dungeon, so mark it completed to unlock "brute".
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
       makeSnapshot({
-        player: {
-          hp: 40,
-          maxHp: 40,
-          skills: {
-            attack: { level: 40, xp: xpForLevel(40) },
-            strength: { level: 40, xp: xpForLevel(40) },
-            defence: { level: 40, xp: xpForLevel(40) },
-            hitpoints: { level: 40, xp: xpForLevel(40) },
-          },
-        },
+        player: { completedDungeonIds: ["gauntlet"] },
       }),
     );
     const root = document.createElement("main");
@@ -606,7 +609,7 @@ describe("Fishing", () => {
     const deepPondBtn = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(pondBtn?.textContent).toBe("🎣 Test Pond");
     expect(pondBtn?.disabled).toBe(false);
-    expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's combat-level gate
+    expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
   it("XP row shows 5 chips, including a FIS chip for Fishing", () => {
@@ -643,6 +646,32 @@ describe("Fishing", () => {
     expect(root.querySelector("#feed li")?.textContent).toMatch(/caught.*meat/i);
     expect(engine.snapshot().player.skills.fishing.xp).toBeGreaterThan(0);
     expect(engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(1);
+  });
+
+  it("picker still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          completedDungeonIds: ["gauntlet"], // Crypt Area gate already open
+          skills: { fishing: { level: 19, xp: xpForLevel(20) - 5 } }, // one Catch from level 20
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    const deepPondBefore = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
+    expect(deepPondBefore?.disabled).toBe(true); // Area open, but Fishing level 19 < levelReq 20
+
+    engine.selectFishingSpot("pond"); // pond: catchChance 1, xp 10 per Catch (fixtureContent)
+    for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3: exactly one Catch lands
+    expect(engine.snapshot().player.skills.fishing.level).toBe(20);
+
+    // buildPicker runs off the levelup event itself — no explicit render() call here.
+    const deepPondAfter = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
+    expect(deepPondAfter?.disabled).toBe(false);
   });
 });
 
@@ -893,7 +922,7 @@ describe("Dungeons", () => {
 
     const cryptBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="crypt-dungeon"]');
     expect(cryptBtn?.textContent).toBe("⚔ Crypt Dungeon");
-    expect(cryptBtn?.disabled).toBe(true); // Test Crypt requires combat level 40
+    expect(cryptBtn?.disabled).toBe(true); // Test Crypt is locked until "gauntlet" is cleared
   });
 
   it("the dungeon header is absent (hidden, no text) outside a run", () => {
@@ -947,5 +976,29 @@ describe("Dungeons", () => {
     // Ejected to idle: no more Dungeon, no Monster selected.
     expect(root.querySelector<HTMLElement>("#dungeon-header")?.hidden).toBe(true);
     expect(root.querySelector("#monster-name")?.textContent).toBe("Pick a monster ↓");
+  });
+
+  it("picker rebuilds on dungeon-completed, unlocking the Crypt gate immediately with no levelup involved", () => {
+    const { engine, root } = mount(5); // seed 5 completes "gauntlet" within 5000 Ticks (see core/engine.test.ts)
+    const bruteBefore = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
+    expect(bruteBefore?.disabled).toBe(true);
+    const cryptLabelBefore = [...root.querySelectorAll(".area-name")].find((p) =>
+      p.textContent?.startsWith("Test Crypt"),
+    );
+    expect(cryptLabelBefore?.textContent).toBe("Test Crypt 🔒 Clear The Gauntlet");
+
+    root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]')?.click();
+    for (let i = 0; i < 5000 && engine.snapshot().player.completedDungeonIds.length === 0; i++) {
+      engine.tick();
+    }
+    expect(engine.snapshot().player.completedDungeonIds).toEqual(["gauntlet"]);
+
+    // buildPicker runs off the dungeon-completed event itself — no explicit render() call here.
+    const bruteAfter = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
+    expect(bruteAfter?.disabled).toBe(false);
+    const cryptLabelAfter = [...root.querySelectorAll(".area-name")].find((p) =>
+      p.textContent?.startsWith("Test Crypt"),
+    );
+    expect(cryptLabelAfter?.textContent).toBe("Test Crypt");
   });
 });

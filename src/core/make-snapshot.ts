@@ -63,7 +63,12 @@ function baseSnapshot(): Snapshot {
     dungeon: null,
     bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
     areas: fixtureContent.areas.map((area) => {
-      const unlocked = combatLevel >= area.combatLevelReq;
+      // completedDungeonIds is always [] here (base defaults, before `overrides` is merged in by
+      // makeSnapshot): a gated Area reads locked at the base level, same as pre-#24's combatLevel
+      // gate did against the base level-1 skills. A `player.completedDungeonIds` override merges
+      // in afterward and replaces `areas` wholesale if the caller also supplies one (see
+      // `mergeUnknown` / the `areas: []` wholesale-replace test in make-snapshot.test.ts).
+      const unlocked = !area.unlockedByDungeonId;
       return {
         id: area.id,
         name: area.name,
