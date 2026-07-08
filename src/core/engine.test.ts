@@ -5,7 +5,7 @@ import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
-import type { AutoEatThreshold } from "./types";
+import type { AutoEatThreshold, CombatStyle } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -684,6 +684,214 @@ describe("save/load", () => {
     );
     expect(veteran.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(true);
     expect(() => veteran.selectMonster("brute")).not.toThrow();
+  });
+});
+
+describe("loadState: full-sweep tolerant save validation (#38)", () => {
+  it("an invalid combatStyle falls back to aggressive, and no NaN reaches xp on the next kill", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { combatStyle: "berserk" as CombatStyle } }),
+    );
+    expect(engine.snapshot().player.combatStyle).toBe("aggressive");
+
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 50; i++) engine.tick();
+    const skills = engine.snapshot().player.skills;
+    expect(Number.isNaN(skills.attack.xp)).toBe(false);
+    expect(Number.isNaN(skills.strength.xp)).toBe(false);
+    expect(Number.isNaN(skills.defence.xp)).toBe(false);
+    expect(Number.isNaN(skills.hitpoints.xp)).toBe(false);
+  });
+
+  it("equipment.weapon naming an unknown item loads that slot null", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { equipment: { weapon: "excalibur" } } }),
+    );
+    expect(engine.snapshot().player.equipment.weapon).toBeNull();
+  });
+
+  it("equipment naming a real item in the wrong slot loads that slot null", () => {
+    // lucky-charm is a head item; placing it in the weapon slot is a slot mismatch.
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { equipment: { weapon: "lucky-charm" } } }),
+    );
+    expect(engine.snapshot().player.equipment.weapon).toBeNull();
+  });
+
+  it("a valid equipment reference still loads normally alongside the rest of the sweep", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { equipment: { head: "lucky-charm" } } }),
+    );
+    expect(engine.snapshot().player.equipment.head).toBe("lucky-charm");
+  });
+
+  it("inventory entries for an unknown itemId are dropped", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { inventory: [{ itemId: "unobtainium", qty: 3 }] } }),
+    );
+    expect(engine.snapshot().player.inventory).toEqual([]);
+  });
+
+  it("inventory entries with qty 0, negative, or non-integer are dropped; valid entries survive", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          inventory: [
+            { itemId: "meat", qty: 0 },
+            { itemId: "gold", qty: -1 },
+            { itemId: "bronze-sword", qty: 1.5 },
+            { itemId: "lucky-charm", qty: 2 },
+          ],
+        },
+      }),
+    );
+    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
+  });
+
+  it("a saved skill xp of NaN or negative loads at the fresh default for that skill", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          skills: {
+            attack: { xp: NaN },
+            strength: { xp: -50 },
+          },
+        },
+      }),
+    );
+    const skills = engine.snapshot().player.skills;
+    expect(skills.attack.xp).toBe(0);
+    expect(skills.strength.xp).toBe(0);
+  });
+
+  it("a missing hitpoints skill falls back to the fresh default (xpForLevel(10))", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { skills: { hitpoints: { xp: NaN } } } }),
+    );
+    expect(engine.snapshot().player.skills.hitpoints.xp).toBe(xpForLevel(10));
+  });
+
+  it("hp above maxHp loads clamped to maxHp", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { hp: 9999, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
+      }),
+    );
+    expect(engine.snapshot().player.hp).toBe(10);
+  });
+
+  it("hp below 1 (including 0 and negative) loads clamped to 1", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { hp: -20, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
+      }),
+    );
+    expect(engine.snapshot().player.hp).toBe(1);
+  });
+
+  it("a save whose monster names an unknown id loads idle instead of throwing", () => {
+    expect(() =>
+      createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ monster: { id: "dragon", name: "Dragon", hp: 100, maxHp: 100 } }),
+      ),
+    ).not.toThrow();
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ monster: { id: "dragon", name: "Dragon", hp: 100, maxHp: 100 } }),
+    );
+    expect(engine.snapshot().monster).toBeNull();
+  });
+
+  it("a save whose fishing names an unknown spot id loads idle instead of throwing", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ fishing: { spotId: "river", name: "River" } }),
+    );
+    expect(engine.snapshot().fishing).toBeNull();
+    expect(engine.snapshot().monster).toBeNull();
+  });
+
+  it("a save with a valid monster still resumes combat with its saved HP (no regression)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ monster: { id: "dummy", name: "Training Dummy", hp: 2, maxHp: 3 } }),
+    );
+    expect(engine.snapshot().monster).toEqual({
+      id: "dummy",
+      name: "Training Dummy",
+      hp: 2,
+      maxHp: 3,
+    });
+    let kills = 0;
+    engine.on("kill", () => kills++);
+    for (let i = 0; i < 5000; i++) engine.tick();
+    expect(kills).toBeGreaterThan(0);
+  });
+
+  it("never throws even when every field is corrupted at once", () => {
+    expect(() =>
+      createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            hp: NaN,
+            combatStyle: "berserk" as CombatStyle,
+            autoEatThreshold: 0.9 as AutoEatThreshold,
+            skills: {
+              attack: { xp: -1 },
+              strength: { xp: NaN },
+              defence: { xp: NaN },
+              hitpoints: { xp: NaN },
+              fishing: { xp: NaN },
+            },
+            equipment: { weapon: "nonexistent", shield: "lucky-charm" },
+            inventory: [
+              { itemId: "nonexistent", qty: 5 },
+              { itemId: "gold", qty: -3 },
+            ],
+          },
+          monster: { id: "nonexistent", name: "x", hp: 1, maxHp: 1 },
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("a valid Snapshot still round-trips unchanged (no behavioural change for clean saves)", () => {
+    const original = freshEngine();
+    original.selectMonster("dummy");
+    grindFor(original, "bronze-sword");
+    original.equip("bronze-sword");
+    for (let i = 0; i < 200; i++) original.tick();
+    const saved = original.snapshot();
+
+    const restored = createEngine(fixtureContent, seededRng(1), JSON.parse(JSON.stringify(saved)));
+    expect(restored.snapshot()).toEqual(saved);
   });
 });
 
