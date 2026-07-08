@@ -27,3 +27,27 @@ scene.
   animation set; `src/assets/sprites/goblin.png` is the first frame of the
   front-facing idle animation. Confirmed CC0 on the OpenGameArt submission
   page.
+
+## Audio packs
+
+Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs, both licensed CC0 1.0 Universal:
+
+| Event (Engine)          | File                         | Source pack                                        |
+| ----------------------- | ---------------------------- | -------------------------------------------------- |
+| `kill`                  | `public/audio/kill.wav`      | Kenney Impact Sounds — `impactPunch_heavy_002.ogg` |
+| `food-eaten`            | `public/audio/eat.wav`       | Kenney Impact Sounds — `impactSoft_medium_000.ogg` |
+| `levelup`               | `public/audio/levelup.wav`   | Kenney Digital Audio — `powerUp1.ogg`              |
+| `drop` (rare band only) | `public/audio/rare-drop.wav` | Kenney Digital Audio — `twoTone1.ogg`              |
+| `death`                 | `public/audio/death.wav`     | Kenney Digital Audio — `lowDown.ogg`               |
+
+- **Pack**: Impact Sounds
+  **Author**: Kenney Vleugels (kenney.nl)
+  **URL**: https://kenney.nl/assets/impact-sounds
+  **License**: CC0 1.0 Universal (public domain dedication) — confirmed via the pack's bundled `License.txt`
+
+- **Pack**: Digital Audio
+  **Author**: Kenney Vleugels (kenney.nl)
+  **URL**: https://kenney.nl/assets/digital-audio
+  **License**: CC0 1.0 Universal (public domain dedication) — confirmed via the pack's bundled `License.txt`
+
+Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). No other alteration was made to the audio content.
