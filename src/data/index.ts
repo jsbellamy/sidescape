@@ -11,12 +11,14 @@ export const content: Content = {
       name: "Lumbry Meadows",
       combatLevelReq: 0,
       monsterIds: ["chicken", "cow", "goblin"],
+      fishingSpotIds: ["shrimp-pool"],
     },
     {
       id: "darkroot-forest",
       name: "Darkroot Forest",
       combatLevelReq: 10,
       monsterIds: ["wolf", "goblin-warrior", "bandit"],
+      fishingSpotIds: ["trout-run"],
     },
   ],
   monsters: [
@@ -204,6 +206,28 @@ export const content: Content = {
       strBonus: 1,
       defBonus: 4,
       value: 120,
+    },
+    // Append-only: autoEat eats the first owned Food in this order, so never reorder above.
+    { kind: "food", id: "cooked-shrimp", name: "Cooked Shrimp", heals: 3, value: 2 },
+  ],
+  fishingSpots: [
+    {
+      id: "shrimp-pool",
+      name: "Shrimp Pool",
+      levelReq: 1,
+      itemId: "cooked-shrimp",
+      xp: 10,
+      catchTicks: 5,
+      catchChance: 0.6,
+    },
+    {
+      id: "trout-run",
+      name: "Trout Run",
+      levelReq: 20,
+      itemId: "cooked-trout",
+      xp: 50,
+      catchTicks: 5,
+      catchChance: 0.5,
     },
   ],
 };

@@ -4,7 +4,7 @@ import { fixtureContent } from "./fixture-content";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
-import type { AutoEatThreshold } from "./types";
+import type { AutoEatThreshold, Snapshot } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -53,8 +53,20 @@ describe("fresh engine", () => {
     // combat level = floor((atk + str + def + hp) / 4) = floor(13/4) = 3
     expect(snap.player.combatLevel).toBe(3);
     expect(snap.areas).toEqual([
-      { id: "meadow", name: "Test Meadow", unlocked: true, monsterIds: ["dummy"] },
-      { id: "crypt", name: "Test Crypt", unlocked: false, monsterIds: ["brute"] },
+      {
+        id: "meadow",
+        name: "Test Meadow",
+        unlocked: true,
+        monsterIds: ["dummy"],
+        fishingSpots: [{ id: "pond", unlocked: true }],
+      },
+      {
+        id: "crypt",
+        name: "Test Crypt",
+        unlocked: false,
+        monsterIds: ["brute"],
+        fishingSpots: [{ id: "deep-pond", unlocked: false }],
+      },
     ]);
   });
 
@@ -207,12 +219,14 @@ describe("Configurable auto-eat threshold", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: invSeed,
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
   }
@@ -351,12 +365,14 @@ describe("Passive HP regen", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
   }
@@ -402,12 +418,14 @@ describe("Passive HP regen", () => {
           // weak Defence so the gated, hard-hitting brute can actually land a kill
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 60, xp: xpForLevel(60) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
     veteran.selectMonster("brute");
@@ -448,12 +466,14 @@ describe("Manual eat command", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [{ itemId: "meat", qty: 2 }],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
 
@@ -674,12 +694,14 @@ describe("save/load", () => {
           strength: { level: 45, xp: xpForLevel(45) },
           defence: { level: 45, xp: xpForLevel(45) },
           hitpoints: { level: 45, xp: xpForLevel(45) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
     expect(veteran.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(true);
@@ -703,5 +725,266 @@ describe("Drop Table convergence", () => {
     const expected = kills / 128;
     expect(rares).toBeGreaterThan(expected * 0.6);
     expect(rares).toBeLessThan(expected * 1.4);
+  });
+});
+
+/** A combat-level-45 veteran (Area gates all open) with a configurable Fishing level/XP. */
+function veteranSnapshot(fishingLevel = 1, fishingXp = 0): Snapshot {
+  return {
+    player: {
+      hp: 45,
+      maxHp: 45,
+      combatLevel: 45,
+      combatStyle: "aggressive",
+      autoEatThreshold: 0.5,
+      skills: {
+        attack: { level: 45, xp: xpForLevel(45) },
+        strength: { level: 45, xp: xpForLevel(45) },
+        defence: { level: 45, xp: xpForLevel(45) },
+        hitpoints: { level: 45, xp: xpForLevel(45) },
+        fishing: { level: fishingLevel, xp: fishingXp },
+      },
+      equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+      inventory: [],
+      respawning: false,
+    },
+    monster: null,
+    fishing: null,
+    areas: [],
+  };
+}
+
+describe("Fishing", () => {
+  it("selectFishingSpot yields Fishing XP and edible Food over Ticks, emitting fish-caught (catchChance 1)", () => {
+    const engine = freshEngine();
+    const caught: { spotId: string; itemId: string; qty: number }[] = [];
+    engine.on("fish-caught", (e) =>
+      caught.push({ spotId: e.spotId, itemId: e.itemId, qty: e.qty }),
+    );
+    engine.selectFishingSpot("pond");
+    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+
+    for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3
+    expect(caught).toEqual([{ spotId: "pond", itemId: "meat", qty: 1 }]);
+
+    for (let i = 0; i < 3; i++) engine.tick();
+    expect(caught).toHaveLength(2);
+
+    const snap = engine.snapshot();
+    expect(snap.player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(2);
+    expect(snap.player.skills.fishing.xp).toBe(20); // 2 Catches * pond.xp (10)
+  });
+
+  it("throws on an unknown Fishing Spot id", () => {
+    expect(() => freshEngine().selectFishingSpot("river")).toThrow(/unknown/i);
+  });
+
+  it("throws when the containing Area is locked, even before checking Fishing level", () => {
+    expect(() => freshEngine().selectFishingSpot("deep-pond")).toThrow(/combat level 40/i);
+  });
+
+  it("throws for insufficient Fishing level once the Area gate is already open", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), veteranSnapshot());
+    expect(() => engine.selectFishingSpot("deep-pond")).toThrow(/fishing level 20/i);
+  });
+
+  it("succeeds once both the Area and Fishing level gates are met", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), veteranSnapshot(20, xpForLevel(20)));
+    expect(() => engine.selectFishingSpot("deep-pond")).not.toThrow();
+    expect(engine.snapshot().fishing).toEqual({ spotId: "deep-pond", name: "Test Deep Pond" });
+  });
+
+  it("derives locked/unlocked Fishing Spot gates in the Snapshot, independent of the Area gate", () => {
+    const fresh = freshEngine().snapshot();
+    expect(fresh.areas.find((a) => a.id === "meadow")?.fishingSpots).toEqual([
+      { id: "pond", unlocked: true },
+    ]);
+    expect(fresh.areas.find((a) => a.id === "crypt")?.fishingSpots).toEqual([
+      { id: "deep-pond", unlocked: false }, // Area itself is locked
+    ]);
+
+    const lowFishing = createEngine(fixtureContent, seededRng(1), veteranSnapshot()).snapshot();
+    // Area is unlocked (combat level 45) but Fishing level 1 < levelReq 20
+    expect(lowFishing.areas.find((a) => a.id === "crypt")?.fishingSpots).toEqual([
+      { id: "deep-pond", unlocked: false },
+    ]);
+
+    const highFishing = createEngine(
+      fixtureContent,
+      seededRng(1),
+      veteranSnapshot(20, xpForLevel(20)),
+    ).snapshot();
+    expect(highFishing.areas.find((a) => a.id === "crypt")?.fishingSpots).toEqual([
+      { id: "deep-pond", unlocked: true },
+    ]);
+  });
+
+  it("selecting a Fishing Spot clears any selected Monster, and vice versa (at most one active)", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    expect(engine.snapshot().monster).not.toBeNull();
+
+    engine.selectFishingSpot("pond");
+    expect(engine.snapshot().monster).toBeNull();
+    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+
+    engine.selectMonster("dummy");
+    expect(engine.snapshot().fishing).toBeNull();
+    expect(engine.snapshot().monster).not.toBeNull();
+  });
+
+  it("selecting a Fishing Spot mid-Respawn cancels it, restoring hp to at least 1", () => {
+    const engine = createEngine(fiercerDummyContent(), seededRng(42));
+    engine.selectMonster("dummy");
+    let died = false;
+    engine.on("death", () => {
+      died = true;
+    });
+    for (let i = 0; i < 5000 && !died; i++) engine.tick();
+    expect(died).toBe(true);
+    expect(engine.snapshot().player.respawning).toBe(true);
+    expect(engine.snapshot().player.hp).toBe(0);
+
+    engine.selectFishingSpot("pond");
+    const player = engine.snapshot().player;
+    expect(player.respawning).toBe(false);
+    expect(player.hp).toBeGreaterThanOrEqual(1);
+    expect(engine.snapshot().monster).toBeNull();
+    expect(engine.snapshot().fishing).not.toBeNull();
+  });
+
+  it("Fishing XP never moves combatLevel() or Area unlocks", () => {
+    const engine = freshEngine();
+    const before = engine.snapshot();
+    engine.selectFishingSpot("pond");
+    for (let i = 0; i < 3000; i++) engine.tick();
+    const after = engine.snapshot();
+
+    expect(after.player.skills.fishing.xp).toBeGreaterThan(0);
+    expect(after.player.combatLevel).toBe(before.player.combatLevel);
+    expect(after.areas.find((a) => a.id === "crypt")?.unlocked).toBe(
+      before.areas.find((a) => a.id === "crypt")?.unlocked,
+    );
+  });
+
+  describe("pinned decisions while fishing", () => {
+    function damagedFishingSnapshot(hp: number): Snapshot {
+      return {
+        player: {
+          hp,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+            fishing: { level: 1, xp: 0 },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [{ itemId: "meat", qty: 5 }],
+          respawning: false,
+        },
+        monster: null,
+        fishing: null,
+        areas: [],
+      };
+    }
+
+    it("passive regen continues while fishing (downtime heals)", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedFishingSnapshot(5));
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < 9; i++) engine.tick();
+      expect(engine.snapshot().player.hp).toBe(5);
+      engine.tick();
+      expect(engine.snapshot().player.hp).toBe(6);
+    });
+
+    it("auto-eat never fires while fishing, even below the threshold with Food owned", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedFishingSnapshot(2));
+      let ate = 0;
+      engine.on("food-eaten", () => ate++);
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < 100; i++) engine.tick();
+      expect(ate).toBe(0);
+    });
+
+    it("death cannot occur while fishing, even starting at 1 HP", () => {
+      const engine = createEngine(fixtureContent, seededRng(1), damagedFishingSnapshot(1));
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(died).toBe(false);
+      expect(engine.snapshot().player.hp).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("save/load", () => {
+    it("a pre-feature save (no fishing key anywhere) loads at Fishing level 1 / 0 XP with combat resumed unchanged", () => {
+      const legacySave = {
+        player: {
+          hp: 3,
+          maxHp: 3,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+            // no fishing key: simulates a save written before this feature shipped
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          inventory: [],
+          respawning: false,
+        },
+        monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },
+        // no top-level fishing key either
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      const snap = restored.snapshot();
+      expect(snap.player.skills.fishing).toEqual({ level: 1, xp: 0 });
+      expect(snap.fishing).toBeNull();
+      expect(snap.monster?.id).toBe("dummy");
+
+      let kills = 0;
+      restored.on("kill", () => kills++);
+      for (let i = 0; i < 2000; i++) restored.tick();
+      expect(kills).toBeGreaterThan(0);
+    });
+
+    it("a save made while fishing resumes fishing on load, re-arming the cooldown to catchTicks", () => {
+      const original = freshEngine();
+      original.selectFishingSpot("pond");
+      original.tick(); // 1 tick into a 3-tick cooldown; not yet due for a Catch
+      const saved = original.snapshot();
+      expect(saved.fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(7),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+
+      const caught: unknown[] = [];
+      restored.on("fish-caught", (e) => caught.push(e));
+      restored.tick();
+      restored.tick();
+      expect(caught).toHaveLength(0); // re-armed to catchTicks (3), not resumed at 2 remaining
+      restored.tick();
+      expect(caught).toHaveLength(1);
+    });
   });
 });

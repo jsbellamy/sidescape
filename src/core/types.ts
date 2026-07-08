@@ -1,4 +1,4 @@
-export type SkillName = "attack" | "strength" | "defence" | "hitpoints";
+export type SkillName = "attack" | "strength" | "defence" | "hitpoints" | "fishing";
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
@@ -63,17 +63,34 @@ export interface MonsterDef {
   dropTable: DropTableEntry[];
 }
 
+export interface FishingSpotDef {
+  id: string;
+  name: string;
+  /** Fishing level required to fish here. */
+  levelReq: number;
+  /** Caught item; must be a FoodDef. */
+  itemId: string;
+  /** Fishing XP per successful Catch. */
+  xp: number;
+  /** Ticks between Catch attempts. */
+  catchTicks: number;
+  /** Probability per attempt, 0..1; rolled via Rng. */
+  catchChance: number;
+}
+
 export interface AreaDef {
   id: string;
   name: string;
   combatLevelReq: number;
   monsterIds: string[];
+  fishingSpotIds?: string[];
 }
 
 export interface Content {
   areas: AreaDef[];
   monsters: MonsterDef[];
   items: ItemDef[];
+  fishingSpots: FishingSpotDef[];
 }
 
 export type EngineEvent =
@@ -82,7 +99,8 @@ export type EngineEvent =
   | { type: "levelup"; skill: SkillName; level: number }
   | { type: "death" }
   | { type: "food-eaten"; itemId: string; healed: number }
-  | { type: "item-sold"; itemId: string; qty: number; gold: number };
+  | { type: "item-sold"; itemId: string; qty: number; gold: number }
+  | { type: "fish-caught"; spotId: string; itemId: string; qty: number };
 
 export interface SkillSnapshot {
   level: number;
@@ -102,5 +120,12 @@ export interface Snapshot {
     respawning: boolean;
   };
   monster: { id: string; name: string; hp: number; maxHp: number } | null;
-  areas: { id: string; name: string; unlocked: boolean; monsterIds: string[] }[];
+  fishing: { spotId: string; name: string } | null;
+  areas: {
+    id: string;
+    name: string;
+    unlocked: boolean;
+    monsterIds: string[];
+    fishingSpots: { id: string; unlocked: boolean }[];
+  }[];
 }

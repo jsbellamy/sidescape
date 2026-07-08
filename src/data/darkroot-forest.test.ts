@@ -81,6 +81,7 @@ function meadowsGraduateSave(): Snapshot {
         strength: { level: 15, xp: xpForLevel(15) },
         defence: { level: 10, xp: xpForLevel(10) },
         hitpoints: { level: 16, xp: xpForLevel(16) },
+        fishing: { level: 1, xp: 0 },
       },
       equipment: {
         weapon: "bronze-sword",
@@ -93,6 +94,7 @@ function meadowsGraduateSave(): Snapshot {
       respawning: false,
     },
     monster: null,
+    fishing: null,
     areas: [],
   };
 }

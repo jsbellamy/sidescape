@@ -5,6 +5,7 @@ import type {
   AutoEatThreshold,
   CurrencyDef,
   EquipmentDef,
+  FishingSpotDef,
   FoodDef,
   ItemDef,
   MonsterDef,
@@ -24,6 +25,8 @@ interface State {
   autoEatThreshold: AutoEatThreshold;
   selectedMonsterId: string | null;
   monsterHp: number;
+  selectedSpotId: string | null;
+  catchCooldown: number;
   inventory: Map<string, number>;
   equipment: Record<GearSlot, string | null>;
   respawnTicksLeft: number;
@@ -39,6 +42,7 @@ type EventHandler<T extends EngineEvent["type"]> = (
 export interface Engine {
   tick(): void;
   selectMonster(monsterId: string): void;
+  selectFishingSpot(spotId: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   equip(itemId: string): void;
@@ -74,8 +78,10 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
           strength: saved.player.skills.strength.xp,
           defence: saved.player.skills.defence.xp,
           hitpoints: saved.player.skills.hitpoints.xp,
+          // Old saves lack the key entirely: pre-feature players start Fishing at 1/0 XP.
+          fishing: saved.player.skills.fishing?.xp ?? 0,
         }
-      : { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10) },
+      : { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10), fishing: 0 },
     hp: saved ? saved.player.hp : 10,
     combatStyle: saved?.player.combatStyle ?? "aggressive",
     autoEatThreshold: isAutoEatThreshold(loadedThreshold)
@@ -83,6 +89,8 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       : DEFAULT_AUTO_EAT_THRESHOLD,
     selectedMonsterId: null,
     monsterHp: 0,
+    selectedSpotId: null,
+    catchCooldown: 0,
     inventory: new Map(saved?.player.inventory.map((s) => [s.itemId, s.qty])),
     equipment: saved
       ? { ...saved.player.equipment }
@@ -106,6 +114,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   function monsterDef(id: string): MonsterDef {
     const def = content.monsters.find((m) => m.id === id);
     if (!def) throw new Error(`unknown monster: ${id}`);
+    return def;
+  }
+
+  function fishingSpotDef(id: string): FishingSpotDef {
+    const def = content.fishingSpots.find((s) => s.id === id);
+    if (!def) throw new Error(`unknown fishing spot: ${id}`);
     return def;
   }
 
@@ -206,10 +220,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
   function snapshot(): Snapshot {
     const skills = {} as Snapshot["player"]["skills"];
-    for (const skill of ["attack", "strength", "defence", "hitpoints"] as const) {
+    for (const skill of ["attack", "strength", "defence", "hitpoints", "fishing"] as const) {
       skills[skill] = { level: level(skill), xp: state.xp[skill] };
     }
     const monsterDef = content.monsters.find((m) => m.id === state.selectedMonsterId);
+    const spotDef = content.fishingSpots.find((s) => s.id === state.selectedSpotId);
     return {
       player: {
         hp: state.hp,
@@ -225,12 +240,20 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       monster: monsterDef
         ? { id: monsterDef.id, name: monsterDef.name, hp: state.monsterHp, maxHp: monsterDef.hp }
         : null,
-      areas: content.areas.map((area) => ({
-        id: area.id,
-        name: area.name,
-        unlocked: combatLevel() >= area.combatLevelReq,
-        monsterIds: [...area.monsterIds],
-      })),
+      fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
+      areas: content.areas.map((area) => {
+        const unlocked = combatLevel() >= area.combatLevelReq;
+        return {
+          id: area.id,
+          name: area.name,
+          unlocked,
+          monsterIds: [...area.monsterIds],
+          fishingSpots: (area.fishingSpotIds ?? []).map((id) => {
+            const spot = fishingSpotDef(id);
+            return { id: spot.id, unlocked: unlocked && level("fishing") >= spot.levelReq };
+          }),
+        };
+      }),
     };
   }
 
@@ -280,8 +303,26 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
   }
 
+  /** Rolls one Catch attempt when the cooldown elapses; success grants XP, the Item, and an event. */
+  function fishingTick(): void {
+    const spot = fishingSpotDef(state.selectedSpotId as string);
+    state.catchCooldown -= 1;
+    if (state.catchCooldown > 0) return;
+    state.catchCooldown = spot.catchTicks;
+    if (rng.next() < spot.catchChance) {
+      state.inventory.set(spot.itemId, (state.inventory.get(spot.itemId) ?? 0) + 1);
+      grantXp("fishing", spot.xp);
+      emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
+    }
+  }
+
   function tick(): void {
     regen();
+
+    if (state.selectedSpotId !== null) {
+      fishingTick();
+      return;
+    }
 
     if (state.selectedMonsterId === null) return;
 
@@ -315,6 +356,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   if (saved?.monster) {
     spawnMonster(saved.monster.id);
     state.monsterHp = saved.monster.hp;
+  } else if (saved?.fishing) {
+    // Cooldown isn't part of the Snapshot: re-arm to catchTicks, like monster cooldowns do.
+    const spot = fishingSpotDef(saved.fishing.spotId);
+    state.selectedSpotId = spot.id;
+    state.catchCooldown = spot.catchTicks;
   }
 
   return {
@@ -326,9 +372,25 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       if (area && combatLevel() < area.combatLevelReq) {
         throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
       }
+      state.selectedSpotId = null; // at most one of Monster / Fishing Spot selected
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       spawnMonster(monsterId);
+    },
+    selectFishingSpot(spotId) {
+      const spot = fishingSpotDef(spotId); // throws on unknown id
+      const area = content.areas.find((a) => a.fishingSpotIds?.includes(spotId));
+      if (area && combatLevel() < area.combatLevelReq) {
+        throw new Error(`${area.name} requires combat level ${area.combatLevelReq}`);
+      }
+      if (level("fishing") < spot.levelReq) {
+        throw new Error(`${spot.name} requires Fishing level ${spot.levelReq}`);
+      }
+      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot selected
+      state.respawnTicksLeft = 0;
+      state.hp = Math.max(state.hp, 1);
+      state.selectedSpotId = spotId;
+      state.catchCooldown = spot.catchTicks;
     },
     setCombatStyle(style) {
       state.combatStyle = style;

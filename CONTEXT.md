@@ -13,7 +13,7 @@ An enemy inside an **Area** that the player farms. Has HP, attack/defence stats,
 _Avoid_: mob, enemy, NPC
 
 **Skill**:
-One of Attack (hit chance), Strength (max hit), Defence (damage avoidance), Hitpoints (HP pool). Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
+Attack (hit chance), Strength (max hit), Defence (damage avoidance), and Hitpoints (HP pool) — the four combat Skills — plus Fishing, the first non-combat Skill. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
 _Avoid_: stat, attribute
 
 **Combat Style**:
@@ -48,6 +48,14 @@ Equipment progression rank: bronze → iron → steel → mithril. Area gating r
 **Food**:
 An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP.
 
+**Fishing Spot**:
+A location inside an **Area** where the player fishes instead of fighting, gated by the Area's combat-level requirement and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
+_Avoid_: fishing node, resource node
+
+**Catch**:
+The **Food** produced by a successful attempt at a **Fishing Spot**, rolled once per its cooldown at a flat per-spot chance. Immediately edible ("cooked catch") — v1 has no Cooking Skill in between.
+_Avoid_: loot (for fish)
+
 **Loot Feed**:
 The scrolling UI log of kills, **Drops**, and level-ups.
 
@@ -70,5 +78,6 @@ _Avoid_: death screen, grave
 - A **Drop Table** roll yields **Drops** (quantities of **Items**)
 - A piece of **Equipment** occupies one **Gear Slot** and has one **Gear Tier**
 - Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the active **Combat Style**
-- The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten) and produces **Snapshots** for continuous state
+- The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
+- An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other

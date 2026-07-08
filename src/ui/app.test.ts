@@ -91,6 +91,7 @@ describe("mountApp", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [
@@ -100,6 +101,7 @@ describe("mountApp", () => {
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
     const root = document.createElement("main");
@@ -197,12 +199,14 @@ describe("Combat Style selector", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
     const root = document.createElement("main");
@@ -270,12 +274,14 @@ describe("Auto-eat threshold selector", () => {
           strength: { level: 1, xp: 0 },
           defence: { level: 1, xp: 0 },
           hitpoints: { level: 10, xp: xpForLevel(10) },
+          fishing: { level: 1, xp: 0 },
         },
         equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
         inventory: [],
         respawning: false,
       },
       monster: null,
+      fishing: null,
       areas: [],
     });
     const root = document.createElement("main");
@@ -294,5 +300,52 @@ describe("Auto-eat threshold selector", () => {
     const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
     expect(active[0]?.dataset["threshold"]).toBe("0");
+  });
+});
+
+describe("Fishing", () => {
+  it("renders a 🎣 Fishing Spot button under each Area, disabled when locked", () => {
+    const { root } = mount(1);
+    const pondBtn = root.querySelector<HTMLButtonElement>('[data-spot="pond"]');
+    const deepPondBtn = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
+    expect(pondBtn?.textContent).toBe("🎣 Test Pond");
+    expect(pondBtn?.disabled).toBe(false);
+    expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's combat-level gate
+  });
+
+  it("XP row shows 5 chips, including a FIS chip for Fishing", () => {
+    const { root } = mount(1);
+    const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
+    expect(abbrs).toEqual(["ATT", "STR", "DEF", "HIT", "FIS"]);
+  });
+
+  it("selecting a Fishing Spot shows the fishing scene, hiding the Monster HP bar and sprite", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("🎣 Fishing at Test Pond");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector("#monster-sprite") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("selecting a Monster afterwards restores the normal combat scene", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("logs a feed line when a Catch lands and grants Fishing XP (fixture pond has catchChance 1)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+
+    for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3
+    app.render();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/caught.*meat/i);
+    expect(engine.snapshot().player.skills.fishing.xp).toBeGreaterThan(0);
+    expect(engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(1);
   });
 });
