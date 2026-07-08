@@ -19,6 +19,12 @@ export const content: Content = {
       monsterIds: ["wolf", "goblin-warrior", "bandit"],
       fishingSpotIds: ["trout-run"],
     },
+    {
+      id: "old-sewers",
+      name: "Old Sewers",
+      unlockedByDungeonId: "darkroot-hollow",
+      monsterIds: ["giant-rat", "zombie", "skeleton"],
+    },
   ],
   monsters: [
     {
@@ -133,6 +139,62 @@ export const content: Content = {
       attackSpeed: 4,
       dropTable: [{ itemId: "gold", qty: 20, chance: 1, band: "guaranteed" }],
     },
+    // Old Sewers (#10): roughly double Darkroot Forest's hp/damage, mapping wolf -> giant-rat,
+    // goblin-warrior -> zombie, bandit -> skeleton.
+    {
+      id: "giant-rat",
+      name: "Giant Rat",
+      hp: 32,
+      attackLevel: 12,
+      defenceLevel: 8,
+      maxHit: 6,
+      attackSpeed: 5,
+      dropTable: [
+        { itemId: "gold", qty: 30, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 1, chance: 0.35, band: "common" },
+        { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
+      ],
+    },
+    {
+      id: "zombie",
+      name: "Zombie",
+      hp: 40,
+      attackLevel: 24,
+      defenceLevel: 16,
+      maxHit: 8,
+      attackSpeed: 4,
+      dropTable: [
+        { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "steel-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
+      ],
+    },
+    {
+      id: "skeleton",
+      name: "Skeleton",
+      hp: 48,
+      attackLevel: 28,
+      defenceLevel: 20,
+      maxHit: 10,
+      attackSpeed: 5,
+      dropTable: [
+        { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 1, chance: 0.28, band: "common" },
+        { itemId: "steel-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
+        { itemId: "steel-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
+      ],
+    },
+    // Dungeon-only: absent from every Area's monsterIds, fought only inside "darkroot-hollow".
+    {
+      id: "hollow-warden",
+      name: "Hollow Warden",
+      hp: 35,
+      attackLevel: 18,
+      defenceLevel: 14,
+      maxHit: 6,
+      attackSpeed: 4,
+      dropTable: [{ itemId: "gold", qty: 30, chance: 1, band: "guaranteed" }],
+    },
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
@@ -236,6 +298,50 @@ export const content: Content = {
     // Smithing materials (#28): dropped by Monsters above, consumed by recipes below.
     { kind: "material", id: "bronze-bar", name: "Bronze Bar", value: 8 },
     { kind: "material", id: "iron-bar", name: "Iron Bar", value: 20 },
+    // Old Sewers (#10): steel Equipment tier and a stronger Food. Append-only — see the
+    // autoEat-ordering comment above cooked-shrimp; these go after iron-bar, never earlier.
+    {
+      kind: "equipment",
+      id: "steel-dagger",
+      name: "Steel Dagger",
+      slot: "weapon",
+      atkBonus: 14,
+      strBonus: 11,
+      defBonus: 0,
+      attackSpeed: 4,
+      value: 70,
+    },
+    {
+      kind: "equipment",
+      id: "steel-chainbody",
+      name: "Steel Chainbody",
+      slot: "body",
+      atkBonus: 0,
+      strBonus: 0,
+      defBonus: 14,
+      value: 100,
+    },
+    {
+      kind: "equipment",
+      id: "steel-kiteshield",
+      name: "Steel Kiteshield",
+      slot: "shield",
+      atkBonus: 0,
+      strBonus: 0,
+      defBonus: 12,
+      value: 85,
+    },
+    {
+      kind: "equipment",
+      id: "steel-full-helm",
+      name: "Steel Full Helm",
+      slot: "head",
+      atkBonus: 2,
+      strBonus: 2,
+      defBonus: 7,
+      value: 140,
+    },
+    { kind: "food", id: "cooked-pike", name: "Cooked Pike", heals: 12, value: 15 },
   ],
   fishingSpots: [
     {
@@ -268,6 +374,21 @@ export const content: Content = {
         { itemId: "cooked-meat", qty: 3, chance: 1, band: "guaranteed" },
         { itemId: "bronze-sword", qty: 1, chance: 1 / 3, band: "common" },
         { itemId: "goblin-charm", qty: 1, chance: 1 / 16, band: "rare" },
+      ],
+    },
+    // Old Sewers (#10): Darkroot-Monster waves plus the dungeon-only Hollow Warden boss; the
+    // Chest bridges the iron -> steel transition (an iron item at common, steel at uncommon/rare).
+    {
+      id: "darkroot-hollow",
+      name: "Darkroot Hollow",
+      areaId: "darkroot-forest",
+      waves: ["wolf", "goblin-warrior", "bandit", "hollow-warden"],
+      chest: [
+        { itemId: "gold", qty: 150, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-trout", qty: 3, chance: 1, band: "guaranteed" },
+        { itemId: "iron-full-helm", qty: 1, chance: 1 / 2, band: "common" },
+        { itemId: "steel-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
+        { itemId: "steel-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
       ],
     },
   ],
