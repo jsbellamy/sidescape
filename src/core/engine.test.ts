@@ -8,6 +8,22 @@ function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
 }
 
+/**
+ * The Training Dummy barely fights back by design (see other describe blocks),
+ * which is the point — but it makes death-by-attrition implausibly slow now that
+ * passive regen (1 HP/10 Ticks) outpaces its average damage. For tests that need
+ * the player to actually die against a weak early Monster, hit harder locally
+ * instead of reworking the shared fixture every other test relies on.
+ */
+function fiercerDummyContent() {
+  return {
+    ...fixtureContent,
+    monsters: fixtureContent.monsters.map((m) =>
+      m.id === "dummy" ? { ...m, attackLevel: 5, maxHit: 2, attackSpeed: 3 } : m,
+    ),
+  };
+}
+
 /** Pump Ticks until the player owns `itemId` (or fail the test). */
 function grindFor(engine: ReturnType<typeof freshEngine>, itemId: string, maxTicks = 20_000) {
   for (let i = 0; i < maxTicks; i++) {
@@ -135,7 +151,7 @@ describe("Drops", () => {
 
 describe("taking damage, Food, death and Respawn", () => {
   it("the Monster fights back; death enters Respawn, then combat auto-resumes", () => {
-    const engine = freshEngine();
+    const engine = createEngine(fiercerDummyContent(), seededRng(42));
     const order: string[] = [];
     let respawningSeenOnDeath = false;
     engine.on("kill", () => order.push("kill"));
@@ -157,7 +173,7 @@ describe("taking damage, Food, death and Respawn", () => {
   });
 
   it("auto-eats Food below half HP, never overhealing", () => {
-    const engine = freshEngine();
+    const engine = createEngine(fiercerDummyContent(), seededRng(42));
     let ate = 0;
     engine.on("food-eaten", (e) => {
       ate++;
@@ -169,6 +185,145 @@ describe("taking damage, Food, death and Respawn", () => {
     engine.selectMonster("dummy");
     for (let i = 0; i < 5000; i++) engine.tick();
     expect(ate).toBeGreaterThan(0);
+  });
+});
+
+describe("Passive HP regen", () => {
+  function damagedEngine(hp: number, seed = 1) {
+    return createEngine(fixtureContent, seededRng(seed), {
+      player: {
+        hp,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+  }
+
+  it("gains exactly 1 HP every 10 Ticks while below max HP", () => {
+    const engine = damagedEngine(5);
+    for (let i = 0; i < 9; i++) engine.tick();
+    expect(engine.snapshot().player.hp).toBe(5);
+    engine.tick();
+    expect(engine.snapshot().player.hp).toBe(6);
+
+    for (let i = 0; i < 9; i++) engine.tick();
+    expect(engine.snapshot().player.hp).toBe(6);
+    engine.tick();
+    expect(engine.snapshot().player.hp).toBe(7);
+  });
+
+  it("does not regen once HP reaches max", () => {
+    const engine = damagedEngine(9);
+    for (let i = 0; i < 10; i++) engine.tick();
+    expect(engine.snapshot().player.hp).toBe(10);
+    for (let i = 0; i < 30; i++) engine.tick();
+    expect(engine.snapshot().player.hp).toBe(10);
+  });
+
+  it("never regens while at max HP from the start", () => {
+    const engine = freshEngine();
+    for (let i = 0; i < 50; i++) engine.tick();
+    expect(engine.snapshot().player.hp).toBe(10);
+  });
+
+  it("does not regen during Respawn", () => {
+    const veteran = createEngine(fixtureContent, seededRng(3), {
+      player: {
+        hp: 60,
+        maxHp: 60,
+        combatLevel: 45,
+        combatStyle: "aggressive",
+        skills: {
+          attack: { level: 60, xp: xpForLevel(60) },
+          strength: { level: 60, xp: xpForLevel(60) },
+          // weak Defence so the gated, hard-hitting brute can actually land a kill
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 60, xp: xpForLevel(60) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+    veteran.selectMonster("brute");
+    let died = false;
+    veteran.on("death", () => {
+      died = true;
+    });
+    for (let i = 0; i < 5000 && !died; i++) veteran.tick();
+    expect(died).toBe(true);
+    expect(veteran.snapshot().player.hp).toBe(0);
+    expect(veteran.snapshot().player.respawning).toBe(true);
+
+    let sawHpDuringRespawn = false;
+    for (let i = 0; i < 6; i++) {
+      veteran.tick();
+      const player = veteran.snapshot().player;
+      if (player.respawning) {
+        expect(player.hp).toBe(0);
+        sawHpDuringRespawn = true;
+      }
+    }
+    expect(sawHpDuringRespawn).toBe(true);
+  });
+});
+
+describe("Manual eat command", () => {
+  it("heals from Food, consumes it, emits food-eaten, and never overheals", () => {
+    // meat heals 4, but only 2 HP of headroom is available below max — must cap there
+    const engine = createEngine(fixtureContent, seededRng(1), {
+      player: {
+        hp: 8,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [{ itemId: "meat", qty: 2 }],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+
+    const events: { itemId: string; healed: number }[] = [];
+    engine.on("food-eaten", (e) => events.push({ itemId: e.itemId, healed: e.healed }));
+    engine.eatFood("meat");
+
+    expect(events).toEqual([{ itemId: "meat", healed: 2 }]);
+    expect(engine.snapshot().player.hp).toBe(10);
+    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 1 }]);
+  });
+
+  it("throws for a non-Food item", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    expect(() => engine.eatFood("bronze-sword")).toThrow(/food/i);
+  });
+
+  it("throws for an unowned Food item", () => {
+    const engine = freshEngine();
+    expect(() => engine.eatFood("meat")).toThrow(/own/i);
   });
 });
 

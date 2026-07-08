@@ -208,6 +208,15 @@ body {
   text-decoration: underline;
 }
 
+#inventory .eatable {
+  cursor: pointer;
+  color: #7dd58f;
+}
+
+#inventory .eatable:hover {
+  text-decoration: underline;
+}
+
 #feed li {
   padding: 1px 0;
   border-bottom: 1px solid #221c15;

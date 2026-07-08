@@ -66,8 +66,9 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       .filter((s) => s.itemId !== "gold")
       .map((s) => {
         const def = content.items.find((i) => i.id === s.itemId);
-        const equippable = def?.kind === "equipment";
-        return `<li class="${equippable ? "equippable" : ""}" data-item="${s.itemId}">
+        const cls =
+          def?.kind === "equipment" ? "equippable" : def?.kind === "food" ? "eatable" : "";
+        return `<li class="${cls}" data-item="${s.itemId}">
                   ${itemName(s.itemId)} ×${s.qty}</li>`;
       })
       .join("");
@@ -109,7 +110,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     <section id="panels">
       <p class="panel-title">Equipment <span id="gold"></span></p>
       <ul id="equipment"></ul>
-      <p class="panel-title">Inventory <span class="hint">(click to equip)</span></p>
+      <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
       <ul id="inventory"></ul>
       <p class="panel-title">Loot Feed</p>
       <ul id="feed"></ul>
@@ -135,9 +136,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   el("#inventory").addEventListener("click", (event) => {
     const itemId = (event.target as HTMLElement).closest("li")?.dataset["item"];
     const def = content.items.find((i) => i.id === itemId);
-    if (itemId && def?.kind === "equipment") {
+    if (!itemId || !def) return;
+    if (def.kind === "equipment") {
       engine.equip(itemId);
       feedLine(`Equipped ${def.name}`);
+      render();
+    } else if (def.kind === "food") {
+      engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
       render();
     }
   });
