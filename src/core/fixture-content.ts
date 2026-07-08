@@ -47,6 +47,17 @@ export const fixtureContent: Content = {
       attackSpeed: 4,
       dropTable: [{ itemId: "gold", qty: 200, chance: 1, band: "guaranteed" }],
     },
+    // Dungeon-only: absent from every Area's monsterIds (see the "gauntlet" Dungeon below).
+    {
+      id: "boss-dummy",
+      name: "Boss Dummy",
+      hp: 5,
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 1,
+      attackSpeed: 4,
+      dropTable: [{ itemId: "gold", qty: 10, chance: 1, band: "guaranteed" }],
+    },
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
@@ -93,6 +104,20 @@ export const fixtureContent: Content = {
       xp: 50,
       catchTicks: 3,
       catchChance: 1,
+    },
+  ],
+  dungeons: [
+    // Two "dummy" Waves then the weak "boss-dummy" Boss; chest mixes a guaranteed entry with a
+    // 1/2-chance one so seeded-Rng tests can pin exactly which items land.
+    {
+      id: "gauntlet",
+      name: "The Gauntlet",
+      areaId: "meadow",
+      waves: ["dummy", "dummy", "boss-dummy"],
+      chest: [
+        { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
+        { itemId: "bronze-sword", qty: 1, chance: 0.5, band: "common" },
+      ],
     },
   ],
 };
