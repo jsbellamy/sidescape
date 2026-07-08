@@ -1,0 +1,204 @@
+import { describe, expect, it } from "vitest";
+import { createEngine } from "../core/engine";
+import { makeSnapshot } from "../core/make-snapshot";
+import { seededRng } from "../core/rng";
+import { xpForLevel } from "../core/xp";
+import { content } from "./index";
+
+const OLD_SEWERS_MONSTER_IDS = ["giant-rat", "zombie", "skeleton"];
+const DARKROOT_HOLLOW_WAVES = ["wolf", "goblin-warrior", "bandit", "hollow-warden"];
+
+describe("Old Sewers content", () => {
+  it("appears in the picker, locked until Darkroot Hollow is completed", () => {
+    const fresh = createEngine(content, seededRng(1));
+    const areas = fresh.snapshot().areas;
+    const oldSewers = areas.find((a) => a.id === "old-sewers");
+    expect(oldSewers).toBeDefined();
+    expect(oldSewers?.name).toBe("Old Sewers");
+    expect(oldSewers?.monsterIds).toEqual(OLD_SEWERS_MONSTER_IDS);
+    expect(oldSewers?.unlocked).toBe(false);
+  });
+
+  it("gates a fresh player out of every Old Sewers Monster", () => {
+    for (const monsterId of OLD_SEWERS_MONSTER_IDS) {
+      expect(() => createEngine(content, seededRng(1)).selectMonster(monsterId)).toThrow(
+        /Old Sewers is locked — defeat Darkroot Hollow/,
+      );
+    }
+  });
+
+  it("Giant Rat, Zombie, and Skeleton exist with roughly-doubled Darkroot Forest stats", () => {
+    const giantRat = content.monsters.find((m) => m.id === "giant-rat");
+    const zombie = content.monsters.find((m) => m.id === "zombie");
+    const skeleton = content.monsters.find((m) => m.id === "skeleton");
+    expect(giantRat).toBeDefined();
+    expect(zombie).toBeDefined();
+    expect(skeleton).toBeDefined();
+    // Darkroot Forest tops out at hp 24 / maxHit 5 (Bandit); Old Sewers is roughly double.
+    for (const monster of [giantRat, zombie, skeleton]) {
+      expect(monster!.hp).toBeGreaterThanOrEqual(32);
+      expect(monster!.maxHit).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("each Old Sewers Monster's Drop Table has guaranteed/common bands, and steel Equipment plus the stronger Food appear", () => {
+    let steelEquipmentSeen = false;
+    let cookedPikeSeen = false;
+    for (const monsterId of OLD_SEWERS_MONSTER_IDS) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      const bands = new Set(monster.dropTable.map((e) => e.band));
+      expect(bands.has("guaranteed")).toBe(true);
+      expect(bands.has("common")).toBe(true);
+
+      for (const entry of monster.dropTable) {
+        const item = content.items.find((i) => i.id === entry.itemId);
+        expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
+        if (item?.kind === "equipment" && item.id.startsWith("steel-")) steelEquipmentSeen = true;
+        if (item?.id === "cooked-pike") cookedPikeSeen = true;
+      }
+    }
+    expect(steelEquipmentSeen).toBe(true);
+    expect(cookedPikeSeen).toBe(true);
+  });
+
+  it("Cooked Pike heals more than every earlier Food and steel Equipment out-bonuses its iron equivalent", () => {
+    const cookedPike = content.items.find((i) => i.id === "cooked-pike");
+    expect(cookedPike?.kind).toBe("food");
+    const earlierFood = ["cooked-meat", "cooked-trout", "cooked-shrimp"]
+      .map((id) => content.items.find((i) => i.id === id))
+      .filter((i) => i?.kind === "food");
+    expect(earlierFood.length).toBeGreaterThan(0);
+    for (const food of earlierFood) {
+      expect((cookedPike as { heals: number }).heals).toBeGreaterThan(
+        (food as { heals: number }).heals,
+      );
+    }
+
+    const ironKiteshield = content.items.find((i) => i.id === "iron-kiteshield");
+    const steelKiteshield = content.items.find((i) => i.id === "steel-kiteshield");
+    expect(ironKiteshield?.kind).toBe("equipment");
+    expect(steelKiteshield?.kind).toBe("equipment");
+    expect((steelKiteshield as { defBonus: number }).defBonus).toBeGreaterThan(
+      (ironKiteshield as { defBonus: number }).defBonus,
+    );
+  });
+
+  it("new items are appended after iron-bar (append-only: existing entries never reorder)", () => {
+    const ids = content.items.map((i) => i.id);
+    expect(ids.indexOf("iron-bar")).toBeLessThan(ids.indexOf("steel-dagger"));
+    expect(ids.indexOf("iron-bar")).toBeLessThan(ids.indexOf("cooked-pike"));
+  });
+});
+
+describe("Darkroot Hollow Dungeon", () => {
+  it("is hosted in Darkroot Forest with Darkroot-Monster waves plus the Hollow Warden boss", () => {
+    const dungeon = content.dungeons.find((d) => d.id === "darkroot-hollow");
+    expect(dungeon).toBeDefined();
+    expect(dungeon?.areaId).toBe("darkroot-forest");
+    expect(dungeon?.waves).toEqual(DARKROOT_HOLLOW_WAVES);
+    // The boss (last wave) is dungeon-only: absent from every Area's monsterIds.
+    expect(content.areas.some((a) => a.monsterIds.includes("hollow-warden"))).toBe(false);
+    const boss = content.monsters.find((m) => m.id === "hollow-warden");
+    expect(boss).toBeDefined();
+    expect(boss!.hp).toBeGreaterThan(content.monsters.find((m) => m.id === "bandit")!.hp);
+  });
+
+  it("its Chest bridges the iron -> steel transition", () => {
+    const dungeon = content.dungeons.find((d) => d.id === "darkroot-hollow")!;
+    const chestItemIds = dungeon.chest.map((e) => e.itemId);
+    const ironItems = chestItemIds.filter((id) => id.startsWith("iron-"));
+    const steelItems = chestItemIds.filter((id) => id.startsWith("steel-"));
+    expect(ironItems.length).toBeGreaterThan(0);
+    expect(steelItems.length).toBeGreaterThan(0);
+    for (const entry of dungeon.chest) {
+      const item = content.items.find((i) => i.id === entry.itemId);
+      expect(item, `chest entry ${entry.itemId} not found`).toBeDefined();
+    }
+  });
+
+  it("entering it requires Darkroot Forest unlocked (a fresh player is locked out)", () => {
+    expect(() => createEngine(content, seededRng(1)).enterDungeon("darkroot-hollow")).toThrow(
+      /Darkroot Forest is locked — defeat Meadow Depths/,
+    );
+  });
+});
+
+/** A saved Snapshot for a player who just graduated Darkroot Forest: cleared Meadow Depths
+ * (so Darkroot Forest is unlocked, letting them enter Darkroot Hollow) and geared in iron —
+ * but has NOT yet completed Darkroot Hollow itself. */
+function darkrootGraduateSave() {
+  return makeSnapshot({
+    player: {
+      hp: 30,
+      maxHp: 30,
+      skills: {
+        attack: { level: 26, xp: xpForLevel(26) },
+        strength: { level: 28, xp: xpForLevel(28) },
+        defence: { level: 22, xp: xpForLevel(22) },
+        hitpoints: { level: 30, xp: xpForLevel(30) },
+      },
+      equipment: {
+        weapon: "iron-dagger",
+        shield: "iron-kiteshield",
+        body: "iron-chainbody",
+        head: "iron-full-helm",
+      },
+      autoEatThreshold: 0.5,
+      inventory: [{ itemId: "cooked-trout", qty: 30 }],
+      completedDungeonIds: ["meadow-depths"],
+    },
+  });
+}
+
+describe("Old Sewers tier balance", () => {
+  it("a player who hasn't completed Darkroot Hollow stays gated out of Old Sewers, even iron-geared at Darkroot level", () => {
+    const engine = createEngine(content, seededRng(2024), darkrootGraduateSave());
+    expect(engine.snapshot().areas.find((a) => a.id === "old-sewers")?.unlocked).toBe(false);
+    expect(() => engine.selectMonster("giant-rat")).toThrow(
+      /Old Sewers is locked — defeat Darkroot Hollow/,
+    );
+  });
+
+  it("an iron-geared tier-2 (Darkroot) graduate completes Darkroot Hollow, flipping Old Sewers unlocked on dungeon-completed, then progresses against the Giant Rat", () => {
+    const engine = createEngine(content, seededRng(2024), darkrootGraduateSave());
+
+    let hollowCompleted = false;
+    engine.on("dungeon-completed", (e) => {
+      if (e.dungeonId === "darkroot-hollow") hollowCompleted = true;
+    });
+    expect(() => engine.enterDungeon("darkroot-hollow")).not.toThrow();
+
+    for (let i = 0; i < 20000 && !hollowCompleted; i++) {
+      engine.tick();
+      const snap = engine.snapshot();
+      // Re-enter if a death ejected the run back to idle before it completed.
+      if (!hollowCompleted && snap.dungeon === null && snap.monster === null) {
+        engine.enterDungeon("darkroot-hollow");
+      }
+    }
+
+    expect(hollowCompleted).toBe(true);
+    const afterHollow = engine.snapshot();
+    expect(afterHollow.player.completedDungeonIds).toContain("darkroot-hollow");
+    expect(afterHollow.areas.find((a) => a.id === "old-sewers")?.unlocked).toBe(true);
+
+    expect(() => engine.selectMonster("giant-rat")).not.toThrow();
+    let kills = 0;
+    let deaths = 0;
+    engine.on("kill", () => kills++);
+    engine.on("death", () => deaths++);
+    for (let i = 0; i < 6000; i++) engine.tick();
+
+    expect(kills).toBeGreaterThan(0);
+    expect(kills).toBeGreaterThan(deaths * 2);
+  });
+
+  it("a fresh (unequipped, level-1) player cannot even enter Darkroot Hollow or select a Giant Rat", () => {
+    expect(() => createEngine(content, seededRng(2024)).enterDungeon("darkroot-hollow")).toThrow(
+      /Darkroot Forest is locked — defeat Meadow Depths/,
+    );
+    expect(() => createEngine(content, seededRng(2024)).selectMonster("giant-rat")).toThrow(
+      /Old Sewers is locked — defeat Darkroot Hollow/,
+    );
+  });
+});
