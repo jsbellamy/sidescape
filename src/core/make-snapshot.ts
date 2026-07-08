@@ -56,6 +56,7 @@ function baseSnapshot(): Snapshot {
     },
     monster: null,
     fishing: null,
+    bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
     areas: fixtureContent.areas.map((area) => {
       const unlocked = combatLevel >= area.combatLevelReq;
       return {

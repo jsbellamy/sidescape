@@ -53,6 +53,7 @@ const TABS = [
   { id: "loot", label: "Loot Feed" },
   { id: "equipment", label: "Equipment" },
   { id: "inventory", label: "Inventory" },
+  { id: "bank", label: "Bank" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -118,7 +119,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   function render(): void {
     const snap = engine.snapshot();
-    const { player, monster, fishing } = snap;
+    const { player, monster, fishing, bank } = snap;
 
     el("#player-hp-fill").style.width = `${(player.hp / player.maxHp) * 100}%`;
     el("#player-hp-text").textContent = player.respawning
@@ -199,8 +200,9 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           price !== undefined
             ? `<button class="sell-btn" data-sell="${s.itemId}">Sell ${price}g</button>`
             : "";
+        const depositBtn = `<button class="deposit-btn" data-deposit="${s.itemId}">Bank</button>`;
         return `<li class="${cls}" data-item="${s.itemId}">
-                  ${itemName(s.itemId)} ×${s.qty}${sellBtn}</li>`;
+                  ${itemName(s.itemId)} ×${s.qty}${depositBtn}${sellBtn}</li>`;
       })
       .join("");
 
@@ -208,6 +210,20 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       .map(
         ([slot, itemId]) =>
           `<li><span class="slot">${slot}</span> ${itemId ? itemName(itemId) : "—"}</li>`,
+      )
+      .join("");
+
+    const used = bank.items.length;
+    el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
+    const buySlotsBtn = el<HTMLButtonElement>("#buy-slots-btn");
+    buySlotsBtn.textContent = `Buy +10 slots (${bank.nextSlotsPrice}g)`;
+    buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
+
+    el("#bank").innerHTML = bank.items
+      .map(
+        (s) =>
+          `<li data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}
+             <button class="withdraw-btn" data-withdraw="${s.itemId}">Withdraw</button></li>`,
       )
       .join("");
   }
@@ -275,6 +291,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
           <ul id="inventory"></ul>
         </div>
+        <div data-tab-panel="bank" class="tab-panel">
+          <p class="panel-title">
+            <span id="bank-header"></span>
+            <button id="buy-slots-btn" data-buy-slots></button>
+          </p>
+          <ul id="bank"></ul>
+        </div>
       </div>
     </section>`;
 
@@ -330,6 +353,19 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   el("#inventory").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
+    // Click-handler order is load-bearing (#25): deposit before sell before equip/eat, so
+    // depositing an item never also sells, equips, or eats it.
+    const depositId = target.dataset["deposit"];
+    if (depositId) {
+      const qty = engine.snapshot().player.inventory.find((s) => s.itemId === depositId)?.qty ?? 0;
+      if (qty > 0) {
+        engine.deposit(depositId, qty); // logs its own feed line below
+        feedLine(`Banked ${qty} × ${itemName(depositId)}`);
+        render();
+      }
+      return;
+    }
+
     const sellId = target.dataset["sell"];
     if (sellId) {
       engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
@@ -348,6 +384,23 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
       render();
     }
+  });
+
+  el("#bank").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const withdrawId = target.dataset["withdraw"];
+    if (!withdrawId) return;
+    const qty = engine.snapshot().bank.items.find((s) => s.itemId === withdrawId)?.qty ?? 0;
+    if (qty <= 0) return;
+    engine.withdraw(withdrawId, qty);
+    feedLine(`Withdrew ${qty} × ${itemName(withdrawId)}`);
+    render();
+  });
+
+  el("#buy-slots-btn").addEventListener("click", () => {
+    engine.buyBankSlots();
+    feedLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
+    render();
   });
 
   buildPicker();

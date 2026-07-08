@@ -422,10 +422,15 @@ describe("Panel tabs", () => {
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Loot Feed, Equipment, Inventory — Loot Feed active by default", () => {
+  it("renders one tab per panel — Loot Feed, Equipment, Inventory, Bank — Loot Feed active by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
-    expect(buttons.map((b) => b.textContent)).toEqual(["Loot Feed", "Equipment", "Inventory"]);
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "Loot Feed",
+      "Equipment",
+      "Inventory",
+      "Bank",
+    ]);
 
     const active = buttons.filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
@@ -437,6 +442,7 @@ describe("Panel tabs", () => {
     expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="equipment"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="inventory"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
   });
 
   it("clicking a tab swaps the visible panel and highlights the clicked tab", () => {
@@ -470,6 +476,95 @@ describe("Panel tabs", () => {
     expect(root.querySelector("#inventory")).not.toBeNull();
     expect(root.querySelector("#feed")).not.toBeNull();
     expect(root.querySelector("#gold")).not.toBeNull();
+  });
+});
+
+describe("Bank", () => {
+  function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    return { engine, root, app };
+  }
+
+  it("shows the Bank header as used/capacity and the next slot price on the buy button", () => {
+    const { root } = bankMount({
+      bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 },
+    });
+    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 1/100");
+    expect(root.querySelector("#buy-slots-btn")?.textContent).toBe("Buy +10 slots (1000g)");
+  });
+
+  it("disables the buy-slots button when carried gold is short of the price, enables it when affordable", () => {
+    const short = bankMount({ player: { inventory: [{ itemId: "gold", qty: 500 }] } });
+    expect(short.root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.disabled).toBe(true);
+
+    const flush = bankMount({ player: { inventory: [{ itemId: "gold", qty: 1000 }] } });
+    expect(flush.root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.disabled).toBe(false);
+  });
+
+  it("clicking Buy +10 slots grows capacity, debits gold, updates the header/price, and logs a feed line", () => {
+    const { engine, root } = bankMount({ player: { inventory: [{ itemId: "gold", qty: 1000 }] } });
+    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
+
+    expect(engine.snapshot().bank.capacity).toBe(110);
+    expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")).toBeUndefined();
+    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/110");
+    expect(root.querySelector("#buy-slots-btn")?.textContent).toBe("Buy +10 slots (1500g)");
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank expanded to 110 slots/i);
+  });
+
+  it("depositing from Inventory banks the whole carried stack, updates both lists and the gold counter, and logs a feed line", () => {
+    const { engine, root } = bankMount({
+      player: {
+        inventory: [
+          { itemId: "meat", qty: 5 },
+          { itemId: "gold", qty: 20 },
+        ],
+      },
+    });
+
+    const depositBtn = root.querySelector<HTMLButtonElement>('[data-deposit="meat"]');
+    expect(depositBtn).not.toBeNull();
+    depositBtn?.click();
+
+    expect(engine.snapshot().player.inventory.some((s) => s.itemId === "meat")).toBe(false);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
+    expect(root.querySelector('#inventory li[data-item="meat"]')).toBeNull();
+    expect(root.querySelector('#bank li[data-item="meat"]')?.textContent).toContain("×5");
+    expect(root.querySelector("#gold")?.textContent).toContain("20"); // gold counter untouched
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/banked 5.*cooked meat/i);
+  });
+
+  it("a deposit click never sells, equips, or eats the item", () => {
+    const { engine, root } = bankMount({
+      player: { inventory: [{ itemId: "bronze-sword", qty: 1 }] },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-deposit="bronze-sword"]')?.click();
+
+    const player = engine.snapshot().player;
+    expect(player.equipment.weapon).toBeNull(); // not equipped
+    expect(player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0).toBe(0); // not sold
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(root.querySelector("#feed li")?.textContent).not.toMatch(/sold|equipped/i);
+  });
+
+  it("withdrawing from the Bank returns the whole banked stack to Inventory and logs a feed line", () => {
+    const { engine, root } = bankMount({
+      bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 },
+    });
+
+    const withdrawBtn = root.querySelector<HTMLButtonElement>('[data-withdraw="meat"]');
+    expect(withdrawBtn).not.toBeNull();
+    withdrawBtn?.click();
+
+    expect(engine.snapshot().bank.items).toEqual([]);
+    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 5 }]);
+    expect(root.querySelector('#bank li[data-item="meat"]')).toBeNull();
+    expect(root.querySelector('#inventory li[data-item="meat"]')?.textContent).toContain("×5");
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/withdrew 5.*cooked meat/i);
   });
 });
 

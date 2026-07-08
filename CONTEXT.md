@@ -48,6 +48,13 @@ Equipment progression rank: bronze → iron → steel → mithril. Area gating r
 **Food**:
 An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP.
 
+**Bank**:
+A player's storage separate from the carried inventory; deposited **Items** don't count against anything carried, and can't be worn or auto-eaten until withdrawn. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending carried gold, a gold sink.
+_Avoid_: storage, chest, warehouse
+
+**Bank Slot**:
+One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
+
 **Fishing Spot**:
 A location inside an **Area** where the player fishes instead of fighting, gated by the Area's combat-level requirement and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
 _Avoid_: fishing node, resource node
@@ -80,4 +87,5 @@ _Avoid_: death screen, grave
 - Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the active **Combat Style**
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
+- The **Bank** holds one Item stack per **Bank Slot**, separate from the carried inventory
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
