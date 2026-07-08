@@ -1,6 +1,8 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
+import { AUTO_EAT_THRESHOLDS } from "./types";
 import type {
+  AutoEatThreshold,
   CurrencyDef,
   EquipmentDef,
   FoodDef,
@@ -19,6 +21,7 @@ interface State {
   xp: Record<SkillName, number>;
   hp: number;
   combatStyle: CombatStyle;
+  autoEatThreshold: AutoEatThreshold;
   selectedMonsterId: string | null;
   monsterHp: number;
   inventory: Map<string, number>;
@@ -37,6 +40,7 @@ export interface Engine {
   tick(): void;
   selectMonster(monsterId: string): void;
   setCombatStyle(style: CombatStyle): void;
+  setAutoEatThreshold(threshold: AutoEatThreshold): void;
   equip(itemId: string): void;
   eatFood(itemId: string): void;
   sell(itemId: string, qty?: number): void;
@@ -48,12 +52,20 @@ const UNARMED_SPEED = 4;
 const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
+const DEFAULT_AUTO_EAT_THRESHOLD: AutoEatThreshold = 0.5;
+
+function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
+  return (AUTO_EAT_THRESHOLDS as readonly unknown[]).includes(value);
+}
 
 export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
   // Located once here, never by a hard-coded id: whichever Item Content declares as currency.
   const currencyDef: CurrencyDef | undefined = content.items.find(
     (i): i is CurrencyDef => i.kind === "currency",
   );
+
+  // Loads are tolerant (ADR-0001): an unrecognised or missing saved threshold falls back silently.
+  const loadedThreshold = saved?.player.autoEatThreshold ?? DEFAULT_AUTO_EAT_THRESHOLD;
 
   const state: State = {
     xp: saved
@@ -66,6 +78,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       : { attack: 0, strength: 0, defence: 0, hitpoints: xpForLevel(10) },
     hp: saved ? saved.player.hp : 10,
     combatStyle: saved?.player.combatStyle ?? "aggressive",
+    autoEatThreshold: isAutoEatThreshold(loadedThreshold)
+      ? loadedThreshold
+      : DEFAULT_AUTO_EAT_THRESHOLD,
     selectedMonsterId: null,
     monsterHp: 0,
     inventory: new Map(saved?.player.inventory.map((s) => [s.itemId, s.qty])),
@@ -201,6 +216,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         maxHp: maxHp(),
         combatLevel: combatLevel(),
         combatStyle: state.combatStyle,
+        autoEatThreshold: state.autoEatThreshold,
         skills,
         equipment: { ...state.equipment },
         inventory: [...state.inventory].map(([itemId, qty]) => ({ itemId, qty })),
@@ -240,7 +256,8 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   }
 
   function autoEat(): void {
-    while (state.hp < maxHp() / 2) {
+    if (state.autoEatThreshold === 0) return;
+    while (state.hp < maxHp() * state.autoEatThreshold) {
       const food = content.items.find(
         (item) => item.kind === "food" && (state.inventory.get(item.id) ?? 0) > 0,
       );
@@ -315,6 +332,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     },
     setCombatStyle(style) {
       state.combatStyle = style;
+    },
+    setAutoEatThreshold(threshold) {
+      if (!isAutoEatThreshold(threshold)) {
+        throw new Error(`invalid auto-eat threshold: ${threshold}`);
+      }
+      state.autoEatThreshold = threshold;
     },
     equip(itemId) {
       const def = content.items.find((i) => i.id === itemId);
