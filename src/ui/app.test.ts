@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { seededRng } from "../core/rng";
+import { xpForLevel } from "../core/xp";
 import { mountApp } from "./app";
 
 function mount(seed: number) {
@@ -67,5 +68,96 @@ describe("mountApp", () => {
     const remaining = after.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(remaining).toBe(meatQty - 1);
     expect(root.querySelector("#feed li")?.textContent).toMatch(/ate.*meat/i);
+  });
+
+  it("shows a sell button with price only for items with a value", () => {
+    const noValueContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.id !== "lucky-charm" || i.kind === "currency") return i;
+        const { value: _value, ...rest } = i;
+        return rest;
+      }),
+    };
+    const engine = createEngine(noValueContent, seededRng(1), {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory: [
+          { itemId: "meat", qty: 1 },
+          { itemId: "lucky-charm", qty: 1 },
+        ],
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    });
+    const root = document.createElement("main");
+    mountApp(engine, root, noValueContent);
+
+    const meatLi = root.querySelector('#inventory li[data-item="meat"]');
+    expect(meatLi?.querySelector('[data-sell="meat"]')?.textContent).toBe("Sell 3g");
+
+    const charmLi = root.querySelector('#inventory li[data-item="lucky-charm"]');
+    expect(charmLi?.querySelector('[data-sell="lucky-charm"]')).toBeNull();
+  });
+
+  it("clicking sell sells exactly one unit of Equipment, credits gold, logs a feed line, and does not equip it", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 20_000; i++) {
+      engine.tick();
+      if (engine.snapshot().player.inventory.some((s) => s.itemId === "bronze-sword")) break;
+    }
+    app.render();
+    const before = engine.snapshot().player;
+    const swordQty = before.inventory.find((s) => s.itemId === "bronze-sword")?.qty ?? 0;
+    const goldBefore = before.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+    expect(swordQty).toBeGreaterThan(0);
+
+    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="bronze-sword"]');
+    expect(sellBtn?.textContent).toBe("Sell 20g");
+    sellBtn?.click();
+
+    const after = engine.snapshot().player;
+    expect(after.inventory.find((s) => s.itemId === "bronze-sword")?.qty ?? 0).toBe(swordQty - 1);
+    expect(after.inventory.find((s) => s.itemId === "gold")?.qty).toBe(goldBefore + 20);
+    expect(after.equipment.weapon).toBeNull(); // sold, not equipped
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/sold.*bronze sword.*\+20g/i);
+    expect(root.querySelector("#gold")?.textContent).toContain(String(goldBefore + 20));
+  });
+
+  it("clicking sell on Food sells it instead of eating it (no HP change, no food-eaten line)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 2000; i++) {
+      engine.tick();
+      if (engine.snapshot().player.inventory.some((s) => s.itemId === "meat")) break;
+    }
+    app.render();
+    const before = engine.snapshot().player;
+    const meatQty = before.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    const hpBefore = before.hp;
+
+    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="meat"]');
+    expect(sellBtn?.textContent).toBe("Sell 3g");
+    sellBtn?.click();
+
+    const after = engine.snapshot().player;
+    expect(after.inventory.find((s) => s.itemId === "meat")?.qty ?? 0).toBe(meatQty - 1);
+    expect(after.hp).toBe(hpBefore); // not eaten, so no healing
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/sold.*meat.*\+3g/i);
+    expect(root.querySelector("#feed li")?.textContent).not.toMatch(/ate/i);
   });
 });

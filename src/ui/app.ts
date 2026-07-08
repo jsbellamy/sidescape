@@ -18,6 +18,12 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     return content.items.find((i) => i.id === itemId)?.name ?? itemId;
   }
 
+  /** Gold per unit if `itemId` can be sold from the Inventory; undefined otherwise. */
+  function sellPrice(itemId: string): number | undefined {
+    const def = content.items.find((i) => i.id === itemId);
+    return def && def.kind !== "currency" ? def.value : undefined;
+  }
+
   function el<T extends HTMLElement>(selector: string): T {
     return root.querySelector(selector) as T;
   }
@@ -80,8 +86,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         const def = content.items.find((i) => i.id === s.itemId);
         const cls =
           def?.kind === "equipment" ? "equippable" : def?.kind === "food" ? "eatable" : "";
+        const price = sellPrice(s.itemId);
+        const sellBtn =
+          price !== undefined
+            ? `<button class="sell-btn" data-sell="${s.itemId}">Sell ${price}g</button>`
+            : "";
         return `<li class="${cls}" data-item="${s.itemId}">
-                  ${itemName(s.itemId)} ×${s.qty}</li>`;
+                  ${itemName(s.itemId)} ×${s.qty}${sellBtn}</li>`;
       })
       .join("");
 
@@ -139,6 +150,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
+  engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
   engine.on("levelup", () => buildPicker()); // gate flags may change
 
   el("#picker").addEventListener("click", (event) => {
@@ -150,7 +162,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   });
 
   el("#inventory").addEventListener("click", (event) => {
-    const itemId = (event.target as HTMLElement).closest("li")?.dataset["item"];
+    const target = event.target as HTMLElement;
+    const sellId = target.dataset["sell"];
+    if (sellId) {
+      engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
+      render();
+      return;
+    }
+
+    const itemId = target.closest("li")?.dataset["item"];
     const def = content.items.find((i) => i.id === itemId);
     if (!itemId || !def) return;
     if (def.kind === "equipment") {

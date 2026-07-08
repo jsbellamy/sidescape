@@ -254,6 +254,25 @@ body {
   text-decoration: underline;
 }
 
+.sell-btn {
+  float: right;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 10px;
+  padding: 1px 5px;
+  cursor: pointer;
+}
+
+.sell-btn:hover {
+  border-color: var(--accent);
+}
+
+#feed .sell {
+  color: var(--accent);
+}
+
 #feed li {
   padding: 1px 0;
   border-bottom: 1px solid #221c15;
