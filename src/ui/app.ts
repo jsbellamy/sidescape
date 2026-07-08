@@ -1,5 +1,6 @@
 import type { Engine } from "../core/engine";
 import type { Content } from "../core/types";
+import { monsterSprite, playerSprite } from "./sprites";
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
 export interface MountedApp {
@@ -39,14 +40,25 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       ? "Respawning…"
       : `HP ${player.hp}/${player.maxHp}`;
 
+    const monsterImg = el<HTMLImageElement>("#monster-sprite");
     if (monster) {
       el("#monster-name").textContent = monster.name;
       el("#monster-hp-fill").style.width = `${(monster.hp / monster.maxHp) * 100}%`;
       el("#monster-hp-text").textContent = `${monster.hp}/${monster.maxHp}`;
+
+      const sprite = monsterSprite(monster.id);
+      if (sprite) {
+        monsterImg.src = sprite;
+        monsterImg.alt = monster.name;
+        monsterImg.hidden = false;
+      } else {
+        monsterImg.hidden = true;
+      }
     } else {
       el("#monster-name").textContent = "Pick a monster ↓";
       el("#monster-hp-fill").style.width = "0%";
       el("#monster-hp-text").textContent = "";
+      monsterImg.hidden = true;
     }
 
     el("#xp-row").innerHTML = (["attack", "strength", "defence", "hitpoints"] as const)
@@ -101,6 +113,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   root.innerHTML = `
     <section id="scene">
+      <div id="sprite-row">
+        <img id="monster-sprite" class="sprite pixel" alt="" hidden />
+        <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+      </div>
       <p id="monster-name"></p>
       <div class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
       <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
