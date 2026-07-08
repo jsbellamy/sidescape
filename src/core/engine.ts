@@ -1,8 +1,10 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
 import type {
+  CurrencyDef,
   EquipmentDef,
   FoodDef,
+  ItemDef,
   MonsterDef,
   CombatStyle,
   Content,
@@ -37,6 +39,7 @@ export interface Engine {
   setCombatStyle(style: CombatStyle): void;
   equip(itemId: string): void;
   eatFood(itemId: string): void;
+  sell(itemId: string, qty?: number): void;
   snapshot(): Snapshot;
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
 }
@@ -47,6 +50,11 @@ const RESPAWN_TICKS = 8;
 const REGEN_TICKS = 10;
 
 export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
+  // Located once here, never by a hard-coded id: whichever Item Content declares as currency.
+  const currencyDef: CurrencyDef | undefined = content.items.find(
+    (i): i is CurrencyDef => i.kind === "currency",
+  );
+
   const state: State = {
     xp: saved
       ? {
@@ -98,6 +106,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
   function gearBonus(kind: "atkBonus" | "strBonus" | "defBonus"): number {
     return equippedDefs().reduce((sum, def) => sum + def[kind], 0);
+  }
+
+  /** Gold per unit if `def` can be sold; undefined for currency or anything without a value. */
+  function sellValue(def: ItemDef): number | undefined {
+    return def.kind === "currency" ? undefined : def.value;
   }
 
   function weaponSpeed(): number {
@@ -325,6 +338,23 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       const owned = state.inventory.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
       eat(def);
+    },
+    sell(itemId, qty = 1) {
+      if (!currencyDef) throw new Error("Content defines no currency item");
+      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
+      const def = content.items.find((i) => i.id === itemId);
+      if (!def) throw new Error(`unknown item: ${itemId}`);
+      const value = sellValue(def);
+      if (value === undefined) throw new Error(`${def.name} cannot be sold`);
+      const owned = state.inventory.get(itemId) ?? 0;
+      if (owned < qty) throw new Error(`you do not own ${qty} ${def.name}`);
+
+      const remaining = owned - qty;
+      if (remaining > 0) state.inventory.set(itemId, remaining);
+      else state.inventory.delete(itemId);
+      const gold = value * qty;
+      state.inventory.set(currencyDef.id, (state.inventory.get(currencyDef.id) ?? 0) + gold);
+      emit({ type: "item-sold", itemId, qty, gold });
     },
     on(type, handler) {
       const list = handlers.get(type) ?? [];

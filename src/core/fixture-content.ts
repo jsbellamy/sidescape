@@ -38,7 +38,7 @@ export const fixtureContent: Content = {
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
-    { kind: "food", id: "meat", name: "Cooked Meat", heals: 4 },
+    { kind: "food", id: "meat", name: "Cooked Meat", heals: 4, value: 3 },
     {
       kind: "equipment",
       id: "bronze-sword",
@@ -48,6 +48,7 @@ export const fixtureContent: Content = {
       strBonus: 30,
       defBonus: 0,
       attackSpeed: 4,
+      value: 20,
     },
     {
       kind: "equipment",
@@ -57,6 +58,7 @@ export const fixtureContent: Content = {
       atkBonus: 0,
       strBonus: 0,
       defBonus: 1,
+      value: 100,
     },
   ],
 };

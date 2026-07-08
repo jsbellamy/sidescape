@@ -110,7 +110,7 @@ export const content: Content = {
   ],
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
-    { kind: "food", id: "cooked-meat", name: "Cooked Meat", heals: 4 },
+    { kind: "food", id: "cooked-meat", name: "Cooked Meat", heals: 4, value: 3 },
     {
       kind: "equipment",
       id: "bronze-dagger",
@@ -120,6 +120,7 @@ export const content: Content = {
       strBonus: 3,
       defBonus: 0,
       attackSpeed: 4,
+      value: 10,
     },
     {
       kind: "equipment",
@@ -130,6 +131,7 @@ export const content: Content = {
       strBonus: 6,
       defBonus: 0,
       attackSpeed: 5,
+      value: 20,
     },
     {
       kind: "equipment",
@@ -139,6 +141,7 @@ export const content: Content = {
       atkBonus: 0,
       strBonus: 0,
       defBonus: 4,
+      value: 15,
     },
     {
       kind: "equipment",
@@ -148,6 +151,7 @@ export const content: Content = {
       atkBonus: 0,
       strBonus: 0,
       defBonus: 3,
+      value: 12,
     },
     {
       kind: "equipment",
@@ -157,8 +161,9 @@ export const content: Content = {
       atkBonus: 2,
       strBonus: 2,
       defBonus: 1,
+      value: 150,
     },
-    { kind: "food", id: "cooked-trout", name: "Cooked Trout", heals: 8 },
+    { kind: "food", id: "cooked-trout", name: "Cooked Trout", heals: 8, value: 8 },
     {
       kind: "equipment",
       id: "iron-dagger",
@@ -168,6 +173,7 @@ export const content: Content = {
       strBonus: 7,
       defBonus: 0,
       attackSpeed: 4,
+      value: 35,
     },
     {
       kind: "equipment",
@@ -177,6 +183,7 @@ export const content: Content = {
       atkBonus: 0,
       strBonus: 0,
       defBonus: 8,
+      value: 60,
     },
     {
       kind: "equipment",
@@ -186,6 +193,7 @@ export const content: Content = {
       atkBonus: 0,
       strBonus: 0,
       defBonus: 7,
+      value: 50,
     },
     {
       kind: "equipment",
@@ -195,6 +203,7 @@ export const content: Content = {
       atkBonus: 1,
       strBonus: 1,
       defBonus: 4,
+      value: 120,
     },
   ],
 };

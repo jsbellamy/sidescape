@@ -18,6 +18,8 @@ export interface EquipmentDef {
   defBonus: number;
   /** Weapons only: Ticks between player attacks. */
   attackSpeed?: number;
+  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  value?: number;
 }
 
 export interface FoodDef {
@@ -25,6 +27,8 @@ export interface FoodDef {
   id: string;
   name: string;
   heals: number;
+  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  value?: number;
 }
 
 export interface CurrencyDef {
@@ -73,7 +77,8 @@ export type EngineEvent =
   | { type: "drop"; itemId: string; qty: number; band: DropBand }
   | { type: "levelup"; skill: SkillName; level: number }
   | { type: "death" }
-  | { type: "food-eaten"; itemId: string; healed: number };
+  | { type: "food-eaten"; itemId: string; healed: number }
+  | { type: "item-sold"; itemId: string; qty: number; gold: number };
 
 export interface SkillSnapshot {
   level: number;

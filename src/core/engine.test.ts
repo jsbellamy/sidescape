@@ -378,6 +378,114 @@ describe("Equipment and gates", () => {
   });
 });
 
+describe("Selling items", () => {
+  it("throws for an unknown item", () => {
+    expect(() => freshEngine().sell("dragon-tooth")).toThrow(/unknown/i);
+  });
+
+  it("throws for an unowned item", () => {
+    expect(() => freshEngine().sell("meat")).toThrow(/own/i);
+  });
+
+  it("throws for currency (selling gold for gold is nonsense)", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat"); // any kill also drops gold
+    expect(() => engine.sell("gold")).toThrow(/cannot be sold/i);
+  });
+
+  it("throws for an item without a value", () => {
+    const noValueContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.id !== "meat" || i.kind === "currency") return i;
+        const { value: _value, ...rest } = i;
+        return rest;
+      }),
+    };
+    const engine = createEngine(noValueContent, seededRng(1));
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat");
+    expect(() => engine.sell("meat")).toThrow(/cannot be sold/i);
+  });
+
+  it("throws for qty < 1 or non-integer qty", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat");
+    expect(() => engine.sell("meat", 0)).toThrow();
+    expect(() => engine.sell("meat", -1)).toThrow();
+    expect(() => engine.sell("meat", 1.5)).toThrow();
+  });
+
+  it("throws when selling more than owned", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat");
+    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    expect(() => engine.sell("meat", owned + 1)).toThrow(/own/i);
+  });
+
+  it("selling N removes N from the inventory (deleting the entry at zero), credits N*value gold, and emits one item-sold event", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    const goldBefore =
+      engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+
+    const events: { itemId: string; qty: number; gold: number }[] = [];
+    engine.on("item-sold", (e) => events.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
+    engine.sell("bronze-sword", 1);
+
+    expect(events).toEqual([{ itemId: "bronze-sword", qty: 1, gold: 20 }]);
+    const player = engine.snapshot().player;
+    expect(player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false);
+    const goldAfter = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+    expect(goldAfter).toBe(goldBefore + 20);
+  });
+
+  it("selling part of a stack decrements it without deleting the entry", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 3000; i++) engine.tick();
+    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    expect(owned).toBeGreaterThan(1);
+
+    engine.sell("meat", 1);
+    const remaining = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty;
+    expect(remaining).toBe(owned - 1);
+  });
+
+  it("defaults qty to 1 when omitted", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat");
+    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    engine.sell("meat");
+    const remaining = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    expect(remaining).toBe(owned - 1);
+  });
+
+  it("worn Equipment is structurally unsellable: equip the only copy, then sell throws as unowned", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    engine.equip("bronze-sword");
+    expect(() => engine.sell("bronze-sword")).toThrow(/own/i);
+  });
+
+  it("throws if Content defines no currency, with no hard-coded currency id in the Engine", () => {
+    const noCurrencyContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.filter((i) => i.kind !== "currency"),
+    };
+    const engine = createEngine(noCurrencyContent, seededRng(1));
+    engine.selectMonster("dummy");
+    grindFor(engine, "meat");
+    expect(() => engine.sell("meat")).toThrow();
+  });
+});
+
 describe("save/load", () => {
   it("a Snapshot JSON round-trips through createEngine and keeps fighting", () => {
     const original = freshEngine();
