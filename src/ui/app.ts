@@ -55,7 +55,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   function render(): void {
     const snap = engine.snapshot();
-    const { player, monster } = snap;
+    const { player, monster, fishing } = snap;
 
     el("#player-hp-fill").style.width = `${(player.hp / player.maxHp) * 100}%`;
     el("#player-hp-text").textContent = player.respawning
@@ -71,7 +71,13 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     });
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
-    if (monster) {
+    const monsterBar = el<HTMLElement>("#monster-bar");
+    if (fishing) {
+      el("#monster-name").textContent = `🎣 Fishing at ${fishing.name}`;
+      monsterImg.hidden = true;
+      monsterBar.hidden = true;
+    } else if (monster) {
+      monsterBar.hidden = false;
       el("#monster-name").textContent = monster.name;
       el("#monster-hp-fill").style.width = `${(monster.hp / monster.maxHp) * 100}%`;
       el("#monster-hp-text").textContent = `${monster.hp}/${monster.maxHp}`;
@@ -85,13 +91,14 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         monsterImg.hidden = true;
       }
     } else {
+      monsterBar.hidden = false;
       el("#monster-name").textContent = "Pick a monster ↓";
       el("#monster-hp-fill").style.width = "0%";
       el("#monster-hp-text").textContent = "";
       monsterImg.hidden = true;
     }
 
-    el("#xp-row").innerHTML = (["attack", "strength", "defence", "hitpoints"] as const)
+    el("#xp-row").innerHTML = (["attack", "strength", "defence", "hitpoints", "fishing"] as const)
       .map(
         (skill) =>
           `<div class="skill" title="${skill}: ${Math.floor(player.skills[skill].xp)} xp">
@@ -131,18 +138,24 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   function buildPicker(): void {
     const snap = engine.snapshot();
     el("#picker").innerHTML = snap.areas
-      .map(
-        (area) => `
+      .map((area) => {
+        const monsterButtons = area.monsterIds
+          .map((id) => {
+            const def = content.monsters.find((m) => m.id === id);
+            return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"}>${def?.name ?? id}</button>`;
+          })
+          .join("");
+        const spotButtons = area.fishingSpots
+          .map(({ id, unlocked }) => {
+            const def = content.fishingSpots.find((s) => s.id === id);
+            return `<button data-spot="${id}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
+          })
+          .join("");
+        return `
           <p class="area-name">${area.name}${area.unlocked ? "" : " 🔒"}</p>
-          <div class="monster-buttons">
-            ${area.monsterIds
-              .map((id) => {
-                const def = content.monsters.find((m) => m.id === id);
-                return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"}>${def?.name ?? id}</button>`;
-              })
-              .join("")}
-          </div>`,
-      )
+          <div class="monster-buttons">${monsterButtons}</div>
+          ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}`;
+      })
       .join("");
   }
 
@@ -153,7 +166,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
         <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
       </div>
       <p id="monster-name"></p>
-      <div class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
+      <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
       <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
       <div id="style-row" class="style-row">
         ${Object.entries(STYLE_LABELS)
@@ -185,6 +198,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
+  engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
   engine.on("levelup", () => buildPicker()); // gate flags may change
 
   el("#style-row").addEventListener("click", (event) => {
@@ -204,9 +218,16 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   });
 
   el("#picker").addEventListener("click", (event) => {
-    const id = (event.target as HTMLElement).dataset["monster"];
-    if (id) {
-      engine.selectMonster(id);
+    const target = event.target as HTMLElement;
+    const monsterId = target.dataset["monster"];
+    if (monsterId) {
+      engine.selectMonster(monsterId);
+      render();
+      return;
+    }
+    const spotId = target.dataset["spot"];
+    if (spotId) {
+      engine.selectFishingSpot(spotId);
       render();
     }
   });

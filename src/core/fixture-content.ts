@@ -6,8 +6,20 @@ import type { Content } from "./types";
  */
 export const fixtureContent: Content = {
   areas: [
-    { id: "meadow", name: "Test Meadow", combatLevelReq: 0, monsterIds: ["dummy"] },
-    { id: "crypt", name: "Test Crypt", combatLevelReq: 40, monsterIds: ["brute"] },
+    {
+      id: "meadow",
+      name: "Test Meadow",
+      combatLevelReq: 0,
+      monsterIds: ["dummy"],
+      fishingSpotIds: ["pond"],
+    },
+    {
+      id: "crypt",
+      name: "Test Crypt",
+      combatLevelReq: 40,
+      monsterIds: ["brute"],
+      fishingSpotIds: ["deep-pond"],
+    },
   ],
   monsters: [
     {
@@ -59,6 +71,28 @@ export const fixtureContent: Content = {
       strBonus: 0,
       defBonus: 1,
       value: 100,
+    },
+  ],
+  fishingSpots: [
+    // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting.
+    {
+      id: "pond",
+      name: "Test Pond",
+      levelReq: 1,
+      itemId: "meat",
+      xp: 10,
+      catchTicks: 3,
+      catchChance: 1,
+    },
+    // levelReq 20 behind the Crypt's Area gate: exercises both gate kinds independently.
+    {
+      id: "deep-pond",
+      name: "Test Deep Pond",
+      levelReq: 20,
+      itemId: "meat",
+      xp: 50,
+      catchTicks: 3,
+      catchChance: 1,
     },
   ],
 };
