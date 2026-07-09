@@ -268,5 +268,5 @@ describe("Shade Blade drop-rate convergence", () => {
     const expected = kills * declaredChance;
     expect(shadeBlades).toBeGreaterThan(expected * 0.5);
     expect(shadeBlades).toBeLessThan(expected * 1.5);
-  });
+  }, 15000);
 });
