@@ -759,6 +759,30 @@ describe("Equip via Inventory click emits the equipped event (#26)", () => {
 
     expect(equipped).toEqual(["bronze-sword"]);
   });
+
+  it("clicking an equippable Inventory item moves it into its Gear Slot, updates the Equipment panel, and removes it from the Inventory list (#9)", () => {
+    const { engine, root, app } = mount(1);
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    app.render();
+
+    // Before the click: still carried, and the weapon slot is empty.
+    expect(root.querySelector('#inventory li[data-item="bronze-sword"]')).not.toBeNull();
+    const weaponRowBefore = root.querySelector('[data-slot="weapon"]');
+    expect(weaponRowBefore?.querySelector(".slot-item")?.textContent).toBe("—");
+
+    root.querySelector<HTMLLIElement>('#inventory li[data-item="bronze-sword"]')?.click();
+
+    // The click handler calls render() itself (no explicit app.render() needed here) — the DOM
+    // should already reflect the equip.
+    expect(root.querySelector('#inventory li[data-item="bronze-sword"]')).toBeNull();
+    const weaponRowAfter = root.querySelector('[data-slot="weapon"]');
+    expect(weaponRowAfter?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
+    expect(weaponRowAfter?.querySelector(".slot-stats")?.textContent).toBe(
+      "+10 atk +30 str spd 4t",
+    );
+    expect(engine.snapshot().player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false);
+  });
 });
 
 describe("Sorting the Inventory and Bank lists (#26)", () => {
@@ -1232,5 +1256,104 @@ describe("Combat feedback (#4)", () => {
 
     vi.advanceTimersByTime(1000); // > the flash duration
     expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(false);
+  });
+});
+
+describe("Loot Feed band styling (#9)", () => {
+  it("gives each Drop's feed line a band-specific CSS class for guaranteed/common/uncommon/rare", () => {
+    // fixtureContent's "dummy" already has one entry per band (see the tooltip test above); force
+    // every entry's chance to 1 so a single kill deterministically drops all four at once, instead
+    // of grinding for the 1/128 rare entry to land on its own.
+    const allBandsContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? { ...m, dropTable: m.dropTable.map((entry) => ({ ...entry, chance: 1 })) }
+          : m,
+      ),
+    };
+    const engine = createEngine(allBandsContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, allBandsContent);
+    engine.selectMonster("dummy");
+
+    grindFor(engine, "lucky-charm"); // the rarest of the four — waiting for it waits for all four
+
+    const feedItems = [...root.querySelectorAll<HTMLLIElement>("#feed li")];
+    // feedLine prepends, and the Engine emits drop events in dropTable array order (guaranteed,
+    // common, uncommon, rare), so the newest-first feed reads rare, uncommon, common, guaranteed.
+    expect(feedItems[0]?.className).toBe("drop-rare");
+    expect(feedItems[0]?.textContent).toMatch(/lucky charm/i);
+    expect(feedItems[1]?.className).toBe("drop-uncommon");
+    expect(feedItems[1]?.textContent).toMatch(/bronze sword/i);
+    expect(feedItems[2]?.className).toBe("drop-common");
+    expect(feedItems[2]?.textContent).toMatch(/cooked meat/i);
+    expect(feedItems[3]?.className).toBe("drop-guaranteed");
+    expect(feedItems[3]?.textContent).toMatch(/gold/i);
+  });
+});
+
+describe("Save → remount round-trip (#9)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Mirrors main.ts's own SAVE_KEY constant and its loadSave()/setInterval save wiring (ADR-0001:
+  // the Engine itself has no localStorage access — that wiring lives entirely in main.ts). This
+  // test reproduces that shape directly so the assertion is against a real save -> remount cycle,
+  // not just the Engine-level Snapshot round-trip already covered in core/engine.test.ts.
+  const SAVE_KEY = "sidescape-save-v1";
+
+  it("mount, act, save to localStorage, and remount restores Skills, Inventory, Equipment, and the selected Monster", () => {
+    const engine1 = createEngine(fixtureContent, seededRng(1));
+    const root1 = document.createElement("main");
+    const app1 = mountApp(engine1, root1, fixtureContent);
+
+    engine1.selectMonster("dummy");
+    grindFor(engine1, "bronze-sword");
+    engine1.equip("bronze-sword");
+    app1.render();
+
+    // A little more play after equipping, so more than one Skill carries non-zero XP by save time.
+    for (let i = 0; i < 200; i++) engine1.tick();
+    app1.render();
+
+    const before = engine1.snapshot();
+    expect(before.monster?.id).toBe("dummy");
+    expect(before.player.equipment.weapon).toBe("bronze-sword");
+    expect(before.player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false); // consumed by equip
+
+    // Save, exactly as main.ts's periodic/close-time save does.
+    localStorage.setItem(SAVE_KEY, JSON.stringify(before));
+
+    // Unmount: engine1/root1 are discarded entirely. Remount is a fresh Engine built only from the
+    // saved Snapshot, exactly as main.ts's loadSave() -> createEngine(content, rng, saved) does on
+    // the next launch — a different seed proves the restored state isn't riding on engine1's Rng.
+    const raw = localStorage.getItem(SAVE_KEY);
+    expect(raw).not.toBeNull();
+    const saved = JSON.parse(raw as string);
+    const engine2 = createEngine(fixtureContent, seededRng(2), saved);
+    const root2 = document.createElement("main");
+    mountApp(engine2, root2, fixtureContent);
+
+    const after = engine2.snapshot();
+    expect(after.player.skills).toEqual(before.player.skills);
+    expect(after.player.inventory).toEqual(before.player.inventory);
+    expect(after.player.equipment).toEqual(before.player.equipment);
+    expect(after.monster?.id).toBe("dummy");
+
+    // The fresh mount's DOM already reflects the restored state without any further action.
+    expect(root2.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
+    const weaponRow = root2.querySelector('[data-slot="weapon"]');
+    expect(weaponRow?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
+    expect(root2.querySelector('#inventory li[data-item="bronze-sword"]')).toBeNull();
+    const attackXp = Math.floor(after.player.skills.attack.xp);
+    expect(root2.querySelector<HTMLElement>('[data-skill="attack"]')?.title).toBe(
+      `attack: ${attackXp} xp`,
+    );
   });
 });
