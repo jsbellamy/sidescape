@@ -46,6 +46,9 @@ function baseSnapshot(): Snapshot {
   const maxHp = skills.hitpoints.level;
 
   return {
+    // Fixed, not Date.now() (#69): keeps every Snapshot built by this helper deterministic;
+    // callers exercising offline-progress logic override it explicitly via `overrides.savedAt`.
+    savedAt: 0,
     player: {
       hp: maxHp,
       maxHp,

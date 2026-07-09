@@ -10,6 +10,13 @@ import { content } from "./data";
 import { mountApp } from "./ui/app";
 import type { WindowChrome } from "./ui/app";
 import { mountSfx } from "./ui/sfx";
+import {
+  buildAwaySummaryToast,
+  computeOfflineTicks,
+  OFFLINE_CAP_TICKS,
+  pumpOffline,
+  showAwaySummaryToast,
+} from "./ui/offline-progress";
 import { decodeSave, encodeSave } from "./ui/save-transfer";
 import type { Snapshot } from "./core/types";
 import { BASE_H, panelWindowRect } from "./ui/window-geometry";
@@ -92,7 +99,8 @@ function loadSave(): Snapshot | undefined {
   }
 }
 
-const engine = createEngine(content, mathRandomRng, loadSave());
+const savedSnapshot = loadSave();
+const engine = createEngine(content, mathRandomRng, savedSnapshot);
 
 /** Looks up a required element by selector, throwing (rather than returning a nullable type)
  * so callers — including nested closures, which TS does not narrow across — get a non-null
@@ -182,6 +190,20 @@ window.addEventListener("DOMContentLoaded", () => {
     location.reload();
   });
 
+  // Offline progress (#69): simulate away-time BEFORE mounting the UI, so the pump's Ticks never
+  // reach mountApp's/mountSfx's per-event handlers (they haven't subscribed yet) and never appear
+  // in the first render (which mountApp does at the end of its own setup, below). A save missing
+  // `savedAt` (pre-#69) or one saved just now both yield 0 Ticks — the pump is skipped entirely.
+  const bootNow = Date.now();
+  const offlineTicks = computeOfflineTicks(savedSnapshot?.savedAt, bootNow, TICK_MS);
+  let awaySummaryText: string | null = null;
+  if (offlineTicks > 0) {
+    const awayMs = bootNow - (savedSnapshot?.savedAt as number);
+    const capped = offlineTicks >= OFFLINE_CAP_TICKS;
+    const summary = pumpOffline(engine, offlineTicks);
+    awaySummaryText = buildAwaySummaryToast(summary, awayMs, capped);
+  }
+
   const root = document.querySelector<HTMLElement>("#app");
   if (!root) throw new Error("#app root element missing");
   const app = mountApp(engine, root, content, createTauriWindowChrome());
@@ -189,6 +211,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const muteToggle = document.querySelector<HTMLButtonElement>("#mute-toggle");
   if (!muteToggle) throw new Error("#mute-toggle element missing");
   mountSfx(engine, muteToggle);
+
+  // Shown only after mountApp (so #toast-container exists) and only once the pump above is fully
+  // done — one aggregate toast, never per-event Loot Feed/toast spam from the away Ticks.
+  if (awaySummaryText) showAwaySummaryToast(root, awaySummaryText);
 
   setInterval(() => {
     engine.tick();

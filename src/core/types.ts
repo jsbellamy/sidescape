@@ -218,6 +218,12 @@ export interface SkillSnapshot {
 }
 
 export interface Snapshot {
+  /** Epoch ms at the moment this Snapshot was produced (#69), stamped in `snapshot()` via the
+   * Engine's injected `now` clock option (defaults to `Date.now`, mirroring the injected-Rng
+   * precedent). Used on the next boot to simulate away-time by pumping `tick()` — see
+   * `ui/offline-progress.ts`. Tolerant on load: a save missing this field (pre-#69) is treated as
+   * "no offline time", never as an error. */
+  savedAt: number;
   player: {
     hp: number;
     maxHp: number;
