@@ -1972,14 +1972,21 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
   });
 
   it("a valid Snapshot still round-trips unchanged (no behavioural change for clean saves)", () => {
-    const original = freshEngine();
+    // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+    // calls a millisecond apart would flake this equality — pin the clock instead.
+    const original = createEngine(fixtureContent, seededRng(42), undefined, () => 0);
     original.selectMonster("dummy");
     grindFor(original, "bronze-sword");
     original.equip("bronze-sword");
     for (let i = 0; i < 200; i++) original.tick();
     const saved = original.snapshot();
 
-    const restored = createEngine(fixtureContent, seededRng(1), JSON.parse(JSON.stringify(saved)));
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(saved)),
+      () => 0,
+    );
     expect(restored.snapshot()).toEqual(saved);
   });
 });
