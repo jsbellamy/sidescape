@@ -580,6 +580,14 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     return !area.unlockedByDungeonId || state.completedDungeonIds.has(area.unlockedByDungeonId);
   }
 
+  /** Throws the canonical locked-Area error if `area` is gated and its Dungeon is uncleared. */
+  function assertAreaUnlocked(area: AreaDef | undefined): void {
+    if (area && !areaUnlocked(area)) {
+      const dungeon = dungeonDef(area.unlockedByDungeonId as string);
+      throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
+    }
+  }
+
   function equippedDefs(): EquipmentDef[] {
     const defs: EquipmentDef[] = [];
     for (const itemId of Object.values(state.equipment)) {
@@ -972,6 +980,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
           id: area.id,
           name: area.name,
           unlocked,
+          gatedBy: unlocked
+            ? null
+            : (() => {
+                const d = dungeonDef(area.unlockedByDungeonId as string);
+                return { dungeonId: d.id, name: d.name };
+              })(),
           monsterIds: [...area.monsterIds],
           fishingSpots: (area.fishingSpotIds ?? []).map((id) => {
             const spot = fishingSpotDef(id);
@@ -1149,10 +1163,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     selectMonster(monsterId) {
       monsterDef(monsterId); // throws on unknown id
       const area = content.areas.find((a) => a.monsterIds.includes(monsterId));
-      if (area && !areaUnlocked(area)) {
-        const dungeon = dungeonDef(area.unlockedByDungeonId as string);
-        throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
-      }
+      assertAreaUnlocked(area);
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       // Assigning state.activity wholesale is what makes "at most one of Monster / Fishing Spot /
@@ -1163,10 +1174,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     selectFishingSpot(spotId) {
       const spot = fishingSpotDef(spotId); // throws on unknown id
       const area = content.areas.find((a) => a.fishingSpotIds?.includes(spotId));
-      if (area && !areaUnlocked(area)) {
-        const dungeon = dungeonDef(area.unlockedByDungeonId as string);
-        throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
-      }
+      assertAreaUnlocked(area);
       if (level("fishing") < spot.levelReq) {
         throw new Error(`${spot.name} requires Fishing level ${spot.levelReq}`);
       }
@@ -1179,10 +1187,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     enterDungeon(dungeonId) {
       const dungeon = dungeonDef(dungeonId); // throws on unknown id
       const area = content.areas.find((a) => a.id === dungeon.areaId);
-      if (area && !areaUnlocked(area)) {
-        const gatingDungeon = dungeonDef(area.unlockedByDungeonId as string);
-        throw new Error(`${area.name} is locked — defeat ${gatingDungeon.name}`);
-      }
+      assertAreaUnlocked(area);
       state.respawnTicksLeft = 0; // clears Respawn
       state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
       // Entering a Dungeon also auto-loots first (#60, owner amendment): any open-world loot is

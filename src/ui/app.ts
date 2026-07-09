@@ -553,7 +553,7 @@ export function mountApp(
           )
           .join("");
         return `
-          <p class="area-name">${area.name}${area.unlocked ? "" : ` ${lockClearLabel(area.id)}`}</p>
+          <p class="area-name">${area.name}${area.unlocked ? "" : ` ${lockClearLabel(area)}`}</p>
           <div class="monster-buttons">${monsterButtons}</div>
           ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}
           ${dungeonButtons ? `<div class="monster-buttons dungeon-buttons">${dungeonButtons}</div>` : ""}`;
@@ -561,13 +561,11 @@ export function mountApp(
       .join("");
   }
 
-  /** "🔒 Clear <dungeon name>" for a locked Area's picker label. The Snapshot's areas carry only
-   * the derived `unlocked` flag (#24: Engine keeps gate rules internal), so the gating Dungeon
-   * itself is looked up from the raw Content's `unlockedByDungeonId`. */
-  function lockClearLabel(areaId: string): string {
-    const areaDef = content.areas.find((a) => a.id === areaId);
-    const dungeon = content.dungeons.find((d) => d.id === areaDef?.unlockedByDungeonId);
-    return `🔒 Clear ${dungeon?.name ?? "?"}`;
+  /** "🔒 Clear <dungeon name>" for a locked Area's picker label, read straight from the
+   * Snapshot's derived `gatedBy` (#24/#87: Engine keeps gate rules internal, UI never walks
+   * raw Content for them). */
+  function lockClearLabel(area: Snapshot["areas"][number]): string {
+    return `🔒 Clear ${area.gatedBy?.name ?? "?"}`;
   }
 
   root.innerHTML = `
