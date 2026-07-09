@@ -180,6 +180,11 @@ describe("XP", () => {
 describe("Drops", () => {
   it("every kill lands the guaranteed currency Drop straight into gold (#59); the drop event still fires unchanged", () => {
     const engine = freshEngine();
+    // Isolates currency-drop gold from #63's auto-sell-duplicates gold (default ON): over a long
+    // enough grind, a repeat Equipment Drop would also credit gold via duplicate-sold, which would
+    // otherwise break this test's kills*5 == gold assertion — a concern unrelated to what this test
+    // actually checks (currency Drops crediting gold directly).
+    engine.setAutoSellDuplicates(false);
     let kills = 0;
     const goldDrops: number[] = [];
     engine.on("kill", () => kills++);
@@ -2969,6 +2974,356 @@ describe("Loot Zone (#60)", () => {
         }),
       );
       expect(engine.snapshot().lootZone).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
+    });
+  });
+});
+
+describe("Auto-sell duplicate Equipment (#63)", () => {
+  /** dummy's Drop Table replaced with a single guaranteed bronze-sword entry: makes every kill
+   * produce exactly one deterministic Equipment Drop, so duplicate-sell tests don't have to grind
+   * out bronze-sword's normal 1/16 chance. */
+  function guaranteedSwordDropContent() {
+    return {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [{ itemId: "bronze-sword", qty: 1, chance: 1, band: "uncommon" as const }],
+            }
+          : m,
+      ),
+    };
+  }
+
+  /** Same as guaranteedSwordDropContent, but bronze-sword carries no `value` — for the unsellable-
+   * duplicate case (discarded via overflow-lost instead of sold). */
+  function guaranteedUnsellableSwordDropContent() {
+    const base = guaranteedSwordDropContent();
+    return {
+      ...base,
+      items: base.items.map((i) => {
+        if (i.id !== "bronze-sword" || i.kind !== "equipment") return i;
+        const { value: _value, ...rest } = i;
+        return rest;
+      }),
+    };
+  }
+
+  /** Ticks `engine` (already given a selected Monster) until a "kill" event fires, or fails the
+   * test — mirrors this file's grindFor but stops at the first kill rather than a specific item. */
+  function tickUntilKill(engine: ReturnType<typeof createEngine>, maxTicks = 5000) {
+    let killed = false;
+    engine.on("kill", () => {
+      killed = true;
+    });
+    for (let i = 0; i < maxTicks && !killed; i++) engine.tick();
+    if (!killed) throw new Error("dummy never died");
+  }
+
+  it("a duplicate Drop is auto-sold when the original is equipped, and the drop event still fires first", () => {
+    const engine = createEngine(
+      guaranteedSwordDropContent(),
+      seededRng(7),
+      makeSnapshot({ player: { equipment: { weapon: "bronze-sword" } } }),
+    );
+    const eventOrder: string[] = [];
+    engine.on("drop", (e) => eventOrder.push(`drop:${e.itemId}`));
+    const sold: { itemId: string; gold: number }[] = [];
+    engine.on("duplicate-sold", (e) => {
+      sold.push({ itemId: e.itemId, gold: e.gold });
+      eventOrder.push(`sold:${e.itemId}`);
+    });
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([{ itemId: "bronze-sword", gold: 20 }]);
+    expect(eventOrder).toEqual(["drop:bronze-sword", "sold:bronze-sword"]);
+    expect(engine.snapshot().lootZone).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+
+  it("a duplicate Drop is auto-sold when the original is banked — the banked stack is left untouched, not topped up", () => {
+    const engine = createEngine(
+      guaranteedSwordDropContent(),
+      seededRng(7),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const sold: { itemId: string; gold: number }[] = [];
+    engine.on("duplicate-sold", (e) => sold.push({ itemId: e.itemId, gold: e.gold }));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([{ itemId: "bronze-sword", gold: 20 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(engine.snapshot().lootZone).toEqual([]);
+  });
+
+  it("a duplicate Drop is auto-sold when the original is already sitting in the Loot Zone", () => {
+    const engine = createEngine(
+      guaranteedSwordDropContent(),
+      seededRng(7),
+      makeSnapshot({ lootZone: [{ itemId: "bronze-sword", qty: 1 }] }),
+    );
+    const sold: { itemId: string; gold: number }[] = [];
+    engine.on("duplicate-sold", (e) => sold.push({ itemId: e.itemId, gold: e.gold }));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([{ itemId: "bronze-sword", gold: 20 }]);
+    expect(engine.snapshot().lootZone).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+
+  it("the duplicate is kept (lands in the Loot Zone as normal) when the toggle is off", () => {
+    const engine = createEngine(
+      guaranteedSwordDropContent(),
+      seededRng(7),
+      makeSnapshot({
+        player: { autoSellDuplicates: false },
+        bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
+      }),
+    );
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().lootZone).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+  });
+
+  it("the first-ever copy of an Equipment item is never sold — it lands in the Loot Zone like any other Drop", () => {
+    const engine = createEngine(guaranteedSwordDropContent(), seededRng(7));
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().lootZone).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+  });
+
+  it("an unsellable duplicate (no value) is discarded with overflow-lost instead of duplicate-sold", () => {
+    const engine = createEngine(
+      guaranteedUnsellableSwordDropContent(),
+      seededRng(7),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+    const lost: { itemId: string; qty: number }[] = [];
+    engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([]);
+    expect(lost).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(engine.snapshot().player.gold).toBe(0);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+  });
+
+  it("applies to Dungeon Chest items too, not just kill Drops", () => {
+    // Only the bronze-sword ENTRY's chance is zeroed (leaving its rng.next() draw in place, same
+    // as fixtureContent's own dungeon-completes-within-5000-ticks tests) rather than replacing the
+    // whole Drop Table, so the wave-kill rng sequence stays identical to the known-good "seed 5
+    // completes gauntlet" fixture above — only the Chest is a new deterministic source of bronze-sword.
+    const content = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: m.dropTable.map((entry) =>
+                entry.itemId === "bronze-sword" ? { ...entry, chance: 0 } : entry,
+              ),
+            }
+          : m,
+      ),
+      dungeons: fixtureContent.dungeons.map((d) =>
+        d.id === "gauntlet"
+          ? {
+              ...d,
+              chest: [{ itemId: "bronze-sword", qty: 1, chance: 1, band: "common" as const }],
+            }
+          : d,
+      ),
+    };
+    // Seeded off a real fresh-engine Snapshot (not makeSnapshot's fixture defaults, e.g. Accurate
+    // style / level-1 HP) plus one override, so the wave-kill rng sequence matches the known-good
+    // "seed 5 completes gauntlet" fixture above exactly, with only a pre-owned bronze-sword added.
+    const freshSnap = createEngine(content, seededRng(0)).snapshot();
+    const engine = createEngine(content, seededRng(5), {
+      ...freshSnap,
+      bank: { ...freshSnap.bank, items: [{ itemId: "bronze-sword", qty: 1 }] },
+    });
+    const sold: { itemId: string; gold: number }[] = [];
+    engine.on("duplicate-sold", (e) => sold.push({ itemId: e.itemId, gold: e.gold }));
+    let completed = false;
+    engine.on("dungeon-completed", () => {
+      completed = true;
+    });
+
+    engine.enterDungeon("gauntlet");
+    for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+
+    expect(completed).toBe(true);
+    expect(sold).toEqual([{ itemId: "bronze-sword", gold: 20 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(engine.snapshot().lootZone).toEqual([]);
+  });
+
+  it("stackables (Food/Material) are never treated as duplicates, even when already owned", () => {
+    const content = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? { ...m, dropTable: [{ itemId: "meat", qty: 1, chance: 1, band: "common" as const }] }
+          : m,
+      ),
+    };
+    const engine = createEngine(
+      content,
+      seededRng(3),
+      makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+    );
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+
+    engine.selectMonster("dummy");
+    tickUntilKill(engine);
+
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().lootZone).toEqual([{ itemId: "meat", qty: 1 }]);
+  });
+
+  it("Smithing outputs are never dupe-sold, even though the output is Equipment already owned", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "bronze-sword", qty: 1 },
+            { itemId: "bar", qty: 1 },
+          ],
+        },
+      }),
+    );
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+    const crafted: unknown[] = [];
+    engine.on("item-crafted", (e) => crafted.push(e));
+
+    engine.selectRecipe("test-sword");
+    for (let i = 0; i < 10 && crafted.length === 0; i++) engine.tick();
+
+    expect(crafted).toHaveLength(1);
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual(
+      expect.arrayContaining([{ itemId: "bronze-sword", qty: 2 }]),
+    );
+  });
+
+  it("Fishing Catches are never dupe-sold, even though Catches are always Food (never Equipment)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+    );
+    const sold: unknown[] = [];
+    engine.on("duplicate-sold", (e) => sold.push(e));
+    const caught: unknown[] = [];
+    engine.on("fish-caught", (e) => caught.push(e));
+
+    engine.selectFishingSpot("pond");
+    for (let i = 0; i < 10 && caught.length === 0; i++) engine.tick();
+
+    expect(caught).toHaveLength(1);
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 6 }]);
+  });
+
+  describe("setAutoSellDuplicates command", () => {
+    it("defaults true for a fresh engine, and toggles both ways", () => {
+      const engine = freshEngine();
+      expect(engine.snapshot().player.autoSellDuplicates).toBe(true);
+
+      engine.setAutoSellDuplicates(false);
+      expect(engine.snapshot().player.autoSellDuplicates).toBe(false);
+
+      engine.setAutoSellDuplicates(true);
+      expect(engine.snapshot().player.autoSellDuplicates).toBe(true);
+    });
+
+    it("throws on a non-boolean value", () => {
+      const engine = freshEngine();
+      expect(() => engine.setAutoSellDuplicates("yes" as unknown as boolean)).toThrow();
+    });
+  });
+
+  describe("save/load", () => {
+    it("autoSellDuplicates survives a save/load round-trip", () => {
+      const original = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { autoSellDuplicates: false } }),
+      );
+      const saved = original.snapshot();
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+
+      expect(restored.snapshot().player.autoSellDuplicates).toBe(false);
+    });
+
+    it("a pre-#63 save with no autoSellDuplicates key at all defaults to true", () => {
+      const legacySave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          respawning: false,
+          // no autoSellDuplicates key: simulates a save written before this feature shipped
+        },
+        monster: null,
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+
+      expect(restored.snapshot().player.autoSellDuplicates).toBe(true);
+    });
+
+    it("a non-boolean saved value defaults to true", () => {
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { autoSellDuplicates: "nope" as unknown as boolean } }),
+      );
+
+      expect(restored.snapshot().player.autoSellDuplicates).toBe(true);
     });
   });
 });

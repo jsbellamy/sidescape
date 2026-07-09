@@ -52,6 +52,7 @@ function baseSnapshot(): Snapshot {
       combatLevel,
       combatStyle: "accurate",
       autoEatThreshold: 0,
+      autoSellDuplicates: true,
       foodSlots: [null, null, null],
       skills,
       equipment: { weapon: null, shield: null, head: null, body: null, legs: null },

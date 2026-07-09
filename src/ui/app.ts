@@ -330,6 +330,8 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
     });
 
+    el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
+
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
@@ -539,6 +541,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
           .join("")}
       </div>
+      <label id="autosell-duplicates-row" class="checkbox-row">
+        <input type="checkbox" id="autosell-duplicates-toggle" />
+        Auto-sell duplicate gear
+      </label>
     </section>
     <section id="xp-row"></section>
     <section id="picker"></section>
@@ -595,6 +601,9 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("overflow-lost", (e) =>
     feedLine(`⚠ Bank full — ${itemName(e.itemId)} lost!`, "overflow"),
   );
+  engine.on("duplicate-sold", (e) =>
+    feedLine(`⚠ Auto-sold duplicate ${itemName(e.itemId)} (+${e.gold}g)`, "overflow"),
+  );
   // Loot Zone (#60): a sweep (auto-loot on leaving combat, or the Loot all button) banks whatever
   // fits and leaves the rest in the zone — check the post-sweep Snapshot for leftovers right here,
   // rather than a per-render check, so the warning fires once per sweep instead of spamming every
@@ -650,6 +659,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       engine.setAutoEatThreshold(Number(raw) as AutoEatThreshold);
       render();
     }
+  });
+
+  el<HTMLInputElement>("#autosell-duplicates-toggle").addEventListener("change", (event) => {
+    engine.setAutoSellDuplicates((event.target as HTMLInputElement).checked);
+    render();
   });
 
   el("#sort-row").addEventListener("click", (event) => {
