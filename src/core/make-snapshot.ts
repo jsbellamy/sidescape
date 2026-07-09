@@ -26,8 +26,8 @@ function mergeUnknown(base: unknown, override: unknown): unknown {
 }
 
 /** A minimal, self-consistent Snapshot: level-1 Skills (so full HP is 1), nothing selected,
- * no Gear worn, an empty inventory, and Areas/Fishing Spots gated exactly as Engine would derive
- * them for that combat/Fishing level against `fixtureContent`. */
+ * no Gear worn, gold 0 and an empty Bank, and Areas/Fishing Spots gated exactly as Engine would
+ * derive them for that combat/Fishing level against `fixtureContent`. */
 function baseSnapshot(): Snapshot {
   const skills: Snapshot["player"]["skills"] = {
     attack: { level: 1, xp: 0 },
@@ -57,7 +57,7 @@ function baseSnapshot(): Snapshot {
       // Derived output, ignored on load (#26); the fixture default matches a fresh, unarmed
       // player — mirrors engine.ts's own unarmed attack-speed fallback of 4 Ticks.
       bonuses: { atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 },
-      inventory: [],
+      gold: 0,
       respawning: false,
       completedDungeonIds: [],
     },
@@ -90,10 +90,10 @@ function baseSnapshot(): Snapshot {
 /**
  * Builds a complete, valid Snapshot for tests, so call sites state only the fields their
  * scenario cares about instead of hand-building the whole shape. `overrides` deep-merges onto
- * sensible defaults (full HP at level 1 across every Skill, no Gear, empty inventory, nothing
+ * sensible defaults (full HP at level 1 across every Skill, no Gear, gold 0, empty Bank, nothing
  * selected, no Dungeon completed) for plain nested objects (`player`, `player.skills`,
- * `player.equipment`); arrays (`inventory`, `areas`, `completedDungeonIds`) and nullable objects
- * (`monster`, `fishing`, `dungeon`) are replaced wholesale when supplied.
+ * `player.equipment`, `bank`); arrays (`bank.items`, `areas`, `completedDungeonIds`) and nullable
+ * objects (`monster`, `fishing`, `dungeon`) are replaced wholesale when supplied.
  */
 export function makeSnapshot(overrides?: DeepPartial<Snapshot>): Snapshot {
   return mergeUnknown(baseSnapshot(), overrides) as Snapshot;

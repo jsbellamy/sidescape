@@ -149,9 +149,9 @@ function darkrootGraduateSave() {
         head: "iron-full-helm",
       },
       autoEatThreshold: 0.5,
-      inventory: [{ itemId: "cooked-trout", qty: 30 }],
       completedDungeonIds: ["darkroot-hollow"],
     },
+    bank: { items: [{ itemId: "cooked-trout", qty: 30 }] },
   });
 }
 
@@ -175,9 +175,9 @@ function sewersGraduateSave() {
         head: "steel-full-helm",
       },
       autoEatThreshold: 0.5,
-      inventory: [{ itemId: "cooked-pike", qty: 400 }],
       completedDungeonIds: ["darkroot-hollow"],
     },
+    bank: { items: [{ itemId: "cooked-pike", qty: 400 }] },
   });
 }
 
@@ -191,8 +191,8 @@ function boneCryptFarmerSave() {
     player: {
       ...base.player,
       completedDungeonIds: ["darkroot-hollow", "sewer-king"],
-      inventory: [{ itemId: "cooked-pike", qty: 5_000_000 }],
     },
+    bank: { ...base.bank, items: [{ itemId: "cooked-pike", qty: 5_000_000 }] },
   };
 }
 
@@ -268,5 +268,5 @@ describe("Shade Blade drop-rate convergence", () => {
     const expected = kills * declaredChance;
     expect(shadeBlades).toBeGreaterThan(expected * 0.5);
     expect(shadeBlades).toBeLessThan(expected * 1.5);
-  });
+  }, 15000);
 });

@@ -44,7 +44,7 @@ export interface EquipmentDef {
   /** Weapons only: which Combat Mode this weapon trains; omitted means "melee" (every pre-#7
    * weapon in data/index.ts relies on this default rather than declaring it explicitly). */
   combatMode?: CombatMode;
-  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }
 
@@ -53,7 +53,7 @@ export interface FoodDef {
   id: string;
   name: string;
   heals: number;
-  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }
 
@@ -71,7 +71,7 @@ export interface MaterialDef {
   kind: "material";
   id: string;
   name: string;
-  /** Gold per unit when sold from the Inventory; omit to make it unsellable. */
+  /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }
 
@@ -166,6 +166,13 @@ export type EngineEvent =
   | { type: "fish-caught"; spotId: string; itemId: string; qty: number }
   | { type: "item-crafted"; recipeId: string; itemId: string }
   | { type: "equipped"; itemId: string }
+  /** A passive arrival (drop, Catch, craft output) that needed a NEW Bank stack while the Bank
+   * was full: sellable, so it was auto-sold instead of lost (#59 — passive flows auto-sell on
+   * overflow, player commands throw). Top-ups of an existing stack never trigger this. */
+  | { type: "overflow-sold"; itemId: string; qty: number; gold: number }
+  /** Sibling to overflow-sold (#59): the same full-Bank/new-stack situation, but the item has no
+   * `value` (unsellable), so it was discarded instead. */
+  | { type: "overflow-lost"; itemId: string; qty: number }
   /** wave = 1-based cleared count (e.g. clearing the 2nd of 3 waves emits wave: 2). */
   | { type: "wave-cleared"; dungeonId: string; wave: number; totalWaves: number }
   | { type: "dungeon-completed"; dungeonId: string }
@@ -192,7 +199,9 @@ export interface Snapshot {
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed
      * fresh each snapshot from `content.items` — harmless to persist in a save, ignored on load. */
     bonuses: { atkBonus: number; strBonus: number; defBonus: number; attackSpeed: number };
-    inventory: { itemId: string; qty: number }[];
+    /** The player's currency balance (#59) — a number on the player, not an Item stack; the Bank
+     * is the sole store for every other Item. */
+    gold: number;
     respawning: boolean;
     completedDungeonIds: string[];
   };

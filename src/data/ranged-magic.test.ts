@@ -84,11 +84,11 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     expect(lumbryMeadows.monsterIds).toEqual(expect.arrayContaining(["goblin", "cow"]));
   });
 
-  it("equipping the Shortbow (owned via inventory) and fighting routes attack XP to Ranged, not Attack/Strength", () => {
+  it("equipping the Shortbow (owned via the Bank) and fighting routes attack XP to Ranged, not Attack/Strength", () => {
     const engine = createEngine(
       content,
       seededRng(7),
-      makeSnapshot({ player: { inventory: [{ itemId: "shortbow", qty: 1 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "shortbow", qty: 1 }] } }),
     );
     engine.equip("shortbow");
     expect(engine.snapshot().player.equipment.weapon).toBe("shortbow");
@@ -105,7 +105,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     const engine = createEngine(
       content,
       seededRng(7),
-      makeSnapshot({ player: { inventory: [{ itemId: "apprentice-staff", qty: 1 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "apprentice-staff", qty: 1 }] } }),
     );
     engine.equip("apprentice-staff");
     expect(engine.snapshot().player.equipment.weapon).toBe("apprentice-staff");

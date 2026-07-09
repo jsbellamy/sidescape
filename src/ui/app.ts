@@ -90,7 +90,6 @@ function skillProgress(skill: SkillSnapshot): number {
 const TABS = [
   { id: "loot", label: "Loot Feed" },
   { id: "character", label: "Character" },
-  { id: "inventory", label: "Inventory" },
   { id: "bank", label: "Bank" },
   { id: "smithing", label: "Smithing" },
 ] as const;
@@ -143,7 +142,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     return content.items.find((i) => i.id === itemId)?.name ?? itemId;
   }
 
-  /** Gold per unit if `itemId` can be sold from the Inventory; undefined otherwise. */
+  /** Gold per unit if `itemId` can be sold from the Bank; undefined otherwise. */
   function sellPrice(itemId: string): number | undefined {
     const def = content.items.find((i) => i.id === itemId);
     return def && def.kind !== "currency" ? def.value : undefined;
@@ -339,38 +338,12 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
            </div>`;
     }).join("");
 
-    const gold = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+    const gold = player.gold;
     el("#gold").textContent = `🪙 ${gold}`;
 
     root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
     });
-
-    el("#inventory").innerHTML = sortStacks(
-      player.inventory.filter((s) => s.itemId !== "gold"),
-      sortKey,
-      content,
-    )
-      .map((s) => {
-        const def = content.items.find((i) => i.id === s.itemId);
-        const cls =
-          def?.kind === "equipment"
-            ? "equippable"
-            : def?.kind === "food"
-              ? "eatable"
-              : def?.kind === "material"
-                ? "material"
-                : "";
-        const price = sellPrice(s.itemId);
-        const sellBtn =
-          price !== undefined
-            ? `<button class="sell-btn" data-sell="${s.itemId}">Sell ${price}g</button>`
-            : "";
-        const depositBtn = `<button class="deposit-btn" data-deposit="${s.itemId}">Bank</button>`;
-        return `<li class="${cls}" data-item="${s.itemId}">
-                  ${itemName(s.itemId)} ×${s.qty}${depositBtn}${sellBtn}</li>`;
-      })
-      .join("");
 
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
@@ -393,14 +366,31 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
 
     el("#bank").innerHTML = sortStacks(bank.items, sortKey, content)
-      .map(
-        (s) =>
-          `<li data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}
-             <button class="withdraw-btn" data-withdraw="${s.itemId}">Withdraw</button></li>`,
-      )
+      .map((s) => {
+        const def = content.items.find((i) => i.id === s.itemId);
+        const cls =
+          def?.kind === "equipment"
+            ? "equippable"
+            : def?.kind === "food"
+              ? "eatable"
+              : def?.kind === "material"
+                ? "material"
+                : "";
+        const price = sellPrice(s.itemId);
+        const sellBtn =
+          price !== undefined
+            ? `<button class="sell-btn" data-sell="${s.itemId}">Sell ${price}g</button>`
+            : "";
+        const equipBtn =
+          def?.kind === "equipment"
+            ? `<button class="equip-btn" data-equip="${s.itemId}">Equip</button>`
+            : "";
+        return `<li class="${cls}" data-item="${s.itemId}">
+                  ${itemName(s.itemId)} ×${s.qty}${equipBtn}${sellBtn}</li>`;
+      })
       .join("");
 
-    const owned = (itemId: string) => player.inventory.find((s) => s.itemId === itemId)?.qty ?? 0;
+    const owned = (itemId: string) => bank.items.find((s) => s.itemId === itemId)?.qty ?? 0;
     const smithingLevel = player.skills.smithing.level;
     el("#smithing-recipes").innerHTML = content.recipes
       .map((recipe) => {
@@ -505,18 +495,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           <ul id="character-slots"></ul>
           <p id="character-totals" class="totals-row"></p>
         </div>
-        <div data-tab-panel="inventory" class="tab-panel">
-          <p class="panel-title">Inventory <span class="hint">(click to equip or eat)</span></p>
-          <div id="sort-row" class="style-row">
-            ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
-          </div>
-          <ul id="inventory"></ul>
-        </div>
         <div data-tab-panel="bank" class="tab-panel">
           <p class="panel-title">
             <span id="bank-header"></span>
             <button id="buy-slots-btn" data-buy-slots></button>
+            <span class="hint">(click to equip or eat)</span>
           </p>
+          <div id="sort-row" class="style-row">
+            ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
+          </div>
           <ul id="bank"></ul>
         </div>
         <div data-tab-panel="smithing" class="tab-panel">
@@ -538,6 +525,12 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
+  engine.on("overflow-sold", (e) =>
+    feedLine(`⚠ Bank full — sold ${itemName(e.itemId)} (+${e.gold}g)`, "overflow"),
+  );
+  engine.on("overflow-lost", (e) =>
+    feedLine(`⚠ Bank full — ${itemName(e.itemId)} lost!`, "overflow"),
+  );
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
   engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${itemName(e.itemId)}`, "craft"));
   engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
@@ -611,21 +604,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     }
   });
 
-  el("#inventory").addEventListener("click", (event) => {
+  el("#bank").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
-    // Click-handler order is load-bearing (#25): deposit before sell before equip/eat, so
-    // depositing an item never also sells, equips, or eats it.
-    const depositId = target.dataset["deposit"];
-    if (depositId) {
-      const qty = engine.snapshot().player.inventory.find((s) => s.itemId === depositId)?.qty ?? 0;
-      if (qty > 0) {
-        engine.deposit(depositId, qty); // logs its own feed line below
-        feedLine(`Banked ${qty} × ${itemName(depositId)}`);
-        render();
-      }
-      return;
-    }
-
+    // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip/eat
+    // rule): the Sell and Equip buttons fire before the row-level fallthrough, so clicking either
+    // button never also equips or eats the row via the fallthrough.
     const sellId = target.dataset["sell"];
     if (sellId) {
       engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
@@ -633,27 +616,20 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       return;
     }
 
+    const equipId = target.dataset["equip"];
+    if (equipId) {
+      engine.equip(equipId); // logs its own feed line via the equipped listener above
+      render();
+      return;
+    }
+
     const itemId = target.closest("li")?.dataset["item"];
     const def = content.items.find((i) => i.id === itemId);
     if (!itemId || !def) return;
-    if (def.kind === "equipment") {
-      engine.equip(itemId); // logs its own feed line via the equipped listener above
-      render();
-    } else if (def.kind === "food") {
+    if (def.kind === "food") {
       engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
       render();
     }
-  });
-
-  el("#bank").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const withdrawId = target.dataset["withdraw"];
-    if (!withdrawId) return;
-    const qty = engine.snapshot().bank.items.find((s) => s.itemId === withdrawId)?.qty ?? 0;
-    if (qty <= 0) return;
-    engine.withdraw(withdrawId, qty);
-    feedLine(`Withdrew ${qty} × ${itemName(withdrawId)}`);
-    render();
   });
 
   el("#buy-slots-btn").addEventListener("click", () => {

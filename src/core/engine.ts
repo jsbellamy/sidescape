@@ -71,7 +71,9 @@ interface State {
   combatStyle: CombatStyle;
   autoEatThreshold: AutoEatThreshold;
   activity: Activity;
-  inventory: Map<string, number>;
+  /** The player's currency balance (#59) — gold stopped being an item stack; the Bank below is
+   * the sole store for every other Item. */
+  gold: number;
   bank: Map<string, number>;
   bankCapacity: number;
   equipment: Record<GearSlot, string | null>;
@@ -95,8 +97,6 @@ export interface Engine {
   equip(itemId: string): void;
   eatFood(itemId: string): void;
   sell(itemId: string, qty?: number): void;
-  deposit(itemId: string, qty?: number): void;
-  withdraw(itemId: string, qty?: number): void;
   buyBankSlots(): void;
   snapshot(): Snapshot;
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
@@ -169,7 +169,7 @@ function freshState(_content: Content): State {
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
     activity: null,
-    inventory: new Map(),
+    gold: 0,
     bank: new Map(),
     bankCapacity: BANK_START_CAPACITY,
     equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
@@ -220,33 +220,57 @@ function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, stri
   return equipment;
 }
 
-/** Drops inventory entries whose itemId isn't in Content, or whose qty isn't a positive
- * integer; keeps the rest. */
-function loadInventory(saved: Snapshot, content: Content): Map<string, number> {
-  const itemIds = new Set(content.items.map((i) => i.id));
-  const inventory = new Map<string, number>();
-  for (const entry of saved.player?.inventory ?? []) {
-    const itemId: unknown = entry?.itemId;
-    const qty: unknown = entry?.qty;
-    if (typeof itemId !== "string" || !itemIds.has(itemId)) continue;
-    if (typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) continue;
-    inventory.set(itemId, qty);
-  }
-  return inventory;
+/** True for a finite positive integer — the shared qty validity check every loadState migration
+ * helper below applies before trusting a saved stack's quantity. */
+function isPositiveIntQty(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
-/** Drops Bank entries whose itemId isn't in Content, or whose qty isn't a positive integer;
- * keeps the rest. Mirrors loadInventory — the Bank is a second, separate item store. */
-function loadBank(saved: Snapshot, content: Content): Map<string, number> {
+/** Pre-#59 saves persisted a carried `player.inventory` stack array (including a currency
+ * stack); Snapshot no longer has that field, so it's read back only here, through a narrow cast,
+ * at the loadGold/loadBank migration boundary. A current-format save simply has no such array. */
+function loadLegacyInventory(saved: Snapshot): { itemId: unknown; qty: unknown }[] {
+  const legacy = saved as unknown as {
+    player?: { inventory?: { itemId?: unknown; qty?: unknown }[] };
+  };
+  return (legacy.player?.inventory ?? []).map((entry) => ({
+    itemId: entry?.itemId,
+    qty: entry?.qty,
+  }));
+}
+
+/** Migration (#59): `player.gold` folds in the old currency stack from `player.inventory` (a
+ * pre-#59 save) plus any currency stack that had been deposited into `bank.items` — both
+ * pre-#59 shapes, since currency now never reaches the Bank. A missing/invalid `player.gold`
+ * defaults to 0 before those are added, so a fresh field-less save still loads at 0 gold. */
+function loadGold(saved: Snapshot, currencyId: string): number {
+  const raw: unknown = saved.player?.gold;
+  let gold = typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : 0;
+  for (const entry of loadLegacyInventory(saved)) {
+    if (entry.itemId === currencyId && isPositiveIntQty(entry.qty)) gold += entry.qty;
+  }
+  for (const entry of saved.bank?.items ?? []) {
+    if (entry?.itemId === currencyId && isPositiveIntQty(entry?.qty)) gold += entry.qty;
+  }
+  return gold;
+}
+
+/** Drops Bank entries whose itemId isn't in Content, isn't the currency item (folded into gold
+ * by loadGold instead, see above), or whose qty isn't a positive integer; keeps the rest, summed
+ * across sources. Migration (#59): every pre-#59 `player.inventory` stack other than currency
+ * merges in here too, on top of whatever `bank.items` already held — capacity is NOT enforced on
+ * load (it only gates NEW incoming stacks at runtime), so a merge may leave the Bank over
+ * capacity; that's fine and self-resolving as the player sells/uses items down. */
+function loadBank(saved: Snapshot, content: Content, currencyId: string): Map<string, number> {
   const itemIds = new Set(content.items.map((i) => i.id));
   const bank = new Map<string, number>();
-  for (const entry of saved.bank?.items ?? []) {
-    const itemId: unknown = entry?.itemId;
-    const qty: unknown = entry?.qty;
-    if (typeof itemId !== "string" || !itemIds.has(itemId)) continue;
-    if (typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) continue;
-    bank.set(itemId, qty);
-  }
+  const addStack = (itemId: unknown, qty: unknown): void => {
+    if (typeof itemId !== "string" || itemId === currencyId || !itemIds.has(itemId)) return;
+    if (!isPositiveIntQty(qty)) return;
+    bank.set(itemId, (bank.get(itemId) ?? 0) + qty);
+  };
+  for (const entry of saved.bank?.items ?? []) addStack(entry?.itemId, entry?.qty);
+  for (const entry of loadLegacyInventory(saved)) addStack(entry.itemId, entry.qty);
   return bank;
 }
 
@@ -290,10 +314,10 @@ function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Conte
   return completed;
 }
 
-/** Whether `inventory` covers at least one craft of `recipe` (mirrors the Engine's own
+/** Whether `bank` covers at least one craft of `recipe` (mirrors the Engine's own
  * canCraftRecipe, duplicated here because loadState runs before the Engine's closures exist). */
-function canCraftFromInventory(recipe: RecipeDef, inventory: Map<string, number>): boolean {
-  return recipe.inputs.every((input) => (inventory.get(input.itemId) ?? 0) >= input.qty);
+function canCraftFromBank(recipe: RecipeDef, bank: Map<string, number>): boolean {
+  return recipe.inputs.every((input) => (bank.get(input.itemId) ?? 0) >= input.qty);
 }
 
 /** Resolves a resumable Smithing activity: `blocked` is true when a Monster or Fishing Spot
@@ -305,7 +329,7 @@ function canCraftFromInventory(recipe: RecipeDef, inventory: Map<string, number>
 function loadSmithing(
   saved: Snapshot,
   content: Content,
-  inventory: Map<string, number>,
+  bank: Map<string, number>,
   smithingLevel: number,
   blocked: boolean,
 ): SmithingActivity | null {
@@ -314,7 +338,7 @@ function loadSmithing(
     typeof recipeId === "string" ? content.recipes.find((r) => r.id === recipeId) : undefined;
   if (!recipe) return null;
   if (smithingLevel < recipe.levelReq) return null;
-  if (!canCraftFromInventory(recipe, inventory)) return null;
+  if (!canCraftFromBank(recipe, bank)) return null;
   return { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
 }
 
@@ -323,10 +347,13 @@ function loadSmithing(
  * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
  * the save. A clean Snapshot round-trips through this unchanged. */
 function loadState(saved: Snapshot, content: Content): State {
+  // Non-null: validateContent (run before loadState, see createEngine) guarantees exactly one.
+  const currencyId = content.items.find((i) => i.kind === "currency")!.id;
   const xp = loadXp(saved);
   const maxHp = levelForXp(xp.hitpoints);
   const equipment = loadEquipment(saved, content);
-  const inventory = loadInventory(saved, content);
+  const bank = loadBank(saved, content, currencyId);
+  const gold = loadGold(saved, currencyId);
 
   // Mid-run Dungeon state is NEVER persisted: a reload is an abandon. A save captured mid-run
   // ignores BOTH saved.dungeon and saved.monster — the naive path (spawnMonster(saved.monster.id))
@@ -344,7 +371,7 @@ function loadState(saved: Snapshot, content: Content): State {
   const smithing = loadSmithing(
     saved,
     content,
-    inventory,
+    bank,
     levelForXp(xp.smithing),
     dungeonActive || monster !== undefined || spot !== undefined,
   );
@@ -379,8 +406,8 @@ function loadState(saved: Snapshot, content: Content): State {
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
     activity,
-    inventory,
-    bank: loadBank(saved, content),
+    gold,
+    bank,
     bankCapacity: loadBankCapacity(saved),
     equipment,
     respawnTicksLeft: 0,
@@ -441,9 +468,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     return def;
   }
 
-  /** Whether the carried inventory covers at least one craft of `recipe`. */
+  /** Whether the Bank covers at least one craft of `recipe`. */
   function canCraftRecipe(recipe: RecipeDef): boolean {
-    return recipe.inputs.every((input) => (state.inventory.get(input.itemId) ?? 0) >= input.qty);
+    return recipe.inputs.every((input) => (state.bank.get(input.itemId) ?? 0) >= input.qty);
   }
 
   /** An Area with no gating Dungeon is unlocked from the start; a gated Area unlocks the instant
@@ -481,11 +508,44 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     return Math.floor(rng.next() * (max + 1));
   }
 
+  /** Adds `qty` of `itemId` to the Bank (#59): a top-up of an existing stack always fits (the
+   * #25 rule). A brand-new stack needed while the Bank is already at capacity is instead
+   * auto-sold (sellable) or discarded (unsellable) — the universal "passive flows auto-sell on
+   * overflow; player commands throw" rule. Never throws — this is only ever reached from a
+   * passive arrival (drop, Catch, craft output), never a player command. */
+  function addToBank(itemId: string, qty: number): void {
+    const isNewStack = !state.bank.has(itemId);
+    if (isNewStack && state.bank.size >= state.bankCapacity) {
+      const def = content.items.find((i) => i.id === itemId);
+      const value = def ? sellValue(def) : undefined;
+      if (value !== undefined) {
+        const gold = value * qty;
+        state.gold += gold;
+        emit({ type: "overflow-sold", itemId, qty, gold });
+      } else {
+        emit({ type: "overflow-lost", itemId, qty });
+      }
+      return;
+    }
+    state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+  }
+
+  /** Routes one passive arrival (drop or Chest entry) to its destination (#59): the currency
+   * item credits `state.gold` directly, never touching the Bank; anything else goes to the Bank
+   * via addToBank's top-up/overflow rules above. */
+  function creditPassiveItem(itemId: string, qty: number): void {
+    if (itemId === currencyDef.id) {
+      state.gold += qty;
+      return;
+    }
+    addToBank(itemId, qty);
+  }
+
   function rollDrops(monster: MonsterDef): void {
     for (const entry of monster.dropTable) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
-      state.inventory.set(entry.itemId, (state.inventory.get(entry.itemId) ?? 0) + entry.qty);
       emit({ type: "drop", itemId: entry.itemId, qty: entry.qty, band: entry.band });
+      creditPassiveItem(entry.itemId, entry.qty);
     }
   }
 
@@ -516,14 +576,15 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   }
 
   /** Rolls every Chest entry independently (multi-roll, unlike a Drop Table's per-kill roll):
-   * adds each landed item straight to the inventory and returns it for chest-opened. No per-item
-   * `drop` events fire — Chest contents are reported only via chest-opened (mirrors fishing's
-   * single fish-caught event instead of per-item drops). */
+   * routes each landed item like any other passive arrival (#59 — currency to gold, everything
+   * else to the Bank) and returns it for chest-opened. No per-item `drop` events fire — Chest
+   * contents are reported only via chest-opened (mirrors fishing's single fish-caught event
+   * instead of per-item drops). */
   function rollChest(dungeon: DungeonDef): { itemId: string; qty: number; band: DropBand }[] {
     const items: { itemId: string; qty: number; band: DropBand }[] = [];
     for (const entry of dungeon.chest) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
-      state.inventory.set(entry.itemId, (state.inventory.get(entry.itemId) ?? 0) + entry.qty);
+      creditPassiveItem(entry.itemId, entry.qty);
       items.push({ itemId: entry.itemId, qty: entry.qty, band: entry.band });
     }
     return items;
@@ -669,7 +730,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
           defBonus: gearBonus("defBonus"),
           attackSpeed: weaponSpeed(),
         },
-        inventory: [...state.inventory].map(([itemId, qty]) => ({ itemId, qty })),
+        gold: state.gold,
         respawning: state.respawnTicksLeft > 0,
         completedDungeonIds: [...state.completedDungeonIds],
       },
@@ -722,13 +783,14 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.hp = Math.max(0, state.hp - damage);
   }
 
-  /** Eats one unit of `food`, healing without overheal; returns HP restored. */
+  /** Eats one unit of `food` from the Bank (#59 — an interim bridge until Food Slots replace
+   * this), healing without overheal; returns HP restored. */
   function eat(food: FoodDef): number {
     const healed = Math.min(food.heals, maxHp() - state.hp);
     state.hp += healed;
-    const remaining = (state.inventory.get(food.id) ?? 0) - 1;
-    if (remaining > 0) state.inventory.set(food.id, remaining);
-    else state.inventory.delete(food.id);
+    const remaining = (state.bank.get(food.id) ?? 0) - 1;
+    if (remaining > 0) state.bank.set(food.id, remaining);
+    else state.bank.delete(food.id);
     emit({ type: "food-eaten", itemId: food.id, healed });
     return healed;
   }
@@ -737,7 +799,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     if (state.autoEatThreshold === 0) return;
     while (state.hp < maxHp() * state.autoEatThreshold) {
       const food = content.items.find(
-        (item) => item.kind === "food" && (state.inventory.get(item.id) ?? 0) > 0,
+        (item) => item.kind === "food" && (state.bank.get(item.id) ?? 0) > 0,
       );
       if (!food || food.kind !== "food") return;
       eat(food);
@@ -765,29 +827,31 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     if (activity.catchCooldown > 0) return;
     activity.catchCooldown = spot.catchTicks;
     if (rng.next() < spot.catchChance) {
-      state.inventory.set(spot.itemId, (state.inventory.get(spot.itemId) ?? 0) + 1);
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
+      addToBank(spot.itemId, 1); // a Catch is always Food (validateContent), never currency
     }
   }
 
-  /** Decrements the craft cooldown; at completion consumes `recipe.inputs` (never lost to an
-   * earlier interruption — see selectRecipe/the other select* commands, which only ever swap
-   * `state.activity` wholesale, never mid-craft), adds the output Item, grants Smithing XP, and
-   * emits item-crafted. Auto-repeats (re-arms the cooldown) while inputs still cover another
-   * craft; otherwise clears Smithing back to idle with no extra event — the Snapshot shows it. */
+  /** Decrements the craft cooldown; at completion consumes `recipe.inputs` from the Bank (never
+   * lost to an earlier interruption — see selectRecipe/the other select* commands, which only
+   * ever swap `state.activity` wholesale, never mid-craft), adds the output Item to the Bank
+   * (#59, subject to the same top-up/overflow rules as any other passive arrival), grants
+   * Smithing XP, and emits item-crafted. Auto-repeats (re-arms the cooldown) while inputs still
+   * cover another craft; otherwise clears Smithing back to idle with no extra event — the
+   * Snapshot shows it. */
   function smithingTick(activity: SmithingActivity): void {
     const recipe = recipeDef(activity.recipeId);
     activity.craftCooldown -= 1;
     if (activity.craftCooldown > 0) return;
 
     for (const input of recipe.inputs) {
-      const owned = state.inventory.get(input.itemId) ?? 0;
+      const owned = state.bank.get(input.itemId) ?? 0;
       const remaining = owned - input.qty;
-      if (remaining > 0) state.inventory.set(input.itemId, remaining);
-      else state.inventory.delete(input.itemId);
+      if (remaining > 0) state.bank.set(input.itemId, remaining);
+      else state.bank.delete(input.itemId);
     }
-    state.inventory.set(recipe.outputItemId, (state.inventory.get(recipe.outputItemId) ?? 0) + 1);
+    addToBank(recipe.outputItemId, 1);
     grantXp("smithing", recipe.xp);
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
 
@@ -928,14 +992,28 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       const def = content.items.find((i) => i.id === itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
       if (def.kind !== "equipment") throw new Error(`${def.name} cannot be equipped`);
-      const owned = state.inventory.get(itemId) ?? 0;
+      const owned = state.bank.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
 
-      if (owned > 1) state.inventory.set(itemId, owned - 1);
-      else state.inventory.delete(itemId);
+      // A player command, so it fails loud rather than auto-selling gear the player owns (#59):
+      // if the previously equipped piece would need a brand-new Bank Slot to return to, and the
+      // Bank is full, throw before mutating anything. Checked as it will be AFTER pulling itemId
+      // out of the Bank below — pulling itemId's own last unit can itself free the Slot the swap
+      // needs, so equipping the same item back into its own slot never wrongly reports full.
       const previous = state.equipment[def.slot];
+      if (previous !== null && previous !== itemId) {
+        const itemIdStackClears = owned === 1;
+        const bankSizeAfterPull = state.bank.size - (itemIdStackClears ? 1 : 0);
+        const previousNeedsNewStack = !state.bank.has(previous);
+        if (previousNeedsNewStack && bankSizeAfterPull >= state.bankCapacity) {
+          throw new Error("bank is full");
+        }
+      }
+
+      if (owned > 1) state.bank.set(itemId, owned - 1);
+      else state.bank.delete(itemId);
       if (previous !== null) {
-        state.inventory.set(previous, (state.inventory.get(previous) ?? 0) + 1);
+        state.bank.set(previous, (state.bank.get(previous) ?? 0) + 1);
       }
       state.equipment[def.slot] = itemId;
       emit({ type: "equipped", itemId });
@@ -944,67 +1022,31 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       const def = content.items.find((i) => i.id === itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
       if (def.kind !== "food") throw new Error(`${def.name} is not Food`);
-      const owned = state.inventory.get(itemId) ?? 0;
+      const owned = state.bank.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
       eat(def);
     },
     sell(itemId, qty = 1) {
-      // currencyDef is guaranteed present by validateContent (exactly one currency item).
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
       const def = content.items.find((i) => i.id === itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
       const value = sellValue(def);
       if (value === undefined) throw new Error(`${def.name} cannot be sold`);
-      const owned = state.inventory.get(itemId) ?? 0;
+      const owned = state.bank.get(itemId) ?? 0;
       if (owned < qty) throw new Error(`you do not own ${qty} ${def.name}`);
 
       const remaining = owned - qty;
-      if (remaining > 0) state.inventory.set(itemId, remaining);
-      else state.inventory.delete(itemId);
-      const gold = value * qty;
-      state.inventory.set(currencyDef.id, (state.inventory.get(currencyDef.id) ?? 0) + gold);
-      emit({ type: "item-sold", itemId, qty, gold });
-    },
-    deposit(itemId, qty = 1) {
-      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid deposit quantity: ${qty}`);
-      const def = content.items.find((i) => i.id === itemId);
-      if (!def) throw new Error(`unknown item: ${itemId}`);
-      const owned = state.inventory.get(itemId) ?? 0;
-      if (owned < qty) throw new Error(`you do not own ${qty} ${def.name}`);
-      // Only a brand-new stack consumes a Bank Slot; topping up an existing one always fits.
-      const isNewStack = !state.bank.has(itemId);
-      if (isNewStack && state.bank.size >= state.bankCapacity) {
-        throw new Error("bank is full");
-      }
-
-      const remaining = owned - qty;
-      if (remaining > 0) state.inventory.set(itemId, remaining);
-      else state.inventory.delete(itemId);
-      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
-    },
-    withdraw(itemId, qty = 1) {
-      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid withdraw quantity: ${qty}`);
-      const def = content.items.find((i) => i.id === itemId);
-      if (!def) throw new Error(`unknown item: ${itemId}`);
-      const banked = state.bank.get(itemId) ?? 0;
-      if (banked < qty) throw new Error(`bank does not hold ${qty} ${def.name}`);
-
-      // Carried inventory stays unlimited in v1: withdraw is never capacity-checked.
-      const remaining = banked - qty;
       if (remaining > 0) state.bank.set(itemId, remaining);
       else state.bank.delete(itemId);
-      state.inventory.set(itemId, (state.inventory.get(itemId) ?? 0) + qty);
+      const gold = value * qty;
+      state.gold += gold;
+      emit({ type: "item-sold", itemId, qty, gold });
     },
     buyBankSlots() {
-      // Purchases spend carried gold only (currencyDef, never a hard-coded id); gold itself
-      // is bankable as an ordinary stack, so the Bank's own gold is not spendable here.
       const price = nextBankSlotsPrice(state.bankCapacity);
-      const carried = state.inventory.get(currencyDef.id) ?? 0;
-      if (carried < price) throw new Error(`not enough gold: need ${price}`);
+      if (state.gold < price) throw new Error(`not enough gold: need ${price}`);
 
-      const remaining = carried - price;
-      if (remaining > 0) state.inventory.set(currencyDef.id, remaining);
-      else state.inventory.delete(currencyDef.id);
+      state.gold -= price;
       state.bankCapacity += BANK_SLOTS_PER_PURCHASE;
     },
     on(type, handler) {

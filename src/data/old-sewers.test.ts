@@ -144,9 +144,9 @@ function darkrootGraduateSave() {
         head: "iron-full-helm",
       },
       autoEatThreshold: 0.5,
-      inventory: [{ itemId: "cooked-trout", qty: 30 }],
       completedDungeonIds: ["meadow-depths"],
     },
+    bank: { items: [{ itemId: "cooked-trout", qty: 30 }] },
   });
 }
 

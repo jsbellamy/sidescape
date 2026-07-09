@@ -27,11 +27,12 @@ function fiercerDummyContent() {
   };
 }
 
-/** Pump Ticks until the player owns `itemId` (or fail the test). */
+/** Pump Ticks until the Bank holds `itemId` (or fail the test) — passive Drops land in the Bank
+ * (#59), never a carried inventory. */
 function grindFor(engine: ReturnType<typeof freshEngine>, itemId: string, maxTicks = 20_000) {
   for (let i = 0; i < maxTicks; i++) {
     engine.tick();
-    if (engine.snapshot().player.inventory.some((s) => s.itemId === itemId)) return;
+    if (engine.snapshot().bank.items.some((s) => s.itemId === itemId)) return;
   }
   throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
 }
@@ -69,7 +70,8 @@ describe("fresh engine", () => {
     expect(snap.player.skills.hitpoints.level).toBe(10);
     expect(snap.player.maxHp).toBe(10);
     expect(snap.player.hp).toBe(10);
-    expect(snap.player.inventory).toEqual([]);
+    expect(snap.player.gold).toBe(0);
+    expect(snap.bank.items).toEqual([]);
     expect(snap.monster).toBeNull();
   });
 
@@ -168,7 +170,7 @@ describe("XP", () => {
 });
 
 describe("Drops", () => {
-  it("every kill lands the guaranteed Drop; inventory accumulates quantities", () => {
+  it("every kill lands the guaranteed currency Drop straight into gold (#59); the drop event still fires unchanged", () => {
     const engine = freshEngine();
     let kills = 0;
     const goldDrops: number[] = [];
@@ -183,8 +185,9 @@ describe("Drops", () => {
     for (let i = 0; i < 2000; i++) engine.tick();
     expect(kills).toBeGreaterThanOrEqual(5);
     expect(goldDrops).toHaveLength(kills);
-    const gold = engine.snapshot().player.inventory.find((s) => s.itemId === "gold");
-    expect(gold?.qty).toBe(kills * 5);
+    expect(engine.snapshot().player.gold).toBe(kills * 5);
+    // currency never touches the Bank (#59): it credits player.gold directly.
+    expect(engine.snapshot().bank.items.some((s) => s.itemId === "gold")).toBe(false);
   });
 });
 
@@ -230,7 +233,7 @@ describe("taking damage, Food, death and Respawn", () => {
 describe("Configurable auto-eat threshold", () => {
   function thresholdEngine(
     threshold: AutoEatThreshold,
-    invSeed: { itemId: string; qty: number }[],
+    bankSeed: { itemId: string; qty: number }[],
   ) {
     return createEngine(
       fiercerDummyContent(),
@@ -242,8 +245,8 @@ describe("Configurable auto-eat threshold", () => {
           combatStyle: "aggressive",
           autoEatThreshold: threshold,
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-          inventory: invSeed,
         },
+        bank: { items: bankSeed },
       }),
     );
   }
@@ -279,7 +282,7 @@ describe("Configurable auto-eat threshold", () => {
     expect(ate).toBe(0);
 
     engine.eatFood("meat"); // manual eat is unaffected by the auto-eat threshold
-    const meat = engine.snapshot().player.inventory.find((s) => s.itemId === "meat");
+    const meat = engine.snapshot().bank.items.find((s) => s.itemId === "meat");
     expect(meat?.qty).toBe(19);
   });
 
@@ -460,8 +463,8 @@ describe("Manual eat command", () => {
           hp: 8,
           maxHp: 10,
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-          inventory: [{ itemId: "meat", qty: 2 }],
         },
+        bank: { items: [{ itemId: "meat", qty: 2 }] },
       }),
     );
 
@@ -471,7 +474,7 @@ describe("Manual eat command", () => {
 
     expect(events).toEqual([{ itemId: "meat", healed: 2 }]);
     expect(engine.snapshot().player.hp).toBe(10);
-    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 1 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 1 }]);
   });
 
   it("throws for a non-Food item", () => {
@@ -496,15 +499,15 @@ describe("Equipment and gates", () => {
     expect(() => engine.equip("meat")).toThrow(/equip/i);
   });
 
-  it("equipping moves the item from inventory to its Gear Slot", () => {
+  it("equipping moves the item from the Bank to its Gear Slot", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     grindFor(engine, "bronze-sword");
     engine.equip("bronze-sword");
     const player = engine.snapshot().player;
     expect(player.equipment.weapon).toBe("bronze-sword");
-    expect(player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false);
-    // no longer owned in inventory, so equipping again throws
+    expect(engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")).toBe(false);
+    // no longer owned in the Bank, so equipping again throws
     expect(() => engine.equip("bronze-sword")).toThrow(/own/i);
   });
 
@@ -524,7 +527,7 @@ describe("Equipment and gates", () => {
     let equipped = false;
     for (let i = 0; i < ticks; i++) {
       armed.tick();
-      if (!equipped && armed.snapshot().player.inventory.some((s) => s.itemId === "bronze-sword")) {
+      if (!equipped && armed.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")) {
         armed.equip("bronze-sword");
         equipped = true;
       }
@@ -574,6 +577,67 @@ describe("Equipment and gates", () => {
     engine.equip("bronze-sword");
 
     expect(equipped).toEqual(["bronze-sword"]);
+  });
+
+  describe("equip against a full Bank (#59 — a player command, so it fails loud rather than auto-selling gear)", () => {
+    it("swapping to a new weapon while the Bank is full throws 'bank is full', leaving equipment and the Bank untouched", () => {
+      // Weapon slot already holds bronze-sword; the Bank holds 2 "bow" (a 1-slot Bank at
+      // capacity). Equipping one "bow" only decrements that stack to 1 — it doesn't clear the
+      // stack, so no Slot is freed — and returning bronze-sword needs a fresh Slot the full Bank
+      // can't give: must throw.
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword" } },
+          bank: { items: [{ itemId: "bow", qty: 2 }], capacity: 1 },
+        }),
+      );
+      expect(() => engine.equip("bow")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bow", qty: 2 }]);
+    });
+
+    it("swapping the same item back into its own slot never reports full, even at capacity", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword" } },
+          bank: {
+            items: [
+              { itemId: "bronze-sword", qty: 1 }, // a second copy, banked
+              { itemId: "bar", qty: 1 },
+            ],
+            capacity: 2,
+          },
+        }),
+      );
+      expect(() => engine.equip("bronze-sword")).not.toThrow();
+      expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "bar", qty: 1 },
+        ]),
+      );
+    });
+
+    it("pulling the last unit of the incoming item frees its own Bank Slot, so the swap-back can still fit", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword" } },
+          bank: { items: [{ itemId: "bow", qty: 1 }], capacity: 1 },
+        }),
+      );
+      // Bank is full (1/1) with only "bow" — but equipping "bow" removes its own last unit first,
+      // freeing the one Slot the swapped-out bronze-sword needs, so this must NOT throw.
+      expect(() => engine.equip("bow")).not.toThrow();
+      expect(engine.snapshot().player.equipment.weapon).toBe("bow");
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    });
   });
 });
 
@@ -669,37 +733,34 @@ describe("Selling items", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     grindFor(engine, "meat");
-    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    const owned = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(() => engine.sell("meat", owned + 1)).toThrow(/own/i);
   });
 
-  it("selling N removes N from the inventory (deleting the entry at zero), credits N*value gold, and emits one item-sold event", () => {
+  it("selling N removes N from the Bank (deleting the entry at zero), credits N*value gold, and emits one item-sold event", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     grindFor(engine, "bronze-sword");
-    const goldBefore =
-      engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+    const goldBefore = engine.snapshot().player.gold;
 
     const events: { itemId: string; qty: number; gold: number }[] = [];
     engine.on("item-sold", (e) => events.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
     engine.sell("bronze-sword", 1);
 
     expect(events).toEqual([{ itemId: "bronze-sword", qty: 1, gold: 20 }]);
-    const player = engine.snapshot().player;
-    expect(player.inventory.some((s) => s.itemId === "bronze-sword")).toBe(false);
-    const goldAfter = player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
-    expect(goldAfter).toBe(goldBefore + 20);
+    expect(engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")).toBe(false);
+    expect(engine.snapshot().player.gold).toBe(goldBefore + 20);
   });
 
   it("selling part of a stack decrements it without deleting the entry", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     for (let i = 0; i < 3000; i++) engine.tick();
-    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    const owned = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(owned).toBeGreaterThan(1);
 
     engine.sell("meat", 1);
-    const remaining = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty;
+    const remaining = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty;
     expect(remaining).toBe(owned - 1);
   });
 
@@ -707,9 +768,9 @@ describe("Selling items", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     grindFor(engine, "meat");
-    const owned = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    const owned = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     engine.sell("meat");
-    const remaining = engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty ?? 0;
+    const remaining = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(remaining).toBe(owned - 1);
   });
 
@@ -730,177 +791,46 @@ describe("Selling items", () => {
   });
 });
 
-describe("Bank", () => {
+describe("Bank (#59 — the sole item store; gold is player.gold, never a stack)", () => {
   function bankEngine(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     return createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
   }
 
-  it("deposit moves qty from the carried Inventory into the Bank, decrementing the stack", () => {
-    const engine = bankEngine({ player: { inventory: [{ itemId: "meat", qty: 5 }] } });
-    engine.deposit("meat", 3);
-    const snap = engine.snapshot();
-    expect(snap.player.inventory).toEqual([{ itemId: "meat", qty: 2 }]);
-    expect(snap.bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
-  });
-
-  it("depositing the whole stack deletes the Inventory entry", () => {
-    const engine = bankEngine({ player: { inventory: [{ itemId: "meat", qty: 5 }] } });
-    engine.deposit("meat", 5);
-    expect(engine.snapshot().player.inventory).toEqual([]);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
-  });
-
-  it("depositing again tops up the existing Bank stack instead of creating a new one", () => {
-    const engine = bankEngine({
-      player: { inventory: [{ itemId: "meat", qty: 5 }] },
-      bank: { items: [{ itemId: "meat", qty: 2 }], capacity: 100 },
-    });
-    engine.deposit("meat", 3);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
-  });
-
-  it("defaults qty to 1 when omitted", () => {
-    const engine = bankEngine({ player: { inventory: [{ itemId: "meat", qty: 5 }] } });
-    engine.deposit("meat");
-    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 4 }]);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 1 }]);
-  });
-
-  it("deposit throws for an unknown item", () => {
-    expect(() => bankEngine().deposit("dragon-tooth")).toThrow(/unknown/i);
-  });
-
-  it("deposit throws for qty < 1 or non-integer", () => {
-    const engine = bankEngine({ player: { inventory: [{ itemId: "meat", qty: 5 }] } });
-    expect(() => engine.deposit("meat", 0)).toThrow();
-    expect(() => engine.deposit("meat", -1)).toThrow();
-    expect(() => engine.deposit("meat", 1.5)).toThrow();
-  });
-
-  it("deposit throws when depositing more than carried", () => {
-    const engine = bankEngine({ player: { inventory: [{ itemId: "meat", qty: 2 }] } });
-    expect(() => engine.deposit("meat", 3)).toThrow(/own/i);
-  });
-
-  it('deposit throws "bank is full" only when creating a brand-new stack at capacity; topping up an existing stack still succeeds', () => {
-    const engine = bankEngine({
-      player: {
-        inventory: [
-          { itemId: "meat", qty: 5 },
-          { itemId: "lucky-charm", qty: 1 },
-        ],
-      },
-      bank: {
-        items: [
-          { itemId: "meat", qty: 1 },
-          { itemId: "bronze-sword", qty: 1 },
-        ],
-        capacity: 2,
-      },
-    });
-    expect(() => engine.deposit("meat", 1)).not.toThrow(); // topping up: fits despite being full
-    expect(engine.snapshot().bank.items.find((i) => i.itemId === "meat")?.qty).toBe(2);
-    expect(() => engine.deposit("lucky-charm", 1)).toThrow(/bank is full/i); // new stack: rejected
-  });
-
-  it("worn Equipment is structurally undepositable: equip the only copy, then deposit throws as unowned", () => {
-    const engine = freshEngine();
-    engine.selectMonster("dummy");
-    grindFor(engine, "bronze-sword");
-    engine.equip("bronze-sword");
-    expect(() => engine.deposit("bronze-sword")).toThrow(/own/i);
-  });
-
-  describe("withdraw", () => {
-    it("moves qty from the Bank into the carried Inventory, decrementing the Bank stack", () => {
-      const engine = bankEngine({ bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 } });
-      engine.withdraw("meat", 3);
-      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 2 }]);
-      expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 3 }]);
-    });
-
-    it("withdrawing the whole stack deletes the Bank entry", () => {
-      const engine = bankEngine({ bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 } });
-      engine.withdraw("meat", 5);
-      expect(engine.snapshot().bank.items).toEqual([]);
-    });
-
-    it("defaults qty to 1 when omitted", () => {
-      const engine = bankEngine({ bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 } });
-      engine.withdraw("meat");
-      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 4 }]);
-      expect(engine.snapshot().player.inventory).toEqual([{ itemId: "meat", qty: 1 }]);
-    });
-
-    it("throws for an unknown item", () => {
-      expect(() => bankEngine().withdraw("dragon-tooth")).toThrow(/unknown/i);
-    });
-
-    it("throws for qty < 1 or non-integer", () => {
-      const engine = bankEngine({ bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 } });
-      expect(() => engine.withdraw("meat", 0)).toThrow();
-      expect(() => engine.withdraw("meat", -1)).toThrow();
-      expect(() => engine.withdraw("meat", 1.5)).toThrow();
-    });
-
-    it("throws when withdrawing more than banked", () => {
-      const engine = bankEngine({ bank: { items: [{ itemId: "meat", qty: 2 }], capacity: 100 } });
-      expect(() => engine.withdraw("meat", 3)).toThrow();
-    });
-
-    it("is never capacity-checked: withdrawing into an already-huge carried stack still succeeds", () => {
-      const engine = bankEngine({
-        player: { inventory: [{ itemId: "meat", qty: 10_000 }] },
-        bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 },
-      });
-      expect(() => engine.withdraw("meat", 5)).not.toThrow();
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(10_005);
-    });
-  });
-
   describe("buyBankSlots", () => {
     it("charges 1000g, then 1500g, then 2000g (derived from capacity), growing capacity by BANK_SLOTS_PER_PURCHASE (10) each time", () => {
-      const engine = bankEngine({ player: { inventory: [{ itemId: "gold", qty: 10_000 }] } });
+      const engine = bankEngine({ player: { gold: 10_000 } });
       expect(engine.snapshot().bank.capacity).toBe(100);
       expect(engine.snapshot().bank.nextSlotsPrice).toBe(1000);
 
       engine.buyBankSlots();
       expect(engine.snapshot().bank.capacity).toBe(110);
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty).toBe(9000);
+      expect(engine.snapshot().player.gold).toBe(9000);
       expect(engine.snapshot().bank.nextSlotsPrice).toBe(1500);
 
       engine.buyBankSlots();
       expect(engine.snapshot().bank.capacity).toBe(120);
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty).toBe(7500);
+      expect(engine.snapshot().player.gold).toBe(7500);
       expect(engine.snapshot().bank.nextSlotsPrice).toBe(2000);
 
       engine.buyBankSlots();
       expect(engine.snapshot().bank.capacity).toBe(130);
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty).toBe(5500);
+      expect(engine.snapshot().player.gold).toBe(5500);
     });
 
-    it("throws when carried gold is short of the next price, spending nothing", () => {
-      const engine = bankEngine({ player: { inventory: [{ itemId: "gold", qty: 999 }] } });
+    it("throws when gold is short of the next price, spending nothing", () => {
+      const engine = bankEngine({ player: { gold: 999 } });
       expect(() => engine.buyBankSlots()).toThrow(/gold/i);
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty).toBe(999);
+      expect(engine.snapshot().player.gold).toBe(999);
       expect(engine.snapshot().bank.capacity).toBe(100);
-    });
-
-    it("spends carried gold only, resolved by currency kind (never a hard-coded id): banked gold is untouched", () => {
-      const engine = bankEngine({
-        player: { inventory: [{ itemId: "gold", qty: 1000 }] },
-        bank: { items: [{ itemId: "gold", qty: 5000 }], capacity: 100 },
-      });
-      engine.buyBankSlots();
-      expect(engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0).toBe(0);
-      expect(engine.snapshot().bank.items.find((i) => i.itemId === "gold")?.qty).toBe(5000);
     });
   });
 
   describe("save/load", () => {
-    it("Bank contents and capacity round-trip through save/load", () => {
-      const original = bankEngine({ player: { inventory: [{ itemId: "gold", qty: 5000 }] } });
-      original.deposit("gold", 500);
+    it("Bank contents, capacity, and gold round-trip through save/load", () => {
+      const original = bankEngine({
+        player: { gold: 5000 },
+        bank: { items: [{ itemId: "meat", qty: 3 }], capacity: 100 },
+      });
       original.buyBankSlots();
       const saved = original.snapshot();
 
@@ -911,6 +841,7 @@ describe("Bank", () => {
       );
       expect(restored.snapshot().bank.items).toEqual(saved.bank.items);
       expect(restored.snapshot().bank.capacity).toBe(saved.bank.capacity);
+      expect(restored.snapshot().player.gold).toBe(saved.player.gold);
     });
 
     it("a pre-feature save (no bank key at all) loads with an empty 100-slot Bank", () => {
@@ -928,7 +859,6 @@ describe("Bank", () => {
             hitpoints: { level: 10, xp: xpForLevel(10) },
           },
           equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
-          inventory: [],
           respawning: false,
         },
         monster: null,
@@ -941,6 +871,7 @@ describe("Bank", () => {
         JSON.parse(JSON.stringify(legacySave)),
       );
       expect(restored.snapshot().bank).toEqual({ items: [], capacity: 100, nextSlotsPrice: 1000 });
+      expect(restored.snapshot().player.gold).toBe(0);
     });
 
     it("Bank entries for an unknown itemId, or with an invalid qty, are dropped on load", () => {
@@ -952,7 +883,6 @@ describe("Bank", () => {
             items: [
               { itemId: "unobtainium", qty: 3 },
               { itemId: "meat", qty: 0 },
-              { itemId: "gold", qty: -1 },
               { itemId: "bronze-sword", qty: 1.5 },
               { itemId: "lucky-charm", qty: 2 },
             ],
@@ -962,6 +892,239 @@ describe("Bank", () => {
       );
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
     });
+
+    it("a currency stack sitting in bank.items (impossible via any current command, but tolerated on load) folds into gold, never surviving as a Bank stack", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { gold: 100 },
+          bank: {
+            items: [
+              { itemId: "gold", qty: 250 },
+              { itemId: "meat", qty: 2 },
+            ],
+            capacity: 100,
+          },
+        }),
+      );
+      expect(engine.snapshot().player.gold).toBe(350);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 2 }]);
+    });
+  });
+});
+
+describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", () => {
+  /** A single Bank Slot, already occupied by "bar" and thus at capacity, so the next passive
+   * arrival of a NEW item is guaranteed to hit the overflow path. */
+  function fullBankSnapshot(
+    playerOverrides: NonNullable<Parameters<typeof makeSnapshot>[0]>["player"] = {},
+  ) {
+    return makeSnapshot({
+      player: playerOverrides,
+      bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+    });
+  }
+
+  it("a sellable passive arrival (Drop) needing a new stack at full capacity is auto-sold: credits qty*value gold and emits overflow-sold, not overflow-lost", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), fullBankSnapshot());
+    const sold: { itemId: string; qty: number; gold: number }[] = [];
+    const lost: { itemId: string; qty: number }[] = [];
+    engine.on("overflow-sold", (e) => sold.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
+    engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
+
+    engine.selectMonster("dummy");
+    // dummy's Drop Table: gold (currency, bypasses the Bank entirely) and meat/bronze-sword/
+    // lucky-charm (all sellable) — grind until one of the sellable, non-"bar" drops lands.
+    for (let i = 0; i < 20_000 && sold.length === 0; i++) engine.tick();
+
+    expect(sold.length).toBeGreaterThan(0);
+    expect(lost).toEqual([]);
+    const [event] = sold;
+    expect(event).toBeDefined();
+    expect(engine.snapshot().player.gold).toBeGreaterThanOrEqual(event!.gold);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]); // still just "bar"
+  });
+
+  it("an unsellable passive arrival needing a new stack at full capacity is discarded and emits overflow-lost, crediting no gold", () => {
+    const noValueContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.id !== "meat" || i.kind === "currency") return i;
+        const { value: _value, ...rest } = i;
+        return rest;
+      }),
+    };
+    const engine = createEngine(
+      noValueContent,
+      seededRng(1),
+      fullBankSnapshot({ skills: { fishing: { level: 1, xp: 0 } } }),
+    );
+    const lost: { itemId: string; qty: number }[] = [];
+    const sold: unknown[] = [];
+    engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
+    engine.on("overflow-sold", (e) => sold.push(e));
+
+    engine.selectFishingSpot("pond"); // pond always catches "meat" (catchChance 1), now unsellable
+    for (let i = 0; i < 3; i++) engine.tick(); // catchTicks 3: exactly one Catch
+
+    expect(lost).toEqual([{ itemId: "meat", qty: 1 }]);
+    expect(sold).toEqual([]);
+    expect(engine.snapshot().player.gold).toBe(0);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
+  });
+
+  it("a passive arrival that tops up an EXISTING stack always fits, even at capacity — no overflow event fires", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { skills: { fishing: { level: 1, xp: 0 } } },
+        bank: { items: [{ itemId: "meat", qty: 1 }], capacity: 1 },
+      }),
+    );
+    let overflowed = false;
+    engine.on("overflow-sold", () => {
+      overflowed = true;
+    });
+    engine.on("overflow-lost", () => {
+      overflowed = true;
+    });
+
+    engine.selectFishingSpot("pond");
+    for (let i = 0; i < 9; i++) engine.tick(); // 3 Catches at catchTicks 3, catchChance 1
+
+    expect(overflowed).toBe(false);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 4 }]);
+  });
+
+  it("smithing output is subject to the same overflow rule as any other passive arrival", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), fullBankSnapshot());
+    // "test-sword" needs 1 bar (already banked, so consuming it clears that very stack) and
+    // outputs "bronze-sword" — a brand-new stack, landing on a Bank that is, at the moment of
+    // output, back down to size 0 (the input stack just cleared), so this does NOT overflow.
+    engine.selectRecipe("test-sword");
+    for (let i = 0; i < 3; i++) engine.tick(); // craftTicks 3
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+  });
+});
+
+describe("Save migration: pre-#59 carried Inventory folds into gold + Bank (tolerant, never bricks a save)", () => {
+  /** A pre-#59 save shape: `player.inventory` existed, `player.gold` did not. Built via a plain
+   * object (cast, not `makeSnapshot`) since the current Snapshot type no longer has `inventory`. */
+  function legacySave(
+    inventory: { itemId: string; qty: number }[],
+    bankItems: { itemId: string; qty: number }[] = [],
+    bankCapacity = 100,
+  ) {
+    return {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        inventory,
+        respawning: false,
+        // no `gold` key: simulates a save written before #59 shipped
+      },
+      monster: null,
+      areas: [],
+      bank: { items: bankItems, capacity: bankCapacity },
+    };
+  }
+
+  it("the carried currency stack sums into player.gold; every other carried stack merges into the Bank", () => {
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(
+        JSON.stringify(
+          legacySave([
+            { itemId: "gold", qty: 300 },
+            { itemId: "meat", qty: 4 },
+            { itemId: "bronze-sword", qty: 1 },
+          ]),
+        ),
+      ),
+    );
+    const snap = restored.snapshot();
+    expect(snap.player.gold).toBe(300);
+    expect(snap.bank.items).toEqual(
+      expect.arrayContaining([
+        { itemId: "meat", qty: 4 },
+        { itemId: "bronze-sword", qty: 1 },
+      ]),
+    );
+    expect(snap.bank.items).toHaveLength(2);
+  });
+
+  it("a currency stack already sitting in bank.items also sums into gold, alongside the carried one", () => {
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(
+        JSON.stringify(legacySave([{ itemId: "gold", qty: 100 }], [{ itemId: "gold", qty: 50 }])),
+      ),
+    );
+    expect(restored.snapshot().player.gold).toBe(150);
+    expect(restored.snapshot().bank.items).toEqual([]);
+  });
+
+  it("a carried stack merges with an existing Bank stack of the same item, summing quantities", () => {
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(
+        JSON.stringify(legacySave([{ itemId: "meat", qty: 4 }], [{ itemId: "meat", qty: 6 }])),
+      ),
+    );
+    expect(restored.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 10 }]);
+  });
+
+  it("migration may push the Bank over capacity — that's tolerated (capacity only gates NEW incoming stacks)", () => {
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(
+        JSON.stringify(
+          legacySave(
+            [
+              { itemId: "meat", qty: 1 },
+              { itemId: "bronze-sword", qty: 1 },
+              { itemId: "lucky-charm", qty: 1 },
+            ],
+            [{ itemId: "bar", qty: 1 }],
+            2, // capacity 2, but 4 distinct stacks total after merge
+          ),
+        ),
+      ),
+    );
+    const snap = restored.snapshot();
+    expect(snap.bank.items).toHaveLength(4);
+    expect(snap.bank.capacity).toBe(2); // unchanged — capacity itself never grows from migration
+    // and the Engine keeps functioning normally afterward (over-capacity is self-resolving, never
+    // bricking the save): selling one stack down doesn't throw.
+    expect(() => restored.sell("bar", 1)).not.toThrow();
+  });
+
+  it("a save with neither inventory nor gold (very old, or already a clean fresh save) loads at gold 0", () => {
+    const bareSave = legacySave([]);
+    delete (bareSave.player as { inventory?: unknown }).inventory;
+    const restored = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(bareSave)),
+    );
+    expect(restored.snapshot().player.gold).toBe(0);
+    expect(restored.snapshot().bank.items).toEqual([]);
   });
 });
 
@@ -978,7 +1141,8 @@ describe("save/load", () => {
     const snap = restored.snapshot();
     expect(snap.player.skills).toEqual(saved.player.skills);
     expect(snap.player.equipment).toEqual(saved.player.equipment);
-    expect(snap.player.inventory).toEqual(saved.player.inventory);
+    expect(snap.player.gold).toBe(saved.player.gold);
+    expect(snap.bank.items).toEqual(saved.bank.items);
     expect(snap.player.hp).toBe(saved.player.hp);
     expect(snap.monster?.id).toBe(saved.monster?.id);
 
@@ -1047,31 +1211,42 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
     expect(engine.snapshot().player.equipment.head).toBe("lucky-charm");
   });
 
-  it("inventory entries for an unknown itemId are dropped", () => {
+  it("Bank entries for an unknown itemId are dropped", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
-      makeSnapshot({ player: { inventory: [{ itemId: "unobtainium", qty: 3 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "unobtainium", qty: 3 }] } }),
     );
-    expect(engine.snapshot().player.inventory).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual([]);
   });
 
-  it("inventory entries with qty 0, negative, or non-integer are dropped; valid entries survive", () => {
+  it("Bank entries with qty 0, negative, or non-integer are dropped; valid entries survive", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
       makeSnapshot({
-        player: {
-          inventory: [
+        bank: {
+          items: [
             { itemId: "meat", qty: 0 },
-            { itemId: "gold", qty: -1 },
             { itemId: "bronze-sword", qty: 1.5 },
             { itemId: "lucky-charm", qty: 2 },
           ],
         },
       }),
     );
-    expect(engine.snapshot().player.inventory).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
+  });
+
+  it("a negative or non-finite saved gold falls back to 0", () => {
+    const negative = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { gold: -50 } }),
+    );
+    expect(negative.snapshot().player.gold).toBe(0);
+
+    const nan = createEngine(fixtureContent, seededRng(1), makeSnapshot({ player: { gold: NaN } }));
+    expect(nan.snapshot().player.gold).toBe(0);
   });
 
   it("a saved skill xp of NaN or negative loads at the fresh default for that skill", () => {
@@ -1177,6 +1352,7 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
             hp: NaN,
             combatStyle: "berserk" as CombatStyle,
             autoEatThreshold: 0.9 as AutoEatThreshold,
+            gold: -3,
             skills: {
               attack: { xp: -1 },
               strength: { xp: NaN },
@@ -1185,12 +1361,9 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
               fishing: { xp: NaN },
             },
             equipment: { weapon: "nonexistent", shield: "lucky-charm" },
-            inventory: [
-              { itemId: "nonexistent", qty: 5 },
-              { itemId: "gold", qty: -3 },
-            ],
           },
           monster: { id: "nonexistent", name: "x", hp: 1, maxHp: 1 },
+          bank: { items: [{ itemId: "nonexistent", qty: 5 }] },
         }),
       ),
     ).not.toThrow();
@@ -1265,7 +1438,7 @@ describe("Fishing", () => {
     expect(caught).toHaveLength(2);
 
     const snap = engine.snapshot();
-    expect(snap.player.inventory.find((s) => s.itemId === "meat")?.qty).toBe(2);
+    expect(snap.bank.items.find((s) => s.itemId === "meat")?.qty).toBe(2);
     expect(snap.player.skills.fishing.xp).toBe(20); // 2 Catches * pond.xp (10)
   });
 
@@ -1370,8 +1543,8 @@ describe("Fishing", () => {
           hp,
           maxHp: 10,
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-          inventory: [{ itemId: "meat", qty: 5 }],
         },
+        bank: { items: [{ itemId: "meat", qty: 5 }] },
       });
     }
 
@@ -1598,14 +1771,14 @@ describe("Dungeons", () => {
         totalWaves: 3,
       });
       expect(snap.monster).toEqual({ id: "boss-dummy", name: "Boss Dummy", hp: 5, maxHp: 5 });
-      // wave Monsters still roll their normal Drop Table (guaranteed gold ×5 lands on every kill).
-      const gold = snap.player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
-      expect(gold).toBeGreaterThanOrEqual(10);
+      // wave Monsters still roll their normal Drop Table (guaranteed gold ×5 lands on every kill,
+      // credited straight to gold, #59).
+      expect(snap.player.gold).toBeGreaterThanOrEqual(10);
     });
   });
 
   describe("Boss kill and the Chest", () => {
-    it("rolls the Chest, adds items to inventory, fires dungeon-completed then chest-opened exactly once each, marks the dungeon completed, and ejects to idle", () => {
+    it("rolls the Chest, credits/banks its items, fires dungeon-completed then chest-opened exactly once each, marks the dungeon completed, and ejects to idle", () => {
       const engine = dungeonEngine(5);
       const order: string[] = [];
       let chestItems: { itemId: string; qty: number; band: string }[] = [];
@@ -1634,8 +1807,7 @@ describe("Dungeons", () => {
       expect(snap.player.completedDungeonIds).toEqual(["gauntlet"]);
       expect(snap.monster).toBeNull();
       expect(snap.dungeon).toBeNull();
-      const gold = snap.player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
-      expect(gold).toBeGreaterThanOrEqual(50); // the Chest's guaranteed 50 gold landed
+      expect(snap.player.gold).toBeGreaterThanOrEqual(50); // the Chest's guaranteed 50 gold landed
     });
 
     it("Chest rolls do not emit per-item drop events (unlike each wave kill's own Drop Table roll)", () => {
@@ -1656,8 +1828,7 @@ describe("Dungeons", () => {
       // Table and emit a `drop` (guaranteed gold: 5, 5, then 10) — but the Chest's own guaranteed
       // 50 gold lands with no matching `drop` event.
       expect(goldDrops).toEqual([5, 5, 10]);
-      const goldQty = engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
-      expect(goldQty).toBeGreaterThanOrEqual(5 + 5 + 10 + 50);
+      expect(engine.snapshot().player.gold).toBeGreaterThanOrEqual(5 + 5 + 10 + 50);
     });
 
     it("the Chest's chance entry (50%) rolls independently of the guaranteed entry across many completions", () => {
@@ -1916,9 +2087,9 @@ describe("Dungeons", () => {
 function smithingSnapshot(barQty: number, smithingLevel = 1, smithingXp = 0) {
   return makeSnapshot({
     player: {
-      inventory: [{ itemId: "bar", qty: barQty }],
       skills: { smithing: { level: smithingLevel, xp: smithingXp } },
     },
+    bank: { items: [{ itemId: "bar", qty: barQty }] },
   });
 }
 
@@ -1934,16 +2105,16 @@ describe("Smithing", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // test-sword.craftTicks === 3
     expect(crafted).toEqual([{ recipeId: "test-sword", itemId: "bronze-sword" }]);
     let snap = engine.snapshot();
-    expect(snap.player.inventory.find((s) => s.itemId === "bar")?.qty).toBe(1);
-    expect(snap.player.inventory.find((s) => s.itemId === "bronze-sword")?.qty).toBe(1);
+    expect(snap.bank.items.find((s) => s.itemId === "bar")?.qty).toBe(1);
+    expect(snap.bank.items.find((s) => s.itemId === "bronze-sword")?.qty).toBe(1);
     expect(snap.player.skills.smithing.xp).toBe(10);
     expect(snap.smithing).toEqual({ recipeId: "test-sword", name: "Test Sword" }); // 1 bar left: re-armed
 
     for (let i = 0; i < 3; i++) engine.tick();
     expect(crafted).toHaveLength(2);
     snap = engine.snapshot();
-    expect(snap.player.inventory.find((s) => s.itemId === "bar")).toBeUndefined();
-    expect(snap.player.inventory.find((s) => s.itemId === "bronze-sword")?.qty).toBe(2);
+    expect(snap.bank.items.find((s) => s.itemId === "bar")).toBeUndefined();
+    expect(snap.bank.items.find((s) => s.itemId === "bronze-sword")?.qty).toBe(2);
     expect(snap.player.skills.smithing.xp).toBe(20);
     expect(snap.smithing).toBeNull(); // no bars left for another craft: auto-stopped to idle
   });
@@ -1976,7 +2147,7 @@ describe("Smithing", () => {
     const engine = createEngine(
       fiercerDummyContent(),
       seededRng(42),
-      makeSnapshot({ player: { inventory: [{ itemId: "bar", qty: 5 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 5 }] } }),
     );
     engine.selectMonster("dummy");
     let died = false;
@@ -2017,7 +2188,9 @@ describe("Smithing", () => {
           hp,
           maxHp: 10,
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-          inventory: [
+        },
+        bank: {
+          items: [
             { itemId: "bar", qty: 100 },
             { itemId: "meat", qty: 5 },
           ],
@@ -2175,9 +2348,9 @@ describe("Smithing", () => {
         seededRng(1),
         makeSnapshot({
           player: {
-            inventory: [{ itemId: "bar", qty: 5 }],
             skills: { smithing: { level: 1, xp: 0 } },
           },
+          bank: { items: [{ itemId: "bar", qty: 5 }] },
           smithing: { recipeId: "test-charm", name: "Test Charm" }, // levelReq 20
         }),
       );
@@ -2189,7 +2362,7 @@ describe("Smithing", () => {
         fixtureContent,
         seededRng(1),
         makeSnapshot({
-          player: { inventory: [], skills: { smithing: { level: 1, xp: 0 } } },
+          player: { skills: { smithing: { level: 1, xp: 0 } } },
           smithing: { recipeId: "test-sword", name: "Test Sword" },
         }),
       );
@@ -2201,7 +2374,7 @@ describe("Smithing", () => {
         fixtureContent,
         seededRng(1),
         makeSnapshot({
-          player: { inventory: [{ itemId: "bar", qty: 5 }] },
+          bank: { items: [{ itemId: "bar", qty: 5 }] },
           monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },
           smithing: { recipeId: "test-sword", name: "Test Sword" },
         }),
@@ -2284,9 +2457,9 @@ describe("Ranged and Magic Skills (#7)", () => {
         makeSnapshot({
           player: {
             combatStyle: "defensive",
-            inventory: [{ itemId: "bronze-sword", qty: 1 }],
             equipment: { weapon: "bow" },
           },
+          bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
         }),
       );
       engine.selectMonster("dummy");

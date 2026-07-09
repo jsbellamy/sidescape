@@ -123,12 +123,12 @@ describe("mountSfx", () => {
     engine.selectMonster("dummy");
     pumpUntil(
       engine,
-      () => engine.snapshot().player.inventory.some((s) => s.itemId === "lucky-charm"), // the rare-band item
+      () => engine.snapshot().bank.items.some((s) => s.itemId === "lucky-charm"), // the rare-band item
     );
 
     expect(played.some((src) => src.includes("rare-drop.wav"))).toBe(true);
     // gold is guaranteed every kill and should never trigger the rare sting
-    const goldKills = engine.snapshot().player.inventory.find((s) => s.itemId === "gold")?.qty ?? 0;
+    const goldKills = engine.snapshot().player.gold;
     const rareStings = played.filter((src) => src.includes("rare-drop.wav")).length;
     expect(rareStings).toBeLessThan(goldKills);
   });
