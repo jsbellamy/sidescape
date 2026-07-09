@@ -12,15 +12,10 @@ import type { WindowChrome } from "./ui/app";
 import { mountSfx } from "./ui/sfx";
 import { decodeSave, encodeSave } from "./ui/save-transfer";
 import type { Snapshot } from "./core/types";
+import { BASE_H, panelWindowRect } from "./ui/window-geometry";
 
 const SAVE_KEY = "sidescape-save-v1";
 const TICK_MS = 600;
-
-// Window sizing tuning constants (#62) — not spec, chosen to look right around the shrunk
-// activity-core main column at 320px wide. See the PR description for the exact rationale.
-const PANEL_W = 300;
-const BASE_W = 320;
-const BASE_H = 460;
 
 /**
  * The real WindowChrome (#62): resizes the always-on-top window around the fixed-width main
@@ -54,22 +49,27 @@ function createTauriWindowChrome(): WindowChrome {
 
   async function applyPanels(left: boolean, right: boolean): Promise<void> {
     const win = getCurrentWindow();
-    const width = BASE_W + (left ? PANEL_W : 0) + (right ? PANEL_W : 0);
 
     const scaleFactor = await win.scaleFactor();
     const currentPos = (await win.outerPosition()).toLogical(scaleFactor);
-    let x = currentPos.x;
-    if (left && !wasLeftOpen) x -= PANEL_W;
-    else if (!left && wasLeftOpen) x += PANEL_W;
 
     const monitor = await currentMonitor();
-    if (monitor) {
-      const monitorPos = monitor.position.toLogical(monitor.scaleFactor);
-      const monitorSize = monitor.size.toLogical(monitor.scaleFactor);
-      const minX = monitorPos.x;
-      const maxX = Math.max(minX, monitorPos.x + monitorSize.width - width);
-      x = Math.min(Math.max(x, minX), maxX);
-    }
+    const monitorRect = monitor
+      ? {
+          x: monitor.position.toLogical(monitor.scaleFactor).x,
+          y: monitor.position.toLogical(monitor.scaleFactor).y,
+          width: monitor.size.toLogical(monitor.scaleFactor).width,
+          height: monitor.size.toLogical(monitor.scaleFactor).height,
+        }
+      : null;
+
+    const { width, x } = panelWindowRect({
+      currentX: currentPos.x,
+      wasLeftOpen,
+      left,
+      right,
+      monitor: monitorRect,
+    });
 
     await win.setSize(new LogicalSize(width, BASE_H));
     await win.setPosition(new LogicalPosition(x, currentPos.y));
