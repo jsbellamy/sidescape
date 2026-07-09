@@ -385,11 +385,17 @@ export function mountApp(
       .join("");
   }
 
-  function render(): void {
-    const snap = engine.snapshot();
-    advanceCombatFx(snap);
-    const { player, monster, fishing, dungeon, smithing, bank } = snap;
-
+  /** Renders the main column's "scene": the current Dungeon banner (if any), the player HP bar,
+   * the gold counter in the chrome row directly above it, and whichever of Monster / Fishing Spot
+   * / Smithing Recipe is active (or the "pick a monster" placeholder). Decomposed from the old
+   * monolithic `render()` (#39) — DOM output is unchanged. */
+  function renderScene(
+    dungeon: Snapshot["dungeon"],
+    player: Snapshot["player"],
+    monster: Snapshot["monster"],
+    fishing: Snapshot["fishing"],
+    smithing: Snapshot["smithing"],
+  ): void {
     const dungeonHeader = el<HTMLElement>("#dungeon-header");
     if (dungeon) {
       dungeonHeader.textContent = `⚔ ${dungeon.name} — Wave ${dungeon.wave}/${dungeon.totalWaves}`;
@@ -403,18 +409,6 @@ export function mountApp(
     el("#player-hp-text").textContent = player.respawning
       ? "Respawning…"
       : `HP ${player.hp}/${player.maxHp}`;
-
-    renderFoodSlots(player.foodSlots, bank.items);
-
-    root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
-      btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
-    });
-
-    el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
@@ -464,8 +458,14 @@ export function mountApp(
       monsterStats.textContent = "";
     }
 
+    el("#gold").textContent = `🪙 ${player.gold}`;
+  }
+
+  /** Renders the Skills tab panel's xp-row: one entry per Skill, in `SKILL_NAMES` order (#36) —
+   * never an inline literal, so a future Skill addition needs no change here. */
+  function renderXpRow(skills: Snapshot["player"]["skills"]): void {
     el("#xp-row").innerHTML = SKILL_NAMES.map((skill) => {
-      const s = player.skills[skill];
+      const s = skills[skill];
       const pct = Math.floor(skillProgress(s) * 100);
       return `<div class="skill" data-skill="${skill}" title="${skill}: ${Math.floor(s.xp)} xp">
              <span class="skill-abbr">${skill.slice(0, 3).toUpperCase()}</span>
@@ -473,13 +473,20 @@ export function mountApp(
              <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
            </div>`;
     }).join("");
+  }
 
-    const gold = player.gold;
-    el("#gold").textContent = `🪙 ${gold}`;
-
-    root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
+  /** Renders the Character tab panel: worn Gear Slots, derived stat totals, the Combat Style and
+   * auto-eat threshold segmented controls' active states, and the auto-sell-duplicates checkbox. */
+  function renderCharacter(player: Snapshot["player"]): void {
+    root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
     });
+
+    root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
+      btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
+    });
+
+    el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
 
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
@@ -494,8 +501,10 @@ export function mountApp(
     const b = player.bonuses;
     el("#character-totals").textContent =
       `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`;
+  }
 
-    const lootZone = snap.lootZone;
+  /** Renders the main column's Loot Zone strip: hidden while empty, otherwise one chip per stack. */
+  function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
     const lootStrip = el<HTMLElement>("#loot-strip");
     lootStrip.hidden = lootZone.length === 0;
     el("#loot-strip-items").innerHTML = lootZone
@@ -503,6 +512,15 @@ export function mountApp(
         (s) => `<li class="loot-chip" data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</li>`,
       )
       .join("");
+  }
+
+  /** Renders the Bank tab panel: the sort-row's active toggle, the capacity header + buy-slots
+   * button, and the sorted stack list with its per-row Equip/Sell buttons. `gold` (rather than the
+   * whole player) is all the buy-slots button's disabled check needs. */
+  function renderBank(bank: Snapshot["bank"], gold: number): void {
+    root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
+    });
 
     const used = bank.items.length;
     el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
@@ -534,9 +552,12 @@ export function mountApp(
                   ${itemName(s.itemId)} ×${s.qty}${equipBtn}${sellBtn}</li>`;
       })
       .join("");
+  }
 
-    const owned = (itemId: string) => bank.items.find((s) => s.itemId === itemId)?.qty ?? 0;
-    const smithingLevel = player.skills.smithing.level;
+  /** Renders the Smithing tab panel's recipe list: each Recipe's inputs (with owned quantities),
+   * level gate, and a Craft button disabled while under-leveled or short on inputs. */
+  function renderSmithing(bankItems: Snapshot["bank"]["items"], smithingLevel: number): void {
+    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
     el("#smithing-recipes").innerHTML = content.recipes
       .map((recipe) => {
         const inputsLine = recipe.inputs
@@ -552,6 +573,23 @@ export function mountApp(
                 </li>`;
       })
       .join("");
+  }
+
+  /** Dispatcher (#39): reads the latest Snapshot, advances the combat-fx mirror, then calls each
+   * per-panel renderer in turn. No panel-rendering logic lives here — see the per-panel functions
+   * above for what each one owns. */
+  function render(): void {
+    const snap = engine.snapshot();
+    advanceCombatFx(snap);
+    const { player, monster, fishing, dungeon, smithing, bank } = snap;
+
+    renderScene(dungeon, player, monster, fishing, smithing);
+    renderFoodSlots(player.foodSlots, bank.items);
+    renderXpRow(player.skills);
+    renderCharacter(player);
+    renderLootStrip(snap.lootZone);
+    renderBank(bank, player.gold);
+    renderSmithing(bank.items, player.skills.smithing.level);
   }
 
   function buildPicker(): void {
