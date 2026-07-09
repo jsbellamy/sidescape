@@ -603,9 +603,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     return weaponSpeedFor(state.equipment.weapon, content);
   }
 
-  function rollDamage(chance: number, max: number): number {
-    if (rng.next() >= chance) return 0; // miss
-    return Math.floor(rng.next() * (max + 1));
+  function rollDamage(chance: number, max: number): { hit: boolean; damage: number } {
+    if (rng.next() >= chance) return { hit: false, damage: 0 }; // miss
+    return { hit: true, damage: Math.floor(rng.next() * (max + 1)) };
   }
 
   /** Adds `qty` of `itemId` to the Bank (#59): a top-up of an existing stack always fits (the
@@ -862,9 +862,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       effectiveLevel(level("strength"), "strength", state.combatStyle),
       gearBonus("strBonus"),
     );
-    const damage = Math.min(rollDamage(hitChance(atkRoll, defRoll), max), activity.monsterHp);
+    const { hit, damage: rolled } = rollDamage(hitChance(atkRoll, defRoll), max);
+    const damage = Math.min(rolled, activity.monsterHp);
     activity.monsterHp -= damage;
     awardCombatXp(damage);
+    emit({ type: "attack", actor: "player", damage, hit });
     if (activity.monsterHp <= 0) {
       emit({ type: "kill", monsterId: monster.id });
       rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
@@ -986,8 +988,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       effectiveLevel(level("defence"), "defence", state.combatStyle),
       gearBonus("defBonus"),
     );
-    const damage = rollDamage(hitChance(atkRoll, defRoll), monster.maxHit);
+    const { hit, damage } = rollDamage(hitChance(atkRoll, defRoll), monster.maxHit);
     state.hp = Math.max(0, state.hp - damage);
+    emit({ type: "attack", actor: "monster", damage, hit });
   }
 
   /** Eats one unit of `food` out of Food Slot `slotIndex` (#61 — replaces the old eat-from-Bank

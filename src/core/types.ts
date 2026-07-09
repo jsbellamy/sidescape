@@ -166,6 +166,13 @@ export interface Content {
 
 export type EngineEvent =
   | { type: "kill"; monsterId: string }
+  /** One resolved swing (player or monster), fired every time an attack resolves — including
+   * accuracy misses (hit: false, damage 0) and hits that rolled 0 damage (hit: true, damage 0).
+   * Owner's rule, recorded for the Combat Depth wave (#75): "the boolean may only apply to magic
+   * where it can be a zero hit but still apply the effect and a miss should not apply the effect."
+   * Today the UI renders damage 0 as a blue miss splat either way; `hit` exists so effect
+   * application can key off it later without an event-shape change. */
+  | { type: "attack"; actor: "player" | "monster"; damage: number; hit: boolean }
   | { type: "drop"; itemId: string; qty: number; band: DropBand }
   | { type: "levelup"; skill: SkillName; level: number }
   | { type: "death" }

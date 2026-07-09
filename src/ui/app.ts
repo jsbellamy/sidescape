@@ -175,20 +175,7 @@ export function mountApp(
   let openFoodChooserSlot: number | null = null;
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
-  // reacts to Snapshot deltas and the Engine's own events, adding no new Engine state (ADR-0001:
-  // Snapshot is the only continuous state the UI reads, and there is no hit/miss Engine event to
-  // react to instead). `fx*` tracks a mirror of the Engine's own attack cooldowns — sized from the
-  // Snapshot's public `player.bonuses.attackSpeed` and the Monster's own `attackSpeed` — so a real
-  // miss (an attack landed for 0 damage) can be told apart from a quiet Tick where nobody swung.
-  // It advances once per `render()` call, which the caller pairs 1:1 with `engine.tick()` in
-  // production (see main.ts's interval); a `render()` from an unrelated click (e.g. selling an
-  // Item) can nudge the cadence by a beat — a cosmetic approximation acceptable for feedback FX
-  // that never touches core combat resolution.
-  let fxMonsterId: string | null = null;
-  let fxMonsterHp = 0;
-  let fxPlayerHp = engine.snapshot().player.hp;
-  let fxPlayerCd = 0;
-  let fxMonsterCd = 0;
+  // reacts to the Engine's own events, adding no new Engine state.
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Shows the LEFT (Areas) panel and the RIGHT panel's active tab (if any), hiding the rest;
@@ -270,51 +257,6 @@ export function mountApp(
     splat.textContent = String(amount);
     layer.appendChild(splat);
     setTimeout(() => splat.remove(), SPLAT_FADE_MS);
-  }
-
-  /** Advances the combat-fx cooldown mirror from the latest Snapshot and shows a damage splat over
-   * whichever side(s) attacked this call — see the `fx*` declarations above for why this mirrors
-   * (rather than reads) attack cadence. No-ops whenever combat isn't actually happening (no
-   * Monster selected, or the player is mid-Respawn), keeping the baselines fresh so the next real
-   * engagement starts from a clean reading instead of a stale delta. */
-  function advanceCombatFx(snap: Snapshot): void {
-    const { player, monster } = snap;
-    if (!monster || player.respawning) {
-      fxMonsterId = monster?.id ?? null;
-      fxMonsterHp = monster?.hp ?? 0;
-      fxPlayerHp = player.hp;
-      return;
-    }
-
-    const monsterSpeed = content.monsters.find((m) => m.id === monster.id)?.attackSpeed ?? 1;
-    // Monster HP only ever resets to max via the Engine's own spawnMonster (new selection, a kill
-    // respawning the same Monster, a wave change, or resuming play after the player's own death) —
-    // every one of those also re-arms the Engine's real cooldowns, so mirroring that same signal
-    // here keeps our cooldown mirror in lockstep instead of drifting across those transitions.
-    const freshSpawn =
-      monster.id !== fxMonsterId || (monster.hp === monster.maxHp && fxMonsterHp < monster.maxHp);
-
-    if (freshSpawn) {
-      fxPlayerCd = player.bonuses.attackSpeed;
-      fxMonsterCd = monsterSpeed;
-    } else {
-      fxPlayerCd -= 1;
-      if (fxPlayerCd <= 0) {
-        fxPlayerCd = player.bonuses.attackSpeed;
-        showSplat(el("#monster-splats"), Math.max(0, fxMonsterHp - monster.hp));
-      }
-      fxMonsterCd -= 1;
-      if (fxMonsterCd <= 0) {
-        fxMonsterCd = monsterSpeed;
-        // Player HP can also move the same Tick from regen/auto-eat, which can mask (or invert) a
-        // hit's true delta — an accepted approximation, same as the cadence mirror above.
-        showSplat(el("#player-splats"), Math.max(0, fxPlayerHp - player.hp));
-      }
-    }
-
-    fxMonsterId = monster.id;
-    fxMonsterHp = monster.hp;
-    fxPlayerHp = player.hp;
   }
 
   /** Appends a level-up toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each
@@ -572,12 +514,10 @@ export function mountApp(
       .join("");
   }
 
-  /** Dispatcher (#39): reads the latest Snapshot, advances the combat-fx mirror, then calls each
-   * per-panel renderer in turn. No panel-rendering logic lives here — see the per-panel functions
-   * above for what each one owns. */
+  /** Dispatcher (#39): reads the latest Snapshot, then calls each per-panel renderer in turn. No
+   * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
   function render(): void {
     const snap = engine.snapshot();
-    advanceCombatFx(snap);
     const { player, monster, fishing, dungeon, smithing, bank } = snap;
 
     renderScene(dungeon, player, monster, fishing, smithing);
@@ -717,6 +657,13 @@ export function mountApp(
       </div>
     </div>`;
 
+  // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
+  // the Monster's land on the player's; fires during engine.tick() itself, not the following
+  // render(), so the splat cadence exactly matches Engine-resolved attacks regardless of how
+  // often render() happens to run.
+  engine.on("attack", (e) => {
+    showSplat(el(e.actor === "player" ? "#monster-splats" : "#player-splats"), e.damage);
+  });
   engine.on("kill", (e) =>
     feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`),
   );

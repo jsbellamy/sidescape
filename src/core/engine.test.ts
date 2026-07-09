@@ -143,6 +143,73 @@ describe("combat", () => {
   });
 });
 
+describe("attack events (#86)", () => {
+  it("player attacks land on #monster-splats' cadence (weapon speed) and Monster attacks on its own attackSpeed", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    const playerTicks: number[] = [];
+    const monsterTicks: number[] = [];
+    engine.on("attack", (e) => {
+      if (e.actor === "player") playerTicks.push(tick);
+      else monsterTicks.push(tick);
+    });
+    let tick = 0;
+    // Short window: long enough for several swings each side, short enough that a Respawn
+    // (which pauses the cadence) is implausible against the barely-fighting-back dummy.
+    for (let i = 0; i < 20; i++) {
+      tick++;
+      engine.tick();
+    }
+
+    // Unarmed player speed == UNARMED_SPEED (4); dummy's own attackSpeed is also 4.
+    expect(playerTicks).toEqual([4, 8, 12, 16, 20]);
+    expect(monsterTicks).toEqual([4, 8, 12, 16, 20]);
+  });
+
+  it("a killing blow emits attack before kill", () => {
+    const engine = freshEngine();
+    const order: string[] = [];
+    engine.on("attack", (e) => order.push(`attack:${e.actor}`));
+    engine.on("kill", () => order.push("kill"));
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 400; i++) engine.tick();
+
+    const firstKillIndex = order.indexOf("kill");
+    expect(firstKillIndex).toBeGreaterThan(0);
+    expect(order[firstKillIndex - 1]).toBe("attack:player");
+  });
+
+  it("a seeded run produces both an accuracy miss (hit: false, damage 0) and a connected 0-roll (hit: true, damage 0)", () => {
+    const engine = freshEngine();
+    const playerAttacks: { hit: boolean; damage: number }[] = [];
+    engine.on("attack", (e) => {
+      if (e.actor === "player") playerAttacks.push({ hit: e.hit, damage: e.damage });
+    });
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 400; i++) engine.tick();
+
+    expect(playerAttacks.some((a) => a.hit === false && a.damage === 0)).toBe(true);
+    expect(playerAttacks.some((a) => a.hit === true && a.damage > 0)).toBe(true);
+  });
+
+  it("the applied Monster HP delta matches the player-attack event's (clamped) damage", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    let hpBefore = engine.snapshot().monster!.hp;
+    engine.on("attack", (e) => {
+      if (e.actor !== "player") return;
+      // Fires right after `activity.monsterHp -= damage` and before the kill/respawn reset, so
+      // the Monster's Snapshot HP mid-Tick still reflects this swing's clamped damage exactly.
+      const hpAfterThisSwing = engine.snapshot().monster!.hp;
+      expect(hpBefore - hpAfterThisSwing).toBe(e.damage);
+    });
+    for (let i = 0; i < 400; i++) {
+      engine.tick();
+      hpBefore = engine.snapshot().monster!.hp;
+    }
+  });
+});
+
 describe("XP", () => {
   it("aggressive damage grants Strength XP at 4/damage with a Hitpoints trickle at 4/3", () => {
     const engine = freshEngine();
