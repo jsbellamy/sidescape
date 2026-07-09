@@ -3777,7 +3777,9 @@ describe("Smithing", () => {
     });
 
     it("a valid Smithing Snapshot still round-trips unchanged", () => {
-      const original = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5));
+      // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+      // calls a millisecond apart would flake this equality — pin the clock instead.
+      const original = createEngine(fixtureContent, seededRng(1), smithingSnapshot(5), () => 0);
       original.selectRecipe("test-sword");
       for (let i = 0; i < 5; i++) original.tick();
       const saved = original.snapshot();
@@ -3786,6 +3788,7 @@ describe("Smithing", () => {
         fixtureContent,
         seededRng(1),
         JSON.parse(JSON.stringify(saved)),
+        () => 0,
       );
       expect(restored.snapshot()).toEqual(saved);
     });
@@ -4022,10 +4025,13 @@ describe("Ranged and Magic Skills (#7)", () => {
     });
 
     it("a valid Snapshot carrying Ranged/Magic XP round-trips unchanged", () => {
+      // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+      // calls a millisecond apart would flake this equality — pin the clock instead.
       const original = createEngine(
         fixtureContent,
         seededRng(42),
         makeSnapshot({ player: { equipment: { weapon: "bow" } } }),
+        () => 0,
       );
       original.selectMonster("dummy");
       for (let i = 0; i < 200; i++) original.tick();
@@ -4036,6 +4042,7 @@ describe("Ranged and Magic Skills (#7)", () => {
         fixtureContent,
         seededRng(1),
         JSON.parse(JSON.stringify(saved)),
+        () => 0,
       );
       expect(restored.snapshot()).toEqual(saved);
     });
