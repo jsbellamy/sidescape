@@ -52,6 +52,7 @@ function baseSnapshot(): Snapshot {
       combatLevel,
       combatStyle: "accurate",
       autoEatThreshold: 0,
+      foodSlots: [null, null, null],
       skills,
       equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
       // Derived output, ignored on load (#26); the fixture default matches a fresh, unarmed

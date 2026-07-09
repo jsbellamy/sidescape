@@ -350,13 +350,14 @@ export const content: Content = {
       defBonus: 4,
       value: 120,
     },
-    // Append-only: autoEat eats the first owned Food in this order, so never reorder above.
+    // Append-only: ids are referenced by saves (Food Slots persist an itemId, #61), so never
+    // reorder above. Content order no longer drives autoEat — that's Food Slot order now.
     { kind: "food", id: "cooked-shrimp", name: "Cooked Shrimp", heals: 3, value: 2 },
     // Smithing materials (#28): dropped by Monsters above, consumed by recipes below.
     { kind: "material", id: "bronze-bar", name: "Bronze Bar", value: 8 },
     { kind: "material", id: "iron-bar", name: "Iron Bar", value: 20 },
     // Old Sewers (#10): steel Equipment tier and a stronger Food. Append-only — see the
-    // autoEat-ordering comment above cooked-shrimp; these go after iron-bar, never earlier.
+    // append-only comment above cooked-shrimp; these go after iron-bar, never earlier.
     {
       kind: "equipment",
       id: "steel-dagger",
@@ -400,7 +401,7 @@ export const content: Content = {
     },
     { kind: "food", id: "cooked-pike", name: "Cooked Pike", heals: 12, value: 15 },
     // Bone Crypt (#11): the mithril Equipment tier and the Shade Blade, the best weapon in the
-    // game. Append-only — see the autoEat-ordering comment above cooked-shrimp; these go after
+    // game. Append-only — see the append-only comment above cooked-shrimp; these go after
     // cooked-pike, never earlier.
     {
       kind: "equipment",

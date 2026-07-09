@@ -224,8 +224,8 @@ describe("taking damage, Food, death and Respawn", () => {
 
   it("auto-eats Food below half HP, never overhealing", () => {
     // Food (meat) is now itself a combat Drop, which lands in the Loot Zone rather than the Bank
-    // (#60) — auto-eat only ever reads from the Bank, so seed it directly instead of relying on
-    // incidental kill Drops reaching it mid-fight.
+    // (#60) — auto-eat only ever reads from Food Slots (#61), so seed the loadout directly
+    // instead of relying on incidental kill Drops reaching a Slot mid-fight.
     const engine = createEngine(
       fiercerDummyContent(),
       seededRng(42),
@@ -235,9 +235,9 @@ describe("taking damage, Food, death and Respawn", () => {
           maxHp: 10,
           combatStyle: "aggressive",
           autoEatThreshold: 0.5, // makeSnapshot's own default is 0 (Off) — freshState's is 0.5
+          foodSlots: [{ itemId: "meat", qty: 20 }, null, null],
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
         },
-        bank: { items: [{ itemId: "meat", qty: 20 }] },
       }),
     );
     let ate = 0;
@@ -255,10 +255,8 @@ describe("taking damage, Food, death and Respawn", () => {
 });
 
 describe("Configurable auto-eat threshold", () => {
-  function thresholdEngine(
-    threshold: AutoEatThreshold,
-    bankSeed: { itemId: string; qty: number }[],
-  ) {
+  /** Seeds Food Slot 0 with `meat` (#61 — autoEat only ever reads Food Slots, never the Bank). */
+  function thresholdEngine(threshold: AutoEatThreshold, slot0Qty: number) {
     return createEngine(
       fiercerDummyContent(),
       seededRng(42),
@@ -268,9 +266,9 @@ describe("Configurable auto-eat threshold", () => {
           maxHp: 10,
           combatStyle: "aggressive",
           autoEatThreshold: threshold,
+          foodSlots: [{ itemId: "meat", qty: slot0Qty }, null, null],
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
         },
-        bank: { items: bankSeed },
       }),
     );
   }
@@ -291,8 +289,8 @@ describe("Configurable auto-eat threshold", () => {
     expect(engine.snapshot().player.autoEatThreshold).toBe(0.5);
   });
 
-  it("at Off (0), auto-eat never fires even at low HP with Food owned; the player can die, and manual eatFood still works", () => {
-    const engine = thresholdEngine(0, [{ itemId: "meat", qty: 20 }]);
+  it("at Off (0), auto-eat never fires even at low HP with Food owned; the player can die, and manual eatFromSlot still works", () => {
+    const engine = thresholdEngine(0, 20);
     let ate = 0;
     engine.on("food-eaten", () => ate++);
     let died = false;
@@ -305,13 +303,12 @@ describe("Configurable auto-eat threshold", () => {
     expect(died).toBe(true);
     expect(ate).toBe(0);
 
-    engine.eatFood("meat"); // manual eat is unaffected by the auto-eat threshold
-    const meat = engine.snapshot().bank.items.find((s) => s.itemId === "meat");
-    expect(meat?.qty).toBe(19);
+    engine.eatFromSlot(0); // manual eat is unaffected by the auto-eat threshold
+    expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 19 });
   });
 
   it("at 0.75, auto-eat triggers as soon as HP first drops below 75% of max", () => {
-    const engine = thresholdEngine(0.75, [{ itemId: "meat", qty: 20 }]);
+    const engine = thresholdEngine(0.75, 20);
     let firstEatPreHp: number | undefined;
     engine.on("food-eaten", (e) => {
       if (firstEatPreHp === undefined) firstEatPreHp = engine.snapshot().player.hp - e.healed;
@@ -476,41 +473,505 @@ describe("Passive HP regen", () => {
   });
 });
 
-describe("Manual eat command", () => {
-  it("heals from Food, consumes it, emits food-eaten, and never overheals", () => {
-    // meat heals 4, but only 2 HP of headroom is available below max — must cap there
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
+describe("Active Food Slots (#61)", () => {
+  describe("assignFoodSlot", () => {
+    it("moves the entire Bank stock into the slot, clearing the Bank stack", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+      );
+      engine.assignFoodSlot(0, "meat");
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("throws on an out-of-range index", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+      );
+      expect(() => engine.assignFoodSlot(-1, "meat")).toThrow();
+      expect(() => engine.assignFoodSlot(3, "meat")).toThrow();
+    });
+
+    it("throws for an unknown itemId or a non-Food item", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+      );
+      expect(() => engine.assignFoodSlot(0, "unobtainium")).toThrow(/food/i);
+      expect(() => engine.assignFoodSlot(0, "bronze-sword")).toThrow(/food/i);
+    });
+
+    it("throws when the Bank holds zero of the Food", () => {
+      const engine = freshEngine();
+      expect(() => engine.assignFoodSlot(0, "meat")).toThrow(/own/i);
+    });
+
+    it("throws when the same Food is already assigned to a DIFFERENT slot", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+      );
+      engine.assignFoodSlot(0, "meat");
+      expect(() => engine.assignFoodSlot(1, "meat")).toThrow(/assigned/i);
+      expect(engine.snapshot().player.foodSlots[1]).toBeNull(); // untouched
+    });
+
+    it("swap: assigning a different Food into an occupied slot returns the old stock to the Bank first", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bread", qty: 4 }] },
+          player: { foodSlots: [{ itemId: "meat", qty: 7 }, null, null] },
+        }),
+      );
+      engine.assignFoodSlot(0, "bread");
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "bread", qty: 4 });
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 7 }]);
+    });
+
+    it("swap: a qty-0 occupied slot clears without needing a Bank Slot for the old (empty) stock", () => {
+      // Bank sits at capacity 1, already holding "bar" — a swap that needed to return real stock
+      // would throw "bank is full" here (see the test below), but slot 0's "meat" is at qty 0.
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bread", qty: 1 },
+              { itemId: "bar", qty: 1 },
+            ],
+            capacity: 1,
+          },
+          player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      expect(() => engine.assignFoodSlot(0, "bread")).not.toThrow();
+      expect(engine.snapshot().player.foodSlots[0]?.itemId).toBe("bread");
+    });
+
+    it('a bank-full swap throws "bank is full", mutating nothing', () => {
+      // Capacity 1, but "bar" AND "bread" both already sit in the Bank (2 stacks, tolerated on
+      // load) — so even after bread's own stack fully clears (moving into the slot), the
+      // remaining "bar" stack alone still fills the Bank's only Slot, leaving no room for the
+      // swapped-out "meat" to return.
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bar", qty: 1 },
+              { itemId: "bread", qty: 4 },
+            ],
+            capacity: 1,
+          },
+          player: { foodSlots: [{ itemId: "meat", qty: 7 }, null, null] },
+        }),
+      );
+      expect(() => engine.assignFoodSlot(0, "bread")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 7 });
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bar", qty: 1 },
+          { itemId: "bread", qty: 4 },
+        ]),
+      );
+    });
+  });
+
+  describe("unassignFoodSlot", () => {
+    it("returns the slot's stock to the Bank and clears the slot to null", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 5 }, null, null] } }),
+      );
+      engine.unassignFoodSlot(0);
+      expect(engine.snapshot().player.foodSlots[0]).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
+    });
+
+    it("a slot at qty 0 unassigns without touching the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 }, // Bank already full
+          player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      expect(() => engine.unassignFoodSlot(0)).not.toThrow();
+      expect(engine.snapshot().player.foodSlots[0]).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
+    });
+
+    it('throws "bank is full" when the returning stock needs a new Bank Slot at capacity', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          player: { foodSlots: [{ itemId: "meat", qty: 5 }, null, null] },
+        }),
+      );
+      expect(() => engine.unassignFoodSlot(0)).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+    });
+
+    it("throws on an out-of-range index; unassigning an already-null slot is a harmless no-op", () => {
+      const engine = freshEngine();
+      expect(() => engine.unassignFoodSlot(-1)).toThrow();
+      expect(() => engine.unassignFoodSlot(3)).toThrow();
+      expect(() => engine.unassignFoodSlot(0)).not.toThrow();
+    });
+  });
+
+  describe("eatFromSlot", () => {
+    it("heals from the slot, decrements it, emits food-eaten, and never overheals", () => {
+      // meat heals 4, but only 2 HP of headroom is available below max — must cap there
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            hp: 8,
+            maxHp: 10,
+            skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+            foodSlots: [{ itemId: "meat", qty: 2 }, null, null],
+          },
+        }),
+      );
+
+      const events: { itemId: string; healed: number }[] = [];
+      engine.on("food-eaten", (e) => events.push({ itemId: e.itemId, healed: e.healed }));
+      engine.eatFromSlot(0);
+
+      expect(events).toEqual([{ itemId: "meat", healed: 2 }]);
+      expect(engine.snapshot().player.hp).toBe(10);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+    });
+
+    it("eating the last unit leaves the slot at qty 0, still assigned (empty != unassigned)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 1 }, null, null] } }),
+      );
+      engine.eatFromSlot(0);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 0 });
+    });
+
+    it("throws on an out-of-range index, a null slot, or a qty-0 slot", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] } }),
+      );
+      expect(() => engine.eatFromSlot(-1)).toThrow();
+      expect(() => engine.eatFromSlot(3)).toThrow();
+      expect(() => engine.eatFromSlot(0)).toThrow(); // qty 0
+      expect(() => engine.eatFromSlot(1)).toThrow(); // null
+    });
+  });
+
+  describe("autoEat drains slots in order", () => {
+    /** Fiercer "dummy" (see fiercerDummyContent) so the player actually takes damage; hitpoints
+     * pinned to level 10 (maxHp 10) for round-number threshold math. */
+    function slottedEngine(
+      threshold: AutoEatThreshold,
+      foodSlots: ({ itemId: string; qty: number } | null)[],
+    ) {
+      return createEngine(
+        fiercerDummyContent(),
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            hp: 10,
+            maxHp: 10,
+            combatStyle: "aggressive",
+            autoEatThreshold: threshold,
+            foodSlots,
+            skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          },
+        }),
+      );
+    }
+
+    it("eats from slot 0 before slot 1, and never touches unassigned Bank Food", () => {
+      const engine = createEngine(
+        fiercerDummyContent(),
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            hp: 10,
+            maxHp: 10,
+            combatStyle: "aggressive",
+            autoEatThreshold: 0.5,
+            // slot 0 carries far more meat than 5000 Ticks of this fight could ever consume, so
+            // slot 1's bread is never reached — isolates the "lowest-index-first" ordering rule.
+            foodSlots: [{ itemId: "meat", qty: 999_999 }, { itemId: "bread", qty: 20 }, null],
+            skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          },
+          bank: { items: [{ itemId: "meat", qty: 50 }] }, // unassigned Bank stock — must stay put
+        }),
+      );
+      const eaten: string[] = [];
+      engine.on("food-eaten", (e) => eaten.push(e.itemId));
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 5000; i++) engine.tick();
+
+      expect(eaten.length).toBeGreaterThan(0);
+      expect(eaten.every((id) => id === "meat")).toBe(true); // slot 0's meat, never slot 1's bread
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 50 }]); // untouched
+    });
+
+    it("falls through to slot 1 once slot 0 runs dry", () => {
+      const engine = slottedEngine(0.75, [
+        { itemId: "meat", qty: 1 },
+        { itemId: "bread", qty: 20 },
+        null,
+      ]);
+      const eaten: string[] = [];
+      engine.on("food-eaten", (e) => eaten.push(e.itemId));
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 5000; i++) engine.tick();
+
+      expect(eaten).toContain("bread"); // slot 0 (1 unit of meat) ran dry, so slot 1 picked up
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 0 });
+    });
+
+    it("stops once HP clears the threshold, even with food remaining", () => {
+      // A near-inexhaustible slot 0: autoEat only ever stops because HP cleared the threshold,
+      // never because food ran out.
+      const engine = slottedEngine(0.25, [{ itemId: "meat", qty: 999_999 }, null, null]);
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 5000; i++) engine.tick();
+      expect(engine.snapshot().player.hp).toBeGreaterThanOrEqual(2.5); // >= 25% of maxHp 10
+    });
+  });
+
+  describe("Slot-as-home routing: arrivals of an assigned Food land in the slot, not the Bank", () => {
+    it("a fishing Catch of a slot-assigned Food lands in the slot", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 2 }, null, null] } }),
+      );
+      engine.selectFishingSpot("pond"); // catchChance 1, always catches "meat"
+      for (let i = 0; i < 3; i++) engine.tick(); // catchTicks 3: exactly one Catch
+
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 3 });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("a qty-0 slot still refills automatically from a fishing Catch (empty != unassigned)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] } }),
+      );
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < 3; i++) engine.tick();
+
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+    });
+
+    it("a Loot Zone sweep of a slot-assigned Food lands in the slot, not the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { foodSlots: [{ itemId: "meat", qty: 1 }, null, null] },
+          lootZone: [{ itemId: "meat", qty: 4 }],
+        }),
+      );
+      const looted: { itemId: string; qty: number }[][] = [];
+      engine.on("looted", (e) => looted.push(e.items));
+
+      engine.lootAll();
+
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+      expect(engine.snapshot().lootZone).toEqual([]);
+      expect(engine.snapshot().bank.items).toEqual([]);
+      expect(looted).toEqual([[{ itemId: "meat", qty: 4 }]]);
+    });
+
+    it("a qty-0 slot refills from a Loot Zone sweep too", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+          lootZone: [{ itemId: "meat", qty: 2 }],
+        }),
+      );
+      engine.lootAll();
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 2 });
+    });
+
+    it("Slot-bound arrivals never overflow, even against a full Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 }, // full
+          player: { foodSlots: [{ itemId: "meat", qty: 1 }, null, null] },
+          lootZone: [{ itemId: "meat", qty: 3 }],
+        }),
+      );
+      const overflowEvents: unknown[] = [];
+      engine.on("overflow-sold", (e) => overflowEvents.push(e));
+      engine.on("overflow-lost", (e) => overflowEvents.push(e));
+
+      engine.lootAll();
+
+      expect(overflowEvents).toEqual([]);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 4 });
+    });
+  });
+
+  describe("save/load", () => {
+    it("foodSlots round-trips through save/load", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "meat", qty: 5 },
+              { itemId: "bread", qty: 2 },
+            ],
+          },
+        }),
+      );
+      engine.assignFoodSlot(0, "meat");
+      engine.assignFoodSlot(2, "bread");
+      const saved = engine.snapshot();
+
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+      expect(restored.snapshot().player.foodSlots).toEqual(saved.player.foodSlots);
+    });
+
+    it("a save missing foodSlots entirely loads as [null, null, null]", () => {
+      const legacySave = {
         player: {
-          hp: 8,
+          hp: 10,
           maxHp: 10,
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          respawning: false,
+          // no foodSlots key: simulates a save written before this feature shipped
         },
-        bank: { items: [{ itemId: "meat", qty: 2 }] },
-      }),
-    );
+        monster: null,
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      expect(restored.snapshot().player.foodSlots).toEqual([null, null, null]);
+    });
 
-    const events: { itemId: string; healed: number }[] = [];
-    engine.on("food-eaten", (e) => events.push({ itemId: e.itemId, healed: e.healed }));
-    engine.eatFood("meat");
+    it("a wrong-length saved array is normalized to 3 (short padded, long truncated)", () => {
+      const short = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 2 }] } }),
+      );
+      expect(short.snapshot().player.foodSlots).toEqual([{ itemId: "meat", qty: 2 }, null, null]);
 
-    expect(events).toEqual([{ itemId: "meat", healed: 2 }]);
-    expect(engine.snapshot().player.hp).toBe(10);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 1 }]);
-  });
+      const long = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            foodSlots: [
+              { itemId: "meat", qty: 1 },
+              { itemId: "bread", qty: 1 },
+              null,
+              { itemId: "meat", qty: 9 },
+            ],
+          },
+        }),
+      );
+      expect(long.snapshot().player.foodSlots).toEqual([
+        { itemId: "meat", qty: 1 },
+        { itemId: "bread", qty: 1 },
+        null,
+      ]);
+    });
 
-  it("throws for a non-Food item", () => {
-    const engine = freshEngine();
-    engine.selectMonster("dummy");
-    grindFor(engine, "bronze-sword");
-    expect(() => engine.eatFood("bronze-sword")).toThrow(/food/i);
-  });
+    it("an entry with an unknown or non-Food itemId loads as null", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            foodSlots: [
+              { itemId: "unobtainium", qty: 3 },
+              { itemId: "bronze-sword", qty: 1 },
+              { itemId: "meat", qty: 2 },
+            ],
+          },
+        }),
+      );
+      expect(engine.snapshot().player.foodSlots).toEqual([null, null, { itemId: "meat", qty: 2 }]);
+    });
 
-  it("throws for an unowned Food item", () => {
-    const engine = freshEngine();
-    expect(() => engine.eatFood("meat")).toThrow(/own/i);
+    it("qty is coerced to a finite non-negative integer, falling back to 0", () => {
+      // Built as a plain object (not makeSnapshot) since a negative/string/NaN qty isn't a value
+      // the typed Snapshot shape can hold — this simulates hand-edited or corrupted save JSON.
+      const corrupted = {
+        player: {
+          foodSlots: [
+            { itemId: "meat", qty: -3 },
+            { itemId: "meat", qty: "12" },
+            { itemId: "meat", qty: Number.NaN },
+          ],
+        },
+      };
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(corrupted)),
+      );
+      expect(engine.snapshot().player.foodSlots).toEqual([
+        { itemId: "meat", qty: 0 },
+        { itemId: "meat", qty: 0 },
+        { itemId: "meat", qty: 0 },
+      ]);
+    });
+
+    it("old saves' Food (already migrated to the Bank by #59) simply starts unassigned", () => {
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 10 }] } }),
+      );
+      expect(restored.snapshot().player.foodSlots).toEqual([null, null, null]);
+      expect(restored.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 10 }]);
+    });
   });
 });
 

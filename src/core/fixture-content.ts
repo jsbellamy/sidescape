@@ -62,6 +62,9 @@ export const fixtureContent: Content = {
   items: [
     { kind: "currency", id: "gold", name: "Gold" },
     { kind: "food", id: "meat", name: "Cooked Meat", heals: 4, value: 3 },
+    // A second Food (#61): lets Food Slot tests exercise a swap (a slot occupied by a DIFFERENT
+    // Food) independently of "meat", which most other fixtures already lean on.
+    { kind: "food", id: "bread", name: "Bread", heals: 2, value: 1 },
     {
       kind: "equipment",
       id: "bronze-sword",

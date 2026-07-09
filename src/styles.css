@@ -263,6 +263,98 @@ body {
   text-shadow: 0 1px 2px #000;
 }
 
+.food-slots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  position: relative;
+}
+
+.food-slot {
+  flex: 1;
+  position: relative;
+}
+
+.food-slot-eat,
+.food-slot-add {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 16px 3px 4px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.food-slot-add {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 3px 4px;
+}
+
+.food-slot-eat:hover,
+.food-slot-add:hover {
+  border-color: var(--accent);
+}
+
+.food-slot-unassign {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.food-slot-unassign:hover {
+  color: var(--accent);
+}
+
+.food-slot-chooser {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.food-slot-chooser button {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.food-slot-chooser button:hover {
+  color: var(--accent);
+}
+
+.food-slot-chooser .hint {
+  color: var(--text-dim);
+  font-size: 10px;
+  padding: 2px 4px;
+}
+
 .style-row {
   display: flex;
   gap: 4px;

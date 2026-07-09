@@ -100,7 +100,7 @@ describe("mountApp", () => {
     expect((root.querySelector("#monster-hp-fill") as HTMLElement).style.width).not.toBe("100%");
   });
 
-  it("clicking Food in the Bank panel eats it and logs a feed line", () => {
+  it("clicking a Food row in the Bank panel no longer eats it (#61 moved eating to the Food Slot bar)", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
@@ -113,14 +113,15 @@ describe("mountApp", () => {
     app.render();
     const meatQty = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(meatQty).toBeGreaterThan(0);
+    const hpBefore = engine.snapshot().player.hp;
 
     const meatLi = root.querySelector<HTMLLIElement>('#bank li[data-item="meat"]');
     expect(meatLi).not.toBeNull();
     meatLi?.click();
 
-    const remaining = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
-    expect(remaining).toBe(meatQty - 1);
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/ate.*meat/i);
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0).toBe(meatQty);
+    expect(engine.snapshot().player.hp).toBe(hpBefore);
+    expect(root.querySelector("#feed li")?.textContent).not.toMatch(/ate/i);
   });
 
   it("shows a sell button with price only for items with a value", () => {
@@ -587,7 +588,7 @@ describe("Bank", () => {
     expect(root.querySelector('#bank li[data-item="bar"] [data-equip]')).toBeNull();
   });
 
-  it("clicking a Food row in the Bank (not the Equip/Sell buttons) eats it, never sells or equips it", () => {
+  it("clicking a Food row in the Bank (not the Equip/Sell buttons) does nothing — Food is eaten from the Food Slot bar, not the Bank (#61)", () => {
     const { engine, root } = bankMount({
       player: { hp: 5, maxHp: 10, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
       bank: { items: [{ itemId: "meat", qty: 3 }] },
@@ -595,9 +596,9 @@ describe("Bank", () => {
 
     root.querySelector<HTMLLIElement>('#bank li[data-item="meat"]')?.click();
 
-    expect(engine.snapshot().player.hp).toBeGreaterThan(5);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 2 }]);
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/ate.*meat/i);
+    expect(engine.snapshot().player.hp).toBe(5);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
+    expect(root.querySelector("#feed li")).toBeNull();
   });
 
   it("logs an overflow-sold feed line when a sellable combat Drop can't fit a full Loot Zone (#60 — kill Drops overflow the zone, not the Bank)", () => {
@@ -672,6 +673,108 @@ describe("Bank", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
 
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*lost/i);
+  });
+});
+
+describe("Food Slot bar (#61)", () => {
+  function foodMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent);
+    return { engine, root, app };
+  }
+
+  it("an empty slot shows a [+] that opens a chooser listing only the Bank's Food stacks", () => {
+    const { root } = foodMount({
+      bank: {
+        items: [
+          { itemId: "meat", qty: 5 },
+          { itemId: "bread", qty: 2 },
+          { itemId: "bar", qty: 1 }, // a Material — must never show up as a Food choice
+        ],
+      },
+    });
+    expect(root.querySelector('[data-add="0"]')).not.toBeNull();
+    expect(root.querySelector(".food-slot-chooser")).toBeNull(); // closed by default
+
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+
+    const chooser = root.querySelector(".food-slot-chooser");
+    expect(chooser).not.toBeNull();
+    expect(chooser?.querySelector('[data-assign="0"][data-item="meat"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-assign="0"][data-item="bread"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-item="bar"]')).toBeNull();
+  });
+
+  it("an empty slot's chooser shows a hint when the Bank has no Food at all", () => {
+    const { root } = foodMount();
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+    expect(root.querySelector(".food-slot-chooser .hint")?.textContent).toMatch(/no food/i);
+  });
+
+  it("re-clicking the same [+] dismisses the chooser without assigning", () => {
+    const { root } = foodMount({ bank: { items: [{ itemId: "meat", qty: 5 }] } });
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+    expect(root.querySelector(".food-slot-chooser")).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+    expect(root.querySelector(".food-slot-chooser")).toBeNull();
+  });
+
+  it("picking a Food from the chooser assigns it (moving the whole Bank stock) and closes the chooser", () => {
+    const { engine, root } = foodMount({ bank: { items: [{ itemId: "meat", qty: 5 }] } });
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-assign="0"][data-item="meat"]')?.click();
+
+    expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+    expect(engine.snapshot().bank.items).toEqual([]);
+    expect(root.querySelector(".food-slot-chooser")).toBeNull(); // closed after picking
+    expect(root.querySelector('[data-eat="0"]')?.textContent).toMatch(/cooked meat.*5/i);
+  });
+
+  it("clicking a filled slot eats one and logs a feed line", () => {
+    const { engine, root } = foodMount({
+      player: {
+        hp: 5,
+        maxHp: 10,
+        skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+      },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-eat="0"]')?.click();
+
+    expect(engine.snapshot().player.hp).toBeGreaterThan(5);
+    expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 2 });
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/ate.*meat/i);
+  });
+
+  it("clicking ✕ unassigns the slot, returning its stock to the Bank", () => {
+    const { engine, root } = foodMount({
+      player: { foodSlots: [{ itemId: "meat", qty: 3 }, null, null] },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-unassign="0"]')?.click();
+
+    expect(engine.snapshot().player.foodSlots[0]).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
+    expect(root.querySelector('[data-add="0"]')).not.toBeNull(); // now renders as empty
+  });
+
+  it("dispatch order: clicking ✕ on a filled slot unassigns only, never also eats", () => {
+    const { engine, root } = foodMount({
+      player: {
+        hp: 5,
+        maxHp: 10,
+        skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+      },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-unassign="0"]')?.click();
+
+    expect(engine.snapshot().player.hp).toBe(5); // not eaten
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]); // full stock back
   });
 });
 

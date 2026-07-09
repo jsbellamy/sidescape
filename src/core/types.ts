@@ -26,6 +26,14 @@ export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
 export const AUTO_EAT_THRESHOLDS = [0, 0.25, 0.5, 0.75] as const;
 export type AutoEatThreshold = (typeof AUTO_EAT_THRESHOLDS)[number];
 
+/** One of the FOOD_SLOT_COUNT (engine.ts) Active Food Slots (#61): a slot IS the assigned Food's
+ * home — while assigned, its entire Bank stock lives here and every new arrival of that Food
+ * (fishing Catches, Loot Zone sweeps) routes here instead of the Bank. `null` = unassigned. A
+ * slot may sit at `qty: 0` while still assigned — the itemId persists (empty != unassigned), so
+ * the next arrival refills it automatically. Slot order (array index) is auto-eat's draining
+ * priority, 1→2→3. */
+export type FoodSlot = { itemId: string; qty: number } | null;
+
 /** Source of randomness; next() returns a float in [0, 1). */
 export interface Rng {
   next(): number;
@@ -203,6 +211,9 @@ export interface Snapshot {
     combatLevel: number;
     combatStyle: CombatStyle;
     autoEatThreshold: AutoEatThreshold;
+    /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT (3): replaces free-form
+     * eat-from-Bank. See FoodSlot's own doc for the home/routing/priority rules. */
+    foodSlots: FoodSlot[];
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed

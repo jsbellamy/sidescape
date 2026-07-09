@@ -50,7 +50,7 @@ describe("Fishing content", () => {
     );
   });
 
-  it("cooked-shrimp is an edible, sellable Food appended after existing items (autoEat order preserved)", () => {
+  it("cooked-shrimp is an edible, sellable Food appended after existing items (append-only content order preserved)", () => {
     const shrimp = content.items.find((i) => i.id === "cooked-shrimp");
     expect(shrimp).toEqual({
       kind: "food",

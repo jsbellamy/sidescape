@@ -12,6 +12,7 @@ import type {
   EquipmentDef,
   FishingSpotDef,
   FoodDef,
+  FoodSlot,
   ItemDef,
   MonsterDef,
   RecipeDef,
@@ -70,6 +71,9 @@ interface State {
   hp: number;
   combatStyle: CombatStyle;
   autoEatThreshold: AutoEatThreshold;
+  /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT; see FoodSlot's own doc
+   * (types.ts) for the home/routing/priority rules. */
+  foodSlots: FoodSlot[];
   activity: Activity;
   /** The player's currency balance (#59) — gold stopped being an item stack; the Bank below is
    * the sole store for every other Item. */
@@ -98,7 +102,21 @@ export interface Engine {
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   equip(itemId: string): void;
-  eatFood(itemId: string): void;
+  /** Assigns `itemId` (must be Food) to Food Slot `slotIndex` (#61): moves the entire Bank stock
+   * into the slot, which becomes that Food's home — see FoodSlot's doc. Throws on: an out-of-
+   * range index, an unknown/non-Food itemId, that Food already assigned to a DIFFERENT slot, or
+   * zero of it in the Bank. If the slot already holds a different Food, that stock returns to the
+   * Bank first (a swap); if the Bank is full and that return needs a new Bank Slot, throws
+   * "bank is full" (a player command, never auto-sold — same rule as `equip`). */
+  assignFoodSlot(slotIndex: number, itemId: string): void;
+  /** Clears Food Slot `slotIndex` back to `null`, returning its stock to the Bank (same
+   * bank-full throw as `assignFoodSlot`'s swap). A slot already at qty 0 unassigns without
+   * touching the Bank. Throws only on an out-of-range index; unassigning an already-empty
+   * (`null`) slot is a harmless no-op. */
+  unassignFoodSlot(slotIndex: number): void;
+  /** Eats one unit from Food Slot `slotIndex` (no-overheal, same math as the old `eatFood`).
+   * Throws on an out-of-range index, or a `null`/qty-0 slot. */
+  eatFromSlot(slotIndex: number): void;
   sell(itemId: string, qty?: number): void;
   buyBankSlots(): void;
   /** Sweeps the Loot Zone into the Bank on demand (#60) — the same sweep auto-loot runs on
@@ -114,6 +132,10 @@ const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
 const DEFAULT_AUTO_EAT_THRESHOLD: AutoEatThreshold = 0.5;
+
+/** Active Food Slot count (#61): tuning, not spec — a fixed-length loadout that replaced
+ * free-form eat-from-Bank. Slot order (array index) is auto-eat's draining priority. */
+const FOOD_SLOT_COUNT = 3;
 
 /** Loot Zone capacity (#60): max STACKS the zone holds, mirroring a Bank Slot's "1 stack, any
  * qty" rule. Tuning, not spec. */
@@ -179,6 +201,7 @@ function freshState(_content: Content): State {
     hp: 10,
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
+    foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
     activity: null,
     gold: 0,
     bank: new Map(),
@@ -230,6 +253,32 @@ function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, stri
     if (def?.kind === "equipment" && def.slot === slot) equipment[slot] = itemId;
   }
   return equipment;
+}
+
+/** Tolerant load of `player.foodSlots` (#61): missing entirely -> FOOD_SLOT_COUNT nulls; an array
+ * of the wrong length is normalized (extra entries dropped, short ones padded with null); an
+ * entry whose itemId is unknown or not a FoodDef loads as null — old saves' Food (already
+ * migrated to the Bank by #59's inventory removal) simply starts unassigned; qty is coerced to a
+ * finite non-negative integer, falling back to 0 (a slot may legitimately sit at qty 0 while
+ * still assigned — empty != unassigned, see FoodSlot's doc). */
+function loadFoodSlots(saved: Snapshot, content: Content): FoodSlot[] {
+  const raw: unknown = saved.player?.foodSlots;
+  const entries = Array.isArray(raw) ? raw : [];
+  const slots: FoodSlot[] = [];
+  for (let i = 0; i < FOOD_SLOT_COUNT; i++) {
+    const entry = entries[i] as { itemId?: unknown; qty?: unknown } | null | undefined;
+    const itemId: unknown = entry?.itemId;
+    const def =
+      typeof itemId === "string" ? content.items.find((it) => it.id === itemId) : undefined;
+    if (!entry || def?.kind !== "food") {
+      slots.push(null);
+      continue;
+    }
+    const qty: unknown = entry.qty;
+    const validQty = typeof qty === "number" && Number.isInteger(qty) && qty >= 0 ? qty : 0;
+    slots.push({ itemId: def.id, qty: validQty });
+  }
+  return slots;
 }
 
 /** True for a finite positive integer — the shared qty validity check every loadState migration
@@ -435,6 +484,7 @@ function loadState(saved: Snapshot, content: Content): State {
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
+    foodSlots: loadFoodSlots(saved, content),
     activity,
     gold,
     bank,
@@ -595,15 +645,43 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     addToLootZone(itemId, qty);
   }
 
-  /** Moves every Loot Zone stack into the Bank (#60): a top-up of an existing Bank stack always
-   * fits; a stack that would need a brand-new Bank Slot while the Bank is already at capacity
-   * stays in the Loot Zone untouched — a sweep never sells, unlike zone-full overflow above.
-   * Emits one `looted` event listing exactly the stacks actually banked; emits nothing if none
-   * moved. Shared by every auto-loot trigger and the on-demand lootAll() command — both idempotent
-   * by construction, since a second sweep simply finds nothing left that fits. */
+  /** Slot-as-home routing (#61): if `itemId` is assigned to a Food Slot, credits `qty` straight
+   * into that slot and reports true — Slots have no qty cap, so a slot-bound arrival never
+   * overflows. Returns false (no-op) when `itemId` isn't assigned anywhere, leaving the caller to
+   * fall back to its own Bank/Loot-Zone placement. */
+  function creditToFoodSlotIfHome(itemId: string, qty: number): boolean {
+    const slotIndex = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
+    if (slotIndex === -1) return false;
+    (state.foodSlots[slotIndex] as { itemId: string; qty: number }).qty += qty;
+    return true;
+  }
+
+  /** Routes one passive arrival to its home (#61, extends addToBank): a Food assigned to a Slot
+   * lands there instead of the Bank; anything else falls through to addToBank's normal top-up/
+   * overflow rules. Used by arrival paths outside the Loot Zone (fishing Catches) — combat Drops
+   * still buffer in the Loot Zone first and only route to a Slot at sweep time, see
+   * sweepLootZone below. */
+  function arriveAtHome(itemId: string, qty: number): void {
+    if (creditToFoodSlotIfHome(itemId, qty)) return;
+    addToBank(itemId, qty);
+  }
+
+  /** Moves every Loot Zone stack to its home (#60, extended by #61's Slot-as-home routing): a
+   * Food assigned to a Slot lands there (no cap, never overflows); everything else goes to the
+   * Bank, where a top-up of an existing stack always fits and a stack that would need a brand-new
+   * Bank Slot while the Bank is already at capacity stays in the Loot Zone untouched — a sweep
+   * never sells, unlike zone-full overflow above. Emits one `looted` event listing exactly the
+   * stacks actually moved; emits nothing if none moved. Shared by every auto-loot trigger and the
+   * on-demand lootAll() command — both idempotent by construction, since a second sweep simply
+   * finds nothing left that fits. */
   function sweepLootZone(): void {
     const banked: { itemId: string; qty: number }[] = [];
     for (const [itemId, qty] of [...state.lootZone]) {
+      if (creditToFoodSlotIfHome(itemId, qty)) {
+        state.lootZone.delete(itemId);
+        banked.push({ itemId, qty });
+        continue;
+      }
       const isNewStack = !state.bank.has(itemId);
       if (isNewStack && state.bank.size >= state.bankCapacity) continue; // stays in the zone
       state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
@@ -796,6 +874,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         combatLevel: combatLevel(),
         combatStyle: state.combatStyle,
         autoEatThreshold: state.autoEatThreshold,
+        foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
         skills,
         equipment: { ...state.equipment },
         bonuses: {
@@ -858,26 +937,30 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.hp = Math.max(0, state.hp - damage);
   }
 
-  /** Eats one unit of `food` from the Bank (#59 — an interim bridge until Food Slots replace
-   * this), healing without overheal; returns HP restored. */
-  function eat(food: FoodDef): number {
+  /** Eats one unit of `food` out of Food Slot `slotIndex` (#61 — replaces the old eat-from-Bank
+   * bridge), healing without overheal; returns HP restored. The slot stays assigned at qty 0
+   * (empty != unassigned) rather than clearing to null. Caller guarantees the slot actually holds
+   * `food` at qty > 0. */
+  function eatFromSlotAt(slotIndex: number, food: FoodDef): number {
     const healed = Math.min(food.heals, maxHp() - state.hp);
     state.hp += healed;
-    const remaining = (state.bank.get(food.id) ?? 0) - 1;
-    if (remaining > 0) state.bank.set(food.id, remaining);
-    else state.bank.delete(food.id);
+    (state.foodSlots[slotIndex] as { itemId: string; qty: number }).qty -= 1;
     emit({ type: "food-eaten", itemId: food.id, healed });
     return healed;
   }
 
+  /** Rewritten for Food Slots (#61): drains the lowest-index slot with qty > 0 until HP clears
+   * the threshold or every slot runs dry — the old Content-order Bank scan is gone. Threshold
+   * semantics (0 = off) unchanged. */
   function autoEat(): void {
     if (state.autoEatThreshold === 0) return;
     while (state.hp < maxHp() * state.autoEatThreshold) {
-      const food = content.items.find(
-        (item) => item.kind === "food" && (state.bank.get(item.id) ?? 0) > 0,
-      );
-      if (!food || food.kind !== "food") return;
-      eat(food);
+      const slotIndex = state.foodSlots.findIndex((slot) => slot && slot.qty > 0);
+      if (slotIndex === -1) return;
+      const slot = state.foodSlots[slotIndex] as { itemId: string; qty: number };
+      const def = content.items.find((i) => i.id === slot.itemId);
+      if (!def || def.kind !== "food") return; // guards against a corrupted slot; not reachable via commands
+      eatFromSlotAt(slotIndex, def);
     }
   }
 
@@ -904,7 +987,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     if (rng.next() < spot.catchChance) {
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
-      addToBank(spot.itemId, 1); // a Catch is always Food (validateContent), never currency
+      // a Catch is always Food (validateContent), never currency — routes to its Food Slot home
+      // if assigned (#61), otherwise the Bank as before.
+      arriveAtHome(spot.itemId, 1);
     }
   }
 
@@ -1108,13 +1193,62 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       state.equipment[def.slot] = itemId;
       emit({ type: "equipped", itemId });
     },
-    eatFood(itemId) {
+    assignFoodSlot(slotIndex, itemId) {
+      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
+        throw new Error(`invalid food slot index: ${slotIndex}`);
+      }
       const def = content.items.find((i) => i.id === itemId);
-      if (!def) throw new Error(`unknown item: ${itemId}`);
-      if (def.kind !== "food") throw new Error(`${def.name} is not Food`);
+      if (!def || def.kind !== "food") throw new Error(`${itemId} is not Food`);
+      const elsewhere = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
+      if (elsewhere !== -1 && elsewhere !== slotIndex) {
+        throw new Error(`${def.name} is already assigned to a Food Slot`);
+      }
       const owned = state.bank.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
-      eat(def);
+
+      const current = state.foodSlots[slotIndex];
+      let homeQty = owned;
+      if (current && current.itemId === itemId) {
+        homeQty += current.qty; // topping up a slot that already holds this Food
+      } else if (current && current.qty > 0) {
+        // Swap: the old stock returns to the Bank first. itemId's own Bank stack is about to
+        // fully clear (its ENTIRE stock moves into the Slot below), which may itself free the
+        // Bank Slot the swap-back needs — mirrors equip's own pull-then-check ordering above.
+        const bankSizeAfterPull = state.bank.size - 1;
+        const previousNeedsNewStack = !state.bank.has(current.itemId);
+        if (previousNeedsNewStack && bankSizeAfterPull >= state.bankCapacity) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      }
+
+      state.bank.delete(itemId);
+      state.foodSlots[slotIndex] = { itemId, qty: homeQty };
+    },
+    unassignFoodSlot(slotIndex) {
+      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
+        throw new Error(`invalid food slot index: ${slotIndex}`);
+      }
+      const slot = state.foodSlots[slotIndex];
+      if (!slot) return; // already unassigned — harmless no-op
+      if (slot.qty > 0) {
+        const isNewStack = !state.bank.has(slot.itemId);
+        if (isNewStack && state.bank.size >= state.bankCapacity) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(slot.itemId, (state.bank.get(slot.itemId) ?? 0) + slot.qty);
+      }
+      state.foodSlots[slotIndex] = null;
+    },
+    eatFromSlot(slotIndex) {
+      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
+        throw new Error(`invalid food slot index: ${slotIndex}`);
+      }
+      const slot = state.foodSlots[slotIndex];
+      if (!slot || slot.qty <= 0) throw new Error(`food slot ${slotIndex} is empty`);
+      const def = content.items.find((i) => i.id === slot.itemId);
+      if (!def || def.kind !== "food") throw new Error(`food slot ${slotIndex} is empty`);
+      eatFromSlotAt(slotIndex, def);
     },
     sell(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);

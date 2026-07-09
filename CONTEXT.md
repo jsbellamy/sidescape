@@ -50,7 +50,10 @@ One of: weapon, shield, head, body, legs.
 Equipment progression rank: bronze → iron → steel → mithril. Area gating references Gear Tiers.
 
 **Food**:
-An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP.
+An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP. Eaten only via a **Food Slot** — never directly from the Bank.
+
+**Food Slot**:
+One of 3 loadout slots holding the player's active Food; the slot is that Food's home (its whole stock lives there while assigned, and new arrivals flow to it), auto-eat drains slots in order, and clicking a slot eats one.
 
 **Material**:
 An **Item** consumed as a **Recipe** input — stackable, unequippable, uneatable; sellable when it carries a value and always bankable, same as any other Item. A **Bar** is the only Material in v1.
@@ -64,7 +67,7 @@ A Smithing-level-gated conversion of Materials into one Equipment Item, trained 
 _Avoid_: blueprint, formula
 
 **Bank**:
-The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here; **Equipment** is worn directly from the Bank and **Food** is eaten directly from it. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
+The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here, unless it's Food assigned to a **Food Slot**, which routes there instead; **Equipment** is worn directly from the Bank, while **Food** is eaten only via a Food Slot. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
 _Avoid_: storage, chest, warehouse, inventory
 
 **Loot Zone**:
