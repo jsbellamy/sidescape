@@ -616,14 +616,28 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     return { hit: true, damage: Math.floor(rng.next() * (max + 1)) };
   }
 
+  /** The Bank Slot invariant, stated once (#88): a top-up of an existing stack always fits; a
+   * brand-new stack needs a free slot. `pulled` (default 0) is how many stacks the caller is
+   * about to remove from `store` in the same operation — equip/assignFoodSlot check the
+   * swap-back AFTER pulling the incoming item's own stack, because pulling its last unit can
+   * itself free the slot the swap needs. */
+  function hasRoomForNewStack(
+    store: Map<string, number>,
+    capacity: number,
+    itemId: string,
+    pulled = 0,
+  ): boolean {
+    if (store.has(itemId)) return true;
+    return store.size - pulled < capacity;
+  }
+
   /** Adds `qty` of `itemId` to the Bank (#59): a top-up of an existing stack always fits (the
    * #25 rule). A brand-new stack needed while the Bank is already at capacity is instead
    * auto-sold (sellable) or discarded (unsellable) — the universal "passive flows auto-sell on
    * overflow; player commands throw" rule. Never throws — this is only ever reached from a
    * passive arrival (drop, Catch, craft output), never a player command. */
   function addToBank(itemId: string, qty: number): void {
-    const isNewStack = !state.bank.has(itemId);
-    if (isNewStack && state.bank.size >= state.bankCapacity) {
+    if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
       const def = content.items.find((i) => i.id === itemId);
       const value = def ? sellValue(def) : undefined;
       if (value !== undefined) {
@@ -644,8 +658,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
    * same universal overflow rule and events as a full Bank (#59). Never throws — reached only
    * from a combat arrival (kill Drop or Dungeon Chest item), never a player command. */
   function addToLootZone(itemId: string, qty: number): void {
-    const isNewStack = !state.lootZone.has(itemId);
-    if (isNewStack && state.lootZone.size >= LOOT_ZONE_CAPACITY) {
+    if (!hasRoomForNewStack(state.lootZone, LOOT_ZONE_CAPACITY, itemId)) {
       const def = content.items.find((i) => i.id === itemId);
       const value = def ? sellValue(def) : undefined;
       if (value !== undefined) {
@@ -742,8 +755,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         banked.push({ itemId, qty });
         continue;
       }
-      const isNewStack = !state.bank.has(itemId);
-      if (isNewStack && state.bank.size >= state.bankCapacity) continue; // stays in the zone
+      if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) continue; // stays in the zone
       state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
       state.lootZone.delete(itemId);
       banked.push({ itemId, qty });
@@ -1242,10 +1254,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       // needs, so equipping the same item back into its own slot never wrongly reports full.
       const previous = state.equipment[def.slot];
       if (previous !== null && previous !== itemId) {
-        const itemIdStackClears = owned === 1;
-        const bankSizeAfterPull = state.bank.size - (itemIdStackClears ? 1 : 0);
-        const previousNeedsNewStack = !state.bank.has(previous);
-        if (previousNeedsNewStack && bankSizeAfterPull >= state.bankCapacity) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, previous, owned === 1 ? 1 : 0)) {
           throw new Error("bank is full");
         }
       }
@@ -1279,9 +1288,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         // Swap: the old stock returns to the Bank first. itemId's own Bank stack is about to
         // fully clear (its ENTIRE stock moves into the Slot below), which may itself free the
         // Bank Slot the swap-back needs — mirrors equip's own pull-then-check ordering above.
-        const bankSizeAfterPull = state.bank.size - 1;
-        const previousNeedsNewStack = !state.bank.has(current.itemId);
-        if (previousNeedsNewStack && bankSizeAfterPull >= state.bankCapacity) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
           throw new Error("bank is full");
         }
         state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
@@ -1297,8 +1304,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       const slot = state.foodSlots[slotIndex];
       if (!slot) return; // already unassigned — harmless no-op
       if (slot.qty > 0) {
-        const isNewStack = !state.bank.has(slot.itemId);
-        if (isNewStack && state.bank.size >= state.bankCapacity) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, slot.itemId)) {
           throw new Error("bank is full");
         }
         state.bank.set(slot.itemId, (state.bank.get(slot.itemId) ?? 0) + slot.qty);
