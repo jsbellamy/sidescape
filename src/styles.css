@@ -171,6 +171,8 @@ body {
   height: 64px;
   object-fit: contain;
   animation: sprite-idle 1.8s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
 }
 
 .sprite[hidden] {
@@ -197,25 +199,46 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Above .sprite (#77) so a hitsplat is never occluded by the pixel art it's reporting on. */
+  z-index: 2;
 }
 
+/* Hitsplat (#77): a solid coloured pill/blob backing behind a bold white outlined number, so it
+ * reads over busy pixel-art sprites at a glance (RuneScape-style), rather than plain shadowed
+ * text floating over the sprite. `top`/`left` are set inline per-splat (see `showSplat` in
+ * app.ts) for the upper-half bias + anti-overlap jitter; the values here are just a fallback. */
 .splat {
   position: absolute;
-  top: 50%;
+  top: 38%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 15px;
   font-weight: 800;
-  text-shadow: 0 1px 2px #000;
+  color: #fff;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.55);
   animation: splat-fade 700ms ease-out forwards;
 }
 
 .splat-hit {
-  color: #e04a3f;
+  background: #e04a3f;
+  border: 1.5px solid #7a231c;
 }
 
 .splat-miss {
-  color: #4a90d9;
+  background: #4a90d9;
+  border: 1.5px solid #1e4f7a;
 }
 
 @keyframes splat-fade {
