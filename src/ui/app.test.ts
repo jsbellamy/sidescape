@@ -1885,4 +1885,45 @@ describe("Save → remount round-trip (#9)", () => {
       `attack: ${attackXp} xp`,
     );
   });
+
+  it("also restores Food Slots and the Loot Zone across a save round-trip (#60, #61)", () => {
+    // Food assigned to a Slot lives in the slot, not the Bank (see FoodSlot in CONTEXT.md), so the
+    // seeded state below is self-consistent: an empty Bank plus one filled Food Slot, and a
+    // combat Drop still sitting unswept in the Loot Zone.
+    const engine1 = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { foodSlots: [{ itemId: "meat", qty: 5 }, null, null] },
+        lootZone: [{ itemId: "bar", qty: 2 }],
+      }),
+    );
+    const root1 = document.createElement("main");
+    const app1 = mountApp(engine1, root1, fixtureContent, noopWindowChrome);
+    app1.render();
+
+    const before = engine1.snapshot();
+    expect(before.player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+    expect(before.lootZone).toEqual([{ itemId: "bar", qty: 2 }]);
+
+    localStorage.setItem(SAVE_KEY, JSON.stringify(before));
+
+    const raw = localStorage.getItem(SAVE_KEY);
+    expect(raw).not.toBeNull();
+    const saved = JSON.parse(raw as string);
+    const engine2 = createEngine(fixtureContent, seededRng(2), saved);
+    const root2 = document.createElement("main");
+    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
+
+    const after = engine2.snapshot();
+    expect(after.player.foodSlots).toEqual(before.player.foodSlots);
+    expect(after.lootZone).toEqual(before.lootZone);
+
+    // The fresh mount's DOM already reflects the restored Food Slot and Loot Zone without any
+    // further action.
+    expect(root2.querySelector('[data-eat="0"]')?.textContent).toMatch(/cooked meat.*5/i);
+    expect(root2.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+    const chip = root2.querySelector<HTMLLIElement>("#loot-strip-items .loot-chip");
+    expect(chip?.textContent).toBe("Test Bar ×2");
+  });
 });
