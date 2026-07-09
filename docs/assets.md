@@ -95,3 +95,17 @@ Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs
   **License**: CC0 1.0 Universal (public domain dedication) — confirmed via the pack's bundled `License.txt`
 
 Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). No other alteration was made to the audio content.
+
+## Scene backdrops and props (#80)
+
+The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
+Theme — meadow/forest/sewer/crypt/town) and the Smithing anvil foreground prop
+(`#activity-prop.prop-anvil`) are **hand-built with plain CSS** (`linear-gradient` layers, a
+`clip-path` silhouette for the anvil) — no third-party image asset, so no license/provenance entry
+is needed for them. This invokes the issue's own escape hatch verbatim: "if a decent CC0 set can't
+be found for a theme, hand-build that theme's layers with CSS gradients/shapes — plain-CSS is
+CLAUDE.md-native and better than a license risk." All five themes went this route rather than
+sourcing five more pixel-art packs, for the same reason CLAUDE.md's "no game engine, plain DOM/CSS
+rendering" already prefers — zero license risk, and swapping any one theme to a real sprite sheet
+later is a one-line `background-image` change per layer (see the comment above the per-theme rules
+in `src/styles.css`), no structural change.

@@ -21,6 +21,13 @@ export type SkillName = (typeof SKILL_NAMES)[number];
 export const ATTACK_TYPES = ["stab", "slash", "crush", "ranged", "magic"] as const;
 export type AttackType = (typeof ATTACK_TYPES)[number];
 
+/** Scene-backdrop themes (#80): one per Area, plus the shared `town` theme for non-Area activities
+ * (Smithing today; #76's other production Skills later). Theme resolution itself is a UI-only
+ * concern (ADR-0001's #20 Engine/Snapshot boundary — see ui/theme.ts's `resolveTheme`); this type
+ * lives in core/types.ts only because `AreaDef.theme` (below) needs it. */
+export const THEMES = ["meadow", "forest", "sewer", "crypt", "town"] as const;
+export type Theme = (typeof THEMES)[number];
+
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
 /** A weapon's Combat Mode (#7) — deliberately NOT a widening of CombatStyle: CombatStyle is the
  * player's melee training selector (Accurate/Aggressive/Defensive), while Combat Mode is which of
@@ -162,6 +169,9 @@ export interface AreaDef {
   unlockedByDungeonId?: string;
   monsterIds: string[];
   fishingSpotIds?: string[];
+  /** The scene backdrop this Area shows while fighting/fishing/dungeoning in it (#80). Required
+   * (not optional) so adding an Area is a compile error until it's themed — see THEMES. */
+  theme: Theme;
 }
 
 export interface DungeonDef {
