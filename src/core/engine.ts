@@ -516,7 +516,18 @@ function loadState(saved: Snapshot, content: Content): State {
   };
 }
 
-export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engine {
+/**
+ * `content`/`rng` as before; `saved` resumes a Snapshot (tolerant field-by-field load, see
+ * loadState); `now` (#69) is the clock `snapshot()` stamps `savedAt` from on every call — defaults
+ * to `Date.now`, mirroring `rng`'s injected-randomness precedent, so tests can pin `savedAt` to a
+ * literal value instead of racing the real clock.
+ */
+export function createEngine(
+  content: Content,
+  rng: Rng,
+  saved?: Snapshot,
+  now: () => number = Date.now,
+): Engine {
   // Fail loud on malformed Content (ADR-0001 extended to construction): every
   // violation is collected and reported together, not just the first.
   const violations = validateContent(content);
@@ -942,6 +953,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     const dungeonRunDef = dungeonRun ? dungeonDef(dungeonRun.dungeonId) : undefined;
     const smithingRecipeDef = smithingActivity ? recipeDef(smithingActivity.recipeId) : undefined;
     return {
+      savedAt: now(),
       player: {
         hp: state.hp,
         maxHp: maxHp(),

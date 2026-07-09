@@ -1733,6 +1733,40 @@ describe("save/load", () => {
   });
 });
 
+describe("Snapshot.savedAt clock injection (#69)", () => {
+  it("stamps snapshot().savedAt from the injected `now` clock, not the real one", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), undefined, () => 123_456);
+    expect(engine.snapshot().savedAt).toBe(123_456);
+  });
+
+  it("re-stamps savedAt on every snapshot() call, tracking the clock forward", () => {
+    let time = 1_000;
+    const engine = createEngine(fixtureContent, seededRng(1), undefined, () => time);
+    expect(engine.snapshot().savedAt).toBe(1_000);
+    time = 2_000;
+    expect(engine.snapshot().savedAt).toBe(2_000);
+  });
+
+  it("defaults to the real Date.now() when no clock is injected", () => {
+    const before = Date.now();
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const stamped = engine.snapshot().savedAt;
+    const after = Date.now();
+    expect(stamped).toBeGreaterThanOrEqual(before);
+    expect(stamped).toBeLessThanOrEqual(after);
+  });
+
+  it("loads a save missing savedAt (pre-#69) without throwing — the field is output-only, never read back", () => {
+    const legacySave = makeSnapshot() as unknown as Record<string, unknown>;
+    delete legacySave["savedAt"];
+    expect(() =>
+      createEngine(fixtureContent, seededRng(1), legacySave as never, () => 999),
+    ).not.toThrow();
+    const engine = createEngine(fixtureContent, seededRng(1), legacySave as never, () => 999);
+    expect(engine.snapshot().savedAt).toBe(999); // freshly stamped, not derived from the missing field
+  });
+});
+
 describe("loadState: full-sweep tolerant save validation (#38)", () => {
   it("an invalid combatStyle falls back to aggressive, and no NaN reaches xp on the next kill", () => {
     const engine = createEngine(
