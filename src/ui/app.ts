@@ -83,18 +83,70 @@ function skillProgress(skill: SkillSnapshot): number {
 }
 
 /**
- * One entry per panel tab. The tab strip, click handling, and show/hide logic below are generic
- * over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28) means
- * adding an entry here plus a matching `[data-tab-panel]` section in the `#tab-panels` markup;
- * no other code in this file needs to change.
+ * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
+ * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
+ * Skills #62) means adding an entry here plus a matching `[data-tab-panel]` section in the
+ * `#tab-panels` markup; no other code in this file needs to change. Order here is display order
+ * in the tab strip (#62: Skills, Character, Bank, Smithing, Loot Feed).
  */
 const TABS = [
-  { id: "loot", label: "Loot Feed" },
+  { id: "skills", label: "Skills" },
   { id: "character", label: "Character" },
   { id: "bank", label: "Bank" },
   { id: "smithing", label: "Smithing" },
+  { id: "loot", label: "Loot Feed" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+
+/**
+ * Adapter `mountApp` calls whenever a side panel opens/closes (#62). The real implementation
+ * (main.ts) resizes/repositions the always-on-top Tauri window around the fixed activity core;
+ * tests and the plain-browser `npm run dev` path use a noop, so the window itself is the only
+ * seam — everything else in this file is plain in-page flex layout.
+ */
+export interface WindowChrome {
+  /** `left`/`right` are the panel's new open/closed state, not a delta. */
+  setPanels(left: boolean, right: boolean): void;
+}
+
+/** Presentation-only panel/tab state (#62) — localStorage only, never the Snapshot/save (same
+ * boundary as the sort choice, #26, and the SFX mute preference, #20). `tab: null` means the
+ * RIGHT panel is closed; the LEFT (Areas) panel is independent of it. */
+interface PanelState {
+  left: boolean;
+  tab: TabId | null;
+}
+
+const PANEL_STORAGE_KEY = "sidescape-ui-panels";
+const CLOSED_PANELS: PanelState = { left: false, tab: null };
+
+function isTabId(value: unknown): value is TabId {
+  return TABS.some((t) => t.id === value);
+}
+
+/** The persisted panel state, or both panels closed if unset/malformed or localStorage is
+ * unavailable (private mode, disabled) — the same fail-safe shape as `loadSortKey`. */
+function loadPanelState(): PanelState {
+  try {
+    const raw = localStorage.getItem(PANEL_STORAGE_KEY);
+    if (!raw) return CLOSED_PANELS;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return CLOSED_PANELS;
+    const left = (parsed as { left?: unknown }).left === true;
+    const tabRaw = (parsed as { tab?: unknown }).tab;
+    return { left, tab: isTabId(tabRaw) ? tabRaw : null };
+  } catch {
+    return CLOSED_PANELS;
+  }
+}
+
+function savePanelState(state: PanelState): void {
+  try {
+    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // localStorage may be unavailable; the choice just won't persist.
+  }
+}
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
 export interface MountedApp {
@@ -107,8 +159,17 @@ export interface MountedApp {
  * Adds no timers of its own (ADR-0001): the caller pumps `engine.tick()` and
  * calls the returned `render()` to reflect the new Snapshot.
  */
-export function mountApp(engine: Engine, root: HTMLElement, content: Content): MountedApp {
-  let activeTab: TabId = TABS[0].id;
+export function mountApp(
+  engine: Engine,
+  root: HTMLElement,
+  content: Content,
+  windowChrome: WindowChrome,
+): MountedApp {
+  // Presentation-only side panel state (#62): LEFT (Areas) is independent of the RIGHT tab strip,
+  // where `rightTab: null` means the right panel is closed. Restored from localStorage below.
+  const restoredPanels = loadPanelState();
+  let leftOpen = restoredPanels.left;
+  let rightTab: TabId | null = restoredPanels.tab;
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
   // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
@@ -133,14 +194,30 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   let fxMonsterCd = 0;
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** Shows the active tab's panel and hides the rest; highlights the matching tab button. */
+  /** Shows the LEFT (Areas) panel and the RIGHT panel's active tab (if any), hiding the rest;
+   * highlights the matching tab button and the left arrow. Does not itself notify WindowChrome or
+   * persist — callers that change `leftOpen`/`rightTab` do that via `syncPanels` below. */
   function renderTabs(): void {
+    el<HTMLElement>("#left-panel").hidden = !leftOpen;
+    el<HTMLButtonElement>("#left-arrow").classList.toggle("active", leftOpen);
+
     root.querySelectorAll<HTMLButtonElement>("#tab-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["tab"] === activeTab);
+      btn.classList.toggle("active", btn.dataset["tab"] === rightTab);
     });
     root.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      panel.hidden = panel.dataset["tabPanel"] !== activeTab;
+      panel.hidden = panel.dataset["tabPanel"] !== rightTab;
     });
+    el<HTMLElement>("#right-panel").hidden = rightTab === null;
+  }
+
+  /** Re-renders panel visibility, notifies `WindowChrome` of the new open/closed flags (the
+   * seam main.ts's real Tauri adapter resizes the window from), and persists the choice to
+   * localStorage (#62) — never the Snapshot/save. Called after every LEFT/RIGHT panel change,
+   * including the initial restore-from-localStorage on mount. */
+  function syncPanels(): void {
+    renderTabs();
+    windowChrome.setPanels(leftOpen, rightTab !== null);
+    savePanelState({ left: leftOpen, tab: rightTab });
   }
 
   function itemName(itemId: string): string {
@@ -170,6 +247,9 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     return root.querySelector(selector) as T;
   }
 
+  /** Appends a line to the Loot Feed panel AND mirrors it onto the main column's `#ticker` (the
+   * amendment's "heartbeat" — one line, same band/class styling, never a replacement for the
+   * full feed panel). Both are driven from this single call site so they can never drift apart. */
   function feedLine(text: string, cls = ""): void {
     const li = document.createElement("li");
     li.textContent = text;
@@ -177,6 +257,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     const feed = el<HTMLUListElement>("#feed");
     feed.prepend(li);
     while (feed.children.length > 40) feed.lastChild?.remove();
+
+    const ticker = el<HTMLElement>("#ticker");
+    ticker.textContent = text;
+    ticker.className = cls;
   }
 
   /** Appends a damage splat (a red hit for `amount > 0`, a blue "0" miss otherwise) to `layer`,
@@ -513,57 +597,69 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   root.innerHTML = `
     <div id="flash-overlay"></div>
-    <section id="scene">
-      <div id="toast-container"></div>
-      <div id="sprite-row">
-        <div id="monster-sprite-wrap" class="sprite-wrap">
-          <img id="monster-sprite" class="sprite pixel" alt="" hidden />
-          <div id="monster-splats" class="splat-layer"></div>
+    <div id="left-panel" class="side-panel" hidden>
+      <p class="panel-title">Areas</p>
+      <section id="picker"></section>
+    </div>
+    <div id="main-column">
+      <div id="chrome-row">
+        <button id="left-arrow" data-toggle-left title="Areas">◂</button>
+        <span id="gold"></span>
+      </div>
+      <section id="scene">
+        <div id="toast-container"></div>
+        <div id="sprite-row">
+          <div id="monster-sprite-wrap" class="sprite-wrap">
+            <img id="monster-sprite" class="sprite pixel" alt="" hidden />
+            <div id="monster-splats" class="splat-layer"></div>
+          </div>
+          <div id="player-sprite-wrap" class="sprite-wrap">
+            <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+            <div id="player-splats" class="splat-layer"></div>
+          </div>
         </div>
-        <div id="player-sprite-wrap" class="sprite-wrap">
-          <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
-          <div id="player-splats" class="splat-layer"></div>
-        </div>
-      </div>
-      <p id="dungeon-header" hidden></p>
-      <p id="monster-name"></p>
-      <p id="monster-stats" hidden></p>
-      <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
-      <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
-      <div id="food-slots" class="food-slots"></div>
-      <div id="style-row" class="style-row">
-        ${Object.entries(STYLE_LABELS)
-          .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
-          .join("")}
-      </div>
-      <div id="autoeat-row" class="style-row">
-        ${Object.entries(AUTO_EAT_LABELS)
-          .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
-          .join("")}
-      </div>
-      <label id="autosell-duplicates-row" class="checkbox-row">
-        <input type="checkbox" id="autosell-duplicates-toggle" />
-        Auto-sell duplicate gear
-      </label>
-    </section>
-    <section id="xp-row"></section>
-    <section id="picker"></section>
-    <section id="loot-strip" hidden>
-      <ul id="loot-strip-items"></ul>
-      <button id="loot-all-btn" data-loot-all>Loot all</button>
-    </section>
-    <section id="panels">
+        <p id="dungeon-header" hidden></p>
+        <p id="monster-name"></p>
+        <p id="monster-stats" hidden></p>
+        <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
+        <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
+        <div id="food-slots" class="food-slots"></div>
+      </section>
+      <p id="ticker"></p>
+      <section id="loot-strip" hidden>
+        <ul id="loot-strip-items"></ul>
+        <button id="loot-all-btn" data-loot-all>Loot all</button>
+      </section>
       <div id="tab-row" class="tab-row">
         ${TABS.map((tab) => `<button data-tab="${tab.id}">${tab.label}</button>`).join("")}
       </div>
+    </div>
+    <div id="right-panel" class="side-panel" hidden>
       <div id="tab-panels">
-        <div data-tab-panel="loot" class="tab-panel">
-          <ul id="feed"></ul>
+        <div data-tab-panel="skills" class="tab-panel">
+          <p class="panel-title">Skills</p>
+          <section id="xp-row"></section>
         </div>
         <div data-tab-panel="character" class="tab-panel">
-          <p class="panel-title">Character <span id="gold"></span></p>
+          <p class="panel-title">Character</p>
           <ul id="character-slots"></ul>
           <p id="character-totals" class="totals-row"></p>
+          <div id="style-row" class="style-row">
+            ${Object.entries(STYLE_LABELS)
+              .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
+              .join("")}
+          </div>
+          <div id="autoeat-row" class="style-row">
+            ${Object.entries(AUTO_EAT_LABELS)
+              .map(
+                ([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`,
+              )
+              .join("")}
+          </div>
+          <label id="autosell-duplicates-row" class="checkbox-row">
+            <input type="checkbox" id="autosell-duplicates-toggle" />
+            Auto-sell duplicate gear
+          </label>
         </div>
         <div data-tab-panel="bank" class="tab-panel">
           <p class="panel-title">
@@ -580,8 +676,11 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           <p class="panel-title">Smithing</p>
           <ul id="smithing-recipes"></ul>
         </div>
+        <div data-tab-panel="loot" class="tab-panel">
+          <ul id="feed"></ul>
+        </div>
       </div>
-    </section>`;
+    </div>`;
 
   engine.on("kill", (e) =>
     feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`),
@@ -675,12 +774,22 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     }
   });
 
+  // Right tab strip (#62): clicking an inactive tab opens the RIGHT panel showing it (switching
+  // away from whichever other tab was open, if any); clicking the already-active tab closes the
+  // panel. At most one RIGHT tab is ever open, mirroring the pre-#62 "one active tab" behavior.
   el("#tab-row").addEventListener("click", (event) => {
     const tab = (event.target as HTMLElement).dataset["tab"] as TabId | undefined;
     if (tab) {
-      activeTab = tab;
-      renderTabs();
+      rightTab = rightTab === tab ? null : tab;
+      syncPanels();
     }
+  });
+
+  // Left arrow (#62): toggles the Areas panel independently of the RIGHT tab strip — both sides
+  // may be open at once.
+  el("#left-arrow").addEventListener("click", () => {
+    leftOpen = !leftOpen;
+    syncPanels();
   });
 
   el("#picker").addEventListener("click", (event) => {
@@ -787,7 +896,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   buildPicker();
   render();
-  renderTabs();
+  // Applies the panel state restored from localStorage above (or the closed-both default on a
+  // fresh install) and notifies WindowChrome once up front, so the real Tauri adapter (main.ts)
+  // sizes/positions the OS window to match on every mount, not just on the next toggle.
+  syncPanels();
 
   return { render };
 }

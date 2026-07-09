@@ -5,13 +5,16 @@ import { fixtureContent } from "../core/fixture-content";
 import { content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
+import type { WindowChrome } from "./app";
 import { playerSprite } from "./sprites";
+
+const noopWindowChrome: WindowChrome = { setPanels: () => {} };
 
 describe("combat scene sprites", () => {
   it("shows a pixelated player sprite as soon as the app mounts", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent);
+    mountApp(engine, root, meadowsContent, noopWindowChrome);
 
     const playerImg = root.querySelector<HTMLImageElement>("#player-sprite");
     expect(playerImg).not.toBeNull();
@@ -24,7 +27,7 @@ describe("combat scene sprites", () => {
     for (const monsterId of ["chicken", "cow", "goblin"]) {
       const engine = createEngine(meadowsContent, seededRng(1));
       const root = document.createElement("main");
-      const app = mountApp(engine, root, meadowsContent);
+      const app = mountApp(engine, root, meadowsContent, noopWindowChrome);
 
       engine.selectMonster(monsterId);
       app.render();
@@ -41,7 +44,7 @@ describe("combat scene sprites", () => {
   it("hides the Monster sprite before a Monster is selected", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent);
+    mountApp(engine, root, meadowsContent, noopWindowChrome);
 
     const monsterImg = root.querySelector<HTMLImageElement>("#monster-sprite");
     expect(monsterImg?.hidden).toBe(true);
@@ -50,7 +53,7 @@ describe("combat scene sprites", () => {
   it("does not break on a fixture Monster with no mapped sprite", () => {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent);
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     engine.selectMonster("dummy");
     app.render();

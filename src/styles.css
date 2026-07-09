@@ -61,20 +61,93 @@ body {
   color: var(--text);
 }
 
+/* Three-column shell (#62): [left panel][main column][right panel]. The main column is the
+   activity core and is always visible; the side panels are hidden entirely when closed (both via
+   the `hidden` attribute here, and via WindowChrome shrinking the actual OS window around them in
+   the real Tauri build — see main.ts). */
 #app {
   height: calc(100% - 28px);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  overflow: hidden;
 }
 
 .pixel {
   image-rendering: pixelated;
 }
 
-#app {
+.side-panel {
+  flex: 0 0 300px;
+  width: 300px;
+  padding: 8px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.side-panel[hidden] {
+  display: none;
+}
+
+#left-panel {
+  border-right: 1px solid var(--border);
+}
+
+#right-panel {
+  border-left: 1px solid var(--border);
+}
+
+#main-column {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   padding: 8px;
   gap: 8px;
   overflow: hidden;
+}
+
+#chrome-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+}
+
+#left-arrow {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+#left-arrow:hover {
+  border-color: var(--accent);
+}
+
+#left-arrow.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#gold {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Event ticker (#62 amendment): a one-line heartbeat mirroring the latest Loot Feed line, styled
+   with the same band/class rules as `#feed li` (see those rules further down — they're
+   unscoped from `#feed` on purpose so `#ticker` shares them). */
+#ticker {
+  min-height: 14px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #scene {
@@ -510,15 +583,6 @@ body {
   border-color: var(--accent);
 }
 
-#panels {
-  flex: 1;
-  overflow-y: auto;
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
 .tab-row {
   display: flex;
   gap: 4px;
@@ -544,11 +608,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 700;
-}
-
-#tab-panels {
-  flex: 1;
-  overflow-y: auto;
 }
 
 .tab-panel[hidden] {
@@ -677,40 +736,42 @@ body {
   opacity: 0.6;
 }
 
-#feed .sell {
-  color: var(--accent);
-}
-
+/* Band/event styling classes (#62: unscoped from `#feed` so #ticker — the amendment's one-line
+   heartbeat, updated by the same feedLine() call — shares the exact same colors/weights). */
 #feed li {
   padding: 1px 0;
   border-bottom: 1px solid #221c15;
   color: var(--text-dim);
 }
 
-#feed .drop-uncommon {
+.sell {
+  color: var(--accent);
+}
+
+.drop-uncommon {
   color: #7db3d5;
 }
 
-#feed .drop-rare {
+.drop-rare {
   color: var(--accent);
   font-weight: 700;
 }
 
-#feed .levelup {
+.levelup {
   color: #e6c35c;
 }
 
-#feed .death {
+.death {
   color: #d66;
 }
 
-#feed .dungeon-completed,
-#feed .chest-header {
+.dungeon-completed,
+.chest-header {
   color: #e6c35c;
   font-weight: 700;
 }
 
-#feed .craft {
+.craft {
   color: #d4a8e0;
 }
 

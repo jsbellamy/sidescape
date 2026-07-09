@@ -6,6 +6,14 @@ import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
+import type { WindowChrome } from "./app";
+
+/** A do-nothing WindowChrome for tests that don't care about window resize/position (the vast
+ * majority) — mirrors main.ts's real Tauri adapter's `.catch(console.error)`-guarded contract
+ * without any Tauri API access, same shape as the browser-degrade path `npm run dev` uses. Tests
+ * that specifically exercise the panel-toggle seam (see "Side panels (#62)" below) pass their own
+ * spy instead, to assert `setPanels` is called with the right flags. */
+const noopWindowChrome: WindowChrome = { setPanels: () => {} };
 
 /** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
  * loot it all into the Bank, mirroring core/engine.test.ts's grindFor — combat Drops land in the
@@ -50,7 +58,7 @@ function stubLocalStorage(): Storage {
 function mount(seed: number) {
   const engine = createEngine(fixtureContent, seededRng(seed));
   const root = document.createElement("main");
-  const app = mountApp(engine, root, fixtureContent);
+  const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
   return { engine, root, app };
 }
 
@@ -151,7 +159,7 @@ describe("mountApp", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, noValueContent);
+    mountApp(engine, root, noValueContent, noopWindowChrome);
 
     const meatLi = root.querySelector('#bank li[data-item="meat"]');
     expect(meatLi?.querySelector('[data-sell="meat"]')?.textContent).toBe("Sell 3g");
@@ -232,7 +240,7 @@ describe("Monster stats line", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
 
     expect(root.querySelector("#monster-stats")?.textContent).toBe(
@@ -316,7 +324,7 @@ describe("Combat Style selector", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const active = styleButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
@@ -381,7 +389,7 @@ describe("Auto-eat threshold selector", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
@@ -423,7 +431,7 @@ describe("Auto-sell duplicates toggle (#63)", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     expect(toggle(root)?.checked).toBe(false);
   });
@@ -463,7 +471,7 @@ describe("XP progress bars", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
     expect(fill?.style.width).toBe("0%");
@@ -483,7 +491,7 @@ describe("XP progress bars", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
     expect(fill?.style.width).toBe("99%");
@@ -513,38 +521,38 @@ describe("XP progress bars", () => {
   });
 });
 
-describe("Panel tabs", () => {
+describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)", () => {
   function tabButtons(root: HTMLElement) {
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Loot Feed, Character, Bank, Smithing — Loot Feed active by default", () => {
+  it("renders one tab per panel — Skills, Character, Bank, Smithing, Loot Feed — none active and the right panel closed by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
-      "Loot Feed",
+      "Skills",
       "Character",
       "Bank",
       "Smithing",
+      "Loot Feed",
     ]);
 
-    const active = buttons.filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["tab"]).toBe("loot");
+    expect(buttons.filter((b) => b.classList.contains("active"))).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
   });
 
-  it("only the active tab's panel is visible on mount", () => {
+  it("every tab panel's content is absent from view (right panel hidden) on a fresh mount", () => {
     const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="smithing"]')?.hidden).toBe(true);
+    for (const tab of ["skills", "character", "bank", "smithing", "loot"]) {
+      expect(root.querySelector<HTMLElement>(`[data-tab-panel="${tab}"]`)?.hidden).toBe(true);
+    }
   });
 
-  it("clicking a tab swaps the visible panel and highlights the clicked tab", () => {
+  it("clicking an inactive tab opens the right panel showing it and highlights the tab", () => {
     const { root } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
 
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="loot"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
@@ -552,6 +560,30 @@ describe("Panel tabs", () => {
     const active = tabButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
     expect(active[0]?.dataset["tab"]).toBe("character");
+  });
+
+  it("clicking the active tab again closes the right panel", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
+    expect(tabButtons(root).filter((b) => b.classList.contains("active"))).toHaveLength(0);
+  });
+
+  it("clicking a different tab switches the open panel instead of opening a second one", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="smithing"]')?.click();
+
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="smithing"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
+    const active = tabButtons(root).filter((b) => b.classList.contains("active"));
+    expect(active).toHaveLength(1);
+    expect(active[0]?.dataset["tab"]).toBe("smithing");
   });
 
   it("the active tab persists visually across re-renders", () => {
@@ -571,7 +603,194 @@ describe("Panel tabs", () => {
     expect(root.querySelector("#character-slots")).not.toBeNull();
     expect(root.querySelector("#bank")).not.toBeNull();
     expect(root.querySelector("#feed")).not.toBeNull();
-    expect(root.querySelector("#gold")).not.toBeNull();
+  });
+
+  it("the gold chip moved to the main column, outside any tab panel", () => {
+    const { root } = mount(1);
+    const gold = root.querySelector("#gold");
+    expect(gold).not.toBeNull();
+    expect(gold?.closest("#main-column")).not.toBeNull();
+    expect(gold?.closest("[data-tab-panel]")).toBeNull();
+  });
+});
+
+describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window sideways)", () => {
+  function spyWindowChrome() {
+    const calls: Array<[boolean, boolean]> = [];
+    const chrome: WindowChrome = {
+      setPanels: (left, right) => {
+        calls.push([left, right]);
+      },
+    };
+    return { chrome, calls };
+  }
+
+  function mountWithChrome(chrome: WindowChrome) {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, chrome);
+    return { engine, root, app };
+  }
+
+  it("both panels are closed on a fresh mount", () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
+  });
+
+  it("mounting calls WindowChrome.setPanels(false, false) exactly once when both panels start closed", () => {
+    const { chrome, calls } = spyWindowChrome();
+    mountWithChrome(chrome);
+    expect(calls).toEqual([[false, false]]);
+  });
+
+  it("the left arrow toggles the Areas panel and calls setPanels with the left flag", () => {
+    const { chrome, calls } = spyWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    calls.length = 0; // ignore the initial mount call
+
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
+    expect(calls).toEqual([[true, false]]);
+
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
+    expect(calls).toEqual([
+      [true, false],
+      [false, false],
+    ]);
+  });
+
+  it("opening a right tab calls setPanels with the right flag; re-clicking it calls setPanels(…, false)", () => {
+    const { chrome, calls } = spyWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    calls.length = 0;
+
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(calls).toEqual([[false, true]]);
+
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(calls).toEqual([
+      [false, true],
+      [false, false],
+    ]);
+  });
+
+  it("both sides can be open at once, and each is reflected independently in setPanels", () => {
+    const { chrome, calls } = spyWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    calls.length = 0;
+
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="skills"]')?.click();
+
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+    expect(calls).toEqual([
+      [true, false],
+      [true, true],
+    ]);
+
+    // Closing the left side leaves the right side open, and vice versa.
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    expect(calls[calls.length - 1]).toEqual([false, true]);
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+  });
+
+  it("the picker, XP row, and style/auto-eat controls still work from their new homes", () => {
+    const { engine, root } = mountWithChrome(noopWindowChrome);
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click(); // open Areas
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    expect(engine.snapshot().monster?.id).toBe("dummy");
+    expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
+
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click(); // open Character
+    root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
+    expect(engine.snapshot().player.combatStyle).toBe("accurate");
+    root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
+    expect(engine.snapshot().player.autoEatThreshold).toBe(0);
+
+    root.querySelector<HTMLButtonElement>('[data-tab="skills"]')?.click(); // open Skills
+    expect(root.querySelector('[data-skill="attack"]')).not.toBeNull();
+  });
+
+  it("panel state persists to localStorage under sidescape-ui-panels and restores on remount, never touching the Snapshot/save", () => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
+      const { chrome: chrome1 } = spyWindowChrome();
+      const { engine, root } = mountWithChrome(chrome1);
+      root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+      root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+
+      const raw = localStorage.getItem("sidescape-ui-panels");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw as string)).toEqual({ left: true, tab: "bank" });
+      expect(JSON.stringify(engine.snapshot())).not.toMatch(/panel/i);
+
+      const { chrome: chrome2, calls: calls2 } = spyWindowChrome();
+      const root2 = document.createElement("main");
+      mountApp(engine, root2, fixtureContent, chrome2);
+
+      expect(root2.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
+      expect(root2.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+      expect(root2.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(false);
+      expect(calls2).toEqual([[true, true]]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("Event ticker (#62 amendment): a one-line heartbeat of the most recent feed event", () => {
+  it("updates on every feedLine call, matching the newest #feed li exactly", () => {
+    const { engine, root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 2000; i++) {
+      engine.tick();
+      if (root.querySelector("#feed li")) break;
+    }
+
+    const latestFeedLine = root.querySelector<HTMLLIElement>("#feed li");
+    const ticker = root.querySelector<HTMLElement>("#ticker");
+    expect(latestFeedLine).not.toBeNull();
+    expect(ticker?.textContent).toBe(latestFeedLine?.textContent);
+    expect(ticker?.className).toBe(latestFeedLine?.className);
+  });
+
+  it("does not replace the Loot Feed panel — both the ticker and the full #feed list keep updating", () => {
+    const { engine, root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 5000 && root.querySelectorAll("#feed li").length < 2; i++) engine.tick();
+
+    expect(root.querySelectorAll("#feed li").length).toBeGreaterThanOrEqual(2);
+    expect(root.querySelector<HTMLElement>("#ticker")?.textContent).toBe(
+      root.querySelector<HTMLLIElement>("#feed li")?.textContent,
+    );
+  });
+
+  it("carries rare-Drop band styling (drop-rare) through to the ticker", () => {
+    const rareDropContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [{ itemId: "lucky-charm", qty: 1, chance: 1, band: "rare" as const }],
+            }
+          : m,
+      ),
+    };
+    const engine = createEngine(rareDropContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, rareDropContent, noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 2000 && engine.snapshot().lootZone.length === 0; i++) engine.tick();
+
+    expect(root.querySelector<HTMLElement>("#ticker")?.className).toBe("drop-rare");
+    expect(root.querySelector<HTMLElement>("#ticker")?.textContent).toMatch(/lucky charm/i);
   });
 });
 
@@ -579,7 +798,7 @@ describe("Bank", () => {
   function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent);
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
     return { engine, root, app };
   }
@@ -686,7 +905,7 @@ describe("Bank", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, content);
+    mountApp(engine, root, content, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let sold = false;
@@ -717,7 +936,7 @@ describe("Bank", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, noValueContent);
+    mountApp(engine, root, noValueContent, noopWindowChrome);
     engine.selectFishingSpot("pond"); // catchChance 1, always catches "meat"
 
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
@@ -743,7 +962,7 @@ describe("Bank", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, guaranteedSwordDropContent);
+    mountApp(engine, root, guaranteedSwordDropContent, noopWindowChrome);
     engine.selectMonster("dummy");
 
     let killed = false;
@@ -763,7 +982,7 @@ describe("Food Slot bar (#61)", () => {
   function foodMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent);
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -888,7 +1107,7 @@ describe("Loot strip (#60)", () => {
       makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
     expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
 
     root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
@@ -909,7 +1128,7 @@ describe("Loot strip (#60)", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
 
@@ -931,7 +1150,7 @@ describe("Loot strip (#60)", () => {
       makeSnapshot({ lootZone: [{ itemId: "meat", qty: 2 }] }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, lethalDungeonContent);
+    mountApp(engine, root, lethalDungeonContent, noopWindowChrome);
     // enterDungeon sweeps first (#60), banking the seeded stack, so the run itself starts empty —
     // this only needs to prove the dungeon-failed feed line fires, not that it carries real loot
     // (that's covered at the Engine level in core/engine.test.ts).
@@ -1007,7 +1226,7 @@ describe("Fishing", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const deepPondBefore = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(deepPondBefore?.disabled).toBe(true); // Area open, but Fishing level 19 < levelReq 20
@@ -1159,7 +1378,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("renders a Kind | Value | Name control row above the Bank list", () => {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     const buttons = [...root.querySelectorAll<HTMLButtonElement>("#sort-row button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["Kind", "Value", "Name"]);
@@ -1168,7 +1387,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Value orders the Bank by def.value descending, ties broken by name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
 
@@ -1179,7 +1398,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Kind groups equipment before food, ties broken by name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="kind"]')?.click();
 
@@ -1190,7 +1409,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Name orders the Bank alphabetically by display name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="name"]')?.click();
 
@@ -1201,14 +1420,14 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("the sort choice survives a remount via localStorage and is never written into the save", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
     expect(localStorage.getItem("sidescape-ui-sort")).toBe("value");
 
     // Simulate an app restart: a fresh mount against the same Engine reads the persisted choice.
     const root2 = document.createElement("main");
-    mountApp(engine, root2, fixtureContent);
+    mountApp(engine, root2, fixtureContent, noopWindowChrome);
     expect(bankIds(root2)).toEqual(["lucky-charm", "bronze-sword", "meat"]);
 
     // Presentation-only: never part of the Snapshot/save (same boundary as the SFX mute, #20).
@@ -1218,7 +1437,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sell/equip click handling still targets the right item after sorting (data attributes, not row index)", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent);
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
     // sorted order is now: lucky-charm, bronze-sword, meat — bronze-sword sits in the middle row.
@@ -1250,7 +1469,7 @@ describe("Dungeons", () => {
     };
     const engine = createEngine(lockedDungeonContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, lockedDungeonContent);
+    mountApp(engine, root, lockedDungeonContent, noopWindowChrome);
 
     const gauntletBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]');
     expect(gauntletBtn?.textContent).toBe("⚔ The Gauntlet");
@@ -1347,7 +1566,7 @@ describe("Smithing (#28)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bar", qty: barQty }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent);
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -1544,7 +1763,7 @@ describe("Combat feedback (#4)", () => {
     };
     const engine = createEngine(rareDropContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, rareDropContent);
+    const app = mountApp(engine, root, rareDropContent, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let i = 0;
@@ -1578,7 +1797,7 @@ describe("Loot Feed band styling (#9)", () => {
     };
     const engine = createEngine(allBandsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, allBandsContent);
+    mountApp(engine, root, allBandsContent, noopWindowChrome);
     engine.selectMonster("dummy");
 
     grindFor(engine, "lucky-charm"); // the rarest of the four — waiting for it waits for all four
@@ -1620,7 +1839,7 @@ describe("Save → remount round-trip (#9)", () => {
   it("mount, act, save to localStorage, and remount restores Skills, gold, the Bank, Equipment, and the selected Monster", () => {
     const engine1 = createEngine(fixtureContent, seededRng(1));
     const root1 = document.createElement("main");
-    const app1 = mountApp(engine1, root1, fixtureContent);
+    const app1 = mountApp(engine1, root1, fixtureContent, noopWindowChrome);
 
     engine1.selectMonster("dummy");
     grindFor(engine1, "bronze-sword");
@@ -1647,7 +1866,7 @@ describe("Save → remount round-trip (#9)", () => {
     const saved = JSON.parse(raw as string);
     const engine2 = createEngine(fixtureContent, seededRng(2), saved);
     const root2 = document.createElement("main");
-    mountApp(engine2, root2, fixtureContent);
+    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
 
     const after = engine2.snapshot();
     expect(after.player.skills).toEqual(before.player.skills);
