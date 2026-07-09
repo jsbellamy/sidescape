@@ -92,6 +92,7 @@ describe("fresh engine", () => {
         id: "meadow",
         name: "Test Meadow",
         unlocked: true,
+        gatedBy: null,
         monsterIds: ["dummy"],
         fishingSpots: [{ id: "pond", unlocked: true }],
       },
@@ -99,10 +100,34 @@ describe("fresh engine", () => {
         id: "crypt",
         name: "Test Crypt",
         unlocked: false,
+        gatedBy: { dungeonId: "gauntlet", name: "The Gauntlet" },
         monsterIds: ["brute"],
         fishingSpots: [{ id: "deep-pond", unlocked: false }],
       },
     ]);
+  });
+
+  it("gatedBy is null for an ungated Area, reports the gating Dungeon while locked, and returns to null once that Dungeon is cleared", () => {
+    const fresh = freshEngine().snapshot();
+    expect(fresh.areas.find((a) => a.id === "meadow")?.gatedBy).toBeNull();
+    expect(fresh.areas.find((a) => a.id === "crypt")?.gatedBy).toEqual({
+      dungeonId: "gauntlet",
+      name: "The Gauntlet",
+    });
+
+    const engine = dungeonEngine(5);
+    engine.enterDungeon("gauntlet");
+    let completed = false;
+    engine.on("dungeon-completed", () => {
+      completed = true;
+    });
+    for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+    expect(completed).toBe(true);
+
+    const after = engine.snapshot();
+    const crypt = after.areas.find((a) => a.id === "crypt");
+    expect(crypt?.unlocked).toBe(true);
+    expect(crypt?.gatedBy).toBeNull();
   });
 
   it("ticking with nothing selected changes nothing", () => {

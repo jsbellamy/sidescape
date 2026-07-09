@@ -80,6 +80,11 @@ function baseSnapshot(): Snapshot {
         id: area.id,
         name: area.name,
         unlocked,
+        // Base defaults never gate anything visibly (completedDungeonIds is always [] here, so a
+        // gated Area reads locked, but tests needing a populated gatedBy build the Snapshot via
+        // the real Engine instead — see engine.test.ts). Kept null so this stays a complete, valid
+        // Snapshot shape without duplicating Engine's dungeonDef lookup.
+        gatedBy: null,
         monsterIds: [...area.monsterIds],
         fishingSpots: (area.fishingSpotIds ?? []).map((id) => {
           const spot = fixtureContent.fishingSpots.find((s) => s.id === id);

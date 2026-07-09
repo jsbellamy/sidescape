@@ -266,6 +266,10 @@ export interface Snapshot {
     id: string;
     name: string;
     unlocked: boolean;
+    /** The Dungeon gating this Area while it is locked; null once unlocked or if never gated.
+     * The derived "why" completing ADR-0001's legality-flag promise — the UI renders lock labels
+     * from this, never from raw Content. */
+    gatedBy: { dungeonId: string; name: string } | null;
     monsterIds: string[];
     fishingSpots: { id: string; unlocked: boolean }[];
   }[];
