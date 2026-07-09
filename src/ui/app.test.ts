@@ -1716,6 +1716,23 @@ describe("Combat feedback (#4)", () => {
     expect(root.querySelectorAll("#player-splats .splat-miss").length).toBeGreaterThan(0);
   });
 
+  it("splats are driven by the attack event during engine.tick() itself, not by render() (#86)", () => {
+    // No cooldown mirror left to keep in lockstep with render() cadence: splats now fire the
+    // instant engine.tick() resolves an attack, so pumping many Ticks with a single render() at
+    // the very end must still show one splat per resolved swing on each side.
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 20; i++) engine.tick(); // no app.render() in between
+    app.render();
+
+    const monsterSplats = root.querySelectorAll("#monster-splats .splat");
+    const playerSplats = root.querySelectorAll("#player-splats .splat");
+    // dummy attackSpeed === 4, unarmed player speed === 4: 20 Ticks means ~5 swings each side.
+    expect(monsterSplats.length).toBeGreaterThan(0);
+    expect(playerSplats.length).toBeGreaterThan(0);
+  });
+
   it("fades a damage splat out of the DOM after its animation duration", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
