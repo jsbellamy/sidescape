@@ -250,11 +250,19 @@ export function mountApp(
   /** Appends a damage splat (a red hit for `amount > 0`, a blue "0" miss otherwise) to `layer`,
    * removing it after SPLAT_FADE_MS — long enough for styles.css's `splat-fade` animation to play.
    * Each splat owns its own timer so overlapping splats (both combatants landing an attack the
-   * same Tick) fade independently. */
+   * same Tick) fade independently.
+   *
+   * Anti-overlap (#77): each splat gets a small random x/y jitter set inline, biased toward the
+   * upper half of the sprite (styles.css's `.splat` fallback `top: 38%`) rather than dead-centre
+   * over the face, so two splats fired on the same Tick don't fully coincide. */
   function showSplat(layer: HTMLElement, amount: number): void {
     const splat = document.createElement("span");
     splat.className = amount > 0 ? "splat splat-hit" : "splat splat-miss";
     splat.textContent = String(amount);
+    const jitterX = Math.random() * 24 - 12; // ±12px
+    const jitterY = Math.random() * 14 - 7; // ±7px, still biased upper-half by the 38% base
+    splat.style.left = `calc(50% + ${jitterX.toFixed(1)}px)`;
+    splat.style.top = `calc(38% + ${jitterY.toFixed(1)}px)`;
     layer.appendChild(splat);
     setTimeout(() => splat.remove(), SPLAT_FADE_MS);
   }
