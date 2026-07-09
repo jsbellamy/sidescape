@@ -24,25 +24,59 @@ import type {
   Snapshot,
 } from "./types";
 
+/** The Monster-fighting sub-state shared by "combat" and "dungeon" activities: which Monster is
+ * up, its remaining HP, and both combatants' attack cooldowns. */
+interface MonsterFight {
+  monsterId: string;
+  monsterHp: number;
+  playerCooldown: number;
+  monsterCooldown: number;
+}
+
+interface CombatActivity extends MonsterFight {
+  kind: "combat";
+}
+
+/** Sibling to CombatActivity: a Dungeon run is always mid-fight (waves and the boss are Monsters),
+ * so it carries the same MonsterFight fields plus which run/Wave it's on. */
+interface DungeonActivity extends MonsterFight {
+  kind: "dungeon";
+  dungeonId: string;
+  /** 0-based index into DungeonDef.waves of the Monster currently up. */
+  waveIndex: number;
+}
+
+interface FishingActivity {
+  kind: "fishing";
+  spotId: string;
+  catchCooldown: number;
+}
+
+interface SmithingActivity {
+  kind: "smithing";
+  recipeId: string;
+  craftCooldown: number;
+}
+
+/** The Engine's single "what is the player doing right now" value (#29): at most one of
+ * Monster / Fishing Spot / Dungeon run / Recipe is ever active, enforced structurally by this
+ * being one field rather than by hand in every select command. Every command that starts an
+ * activity assigns this wholesale, which is what makes the exclusivity automatic — there is no
+ * per-command "clear the other three" bookkeeping left to forget. */
+type Activity = CombatActivity | DungeonActivity | FishingActivity | SmithingActivity | null;
+
 interface State {
   xp: Record<SkillName, number>;
   hp: number;
   combatStyle: CombatStyle;
   autoEatThreshold: AutoEatThreshold;
-  selectedMonsterId: string | null;
-  monsterHp: number;
-  selectedSpotId: string | null;
-  catchCooldown: number;
-  smithing: { recipeId: string; craftCooldown: number } | null;
+  activity: Activity;
   inventory: Map<string, number>;
   bank: Map<string, number>;
   bankCapacity: number;
   equipment: Record<GearSlot, string | null>;
   respawnTicksLeft: number;
-  playerCooldown: number;
-  monsterCooldown: number;
   regenTicks: number;
-  dungeonRun: { dungeonId: string; waveIndex: number } | null;
   completedDungeonIds: Set<string>;
 }
 
@@ -134,20 +168,13 @@ function freshState(_content: Content): State {
     hp: 10,
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
-    selectedMonsterId: null,
-    monsterHp: 0,
-    selectedSpotId: null,
-    catchCooldown: 0,
-    smithing: null,
+    activity: null,
     inventory: new Map(),
     bank: new Map(),
     bankCapacity: BANK_START_CAPACITY,
     equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
     respawnTicksLeft: 0,
-    playerCooldown: 0,
-    monsterCooldown: 0,
     regenTicks: 0,
-    dungeonRun: null,
     completedDungeonIds: new Set(),
   };
 }
@@ -281,14 +308,14 @@ function loadSmithing(
   inventory: Map<string, number>,
   smithingLevel: number,
   blocked: boolean,
-): { recipeId: string; craftCooldown: number } | null {
+): SmithingActivity | null {
   const recipeId: unknown = blocked ? undefined : saved.smithing?.recipeId;
   const recipe =
     typeof recipeId === "string" ? content.recipes.find((r) => r.id === recipeId) : undefined;
   if (!recipe) return null;
   if (smithingLevel < recipe.levelReq) return null;
   if (!canCraftFromInventory(recipe, inventory)) return null;
-  return { recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+  return { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
 }
 
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
@@ -322,6 +349,28 @@ function loadState(saved: Snapshot, content: Content): State {
     dungeonActive || monster !== undefined || spot !== undefined,
   );
 
+  // Priority mirrors the resolution above: a resumed Monster wins over a resumed Fishing Spot,
+  // which wins over resumed Smithing; a Dungeon run never resumes (see the comment above). By
+  // construction at most one of monster/spot/smithing is set, so this is a plain cascade, not
+  // another hand-maintained mutual-exclusion check.
+  let activity: Activity = null;
+  if (monster) {
+    activity = {
+      kind: "combat",
+      monsterId: monster.id,
+      monsterHp:
+        typeof savedMonsterHp === "number" && Number.isFinite(savedMonsterHp)
+          ? savedMonsterHp
+          : monster.hp,
+      playerCooldown: weaponSpeedFor(equipment.weapon, content),
+      monsterCooldown: monster.attackSpeed,
+    };
+  } else if (spot) {
+    activity = { kind: "fishing", spotId: spot.id, catchCooldown: spot.catchTicks };
+  } else if (smithing) {
+    activity = smithing;
+  }
+
   return {
     xp,
     hp: loadHp(saved, maxHp),
@@ -329,24 +378,13 @@ function loadState(saved: Snapshot, content: Content): State {
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
-    selectedMonsterId: monster?.id ?? null,
-    monsterHp: monster
-      ? typeof savedMonsterHp === "number" && Number.isFinite(savedMonsterHp)
-        ? savedMonsterHp
-        : monster.hp
-      : 0,
-    selectedSpotId: spot?.id ?? null,
-    catchCooldown: spot ? spot.catchTicks : 0,
-    smithing,
+    activity,
     inventory,
     bank: loadBank(saved, content),
     bankCapacity: loadBankCapacity(saved),
     equipment,
     respawnTicksLeft: 0,
-    playerCooldown: monster ? weaponSpeedFor(equipment.weapon, content) : 0,
-    monsterCooldown: monster ? monster.attackSpeed : 0,
     regenTicks: 0,
-    dungeonRun: null,
     completedDungeonIds: loadCompletedDungeonIds(saved, content),
   };
 }
@@ -451,11 +489,30 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     }
   }
 
-  function spawnMonster(id: string): void {
-    state.selectedMonsterId = id;
-    state.monsterHp = monsterDef(id).hp;
-    state.playerCooldown = weaponSpeed();
-    state.monsterCooldown = monsterDef(id).attackSpeed;
+  /** The MonsterFight fields for a freshly spawned `id`: full HP, both cooldowns re-armed. Used to
+   * seed a brand-new "combat"/"dungeon" activity from a select/enter command. */
+  function freshFight(id: string): MonsterFight {
+    const def = monsterDef(id);
+    return {
+      monsterId: id,
+      monsterHp: def.hp,
+      playerCooldown: weaponSpeed(),
+      monsterCooldown: def.attackSpeed,
+    };
+  }
+
+  /** Mutates `fight` in place to `freshFight(id)`'s values, rather than replacing the object.
+   * Used mid-Tick — kill-respawn, Dungeon wave advance, Respawn completion — where tick() has
+   * already captured a reference to the active MonsterFight before calling in here; replacing the
+   * object outright would leave that reference stale for the rest of the Tick's cooldown/attack
+   * phase. Mirrors the pre-#29 code's single persistent playerCooldown/monsterCooldown fields,
+   * which spawnMonster wrote through rather than swapped. */
+  function respawnFight(fight: MonsterFight, id: string): void {
+    const fresh = freshFight(id);
+    fight.monsterId = fresh.monsterId;
+    fight.monsterHp = fresh.monsterHp;
+    fight.playerCooldown = fresh.playerCooldown;
+    fight.monsterCooldown = fresh.monsterCooldown;
   }
 
   /** Rolls every Chest entry independently (multi-roll, unlike a Drop Table's per-kill roll):
@@ -474,27 +531,26 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
   /** Called from playerAttack's kill branch when a Dungeon run is active: advances to the next
    * Wave, or — on the Boss (the last Wave) — rolls the Chest, marks the Dungeon completed, and
-   * ejects the player to idle (dungeonRun and selectedMonsterId both null). */
-  function handleDungeonKill(run: { dungeonId: string; waveIndex: number }): void {
+   * ejects the player to idle (state.activity back to null). Wave advance mutates `run` in place
+   * (see respawnFight) rather than replacing state.activity, for the same stale-reference reason. */
+  function handleDungeonKill(run: DungeonActivity): void {
     const dungeon = dungeonDef(run.dungeonId);
     const clearedWave = run.waveIndex + 1; // 1-based cleared count
     if (clearedWave < dungeon.waves.length) {
-      state.dungeonRun = { dungeonId: run.dungeonId, waveIndex: clearedWave };
+      run.waveIndex = clearedWave;
       emit({
         type: "wave-cleared",
         dungeonId: dungeon.id,
         wave: clearedWave,
         totalWaves: dungeon.waves.length,
       });
-      spawnMonster(dungeon.waves[clearedWave] as string);
+      respawnFight(run, dungeon.waves[clearedWave] as string);
       return;
     }
     // Boss killed: the Chest is on top of the boss's own Drop Table (already rolled by the caller).
     const items = rollChest(dungeon);
     state.completedDungeonIds.add(dungeon.id);
-    state.dungeonRun = null;
-    state.selectedMonsterId = null;
-    state.monsterHp = 0;
+    state.activity = null;
     emit({ type: "dungeon-completed", dungeonId: dungeon.id });
     emit({ type: "chest-opened", dungeonId: dungeon.id, items });
   }
@@ -531,7 +587,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     grantXp("hitpoints", (4 / 3) * damage);
   }
 
-  function playerAttack(monster: MonsterDef): void {
+  function playerAttack(monster: MonsterDef, activity: CombatActivity | DungeonActivity): void {
     const atkRoll = attackRoll(
       effectiveLevel(level("attack"), "attack", state.combatStyle),
       gearBonus("atkBonus"),
@@ -541,16 +597,16 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       effectiveLevel(level("strength"), "strength", state.combatStyle),
       gearBonus("strBonus"),
     );
-    const damage = Math.min(rollDamage(hitChance(atkRoll, defRoll), max), state.monsterHp);
-    state.monsterHp -= damage;
+    const damage = Math.min(rollDamage(hitChance(atkRoll, defRoll), max), activity.monsterHp);
+    activity.monsterHp -= damage;
     awardCombatXp(damage);
-    if (state.monsterHp <= 0) {
+    if (activity.monsterHp <= 0) {
       emit({ type: "kill", monsterId: monster.id });
       rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
-      if (state.dungeonRun) {
-        handleDungeonKill(state.dungeonRun);
+      if (activity.kind === "dungeon") {
+        handleDungeonKill(activity);
       } else {
-        spawnMonster(monster.id);
+        respawnFight(activity, monster.id);
       }
     }
   }
@@ -581,10 +637,23 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     for (const skill of SKILL_NAMES) {
       skills[skill] = { level: level(skill), xp: state.xp[skill] };
     }
-    const monsterDef = content.monsters.find((m) => m.id === state.selectedMonsterId);
-    const spotDef = content.fishingSpots.find((s) => s.id === state.selectedSpotId);
-    const dungeonRunDef = state.dungeonRun ? dungeonDef(state.dungeonRun.dungeonId) : undefined;
-    const smithingRecipeDef = state.smithing ? recipeDef(state.smithing.recipeId) : undefined;
+    // The Snapshot's monster/fishing/dungeon/smithing sibling fields (a save format that must
+    // stay byte-identical, #29) are all derived here from the one state.activity value — dungeon
+    // stays populated with the current wave's Monster too, so the existing HP-bar rendering keeps
+    // working untouched.
+    const fight =
+      state.activity?.kind === "combat" || state.activity?.kind === "dungeon"
+        ? state.activity
+        : undefined;
+    const dungeonRun = state.activity?.kind === "dungeon" ? state.activity : undefined;
+    const fishingSpotActivity = state.activity?.kind === "fishing" ? state.activity : undefined;
+    const smithingActivity = state.activity?.kind === "smithing" ? state.activity : undefined;
+    const monsterDef = fight ? content.monsters.find((m) => m.id === fight.monsterId) : undefined;
+    const spotDef = fishingSpotActivity
+      ? content.fishingSpots.find((s) => s.id === fishingSpotActivity.spotId)
+      : undefined;
+    const dungeonRunDef = dungeonRun ? dungeonDef(dungeonRun.dungeonId) : undefined;
+    const smithingRecipeDef = smithingActivity ? recipeDef(smithingActivity.recipeId) : undefined;
     return {
       player: {
         hp: state.hp,
@@ -604,21 +673,22 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         respawning: state.respawnTicksLeft > 0,
         completedDungeonIds: [...state.completedDungeonIds],
       },
-      monster: monsterDef
-        ? { id: monsterDef.id, name: monsterDef.name, hp: state.monsterHp, maxHp: monsterDef.hp }
-        : null,
+      monster:
+        monsterDef && fight
+          ? { id: monsterDef.id, name: monsterDef.name, hp: fight.monsterHp, maxHp: monsterDef.hp }
+          : null,
       fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
       dungeon:
-        state.dungeonRun && dungeonRunDef
+        dungeonRun && dungeonRunDef
           ? {
               id: dungeonRunDef.id,
               name: dungeonRunDef.name,
-              wave: state.dungeonRun.waveIndex + 1,
+              wave: dungeonRun.waveIndex + 1,
               totalWaves: dungeonRunDef.waves.length,
             }
           : null,
       smithing:
-        state.smithing && smithingRecipeDef
+        smithingActivity && smithingRecipeDef
           ? { recipeId: smithingRecipeDef.id, name: smithingRecipeDef.name }
           : null,
       bank: {
@@ -689,11 +759,11 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   }
 
   /** Rolls one Catch attempt when the cooldown elapses; success grants XP, the Item, and an event. */
-  function fishingTick(): void {
-    const spot = fishingSpotDef(state.selectedSpotId as string);
-    state.catchCooldown -= 1;
-    if (state.catchCooldown > 0) return;
-    state.catchCooldown = spot.catchTicks;
+  function fishingTick(activity: FishingActivity): void {
+    const spot = fishingSpotDef(activity.spotId);
+    activity.catchCooldown -= 1;
+    if (activity.catchCooldown > 0) return;
+    activity.catchCooldown = spot.catchTicks;
     if (rng.next() < spot.catchChance) {
       state.inventory.set(spot.itemId, (state.inventory.get(spot.itemId) ?? 0) + 1);
       grantXp("fishing", spot.xp);
@@ -703,14 +773,13 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
   /** Decrements the craft cooldown; at completion consumes `recipe.inputs` (never lost to an
    * earlier interruption — see selectRecipe/the other select* commands, which only ever swap
-   * `state.smithing` wholesale, never mid-craft), adds the output Item, grants Smithing XP, and
+   * `state.activity` wholesale, never mid-craft), adds the output Item, grants Smithing XP, and
    * emits item-crafted. Auto-repeats (re-arms the cooldown) while inputs still cover another
    * craft; otherwise clears Smithing back to idle with no extra event — the Snapshot shows it. */
-  function smithingTick(): void {
-    const smithing = state.smithing as { recipeId: string; craftCooldown: number };
-    const recipe = recipeDef(smithing.recipeId);
-    smithing.craftCooldown -= 1;
-    if (smithing.craftCooldown > 0) return;
+  function smithingTick(activity: SmithingActivity): void {
+    const recipe = recipeDef(activity.recipeId);
+    activity.craftCooldown -= 1;
+    if (activity.craftCooldown > 0) return;
 
     for (const input of recipe.inputs) {
       const owned = state.inventory.get(input.itemId) ?? 0;
@@ -723,60 +792,62 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
 
     if (canCraftRecipe(recipe)) {
-      smithing.craftCooldown = recipe.craftTicks;
+      activity.craftCooldown = recipe.craftTicks;
     } else {
-      state.smithing = null;
+      state.activity = null;
     }
   }
 
   function tick(): void {
     regen();
 
-    if (state.selectedSpotId !== null) {
-      fishingTick();
+    if (state.activity?.kind === "fishing") {
+      fishingTick(state.activity);
       return;
     }
 
-    if (state.smithing !== null) {
-      smithingTick();
+    if (state.activity?.kind === "smithing") {
+      smithingTick(state.activity);
       return;
     }
 
-    // Respawn is checked ahead of the "nothing selected" guard below: a Dungeon death clears
-    // selectedMonsterId (see the death branch at the bottom of this function) so Respawn can
-    // still count down to completion with no Monster selected — it just completes to idle
-    // instead of auto-resuming. The spawn on completion is guarded accordingly.
+    // Respawn is checked ahead of the "nothing active" guard below: a Dungeon death clears
+    // state.activity to null (see the death branch at the bottom of this function) so Respawn can
+    // still count down to completion with nothing active — it just completes to idle instead of
+    // auto-resuming. The resume on completion is guarded accordingly.
     if (state.respawnTicksLeft > 0) {
       state.respawnTicksLeft -= 1;
       if (state.respawnTicksLeft === 0) {
         state.hp = maxHp();
-        if (state.selectedMonsterId !== null) spawnMonster(state.selectedMonsterId);
+        if (state.activity?.kind === "combat") {
+          respawnFight(state.activity, state.activity.monsterId);
+        }
       }
       return;
     }
 
-    if (state.selectedMonsterId === null) return;
+    if (state.activity?.kind !== "combat" && state.activity?.kind !== "dungeon") return;
 
-    const monster = monsterDef(state.selectedMonsterId);
-    state.playerCooldown -= 1;
-    if (state.playerCooldown <= 0) {
-      state.playerCooldown = weaponSpeed();
-      playerAttack(monster);
+    const activity = state.activity;
+    const monster = monsterDef(activity.monsterId);
+    activity.playerCooldown -= 1;
+    if (activity.playerCooldown <= 0) {
+      activity.playerCooldown = weaponSpeed();
+      playerAttack(monster, activity);
     }
-    state.monsterCooldown -= 1;
-    if (state.monsterCooldown <= 0) {
-      state.monsterCooldown = monster.attackSpeed;
+    activity.monsterCooldown -= 1;
+    if (activity.monsterCooldown <= 0) {
+      activity.monsterCooldown = monster.attackSpeed;
       monsterAttack(monster);
     }
     autoEat();
     if (state.hp <= 0) {
       state.respawnTicksLeft = RESPAWN_TICKS;
-      // Death ejects the player from a Dungeon run (all-or-nothing): clear dungeonRun AND
-      // selectedMonsterId now, before Respawn starts, so Respawn completes to idle instead of
-      // auto-resuming on the dungeon-only boss/wave Monster. Re-entry always restarts at wave 1.
-      if (state.dungeonRun) {
-        state.dungeonRun = null;
-        state.selectedMonsterId = null;
+      // Death ejects the player from a Dungeon run (all-or-nothing): clear state.activity now,
+      // before Respawn starts, so Respawn completes to idle instead of auto-resuming on the
+      // dungeon-only boss/wave Monster. Re-entry always restarts at wave 1.
+      if (state.activity?.kind === "dungeon") {
+        state.activity = null;
       }
       emit({ type: "death" });
     }
@@ -795,12 +866,12 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         const dungeon = dungeonDef(area.unlockedByDungeonId as string);
         throw new Error(`${area.name} is locked — defeat ${dungeon.name}`);
       }
-      state.selectedSpotId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
-      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
-      state.smithing = null;
-      spawnMonster(monsterId);
+      // Assigning state.activity wholesale is what makes "at most one of Monster / Fishing Spot /
+      // Dungeon / Recipe" structural (#29): whatever was active is replaced outright, never
+      // cleared field-by-field.
+      state.activity = { kind: "combat", ...freshFight(monsterId) };
     },
     selectFishingSpot(spotId) {
       const spot = fishingSpotDef(spotId); // throws on unknown id
@@ -812,13 +883,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       if (level("fishing") < spot.levelReq) {
         throw new Error(`${spot.name} requires Fishing level ${spot.levelReq}`);
       }
-      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
-      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
-      state.smithing = null;
-      state.selectedSpotId = spotId;
-      state.catchCooldown = spot.catchTicks;
+      state.activity = { kind: "fishing", spotId, catchCooldown: spot.catchTicks };
     },
     enterDungeon(dungeonId) {
       const dungeon = dungeonDef(dungeonId); // throws on unknown id
@@ -827,12 +894,14 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         const gatingDungeon = dungeonDef(area.unlockedByDungeonId as string);
         throw new Error(`${area.name} is locked — defeat ${gatingDungeon.name}`);
       }
-      state.selectedSpotId = null; // clears any Fishing Spot
       state.respawnTicksLeft = 0; // clears Respawn
       state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
-      state.smithing = null; // clears any Smithing activity
-      state.dungeonRun = { dungeonId, waveIndex: 0 };
-      spawnMonster(dungeon.waves[0] as string);
+      state.activity = {
+        kind: "dungeon",
+        dungeonId,
+        waveIndex: 0,
+        ...freshFight(dungeon.waves[0] as string),
+      };
     },
     selectRecipe(recipeId) {
       const recipe = recipeDef(recipeId); // throws on unknown id
@@ -842,12 +911,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       if (!canCraftRecipe(recipe)) {
         throw new Error(`insufficient materials for ${recipe.name}`);
       }
-      state.selectedMonsterId = null; // at most one of Monster / Fishing Spot / Dungeon / Smithing
-      state.selectedSpotId = null;
-      state.dungeonRun = null; // leaving mid-run abandons it (all-or-nothing)
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
-      state.smithing = { recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+      state.activity = { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
     },
     setCombatStyle(style) {
       state.combatStyle = style;
