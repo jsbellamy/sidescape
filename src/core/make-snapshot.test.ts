@@ -9,7 +9,7 @@ describe("makeSnapshot", () => {
     expect(() => createEngine(fixtureContent, seededRng(1), makeSnapshot())).not.toThrow();
   });
 
-  it("defaults to full HP, level-1 Skills, no Gear, empty inventory, nothing selected", () => {
+  it("defaults to full HP, level-1 Skills, no Gear, gold 0, empty Bank, nothing selected", () => {
     const snap = makeSnapshot();
     expect(snap.player.hp).toBe(snap.player.maxHp);
     for (const skill of ["attack", "strength", "defence", "hitpoints", "fishing"] as const) {
@@ -22,7 +22,8 @@ describe("makeSnapshot", () => {
       body: null,
       legs: null,
     });
-    expect(snap.player.inventory).toEqual([]);
+    expect(snap.player.gold).toBe(0);
+    expect(snap.bank.items).toEqual([]);
     expect(snap.player.respawning).toBe(false);
     expect(snap.player.combatStyle).toBe("accurate");
     expect(snap.player.autoEatThreshold).toBe(0);
@@ -74,19 +75,19 @@ describe("makeSnapshot", () => {
     expect(snap.fishing).toBeNull();
   });
 
-  it("replaces inventory and areas wholesale rather than merging elements", () => {
+  it("replaces bank.items and areas wholesale rather than merging elements", () => {
     const snap = makeSnapshot({
-      player: { inventory: [{ itemId: "meat", qty: 5 }] },
+      bank: { items: [{ itemId: "meat", qty: 5 }] },
       areas: [],
     });
-    expect(snap.player.inventory).toEqual([{ itemId: "meat", qty: 5 }]);
+    expect(snap.bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
     expect(snap.areas).toEqual([]);
   });
 
   it("each call returns an independent object (no shared mutable defaults)", () => {
     const a = makeSnapshot();
     const b = makeSnapshot();
-    a.player.inventory.push({ itemId: "gold", qty: 1 });
-    expect(b.player.inventory).toEqual([]);
+    a.bank.items.push({ itemId: "gold", qty: 1 });
+    expect(b.bank.items).toEqual([]);
   });
 });

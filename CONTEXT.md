@@ -37,7 +37,7 @@ A concrete **Item** (with quantity) produced by rolling a **Drop Table**.
 _Avoid_: loot (as a noun for a single item)
 
 **Item**:
-Anything obtainable: **Equipment**, **Food**, **Material**, or Gold.
+Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
 An **Item** worn in one of five **Gear Slots**, granting attack / strength / defence bonuses.
@@ -64,11 +64,15 @@ A Smithing-level-gated conversion of Materials into one Equipment Item, trained 
 _Avoid_: blueprint, formula
 
 **Bank**:
-A player's storage separate from the carried inventory; deposited **Items** don't count against anything carried, and can't be worn or auto-eaten until withdrawn. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending carried gold, a gold sink.
-_Avoid_: storage, chest, warehouse
+The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Drop, Catch, Chest, Recipe output) lands here; **Equipment** is worn directly from the Bank and **Food** is eaten directly from it. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
+_Avoid_: storage, chest, warehouse, inventory
 
 **Bank Slot**:
 One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
+
+**Gold**:
+The player's currency balance — a number on the player, not an Item stack, so it never occupies a **Bank Slot**. Currency Drops credit it directly; selling an Item and buying Bank Slots are its only other movements.
+_Avoid_: coins, cash, currency (as the general term — use Gold, the v1 currency's name)
 
 **Fishing Spot**:
 A location inside an **Area** where the player fishes instead of fighting, gated by the Area's own gate (see **Area**) and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
@@ -119,7 +123,7 @@ _Avoid_: death screen, grave
 - Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the equipped weapon's **Combat Mode** (and, for melee, the active **Combat Style**)
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
-- The **Bank** holds one Item stack per **Bank Slot**, separate from the carried inventory
+- The **Bank** holds one Item stack per **Bank Slot** and is the player's sole Item store; **Gold** is tracked separately as a player-level balance, never a Bank stack
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
 - An **Area** may also host a **Dungeon**: an ordered sequence of **Waves** ending in a **Boss**, rewarding a **Chest** on completion; entering one cancels any selected Monster or Fishing Spot, and vice versa
 - A **Recipe** converts Materials into an Equipment Item, training Smithing; at most one of a Monster, a Fishing Spot, a Dungeon run, or a Recipe is active at a time — selecting/entering any one of the four cancels whichever of the other three was active

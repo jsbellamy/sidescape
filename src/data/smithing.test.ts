@@ -104,7 +104,7 @@ describe("Smithing content", () => {
     const engine = createEngine(
       content,
       seededRng(1),
-      makeSnapshot({ player: { inventory: [{ itemId: "bronze-bar", qty: 1 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-bar", qty: 1 }] } }),
     );
     expect(() => engine.selectRecipe("bronze-dagger")).not.toThrow();
     expect(engine.snapshot().smithing).toEqual({
@@ -117,7 +117,7 @@ describe("Smithing content", () => {
     const engine = createEngine(
       content,
       seededRng(1),
-      makeSnapshot({ player: { inventory: [{ itemId: "iron-bar", qty: 5 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "iron-bar", qty: 5 }] } }),
     );
     expect(() => engine.selectRecipe("iron-chainbody")).toThrow(/smithing level 20/i);
   });
@@ -128,17 +128,17 @@ describe("Smithing content", () => {
       seededRng(1),
       makeSnapshot({
         player: {
-          inventory: [{ itemId: "iron-bar", qty: 3 }],
           skills: { smithing: { level: 20, xp: xpForLevel(20) } },
         },
+        bank: { items: [{ itemId: "iron-bar", qty: 3 }] },
       }),
     );
     engine.selectRecipe("iron-chainbody");
     for (let i = 0; i < 15; i++) engine.tick(); // craftTicks === 15
 
     const snap = engine.snapshot();
-    expect(snap.player.inventory.find((s) => s.itemId === "iron-bar")).toBeUndefined();
-    expect(snap.player.inventory.find((s) => s.itemId === "iron-chainbody")?.qty).toBe(1);
+    expect(snap.bank.items.find((s) => s.itemId === "iron-bar")).toBeUndefined();
+    expect(snap.bank.items.find((s) => s.itemId === "iron-chainbody")?.qty).toBe(1);
     expect(snap.player.skills.smithing.xp).toBeGreaterThan(xpForLevel(20));
     expect(snap.smithing).toBeNull(); // no bars left for another craft
   });
