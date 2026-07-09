@@ -76,6 +76,9 @@ interface State {
   gold: number;
   bank: Map<string, number>;
   bankCapacity: number;
+  /** The Loot Zone (#60): combat Drops land here first, capped at LOOT_ZONE_CAPACITY stacks; a
+   * sibling store to `bank`, swept into it on leaving combat or via lootAll(). */
+  lootZone: Map<string, number>;
   equipment: Record<GearSlot, string | null>;
   respawnTicksLeft: number;
   regenTicks: number;
@@ -98,6 +101,10 @@ export interface Engine {
   eatFood(itemId: string): void;
   sell(itemId: string, qty?: number): void;
   buyBankSlots(): void;
+  /** Sweeps the Loot Zone into the Bank on demand (#60) — the same sweep auto-loot runs on
+   * leaving combat. Idempotent and never throws: the Loot Zone may legally sit un-banked
+   * forever, and a stack that can't fit a full Bank simply stays put for next time. */
+  lootAll(): void;
   snapshot(): Snapshot;
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
 }
@@ -107,6 +114,10 @@ const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
 const DEFAULT_AUTO_EAT_THRESHOLD: AutoEatThreshold = 0.5;
+
+/** Loot Zone capacity (#60): max STACKS the zone holds, mirroring a Bank Slot's "1 stack, any
+ * qty" rule. Tuning, not spec. */
+const LOOT_ZONE_CAPACITY = 10;
 
 /** Bank Slot capacity: 1 slot = 1 item stack, regardless of stack quantity. */
 const BANK_START_CAPACITY = 100;
@@ -172,6 +183,7 @@ function freshState(_content: Content): State {
     gold: 0,
     bank: new Map(),
     bankCapacity: BANK_START_CAPACITY,
+    lootZone: new Map(),
     equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
     respawnTicksLeft: 0,
     regenTicks: 0,
@@ -272,6 +284,24 @@ function loadBank(saved: Snapshot, content: Content, currencyId: string): Map<st
   for (const entry of saved.bank?.items ?? []) addStack(entry?.itemId, entry?.qty);
   for (const entry of loadLegacyInventory(saved)) addStack(entry.itemId, entry.qty);
   return bank;
+}
+
+/** Drops Loot Zone entries whose itemId isn't in Content, is the currency item (currency never
+ * enters the zone — a defensively-tolerated corruption, not a real path), or whose qty isn't a
+ * positive integer; keeps the rest, summed across duplicate entries. Mirrors loadBank's tolerant
+ * shape; unlike loadBank, capacity (LOOT_ZONE_CAPACITY stacks) is NOT enforced on load either —
+ * same rationale, it only gates NEW incoming stacks at runtime. A missing field defaults to []. */
+function loadLootZone(saved: Snapshot, content: Content, currencyId: string): Map<string, number> {
+  const itemIds = new Set(content.items.map((i) => i.id));
+  const zone = new Map<string, number>();
+  for (const entry of saved.lootZone ?? []) {
+    const itemId: unknown = entry?.itemId;
+    const qty: unknown = entry?.qty;
+    if (typeof itemId !== "string" || itemId === currencyId || !itemIds.has(itemId)) continue;
+    if (!isPositiveIntQty(qty)) continue;
+    zone.set(itemId, (zone.get(itemId) ?? 0) + qty);
+  }
+  return zone;
 }
 
 /** Bank capacity coerced to a finite number; a missing/non-numeric value falls back to
@@ -409,6 +439,7 @@ function loadState(saved: Snapshot, content: Content): State {
     gold,
     bank,
     bankCapacity: loadBankCapacity(saved),
+    lootZone: loadLootZone(saved, content, currencyId),
     equipment,
     respawnTicksLeft: 0,
     regenTicks: 0,
@@ -530,22 +561,63 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
   }
 
-  /** Routes one passive arrival (drop or Chest entry) to its destination (#59): the currency
-   * item credits `state.gold` directly, never touching the Bank; anything else goes to the Bank
-   * via addToBank's top-up/overflow rules above. */
-  function creditPassiveItem(itemId: string, qty: number): void {
+  /** Adds `qty` of `itemId` to the Loot Zone (#60): a top-up of an existing zone stack always
+   * fits, mirroring addToBank's rule. A brand-new stack needed while the zone already holds
+   * LOOT_ZONE_CAPACITY stacks is instead auto-sold (sellable) or discarded (unsellable) — the
+   * same universal overflow rule and events as a full Bank (#59). Never throws — reached only
+   * from a combat arrival (kill Drop or Dungeon Chest item), never a player command. */
+  function addToLootZone(itemId: string, qty: number): void {
+    const isNewStack = !state.lootZone.has(itemId);
+    if (isNewStack && state.lootZone.size >= LOOT_ZONE_CAPACITY) {
+      const def = content.items.find((i) => i.id === itemId);
+      const value = def ? sellValue(def) : undefined;
+      if (value !== undefined) {
+        const gold = value * qty;
+        state.gold += gold;
+        emit({ type: "overflow-sold", itemId, qty, gold });
+      } else {
+        emit({ type: "overflow-lost", itemId, qty });
+      }
+      return;
+    }
+    state.lootZone.set(itemId, (state.lootZone.get(itemId) ?? 0) + qty);
+  }
+
+  /** Routes one passive arrival (drop or Chest entry) to its destination (#59, extended by
+   * #60): the currency item credits `state.gold` directly, never touching the Bank or the Loot
+   * Zone; anything else goes to the Loot Zone via addToLootZone's top-up/overflow rules above —
+   * combat outputs buffer there instead of landing straight in the Bank. */
+  function creditCombatItem(itemId: string, qty: number): void {
     if (itemId === currencyDef.id) {
       state.gold += qty;
       return;
     }
-    addToBank(itemId, qty);
+    addToLootZone(itemId, qty);
+  }
+
+  /** Moves every Loot Zone stack into the Bank (#60): a top-up of an existing Bank stack always
+   * fits; a stack that would need a brand-new Bank Slot while the Bank is already at capacity
+   * stays in the Loot Zone untouched — a sweep never sells, unlike zone-full overflow above.
+   * Emits one `looted` event listing exactly the stacks actually banked; emits nothing if none
+   * moved. Shared by every auto-loot trigger and the on-demand lootAll() command — both idempotent
+   * by construction, since a second sweep simply finds nothing left that fits. */
+  function sweepLootZone(): void {
+    const banked: { itemId: string; qty: number }[] = [];
+    for (const [itemId, qty] of [...state.lootZone]) {
+      const isNewStack = !state.bank.has(itemId);
+      if (isNewStack && state.bank.size >= state.bankCapacity) continue; // stays in the zone
+      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+      state.lootZone.delete(itemId);
+      banked.push({ itemId, qty });
+    }
+    if (banked.length > 0) emit({ type: "looted", items: banked });
   }
 
   function rollDrops(monster: MonsterDef): void {
     for (const entry of monster.dropTable) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
       emit({ type: "drop", itemId: entry.itemId, qty: entry.qty, band: entry.band });
-      creditPassiveItem(entry.itemId, entry.qty);
+      creditCombatItem(entry.itemId, entry.qty);
     }
   }
 
@@ -576,24 +648,25 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
   }
 
   /** Rolls every Chest entry independently (multi-roll, unlike a Drop Table's per-kill roll):
-   * routes each landed item like any other passive arrival (#59 — currency to gold, everything
-   * else to the Bank) and returns it for chest-opened. No per-item `drop` events fire — Chest
+   * routes each landed item like any other combat arrival (#59/#60 — currency to gold, everything
+   * else to the Loot Zone) and returns it for chest-opened. No per-item `drop` events fire — Chest
    * contents are reported only via chest-opened (mirrors fishing's single fish-caught event
    * instead of per-item drops). */
   function rollChest(dungeon: DungeonDef): { itemId: string; qty: number; band: DropBand }[] {
     const items: { itemId: string; qty: number; band: DropBand }[] = [];
     for (const entry of dungeon.chest) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
-      creditPassiveItem(entry.itemId, entry.qty);
+      creditCombatItem(entry.itemId, entry.qty);
       items.push({ itemId: entry.itemId, qty: entry.qty, band: entry.band });
     }
     return items;
   }
 
   /** Called from playerAttack's kill branch when a Dungeon run is active: advances to the next
-   * Wave, or — on the Boss (the last Wave) — rolls the Chest, marks the Dungeon completed, and
-   * ejects the player to idle (state.activity back to null). Wave advance mutates `run` in place
-   * (see respawnFight) rather than replacing state.activity, for the same stale-reference reason. */
+   * Wave, or — on the Boss (the last Wave) — rolls the Chest, marks the Dungeon completed, ejects
+   * the player to idle (state.activity back to null), and auto-loots the run's Loot Zone into the
+   * Bank (#60 — dungeon completion is a sweep trigger). Wave advance mutates `run` in place (see
+   * respawnFight) rather than replacing state.activity, for the same stale-reference reason. */
   function handleDungeonKill(run: DungeonActivity): void {
     const dungeon = dungeonDef(run.dungeonId);
     const clearedWave = run.waveIndex + 1; // 1-based cleared count
@@ -614,6 +687,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.activity = null;
     emit({ type: "dungeon-completed", dungeonId: dungeon.id });
     emit({ type: "chest-opened", dungeonId: dungeon.id, items });
+    sweepLootZone();
   }
 
   const STYLE_SKILL: Record<CombatStyle, SkillName> = {
@@ -757,6 +831,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         capacity: state.bankCapacity,
         nextSlotsPrice: nextBankSlotsPrice(state.bankCapacity),
       },
+      lootZone: [...state.lootZone].map(([itemId, qty]) => ({ itemId, qty })),
       areas: content.areas.map((area) => {
         const unlocked = areaUnlocked(area);
         return {
@@ -911,7 +986,14 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       // before Respawn starts, so Respawn completes to idle instead of auto-resuming on the
       // dungeon-only boss/wave Monster. Re-entry always restarts at wave 1.
       if (state.activity?.kind === "dungeon") {
+        const dungeonId = state.activity.dungeonId;
         state.activity = null;
+        // Dungeon runs are all-or-nothing for loot too (#60, owner amendment): a mid-run death
+        // EMPTIES the Loot Zone instead of sweeping it — the failed run's own drops are lost, not
+        // banked. Open-world death (below) never touches the Loot Zone.
+        const lostItems = [...state.lootZone].map(([itemId, qty]) => ({ itemId, qty }));
+        state.lootZone.clear();
+        emit({ type: "dungeon-failed", dungeonId, lostItems });
       }
       emit({ type: "death" });
     }
@@ -949,6 +1031,8 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       }
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
+      // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
+      sweepLootZone();
       state.activity = { kind: "fishing", spotId, catchCooldown: spot.catchTicks };
     },
     enterDungeon(dungeonId) {
@@ -960,6 +1044,10 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       }
       state.respawnTicksLeft = 0; // clears Respawn
       state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
+      // Entering a Dungeon also auto-loots first (#60, owner amendment): any open-world loot is
+      // banked before the run starts, so the zone is empty at run start and only ever holds the
+      // current run's own drops while inside — nothing pre-run is ever lost to a failed run.
+      sweepLootZone();
       state.activity = {
         kind: "dungeon",
         dungeonId,
@@ -977,6 +1065,8 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
       }
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
+      // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
+      sweepLootZone();
       state.activity = { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
     },
     setCombatStyle(style) {
@@ -1048,6 +1138,9 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
 
       state.gold -= price;
       state.bankCapacity += BANK_SLOTS_PER_PURCHASE;
+    },
+    lootAll() {
+      sweepLootZone();
     },
     on(type, handler) {
       const list = handlers.get(type) ?? [];

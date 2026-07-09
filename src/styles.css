@@ -363,6 +363,47 @@ body {
   cursor: not-allowed;
 }
 
+#loot-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+#loot-strip-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.loot-chip {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+#loot-all-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+#loot-all-btn:hover {
+  border-color: var(--accent);
+}
+
 #panels {
   flex: 1;
   overflow-y: auto;

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import type { Engine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
+import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
+import { xpForLevel } from "../core/xp";
 import type { Content } from "../core/types";
 import { mountSfx } from "./sfx";
 
@@ -92,9 +94,26 @@ describe("mountSfx", () => {
   });
 
   it("plays a distinct sound on food-eaten", () => {
-    // Needs the player to actually drop below half HP; use the fiercer Dummy so
-    // damage outpaces passive regen (see fiercerDummyContent).
-    const { engine } = mount(42, fiercerDummyContent());
+    // Needs the player to actually drop below half HP; use the fiercer Dummy so damage outpaces
+    // passive regen (see fiercerDummyContent). Food (meat) is itself now a combat Drop, which
+    // lands in the Loot Zone rather than the Bank (#60) — auto-eat only ever reads from the Bank,
+    // so seed it directly instead of relying on incidental kill Drops reaching it mid-fight.
+    const engine = createEngine(
+      fiercerDummyContent(),
+      seededRng(42),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5, // makeSnapshot's own default is 0 (Off)
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        },
+        bank: { items: [{ itemId: "meat", qty: 20 }] },
+      }),
+    );
+    const toggleButton = document.createElement("button");
+    mountSfx(engine, toggleButton);
     engine.selectMonster("dummy");
     pumpUntil(engine, () => played.some((src) => src.includes("eat.wav")));
 
@@ -123,7 +142,7 @@ describe("mountSfx", () => {
     engine.selectMonster("dummy");
     pumpUntil(
       engine,
-      () => engine.snapshot().bank.items.some((s) => s.itemId === "lucky-charm"), // the rare-band item
+      () => engine.snapshot().lootZone.some((s) => s.itemId === "lucky-charm"), // the rare-band item
     );
 
     expect(played.some((src) => src.includes("rare-drop.wav"))).toBe(true);

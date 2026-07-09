@@ -66,6 +66,7 @@ function baseSnapshot(): Snapshot {
     dungeon: null,
     smithing: null,
     bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
+    lootZone: [],
     areas: fixtureContent.areas.map((area) => {
       // completedDungeonIds is always [] here (base defaults, before `overrides` is merged in by
       // makeSnapshot): a gated Area reads locked at the base level, same as pre-#24's combatLevel

@@ -7,12 +7,20 @@ import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
 
-/** Pump Ticks until the Bank holds `itemId` (or fail the test), mirroring core/engine.test.ts's
- * grindFor — passive Drops land in the Bank (#59), never a carried inventory. */
+/** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
+ * loot it all into the Bank, mirroring core/engine.test.ts's grindFor — combat Drops land in the
+ * Loot Zone first, not the Bank directly (#60). */
 function grindFor(engine: ReturnType<typeof createEngine>, itemId: string, maxTicks = 20_000) {
   for (let i = 0; i < maxTicks; i++) {
     engine.tick();
-    if (engine.snapshot().bank.items.some((s) => s.itemId === itemId)) return;
+    const snap = engine.snapshot();
+    if (
+      snap.bank.items.some((s) => s.itemId === itemId) ||
+      snap.lootZone.some((s) => s.itemId === itemId)
+    ) {
+      engine.lootAll();
+      return;
+    }
   }
   throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
 }
@@ -99,8 +107,9 @@ describe("mountApp", () => {
     // grind until a Cooked Meat drops and the player has taken some damage
     for (let i = 0; i < 2000; i++) {
       engine.tick();
-      if (engine.snapshot().bank.items.some((s) => s.itemId === "meat")) break;
+      if (engine.snapshot().lootZone.some((s) => s.itemId === "meat")) break;
     }
+    engine.lootAll();
     app.render();
     const meatQty = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(meatQty).toBeGreaterThan(0);
@@ -156,8 +165,9 @@ describe("mountApp", () => {
 
     for (let i = 0; i < 20_000; i++) {
       engine.tick();
-      if (engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")) break;
+      if (engine.snapshot().lootZone.some((s) => s.itemId === "bronze-sword")) break;
     }
+    engine.lootAll();
     app.render();
     const swordQty =
       engine.snapshot().bank.items.find((s) => s.itemId === "bronze-sword")?.qty ?? 0;
@@ -182,8 +192,9 @@ describe("mountApp", () => {
 
     for (let i = 0; i < 2000; i++) {
       engine.tick();
-      if (engine.snapshot().bank.items.some((s) => s.itemId === "meat")) break;
+      if (engine.snapshot().lootZone.some((s) => s.itemId === "meat")) break;
     }
+    engine.lootAll();
     app.render();
     const meatQty = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     const hpBefore = engine.snapshot().player.hp;
@@ -589,10 +600,42 @@ describe("Bank", () => {
     expect(root.querySelector("#feed li")?.textContent).toMatch(/ate.*meat/i);
   });
 
-  it("logs an overflow-sold feed line when a sellable passive Drop can't fit a full Bank", () => {
-    const { engine, root } = bankMount({
-      bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
-    });
+  it("logs an overflow-sold feed line when a sellable combat Drop can't fit a full Loot Zone (#60 — kill Drops overflow the zone, not the Bank)", () => {
+    // Extend fixtureContent with junk Material items purely to pre-fill all 10 Loot Zone stacks
+    // with items that are NOT among dummy's own Drop Table entries (meat/bronze-sword/lucky-charm),
+    // so the next one of those to land is a genuine 11th stack.
+    const content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        ...Array.from({ length: 7 }, (_, i) => ({
+          kind: "material" as const,
+          id: `junk-${i}`,
+          name: `Junk ${i}`,
+          value: 1,
+        })),
+      ],
+    };
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({
+        lootZone: [
+          { itemId: "bar", qty: 1 },
+          { itemId: "bow", qty: 1 },
+          { itemId: "staff", qty: 1 },
+          { itemId: "junk-0", qty: 1 },
+          { itemId: "junk-1", qty: 1 },
+          { itemId: "junk-2", qty: 1 },
+          { itemId: "junk-3", qty: 1 },
+          { itemId: "junk-4", qty: 1 },
+          { itemId: "junk-5", qty: 1 },
+          { itemId: "junk-6", qty: 1 },
+        ],
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, content);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let sold = false;
@@ -629,6 +672,94 @@ describe("Bank", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
 
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*lost/i);
+  });
+});
+
+describe("Loot strip (#60)", () => {
+  it("is hidden when the Loot Zone is empty, on a fresh mount", () => {
+    const { root } = mount(1);
+    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(true);
+  });
+
+  it("renders zone stacks as chips and shows the strip once combat Drops land in the zone", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 2000 && engine.snapshot().lootZone.length === 0; i++) engine.tick();
+    app.render();
+
+    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+    const chip = root.querySelector<HTMLLIElement>("#loot-strip-items .loot-chip");
+    expect(chip).not.toBeNull();
+    const zoneEntry = engine.snapshot().lootZone[0]!;
+    expect(chip?.textContent).toContain(`×${zoneEntry.qty}`);
+  });
+
+  it("clicking Loot all sweeps the zone into the Bank, hides the strip, and logs a Banked feed line", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+
+    root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
+
+    expect(engine.snapshot().lootZone).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
+    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(true);
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/banked.*meat/i);
+  });
+
+  it("a sweep that leaves a stack behind (full Bank) logs a 'Bank full — loot left behind' feed line and keeps the strip visible", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+        lootZone: [{ itemId: "meat", qty: 3 }],
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
+
+    expect(engine.snapshot().lootZone).toEqual([{ itemId: "meat", qty: 3 }]); // couldn't fit
+    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*left behind/i);
+  });
+
+  it("logs a 'Run failed — loot lost!' feed line (plus the lost stacks) on dungeon-failed", () => {
+    const lethalDungeonContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy" ? { ...m, attackLevel: 99, maxHit: 20, attackSpeed: 1 } : m,
+      ),
+    };
+    const engine = createEngine(
+      lethalDungeonContent,
+      seededRng(42),
+      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 2 }] }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, lethalDungeonContent);
+    // enterDungeon sweeps first (#60), banking the seeded stack, so the run itself starts empty —
+    // this only needs to prove the dungeon-failed feed line fires, not that it carries real loot
+    // (that's covered at the Engine level in core/engine.test.ts).
+    engine.enterDungeon("gauntlet");
+
+    let died = false;
+    engine.on("death", () => {
+      died = true;
+    });
+    for (let i = 0; i < 5000 && !died; i++) engine.tick();
+
+    expect(died).toBe(true);
+    const feedTexts = [...root.querySelectorAll("#feed li")].map((li) => li.textContent);
+    expect(feedTexts.some((t) => /run failed.*loot lost/i.test(t ?? ""))).toBe(true);
   });
 });
 
@@ -1231,11 +1362,11 @@ describe("Combat feedback (#4)", () => {
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let i = 0;
-    for (; i < 2000 && !engine.snapshot().bank.items.some((s) => s.itemId === "lucky-charm"); i++) {
+    for (; i < 2000 && !engine.snapshot().lootZone.some((s) => s.itemId === "lucky-charm"); i++) {
       engine.tick();
     }
     app.render();
-    expect(engine.snapshot().bank.items.some((s) => s.itemId === "lucky-charm")).toBe(true);
+    expect(engine.snapshot().lootZone.some((s) => s.itemId === "lucky-charm")).toBe(true);
 
     expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(true);
     const feedLine = root.querySelector("#feed li.drop-rare");
@@ -1266,7 +1397,12 @@ describe("Loot Feed band styling (#9)", () => {
 
     grindFor(engine, "lucky-charm"); // the rarest of the four — waiting for it waits for all four
 
-    const feedItems = [...root.querySelectorAll<HTMLLIElement>("#feed li")];
+    // grindFor's own lootAll() sweep (#60) may prepend a "Banked …" feed line ahead of the drop
+    // lines — filter down to the drop-* classed lines so this stays about band styling, not sweep
+    // timing/wording.
+    const feedItems = [...root.querySelectorAll<HTMLLIElement>("#feed li")].filter((li) =>
+      li.className.startsWith("drop-"),
+    );
     // feedLine prepends, and the Engine emits drop events in dropTable array order (guaranteed,
     // common, uncommon, rare), so the newest-first feed reads rare, uncommon, common, guaranteed.
     expect(feedItems[0]?.className).toBe("drop-rare");

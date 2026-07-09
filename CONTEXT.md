@@ -64,8 +64,12 @@ A Smithing-level-gated conversion of Materials into one Equipment Item, trained 
 _Avoid_: blueprint, formula
 
 **Bank**:
-The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Drop, Catch, Chest, Recipe output) lands here; **Equipment** is worn directly from the Bank and **Food** is eaten directly from it. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
+The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here; **Equipment** is worn directly from the Bank and **Food** is eaten directly from it. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
 _Avoid_: storage, chest, warehouse, inventory
+
+**Loot Zone**:
+The small buffer (10 stacks) where combat Drops accumulate — kill Drops and Dungeon Chest items land here first, not straight in the Bank; Catches and Recipe outputs bypass it entirely and go straight to the Bank, unchanged. Auto-looted into the Bank when the player leaves combat, or manually via Loot all. Excess beyond its capacity is auto-sold for Gold (or discarded, if unsellable).
+_Avoid_: inventory, loot bag
 
 **Bank Slot**:
 One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
@@ -124,6 +128,7 @@ _Avoid_: death screen, grave
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot** and is the player's sole Item store; **Gold** is tracked separately as a player-level balance, never a Bank stack
+- A **Drop** or **Chest** item lands in the **Loot Zone** first, not the Bank directly; leaving combat (or the on-demand Loot all) sweeps it into the Bank
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
 - An **Area** may also host a **Dungeon**: an ordered sequence of **Waves** ending in a **Boss**, rewarding a **Chest** on completion; entering one cancels any selected Monster or Fishing Spot, and vice versa
 - A **Recipe** converts Materials into an Equipment Item, training Smithing; at most one of a Monster, a Fishing Spot, a Dungeon run, or a Recipe is active at a time — selecting/entering any one of the four cancels whichever of the other three was active
