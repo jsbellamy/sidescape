@@ -152,8 +152,10 @@ function sewersGraduateSaveRanged() {
       },
       autoEatThreshold: 0.5,
       completedDungeonIds: ["darkroot-hollow"],
+      // Assigned to Food Slot 0 (#61) — autoEat only ever drains Food Slots now, never the Bank
+      // directly.
+      foodSlots: [{ itemId: "cooked-pike", qty: 400 }, null, null],
     },
-    bank: { items: [{ itemId: "cooked-pike", qty: 400 }] },
   });
 }
 

@@ -96,8 +96,9 @@ describe("mountSfx", () => {
   it("plays a distinct sound on food-eaten", () => {
     // Needs the player to actually drop below half HP; use the fiercer Dummy so damage outpaces
     // passive regen (see fiercerDummyContent). Food (meat) is itself now a combat Drop, which
-    // lands in the Loot Zone rather than the Bank (#60) — auto-eat only ever reads from the Bank,
-    // so seed it directly instead of relying on incidental kill Drops reaching it mid-fight.
+    // lands in the Loot Zone rather than the Bank (#60) — auto-eat only ever reads from Food
+    // Slots (#61), so seed the loadout directly instead of relying on incidental kill Drops
+    // reaching a Slot mid-fight.
     const engine = createEngine(
       fiercerDummyContent(),
       seededRng(42),
@@ -107,9 +108,9 @@ describe("mountSfx", () => {
           maxHp: 10,
           combatStyle: "aggressive",
           autoEatThreshold: 0.5, // makeSnapshot's own default is 0 (Off)
+          foodSlots: [{ itemId: "meat", qty: 20 }, null, null],
           skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
         },
-        bank: { items: [{ itemId: "meat", qty: 20 }] },
       }),
     );
     const toggleButton = document.createElement("button");

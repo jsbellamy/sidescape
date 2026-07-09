@@ -6,6 +6,7 @@ import type {
   Content,
   DropTableEntry,
   EquipmentDef,
+  FoodSlot,
   GearSlot,
   SkillSnapshot,
   Snapshot,
@@ -110,6 +111,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   let activeTab: TabId = TABS[0].id;
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
+  // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
+  // presentational UI state, never part of the Snapshot/save. Re-clicking the same slot's [+], or
+  // picking a Food from the chooser, closes it (set back to null).
+  let openFoodChooserSlot: number | null = null;
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to Snapshot deltas and the Engine's own events, adding no new Engine state (ADR-0001:
@@ -253,6 +258,49 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     flashTimer = setTimeout(() => overlay.classList.remove("flash-rare"), FLASH_DURATION_MS);
   }
 
+  /** Renders the 3-slot Active Food Slot bar (#61), near the player HP bar: a filled slot shows
+   * name/qty (click = eatFromSlot) plus a small ✕ (click = unassignFoodSlot); an empty slot shows
+   * a `[+]` that opens a chooser listing the Bank's Food stacks (click one = assignFoodSlot).
+   * `openFoodChooserSlot` is presentation-only UI state (never part of the Snapshot), so this
+   * reads it directly from the enclosing closure rather than taking it as a parameter. */
+  function renderFoodSlots(
+    foodSlots: FoodSlot[],
+    bankItems: { itemId: string; qty: number }[],
+  ): void {
+    const foodStacks = bankItems.filter(
+      (s) => content.items.find((i) => i.id === s.itemId)?.kind === "food",
+    );
+    el("#food-slots").innerHTML = foodSlots
+      .map((slot, i) => {
+        if (slot) {
+          return `<div class="food-slot filled" data-slot="${i}">
+                    <button class="food-slot-eat" data-eat="${i}">${itemName(slot.itemId)} ×${slot.qty}</button>
+                    <button class="food-slot-unassign" data-unassign="${i}" title="Unassign">✕</button>
+                  </div>`;
+        }
+        const chooserOpen = openFoodChooserSlot === i;
+        const chooser = chooserOpen
+          ? `<div class="food-slot-chooser">
+              ${
+                foodStacks.length > 0
+                  ? foodStacks
+                      .map(
+                        (s) =>
+                          `<button data-assign="${i}" data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                      )
+                      .join("")
+                  : `<p class="hint">No Food in Bank</p>`
+              }
+            </div>`
+          : "";
+        return `<div class="food-slot empty" data-slot="${i}">
+                  <button class="food-slot-add" data-add="${i}">+</button>
+                  ${chooser}
+                </div>`;
+      })
+      .join("");
+  }
+
   function render(): void {
     const snap = engine.snapshot();
     advanceCombatFx(snap);
@@ -271,6 +319,8 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     el("#player-hp-text").textContent = player.respawning
       ? "Respawning…"
       : `HP ${player.hp}/${player.maxHp}`;
+
+    renderFoodSlots(player.foodSlots, bank.items);
 
     root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
@@ -478,6 +528,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
       <p id="monster-stats" hidden></p>
       <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
       <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
+      <div id="food-slots" class="food-slots"></div>
       <div id="style-row" class="style-row">
         ${Object.entries(STYLE_LABELS)
           .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
@@ -512,7 +563,7 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
           <p class="panel-title">
             <span id="bank-header"></span>
             <button id="buy-slots-btn" data-buy-slots></button>
-            <span class="hint">(click to equip or eat)</span>
+            <span class="hint">(Equip/Sell buttons; Food is eaten from the Food Slot bar)</span>
           </p>
           <div id="sort-row" class="style-row">
             ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
@@ -641,9 +692,9 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
 
   el("#bank").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
-    // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip/eat
-    // rule): the Sell and Equip buttons fire before the row-level fallthrough, so clicking either
-    // button never also equips or eats the row via the fallthrough.
+    // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip
+    // rule): the Sell button fires before Equip. Bank rows no longer eat (#61 moved eating to the
+    // Food Slot bar) — a Food row's only actions left are Equip (never applicable) and Sell.
     const sellId = target.dataset["sell"];
     if (sellId) {
       engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
@@ -655,14 +706,42 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     if (equipId) {
       engine.equip(equipId); // logs its own feed line via the equipped listener above
       render();
+    }
+  });
+
+  // Food Slot bar (#61): dispatch order is load-bearing — data-unassign (✕) is checked before the
+  // slot-level eat, so unassigning never also eats; data-assign (a chooser pick) is checked before
+  // data-add (the [+] toggle) so picking a Food both assigns it and doesn't re-toggle the chooser.
+  el("#food-slots").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    const unassignIndex = target.dataset["unassign"];
+    if (unassignIndex !== undefined) {
+      engine.unassignFoodSlot(Number(unassignIndex)); // logs nothing; no feed line for unassign
+      render();
       return;
     }
 
-    const itemId = target.closest("li")?.dataset["item"];
-    const def = content.items.find((i) => i.id === itemId);
-    if (!itemId || !def) return;
-    if (def.kind === "food") {
-      engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
+    const eatIndex = target.dataset["eat"];
+    if (eatIndex !== undefined) {
+      engine.eatFromSlot(Number(eatIndex)); // logs its own feed line via the food-eaten listener
+      render();
+      return;
+    }
+
+    const assignIndex = target.dataset["assign"];
+    const assignItemId = target.dataset["item"];
+    if (assignIndex !== undefined && assignItemId !== undefined) {
+      engine.assignFoodSlot(Number(assignIndex), assignItemId);
+      openFoodChooserSlot = null;
+      render();
+      return;
+    }
+
+    const addIndex = target.dataset["add"];
+    if (addIndex !== undefined) {
+      const index = Number(addIndex);
+      openFoodChooserSlot = openFoodChooserSlot === index ? null : index; // re-click dismisses
       render();
     }
   });
