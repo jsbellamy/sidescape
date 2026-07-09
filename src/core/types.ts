@@ -181,6 +181,12 @@ export type EngineEvent =
   /** Sibling to overflow-sold (#59): the same full-Bank/new-stack situation, but the item has no
    * `value` (unsellable), so it was discarded instead. */
   | { type: "overflow-lost"; itemId: string; qty: number }
+  /** A passive combat arrival (kill Drop or Chest item) that is an EquipmentDef the player already
+   * owns — equipped, banked, or already sitting in the Loot Zone — auto-sold on arrival instead of
+   * taking a Loot Zone slot (#63, toggleable via `setAutoSellDuplicates`, default ON). Credits
+   * `value` straight to gold; an unsellable duplicate (no `value`) is discarded with overflow-lost
+   * instead. The `drop` event still fires first, unchanged — this only redirects the destination. */
+  | { type: "duplicate-sold"; itemId: string; gold: number }
   /** wave = 1-based cleared count (e.g. clearing the 2nd of 3 waves emits wave: 2). */
   | { type: "wave-cleared"; dungeonId: string; wave: number; totalWaves: number }
   | { type: "dungeon-completed"; dungeonId: string }
@@ -211,6 +217,9 @@ export interface Snapshot {
     combatLevel: number;
     combatStyle: CombatStyle;
     autoEatThreshold: AutoEatThreshold;
+    /** Toggles auto-sell of duplicate Equipment (#63), default true; tolerant load (`?? true`).
+     * See the `duplicate-sold` event and engine.ts's isDuplicateEquipment for the rule. */
+    autoSellDuplicates: boolean;
     /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT (3): replaces free-form
      * eat-from-Bank. See FoodSlot's own doc for the home/routing/priority rules. */
     foodSlots: FoodSlot[];

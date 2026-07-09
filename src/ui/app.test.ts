@@ -399,6 +399,56 @@ describe("Auto-eat threshold selector", () => {
   });
 });
 
+describe("Auto-sell duplicates toggle (#63)", () => {
+  function toggle(root: HTMLElement) {
+    return root.querySelector<HTMLInputElement>("#autosell-duplicates-toggle");
+  }
+
+  it("reflects the Engine's default (ON) on mount", () => {
+    const { root } = mount(1);
+    expect(toggle(root)?.checked).toBe(true);
+  });
+
+  it("reflects OFF when mounted from a saved Snapshot with the toggle off", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          autoSellDuplicates: false,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent);
+
+    expect(toggle(root)?.checked).toBe(false);
+  });
+
+  it("unchecking the checkbox calls setAutoSellDuplicates(false); re-checking flips it back on", () => {
+    const { engine, root } = mount(1);
+    const input = toggle(root)!;
+
+    // happy-dom's checkbox .click() doesn't reliably flip .checked before dispatching, so drive
+    // the interaction the way a real "uncheck the box" user action lands on the DOM: flip the
+    // property, then fire the "change" event the click handler listens for.
+    input.checked = false;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(engine.snapshot().player.autoSellDuplicates).toBe(false);
+    expect(toggle(root)?.checked).toBe(false);
+
+    input.checked = true;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(engine.snapshot().player.autoSellDuplicates).toBe(true);
+    expect(toggle(root)?.checked).toBe(true);
+  });
+});
+
 describe("XP progress bars", () => {
   it("shows a fill bar at 0% right at a level threshold", () => {
     const engine = createEngine(
@@ -673,6 +723,39 @@ describe("Bank", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
 
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*lost/i);
+  });
+
+  it("logs a duplicate-sold feed line when a repeat Equipment Drop is auto-sold (#63)", () => {
+    const guaranteedSwordDropContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [{ itemId: "bronze-sword", qty: 1, chance: 1, band: "uncommon" as const }],
+            }
+          : m,
+      ),
+    };
+    const engine = createEngine(
+      guaranteedSwordDropContent,
+      seededRng(7),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, guaranteedSwordDropContent);
+    engine.selectMonster("dummy");
+
+    let killed = false;
+    engine.on("kill", () => {
+      killed = true;
+    });
+    for (let i = 0; i < 5000 && !killed; i++) engine.tick();
+    expect(killed).toBe(true);
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(
+      /auto-sold duplicate bronze sword \(\+20g\)/i,
+    );
   });
 });
 

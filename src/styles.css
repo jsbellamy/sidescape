@@ -382,6 +382,20 @@ body {
   font-weight: 700;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  cursor: pointer;
+}
+
 /* 8 Skill chips (#7 added Ranged/Magic, on top of #36's original 6): a single flex row at 320px
    squeezed each chip below its readable minimum, so this wraps into a 4-column grid (2 rows of 4)
    instead of shrinking every chip further. */

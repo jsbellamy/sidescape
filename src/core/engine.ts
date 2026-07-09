@@ -71,6 +71,8 @@ interface State {
   hp: number;
   combatStyle: CombatStyle;
   autoEatThreshold: AutoEatThreshold;
+  /** Toggles auto-sell of duplicate Equipment (#63) — see creditCombatItem/isDuplicateEquipment. */
+  autoSellDuplicates: boolean;
   /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT; see FoodSlot's own doc
    * (types.ts) for the home/routing/priority rules. */
   foodSlots: FoodSlot[];
@@ -101,6 +103,9 @@ export interface Engine {
   selectRecipe(recipeId: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
+  /** Toggles auto-sell of duplicate Equipment (#63, default ON) — see creditCombatItem/
+   * isDuplicateEquipment for the rule. Throws on a non-boolean value. */
+  setAutoSellDuplicates(on: boolean): void;
   equip(itemId: string): void;
   /** Assigns `itemId` (must be Food) to Food Slot `slotIndex` (#61): moves the entire Bank stock
    * into the slot, which becomes that Food's home — see FoodSlot's doc. Throws on: an out-of-
@@ -132,6 +137,8 @@ const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
 const DEFAULT_AUTO_EAT_THRESHOLD: AutoEatThreshold = 0.5;
+/** Auto-sell-duplicate-Equipment toggle (#63): default ON. */
+const DEFAULT_AUTO_SELL_DUPLICATES = true;
 
 /** Active Food Slot count (#61): tuning, not spec — a fixed-length loadout that replaced
  * free-form eat-from-Bank. Slot order (array index) is auto-eat's draining priority. */
@@ -159,6 +166,13 @@ function nextBankSlotsPrice(capacity: number): number {
 
 function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
   return (AUTO_EAT_THRESHOLDS as readonly unknown[]).includes(value);
+}
+
+/** Tolerant load of `player.autoSellDuplicates` (#63): anything but an actual boolean — including
+ * a missing key entirely, e.g. a pre-#63 save — falls back to the default (true). */
+function loadAutoSellDuplicates(saved: Snapshot): boolean {
+  const raw: unknown = saved.player?.autoSellDuplicates;
+  return typeof raw === "boolean" ? raw : DEFAULT_AUTO_SELL_DUPLICATES;
 }
 
 const COMBAT_STYLES: readonly CombatStyle[] = ["accurate", "aggressive", "defensive"];
@@ -201,6 +215,7 @@ function freshState(_content: Content): State {
     hp: 10,
     combatStyle: "aggressive",
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
+    autoSellDuplicates: DEFAULT_AUTO_SELL_DUPLICATES,
     foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
     activity: null,
     gold: 0,
@@ -484,6 +499,7 @@ function loadState(saved: Snapshot, content: Content): State {
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
+    autoSellDuplicates: loadAutoSellDuplicates(saved),
     foodSlots: loadFoodSlots(saved, content),
     activity,
     gold,
@@ -633,13 +649,46 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
     state.lootZone.set(itemId, (state.lootZone.get(itemId) ?? 0) + qty);
   }
 
+  /** Whether the player already owns `def` (#63): equipped in its own Gear Slot, holding a Bank
+   * stack, or already sitting in the Loot Zone (an earlier Drop this session not yet swept).
+   * Stackables never reach this check — creditCombatItem only calls it for EquipmentDefs. */
+  function isDuplicateEquipment(def: EquipmentDef): boolean {
+    return (
+      state.equipment[def.slot] === def.id ||
+      (state.bank.get(def.id) ?? 0) > 0 ||
+      (state.lootZone.get(def.id) ?? 0) > 0
+    );
+  }
+
+  /** Sells a duplicate Equipment arrival immediately (#63) instead of routing it to the Loot
+   * Zone: credits `value * qty` to gold and emits duplicate-sold, or — if unsellable — discards
+   * it with the existing overflow-lost event, the same "no value -> discarded" rule a full Loot
+   * Zone/Bank already uses. */
+  function sellDuplicate(def: EquipmentDef, qty: number): void {
+    const value = sellValue(def);
+    if (value !== undefined) {
+      const gold = value * qty;
+      state.gold += gold;
+      emit({ type: "duplicate-sold", itemId: def.id, gold });
+    } else {
+      emit({ type: "overflow-lost", itemId: def.id, qty });
+    }
+  }
+
   /** Routes one passive arrival (drop or Chest entry) to its destination (#59, extended by
-   * #60): the currency item credits `state.gold` directly, never touching the Bank or the Loot
-   * Zone; anything else goes to the Loot Zone via addToLootZone's top-up/overflow rules above —
-   * combat outputs buffer there instead of landing straight in the Bank. */
+   * #60 and #63): the currency item credits `state.gold` directly, never touching the Bank or
+   * the Loot Zone. An EquipmentDef the player already owns is instead auto-sold on the spot when
+   * the toggle is ON (#63) — see isDuplicateEquipment/sellDuplicate. Everything else goes to the
+   * Loot Zone via addToLootZone's top-up/overflow rules above — combat outputs buffer there
+   * instead of landing straight in the Bank. */
   function creditCombatItem(itemId: string, qty: number): void {
     if (itemId === currencyDef.id) {
       state.gold += qty;
+      return;
+    }
+    const def = content.items.find((i) => i.id === itemId);
+    if (state.autoSellDuplicates && def?.kind === "equipment" && isDuplicateEquipment(def)) {
+      sellDuplicate(def, qty);
       return;
     }
     addToLootZone(itemId, qty);
@@ -874,6 +923,7 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         combatLevel: combatLevel(),
         combatStyle: state.combatStyle,
         autoEatThreshold: state.autoEatThreshold,
+        autoSellDuplicates: state.autoSellDuplicates,
         foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
         skills,
         equipment: { ...state.equipment },
@@ -1162,6 +1212,10 @@ export function createEngine(content: Content, rng: Rng, saved?: Snapshot): Engi
         throw new Error(`invalid auto-eat threshold: ${threshold}`);
       }
       state.autoEatThreshold = threshold;
+    },
+    setAutoSellDuplicates(on) {
+      if (typeof on !== "boolean") throw new Error(`invalid autoSellDuplicates: ${on}`);
+      state.autoSellDuplicates = on;
     },
     equip(itemId) {
       const def = content.items.find((i) => i.id === itemId);
