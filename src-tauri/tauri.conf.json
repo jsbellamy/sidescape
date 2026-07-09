@@ -15,10 +15,10 @@
       {
         "title": "SideScape",
         "width": 320,
-        "height": 640,
+        "height": 460,
         "minWidth": 280,
-        "minHeight": 480,
-        "maxWidth": 420,
+        "minHeight": 380,
+        "maxWidth": 920,
         "resizable": true,
         "decorations": false,
         "alwaysOnTop": true
