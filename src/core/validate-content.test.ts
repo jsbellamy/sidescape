@@ -52,6 +52,37 @@ describe("validateContent", () => {
     );
   });
 
+  it("reports a weapon that declares no attackSpeed", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.kind !== "equipment" || i.id !== "bronze-sword") return i;
+        const { attackSpeed: _dropped, ...speedless } = i;
+        return speedless;
+      }),
+    };
+    expect(validateContent(content)).toContain('weapon "bronze-sword" declares no attackSpeed');
+  });
+
+  it("does not require attackSpeed on non-weapon Equipment", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "plain-shield",
+          name: "Plain Shield",
+          slot: "shield" as const,
+          atkBonus: 0,
+          strBonus: 0,
+          defBonus: 1,
+        },
+      ],
+    };
+    expect(validateContent(content)).toEqual([]);
+  });
+
   it("reports a dangling area.monsterIds reference", () => {
     const content: Content = {
       ...fixtureContent,

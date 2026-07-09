@@ -1,3 +1,4 @@
+import { UNARMED_SPEED } from "../core/engine";
 import type { Engine } from "../core/engine";
 import { SKILL_NAMES } from "../core/types";
 import type {
@@ -15,10 +16,6 @@ import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
 import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
-
-/** Mirrors engine.ts's own UNARMED_SPEED: the Character panel shows a weapon's own speed if it
- * declares one, otherwise the same unarmed fallback the Engine uses for the totals row. */
-const UNARMED_SPEED = 4;
 
 /** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
  * key order (a plain object, not guaranteed stable across engines/serialization). */

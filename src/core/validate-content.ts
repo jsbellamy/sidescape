@@ -20,6 +20,14 @@ export function validateContent(content: Content): string[] {
     violations.push(`Content defines ${currencyCount} currency items, expected exactly 1`);
   }
 
+  // Weapons must declare attackSpeed (#90): the Engine's UNARMED_SPEED fallback is for the
+  // truly-unarmed case (weapon slot empty), not a default for content authors to lean on.
+  for (const item of content.items) {
+    if (item.kind === "equipment" && item.slot === "weapon" && item.attackSpeed === undefined) {
+      violations.push(`weapon "${item.id}" declares no attackSpeed`);
+    }
+  }
+
   // Invariant 4: no two entries share an id within a collection.
   violations.push(...duplicateIds(content.items, "items"));
   violations.push(...duplicateIds(content.monsters, "monsters"));
