@@ -132,7 +132,10 @@ export interface Engine {
   on<T extends EngineEvent["type"]>(type: T, handler: EventHandler<T>): void;
 }
 
-const UNARMED_SPEED = 4;
+/** Ticks between player attacks with the weapon slot empty; the single owner of this fact —
+ * app.ts imports it for the Character panel, and validateContent (#90) requires every weapon to
+ * declare its own attackSpeed, so this is never a silent default for content. */
+export const UNARMED_SPEED = 4;
 const RESPAWN_TICKS = 8;
 /** Ticks between passive HP regen while below max HP (ADR: not during Respawn). */
 const REGEN_TICKS = 10;
