@@ -28,6 +28,33 @@ export function validateContent(content: Content): string[] {
     }
   }
 
+  // A weapon (any equipment with attackSpeed) must declare attackType/atkBonus/strBonus (#99);
+  // a non-weapon must NOT carry any of those weapon-only fields — armour carries only `def`.
+  for (const item of content.items) {
+    if (item.kind !== "equipment") continue;
+    if (item.attackSpeed !== undefined) {
+      if (item.attackType === undefined) {
+        violations.push(`weapon "${item.id}" declares no attackType`);
+      }
+      if (item.atkBonus === undefined) {
+        violations.push(`weapon "${item.id}" declares no atkBonus`);
+      }
+      if (item.strBonus === undefined) {
+        violations.push(`weapon "${item.id}" declares no strBonus`);
+      }
+    } else {
+      if (item.attackType !== undefined) {
+        violations.push(`non-weapon "${item.id}" declares attackType`);
+      }
+      if (item.atkBonus !== undefined) {
+        violations.push(`non-weapon "${item.id}" declares atkBonus`);
+      }
+      if (item.strBonus !== undefined) {
+        violations.push(`non-weapon "${item.id}" declares strBonus`);
+      }
+    }
+  }
+
   // Invariant 4: no two entries share an id within a collection.
   violations.push(...duplicateIds(content.items, "items"));
   violations.push(...duplicateIds(content.monsters, "monsters"));

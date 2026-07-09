@@ -21,8 +21,8 @@ describe("Ranged/Magic tier weapons in Drop Tables (#13)", () => {
 
     const bow = content.items.find((i) => i.id === "iron-shortbow");
     const staff = content.items.find((i) => i.id === "iron-staff");
-    expect(bow?.kind === "equipment" && bow.combatMode).toBe("ranged");
-    expect(staff?.kind === "equipment" && staff.combatMode).toBe("magic");
+    expect(bow?.kind === "equipment" && bow.attackType).toBe("ranged");
+    expect(staff?.kind === "equipment" && staff.attackType).toBe("magic");
   });
 
   it("Old Sewers' Drop Tables include the steel-tier bow and staff", () => {
@@ -33,8 +33,8 @@ describe("Ranged/Magic tier weapons in Drop Tables (#13)", () => {
 
     const bow = content.items.find((i) => i.id === "steel-shortbow");
     const staff = content.items.find((i) => i.id === "steel-staff");
-    expect(bow?.kind === "equipment" && bow.combatMode).toBe("ranged");
-    expect(staff?.kind === "equipment" && staff.combatMode).toBe("magic");
+    expect(bow?.kind === "equipment" && bow.attackType).toBe("ranged");
+    expect(staff?.kind === "equipment" && staff.attackType).toBe("magic");
   });
 
   it("Bone Crypt's Drop Tables include the mithril-tier bow and staff", () => {
@@ -44,8 +44,8 @@ describe("Ranged/Magic tier weapons in Drop Tables (#13)", () => {
 
     const bow = content.items.find((i) => i.id === "mithril-shortbow");
     const staff = content.items.find((i) => i.id === "mithril-staff");
-    expect(bow?.kind === "equipment" && bow.combatMode).toBe("ranged");
-    expect(staff?.kind === "equipment" && staff.combatMode).toBe("magic");
+    expect(bow?.kind === "equipment" && bow.attackType).toBe("ranged");
+    expect(staff?.kind === "equipment" && staff.attackType).toBe("magic");
   });
 
   it("every new tier weapon out-bonuses its predecessor tier (iron < steel < mithril, bow and staff alike)", () => {
@@ -91,9 +91,10 @@ describe("Ranged/Magic tier weapons in Drop Tables (#13)", () => {
 /** A saved Snapshot for a ranged-trained player who just graduated Darkroot Forest: cleared
  * Meadow Depths (unlocking Darkroot Forest) and iron-geared with the iron-tier bow instead of a
  * melee weapon — mirrors old-sewers.test.ts's darkrootGraduateSave fixture exactly, but for
- * Ranged. Combat accuracy/damage still keys off Attack/Strength + Combat Style regardless of
- * weapon mode (engine.ts's combatXpSkill comment), so the stat levels match the melee fixture;
- * only the weapon (and therefore where kill XP routes) differs. */
+ * Ranged. Since #99, Ranged combat is mechanically real (accuracy + max hit derive from the
+ * Ranged Skill, not Attack/Strength), so `ranged`/`magic` are trained to the same level as
+ * attack/strength here — both set (rather than just the one the weapon needs) so this one fixture
+ * serves both the Ranged and Magic variant below. */
 function darkrootGraduateSaveRanged() {
   return makeSnapshot({
     player: {
@@ -104,6 +105,8 @@ function darkrootGraduateSaveRanged() {
         strength: { level: 28, xp: xpForLevel(28) },
         defence: { level: 22, xp: xpForLevel(22) },
         hitpoints: { level: 30, xp: xpForLevel(30) },
+        ranged: { level: 28, xp: xpForLevel(28) },
+        magic: { level: 28, xp: xpForLevel(28) },
       },
       equipment: {
         weapon: "iron-shortbow",
@@ -143,6 +146,10 @@ function sewersGraduateSaveRanged() {
         strength: { level: 47, xp: xpForLevel(47) },
         defence: { level: 42, xp: xpForLevel(42) },
         hitpoints: { level: 55, xp: xpForLevel(55) },
+        // Since #99, Ranged/Magic combat draws on their own Skill (see darkrootGraduateSaveRanged
+        // above); both set so this one fixture serves the Ranged and Magic variants alike.
+        ranged: { level: 47, xp: xpForLevel(47) },
+        magic: { level: 47, xp: xpForLevel(47) },
       },
       equipment: {
         weapon: "steel-shortbow",

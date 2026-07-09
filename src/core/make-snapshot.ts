@@ -60,8 +60,15 @@ function baseSnapshot(): Snapshot {
       skills,
       equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
       // Derived output, ignored on load (#26); the fixture default matches a fresh, unarmed
-      // player — mirrors engine.ts's own unarmed attack-speed fallback of 4 Ticks.
-      bonuses: { atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 },
+      // player — mirrors engine.ts's own unarmed attack-speed fallback of 4 Ticks and its unarmed
+      // Attack Type of "crush" (#99, the OSRS punch type).
+      bonuses: {
+        attackType: "crush",
+        atkBonus: 0,
+        strBonus: 0,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        attackSpeed: 4,
+      },
       gold: 0,
       respawning: false,
       completedDungeonIds: [],

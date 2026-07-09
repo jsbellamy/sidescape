@@ -1,7 +1,8 @@
 import { UNARMED_SPEED } from "../core/engine";
 import type { Engine } from "../core/engine";
-import { SKILL_NAMES } from "../core/types";
+import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
 import type {
+  AttackType,
   AutoEatThreshold,
   CombatStyle,
   Content,
@@ -32,13 +33,31 @@ const TOAST_DISMISS_MS = 2500;
 /** Rare-Drop screen-flash duration (#4); mirrors styles.css's `rare-flash` keyframes. */
 const FLASH_DURATION_MS = 400;
 
-/** One line per non-zero stat on `def` (e.g. "+4 atk", "+3 str", "def 4"), plus the weapon's own
- * speed for weapon-slot items. Empty-stat gear (e.g. a Charm with only a name) yields []. */
+/** Abbreviated Attack Type labels for the compact defence-vector readout (#99) — terse to fit the
+ * 320px Character panel budget (#78's icon pass will restyle later). */
+const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
+  stab: "st",
+  slash: "sl",
+  crush: "cr",
+  ranged: "rn",
+  magic: "mg",
+};
+
+/** One compact line for a per-type defence vector, e.g. "st 8 · sl 10 · cr 6 · rn 4 · mg 2" (#99).
+ * Shared by per-piece Gear Slot rows and the Character panel's totals row. */
+function defVectorLabel(def: Record<AttackType, number>): string {
+  return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
+}
+
+/** One line per stat on `def`: the weapon's own attack type (weapon rows only), non-zero
+ * atk/str bonuses, the compact defence vector (#99, always shown — it's the piece's whole
+ * defensive contribution), and the weapon's own speed for weapon-slot items. */
 function equipmentStatParts(def: EquipmentDef): string[] {
   const parts: string[] = [];
-  if (def.atkBonus !== 0) parts.push(`+${def.atkBonus} atk`);
-  if (def.strBonus !== 0) parts.push(`+${def.strBonus} str`);
-  if (def.defBonus !== 0) parts.push(`def ${def.defBonus}`);
+  if (def.slot === "weapon" && def.attackType) parts.push(def.attackType);
+  if (def.atkBonus) parts.push(`+${def.atkBonus} atk`);
+  if (def.strBonus) parts.push(`+${def.strBonus} str`);
+  parts.push(defVectorLabel(def.def));
   if (def.slot === "weapon") parts.push(`spd ${def.attackSpeed ?? UNARMED_SPEED}t`);
   return parts;
 }
@@ -447,7 +466,7 @@ export function mountApp(
 
     const b = player.bonuses;
     el("#character-totals").textContent =
-      `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`;
+      `+${b.atkBonus} atk +${b.strBonus} str ${defVectorLabel(b.def)} spd ${b.attackSpeed}t`;
   }
 
   /** Renders the main column's Loot Zone strip: hidden while empty, otherwise one chip per stack. */
