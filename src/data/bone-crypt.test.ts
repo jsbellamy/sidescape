@@ -111,13 +111,13 @@ describe("Bone Crypt content", () => {
   it("mithril Equipment out-bonuses its steel equivalent", () => {
     const steelChainbody = content.items.find((i) => i.id === "steel-chainbody");
     const mithrilChainbody = content.items.find((i) => i.id === "mithril-chainbody");
-    expect((mithrilChainbody as { defBonus: number }).defBonus).toBeGreaterThan(
-      (steelChainbody as { defBonus: number }).defBonus,
+    expect((mithrilChainbody as { def: { stab: number } }).def.stab).toBeGreaterThan(
+      (steelChainbody as { def: { stab: number } }).def.stab,
     );
     const steelKiteshield = content.items.find((i) => i.id === "steel-kiteshield");
     const mithrilKiteshield = content.items.find((i) => i.id === "mithril-kiteshield");
-    expect((mithrilKiteshield as { defBonus: number }).defBonus).toBeGreaterThan(
-      (steelKiteshield as { defBonus: number }).defBonus,
+    expect((mithrilKiteshield as { def: { stab: number } }).def.stab).toBeGreaterThan(
+      (steelKiteshield as { def: { stab: number } }).def.stab,
     );
   });
 

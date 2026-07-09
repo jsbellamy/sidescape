@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { attackRoll, defenceRoll, effectiveLevel, hitChance } from "./combat";
 import { createEngine } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
@@ -1225,37 +1226,48 @@ describe("Equipment and gates", () => {
 });
 
 describe("Snapshot player.bonuses (#26)", () => {
-  it("is all zero, with the unarmed attack speed fallback, on a fresh engine with nothing equipped", () => {
+  const ZERO_DEF: Record<string, number> = { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 };
+  const ONE_DEF: Record<string, number> = { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 };
+
+  it("is all zero, with the unarmed attack speed fallback and crush attack type, on a fresh engine with nothing equipped", () => {
     const snap = freshEngine().snapshot();
-    expect(snap.player.bonuses).toEqual({ atkBonus: 0, strBonus: 0, defBonus: 0, attackSpeed: 4 });
-  });
-
-  it("sums bonuses across every equipped Gear Slot and reflects the weapon's own speed", () => {
-    const engine = freshEngine();
-    engine.selectMonster("dummy");
-    grindFor(engine, "bronze-sword");
-    grindFor(engine, "lucky-charm");
-    engine.equip("bronze-sword"); // weapon: atk 10, str 30, def 0, speed 4
-    engine.equip("lucky-charm"); // head: atk 0, str 0, def 1
-
-    expect(engine.snapshot().player.bonuses).toEqual({
-      atkBonus: 10,
-      strBonus: 30,
-      defBonus: 1,
+    expect(snap.player.bonuses).toEqual({
+      attackType: "crush",
+      atkBonus: 0,
+      strBonus: 0,
+      def: ZERO_DEF,
       attackSpeed: 4,
     });
   });
 
-  it("falls back to unarmed attack speed 4 when no weapon is equipped, even with other Gear worn", () => {
+  it("sums bonuses across every equipped Gear Slot, reads attackType/atk/str from the weapon only, and reflects the weapon's own speed", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    grindFor(engine, "lucky-charm");
+    engine.equip("bronze-sword"); // weapon: slash, atk 10, str 30, def all-0, speed 4
+    engine.equip("lucky-charm"); // head: def all-1
+
+    expect(engine.snapshot().player.bonuses).toEqual({
+      attackType: "slash",
+      atkBonus: 10,
+      strBonus: 30,
+      def: ONE_DEF,
+      attackSpeed: 4,
+    });
+  });
+
+  it("falls back to unarmed attack speed 4 and crush attack type when no weapon is equipped, even with other Gear worn", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     grindFor(engine, "lucky-charm");
     engine.equip("lucky-charm"); // head only, no weapon
 
     expect(engine.snapshot().player.bonuses).toEqual({
+      attackType: "crush",
       atkBonus: 0,
       strBonus: 0,
-      defBonus: 1,
+      def: ONE_DEF,
       attackSpeed: 4,
     });
   });
@@ -4026,6 +4038,138 @@ describe("Ranged and Magic Skills (#7)", () => {
         JSON.parse(JSON.stringify(saved)),
       );
       expect(restored.snapshot()).toEqual(saved);
+    });
+  });
+});
+
+describe("Attack Type axis (#99)", () => {
+  it("a fresh engine's unarmed Attack Type is crush, the OSRS punch type", () => {
+    expect(freshEngine().snapshot().player.bonuses.attackType).toBe("crush");
+  });
+
+  describe("Player accuracy routes against the equipped weapon's own Attack Type", () => {
+    function contentWithDummySlashDef(defValue: number) {
+      return {
+        ...fixtureContent,
+        monsters: fixtureContent.monsters.map((m) =>
+          m.id === "dummy"
+            ? { ...m, def: { stab: 0, slash: defValue, crush: 0, ranged: 0, magic: 0 } }
+            : m,
+        ),
+      };
+    }
+
+    // bronze-sword is a slash weapon (fixture-content.ts) — with hitpoints trained up so the
+    // player survives long enough across thousands of Ticks to build a real sample.
+    function playerHitRateAgainst(defValue: number, ticks = 4000): number {
+      const engine = createEngine(
+        contentWithDummySlashDef(defValue),
+        seededRng(7),
+        makeSnapshot({
+          player: {
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+            equipment: { weapon: "bronze-sword" },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      let hits = 0;
+      let total = 0;
+      engine.on("attack", (e) => {
+        if (e.actor !== "player") return;
+        total++;
+        if (e.hit) hits++;
+      });
+      for (let i = 0; i < ticks; i++) engine.tick();
+      expect(total).toBeGreaterThan(0);
+      return hits / total;
+    }
+
+    it("hits measurably more often against a monster with a low bonus in the weapon's Attack Type than a high one", () => {
+      const lowDefHitRate = playerHitRateAgainst(0);
+      const highDefHitRate = playerHitRateAgainst(300);
+      expect(lowDefHitRate).toBeGreaterThan(highDefHitRate + 0.2);
+    });
+  });
+
+  describe("Ranged combat is mechanically real: accuracy and max hit derive from the Ranged Skill", () => {
+    function runRanged(
+      rangedLevel: number,
+      attackLevel: number,
+      strengthLevel: number,
+      ticks = 1000,
+    ): number[] {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(99),
+        makeSnapshot({
+          player: {
+            skills: {
+              attack: { level: attackLevel, xp: xpForLevel(attackLevel) },
+              strength: { level: strengthLevel, xp: xpForLevel(strengthLevel) },
+              ranged: { level: rangedLevel, xp: xpForLevel(rangedLevel) },
+              hitpoints: { level: 20, xp: xpForLevel(20) },
+            },
+            equipment: { weapon: "bow" }, // ranged
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      const damages: number[] = [];
+      engine.on("attack", (e) => {
+        if (e.actor === "player") damages.push(e.damage);
+      });
+      for (let i = 0; i < ticks; i++) engine.tick();
+      expect(damages.length).toBeGreaterThan(0);
+      return damages;
+    }
+
+    it("raising the Ranged Skill level raises the observed max hit", () => {
+      const lowRanged = runRanged(1, 1, 1);
+      const highRanged = runRanged(80, 1, 1);
+      expect(Math.max(...highRanged)).toBeGreaterThan(Math.max(...lowRanged));
+    });
+
+    it("raising Attack/Strength Skill levels changes nothing about Ranged combat (bit-identical outcome, same seed)", () => {
+      const lowAtkStr = runRanged(40, 1, 1);
+      const highAtkStr = runRanged(40, 99, 99);
+      expect(highAtkStr).toEqual(lowAtkStr);
+    });
+  });
+
+  describe("Monster-vs-player accuracy is unchanged at uniform defence vectors (interim gearDefAverage, #99)", () => {
+    it("matches the theoretical hitChance for the scalar a uniform vector averages to", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(11),
+        makeSnapshot({
+          player: {
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+            // lucky-charm's def vector is uniform 1 across every Attack Type (fixture-content.ts)
+            // — gearDefAverage() must equal 1, exactly what the old scalar defBonus would have
+            // been at uniform vectors.
+            equipment: { head: "lucky-charm" },
+          },
+        }),
+      );
+      engine.selectMonster("dummy"); // attackLevel 1: weak enough the player survives many Ticks
+      let hits = 0;
+      let total = 0;
+      engine.on("attack", (e) => {
+        if (e.actor !== "monster") return;
+        total++;
+        if (e.hit) hits++;
+      });
+      for (let i = 0; i < 8000; i++) engine.tick();
+      expect(total).toBeGreaterThan(200);
+
+      const dummy = fixtureContent.monsters.find((m) => m.id === "dummy")!;
+      const expectedAtkRoll = attackRoll(dummy.attackLevel + 8, 0);
+      // Player: level-1 Defence, default combatStyle "aggressive" (no Defence style boost).
+      const expectedDefRoll = defenceRoll(effectiveLevel(1, "defence", "aggressive"), 1);
+      const expectedHitChance = hitChance(expectedAtkRoll, expectedDefRoll);
+
+      expect(hits / total).toBeCloseTo(expectedHitChance, 1);
     });
   });
 });

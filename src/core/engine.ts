@@ -1,9 +1,10 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
 import { validateContent } from "./validate-content";
-import { AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
+import { ATTACK_TYPES, AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AreaDef,
+  AttackType,
   AutoEatThreshold,
   CombatMode,
   CurrencyDef,
@@ -193,13 +194,26 @@ function weaponSpeedFor(weaponId: string | null, content: Content): number {
   return def?.kind === "equipment" ? (def.attackSpeed ?? UNARMED_SPEED) : UNARMED_SPEED;
 }
 
-/** Combat Mode for `weaponId` (#7); unarmed, an unresolvable/non-equipment id, or an equipment
- * weapon that doesn't declare one all default to "melee" — mirrors weaponSpeedFor's fallback
- * pattern above, including being pure for the same load-before-closures reason. */
-function weaponCombatModeFor(weaponId: string | null, content: Content): CombatMode {
-  if (weaponId === null) return "melee";
+/** Attack Type for `weaponId` (#99); unarmed or an unresolvable/non-equipment id both fall back to
+ * "crush" — the OSRS unarmed-punch type — mirroring weaponSpeedFor's fallback pattern above,
+ * including being pure for the same load-before-closures reason. A resolvable weapon always
+ * carries `attackType` (validateContent requires it), but the `?? "crush"` guards content that
+ * hasn't been validated yet. */
+function weaponAttackTypeFor(weaponId: string | null, content: Content): AttackType {
+  if (weaponId === null) return "crush";
   const def = content.items.find((i) => i.id === weaponId);
-  return def?.kind === "equipment" ? (def.combatMode ?? "melee") : "melee";
+  return def?.kind === "equipment" ? (def.attackType ?? "crush") : "crush";
+}
+
+/** Combat Mode for `weaponId` (#7) — since #99 derived from the weapon's Attack Type rather than
+ * a stored field: stab/slash/crush all train melee, ranged trains ranged, magic trains magic. One
+ * source of truth (weaponAttackTypeFor above); this function only maps that type to its Combat
+ * Mode family. */
+function weaponCombatModeFor(weaponId: string | null, content: Content): CombatMode {
+  const type = weaponAttackTypeFor(weaponId, content);
+  if (type === "ranged") return "ranged";
+  if (type === "magic") return "magic";
+  return "melee";
 }
 
 /** The no-save defaults: a level-1 player (Hitpoints 10, per ADR), full HP, nothing selected. */
@@ -609,8 +623,28 @@ export function createEngine(
     return defs;
   }
 
-  function gearBonus(kind: "atkBonus" | "strBonus" | "defBonus"): number {
-    return equippedDefs().reduce((sum, def) => sum + def[kind], 0);
+  /** atkBonus/strBonus, summed across equipped Gear Slots (#99: only the weapon carries these
+   * fields now — armour dropped them — so in practice this reads the equipped weapon alone; kept
+   * as a sum over `equippedDefs()` rather than a direct weapon lookup so it stays correct if that
+   * ever changes). */
+  function gearBonus(kind: "atkBonus" | "strBonus"): number {
+    return equippedDefs().reduce((sum, def) => sum + (def[kind] ?? 0), 0);
+  }
+
+  /** Defence bonus for one Attack Type, summed across every equipped Gear Slot (#99) — the
+   * per-type analogue of the old scalar defBonus sum. */
+  function gearDef(type: AttackType): number {
+    return equippedDefs().reduce((sum, def) => sum + def.def[type], 0);
+  }
+
+  /** Interim monster-offence stand-in (#99): monsters don't have their own attackType yet (wave
+   * 2/4 gives them one and swaps this for `gearDef(monster.attackType)`), so until then a
+   * Monster's attack rolls against the mean of the player's five per-type defence sums, rounded
+   * down. With the uniform vectors this wave ships, every gearDef(type) is equal, so this equals
+   * today's scalar defBonus exactly — monster accuracy is unchanged. */
+  function gearDefAverage(): number {
+    const total = ATTACK_TYPES.reduce((sum, type) => sum + gearDef(type), 0);
+    return Math.floor(total / ATTACK_TYPES.length);
   }
 
   /** Gold per unit if `def` can be sold; undefined for currency or anything without a value. */
@@ -883,16 +917,46 @@ export function createEngine(
     grantXp("hitpoints", (4 / 3) * damage);
   }
 
+  /** Player accuracy + max hit for the currently equipped weapon's Attack Type (#99). Melee
+   * (stab/slash/crush) is byte-identical to pre-#99: Attack/Strength + Combat Style, unchanged.
+   * Ranged is mechanically real for the first time: accuracy AND max hit both derive from the
+   * Ranged skill (OSRS-style) rather than Attack/Strength — effectiveLevel already yields +8 with
+   * no Combat Style boost for a non-melee skill, so no change needed there. Magic mirrors Ranged's
+   * shape for now, keyed off the Magic skill; this is explicitly interim — wave 3/4 (Spells)
+   * replaces Magic's max hit with spell-driven damage. */
+  function playerAccuracyAndMaxHit(): { atkRoll: number; max: number } {
+    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    if (mode === "ranged") {
+      const eff = effectiveLevel(level("ranged"), "ranged", state.combatStyle);
+      return {
+        atkRoll: attackRoll(eff, gearBonus("atkBonus")),
+        max: maxHit(eff, gearBonus("strBonus")),
+      };
+    }
+    if (mode === "magic") {
+      const eff = effectiveLevel(level("magic"), "magic", state.combatStyle);
+      return {
+        atkRoll: attackRoll(eff, gearBonus("atkBonus")),
+        max: maxHit(eff, gearBonus("strBonus")),
+      };
+    }
+    return {
+      atkRoll: attackRoll(
+        effectiveLevel(level("attack"), "attack", state.combatStyle),
+        gearBonus("atkBonus"),
+      ),
+      max: maxHit(
+        effectiveLevel(level("strength"), "strength", state.combatStyle),
+        gearBonus("strBonus"),
+      ),
+    };
+  }
+
   function playerAttack(monster: MonsterDef, activity: CombatActivity | DungeonActivity): void {
-    const atkRoll = attackRoll(
-      effectiveLevel(level("attack"), "attack", state.combatStyle),
-      gearBonus("atkBonus"),
-    );
-    const defRoll = defenceRoll(monster.defenceLevel + 8, 0);
-    const max = maxHit(
-      effectiveLevel(level("strength"), "strength", state.combatStyle),
-      gearBonus("strBonus"),
-    );
+    const weaponType = weaponAttackTypeFor(state.equipment.weapon, content);
+    const { atkRoll, max } = playerAccuracyAndMaxHit();
+    // Routed lookup (#99): the monster's weak spot is simply the type it defends worst.
+    const defRoll = defenceRoll(monster.defenceLevel + 8, monster.def[weaponType]);
     const { hit, damage: rolled } = rollDamage(hitChance(atkRoll, defRoll), max);
     const damage = Math.min(rolled, activity.monsterHp);
     activity.monsterHp -= damage;
@@ -965,9 +1029,13 @@ export function createEngine(
         skills,
         equipment: { ...state.equipment },
         bonuses: {
+          attackType: weaponAttackTypeFor(state.equipment.weapon, content),
           atkBonus: gearBonus("atkBonus"),
           strBonus: gearBonus("strBonus"),
-          defBonus: gearBonus("defBonus"),
+          def: Object.fromEntries(ATTACK_TYPES.map((t) => [t, gearDef(t)])) as Record<
+            AttackType,
+            number
+          >,
           attackSpeed: weaponSpeed(),
         },
         gold: state.gold,
@@ -1024,7 +1092,7 @@ export function createEngine(
     const atkRoll = attackRoll(monster.attackLevel + 8, 0);
     const defRoll = defenceRoll(
       effectiveLevel(level("defence"), "defence", state.combatStyle),
-      gearBonus("defBonus"),
+      gearDefAverage(),
     );
     const { hit, damage } = rollDamage(hitChance(atkRoll, defRoll), monster.maxHit);
     state.hp = Math.max(0, state.hp - damage);

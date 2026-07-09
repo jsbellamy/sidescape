@@ -1249,12 +1249,17 @@ describe("Character panel (#26)", () => {
     }
   });
 
+  // Compact defence-vector readout (#99): every Attack Type at bonus 0.
+  const ZERO_DEF_VECTOR = "st 0 · sl 0 · cr 0 · rn 0 · mg 0";
+
   it("shows the totals row at all zero with the unarmed attack speed (4t) when nothing is equipped", () => {
     const { root } = mount(1);
-    expect(root.querySelector("#character-totals")?.textContent).toBe("+0 atk +0 str def 0 spd 4t");
+    expect(root.querySelector("#character-totals")?.textContent).toBe(
+      `+0 atk +0 str ${ZERO_DEF_VECTOR} spd 4t`,
+    );
   });
 
-  it("shows a weapon's own atk/str/speed on its slot row", () => {
+  it("shows a weapon's own attack type, atk/str/speed and defence vector on its slot row", () => {
     const { engine, root, app } = mount(1);
     engine.selectMonster("dummy");
     grindFor(engine, "bronze-sword");
@@ -1263,10 +1268,12 @@ describe("Character panel (#26)", () => {
 
     const weaponRow = root.querySelector('[data-slot="weapon"]');
     expect(weaponRow?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
-    expect(weaponRow?.querySelector(".slot-stats")?.textContent).toBe("+10 atk +30 str spd 4t");
+    expect(weaponRow?.querySelector(".slot-stats")?.textContent).toBe(
+      `slash +10 atk +30 str ${ZERO_DEF_VECTOR} spd 4t`,
+    );
   });
 
-  it("shows an armor piece's def bonus only (no atk/str/speed line noise)", () => {
+  it("shows an armor piece's defence vector only (no atk/str/speed line noise)", () => {
     const { engine, root, app } = mount(1);
     engine.selectMonster("dummy");
     grindFor(engine, "lucky-charm");
@@ -1275,7 +1282,9 @@ describe("Character panel (#26)", () => {
 
     const headRow = root.querySelector('[data-slot="head"]');
     expect(headRow?.querySelector(".slot-item")?.textContent).toBe("Lucky Charm");
-    expect(headRow?.querySelector(".slot-stats")?.textContent).toBe("def 1");
+    expect(headRow?.querySelector(".slot-stats")?.textContent).toBe(
+      "st 1 · sl 1 · cr 1 · rn 1 · mg 1",
+    );
   });
 
   it("totals row matches snapshot().player.bonuses and updates when Gear is equipped", () => {
@@ -1283,15 +1292,23 @@ describe("Character panel (#26)", () => {
     engine.selectMonster("dummy");
     grindFor(engine, "bronze-sword");
     app.render();
-    expect(root.querySelector("#character-totals")?.textContent).toBe("+0 atk +0 str def 0 spd 4t");
+    expect(root.querySelector("#character-totals")?.textContent).toBe(
+      `+0 atk +0 str ${ZERO_DEF_VECTOR} spd 4t`,
+    );
 
     engine.equip("bronze-sword");
     app.render();
 
     const b = engine.snapshot().player.bonuses;
-    expect(b).toEqual({ atkBonus: 10, strBonus: 30, defBonus: 0, attackSpeed: 4 });
+    expect(b).toEqual({
+      attackType: "slash",
+      atkBonus: 10,
+      strBonus: 30,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 4,
+    });
     expect(root.querySelector("#character-totals")?.textContent).toBe(
-      `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`,
+      `+${b.atkBonus} atk +${b.strBonus} str ${ZERO_DEF_VECTOR} spd ${b.attackSpeed}t`,
     );
   });
 });
@@ -1343,7 +1360,7 @@ describe("Equip via Bank click emits the equipped event (#26, #59)", () => {
     const weaponRowAfter = root.querySelector('[data-slot="weapon"]');
     expect(weaponRowAfter?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
     expect(weaponRowAfter?.querySelector(".slot-stats")?.textContent).toBe(
-      "+10 atk +30 str spd 4t",
+      "slash +10 atk +30 str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
     );
     expect(engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")).toBe(false);
   });

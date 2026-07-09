@@ -74,13 +74,41 @@ describe("validateContent", () => {
           id: "plain-shield",
           name: "Plain Shield",
           slot: "shield" as const,
-          atkBonus: 0,
-          strBonus: 0,
-          defBonus: 1,
+          def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
         },
       ],
     };
     expect(validateContent(content)).toEqual([]);
+  });
+
+  it("reports a weapon that declares no attackType (#99)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.kind !== "equipment" || i.id !== "bronze-sword") return i;
+        const { attackType: _dropped, ...typeless } = i;
+        return typeless;
+      }),
+    };
+    expect(validateContent(content)).toContain('weapon "bronze-sword" declares no attackType');
+  });
+
+  it("reports a non-weapon that declares an attackType (#99)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "cursed-shield",
+          name: "Cursed Shield",
+          slot: "shield" as const,
+          attackType: "crush" as const,
+          def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
+        },
+      ],
+    };
+    expect(validateContent(content)).toContain('non-weapon "cursed-shield" declares attackType');
   });
 
   it("reports a dangling area.monsterIds reference", () => {
@@ -203,6 +231,7 @@ describe("validateContent", () => {
           defenceLevel: 1,
           maxHit: 1,
           attackSpeed: 4,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
           dropTable: [],
         },
       ],

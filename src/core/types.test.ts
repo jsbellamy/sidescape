@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SKILL_NAMES } from "./types";
+import { ATTACK_TYPES, SKILL_NAMES } from "./types";
 
 describe("SKILL_NAMES", () => {
   it("is the single source of truth for Skill order: attack, strength, defence, hitpoints, fishing, smithing, ranged, magic", () => {
@@ -16,5 +16,13 @@ describe("SKILL_NAMES", () => {
       "ranged",
       "magic",
     ]);
+  });
+});
+
+describe("ATTACK_TYPES (#99)", () => {
+  it("is the single source of truth for Attack Type order: stab, slash, crush, ranged, magic", () => {
+    // Order is load-bearing for render order (the Character panel's defence-vector readout) —
+    // mirrors SKILL_NAMES's own pinned-order test above.
+    expect(ATTACK_TYPES).toEqual(["stab", "slash", "crush", "ranged", "magic"]);
   });
 });

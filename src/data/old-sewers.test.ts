@@ -78,8 +78,8 @@ describe("Old Sewers content", () => {
     const steelKiteshield = content.items.find((i) => i.id === "steel-kiteshield");
     expect(ironKiteshield?.kind).toBe("equipment");
     expect(steelKiteshield?.kind).toBe("equipment");
-    expect((steelKiteshield as { defBonus: number }).defBonus).toBeGreaterThan(
-      (ironKiteshield as { defBonus: number }).defBonus,
+    expect((steelKiteshield as { def: { stab: number } }).def.stab).toBeGreaterThan(
+      (ironKiteshield as { def: { stab: number } }).def.stab,
     );
   });
 

@@ -11,13 +11,25 @@ export const SKILL_NAMES = [
   "magic",
 ] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
+
+/** The five Attack Types (Combat Depth #99): a weapon attacks with exactly one, chosen by the
+ * weapon itself (dagger=stab, sword=slash, mace/hammer=crush, bow=ranged, staff=magic) — no
+ * per-weapon style selector (owner decision, #75). Defence is a per-type vector on armour and
+ * Monsters (see EquipmentDef.def / MonsterDef.def): the player's accuracy roll routes against the
+ * Monster's defence bonus for the weapon's own type, so a Monster's "weak spot" is simply the
+ * type it defends worst. Order is load-bearing for render order (mirrors SKILL_NAMES). */
+export const ATTACK_TYPES = ["stab", "slash", "crush", "ranged", "magic"] as const;
+export type AttackType = (typeof ATTACK_TYPES)[number];
+
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
 /** A weapon's Combat Mode (#7) — deliberately NOT a widening of CombatStyle: CombatStyle is the
  * player's melee training selector (Accurate/Aggressive/Defensive), while Combat Mode is which of
  * Attack's three families a weapon belongs to. A melee weapon's damage XP still routes through
  * CombatStyle (STYLE_SKILL in engine.ts); a ranged or magic weapon routes straight to its own
  * Skill instead, bypassing Combat Style entirely. See ADR-0002 for why STYLE_SKILL/STYLE_BOOST
- * stay separate maps — this type is orthogonal to both. */
+ * stay separate maps — this type is orthogonal to both. Since #99 there is no stored `combatMode`
+ * field: it's derived from the weapon's `attackType` (stab|slash|crush -> melee, ranged -> ranged,
+ * magic -> magic) — see weaponCombatModeFor in engine.ts, the one source of truth. */
 export type CombatMode = "melee" | "ranged" | "magic";
 export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
@@ -44,14 +56,19 @@ export interface EquipmentDef {
   id: string;
   name: string;
   slot: GearSlot;
-  atkBonus: number;
-  strBonus: number;
-  defBonus: number;
+  /** Weapons only, required-by-validation (validateContent, #99): omitted on armour — see
+   * ATTACK_TYPES. Combat Mode (melee/ranged/magic) is derived from this, not stored separately;
+   * see weaponCombatModeFor in engine.ts. */
+  attackType?: AttackType;
+  /** Weapons only, required-by-validation: like attackSpeed, armour must NOT declare these. */
+  atkBonus?: number;
+  /** Weapons only, required-by-validation: like attackSpeed, armour must NOT declare these. */
+  strBonus?: number;
+  /** Every piece's defence, per Attack Type (#99) — replaces the old scalar defBonus. All five
+   * keys are required (a compile error forces every content site to update). */
+  def: Record<AttackType, number>;
   /** Weapons only: Ticks between player attacks. */
   attackSpeed?: number;
-  /** Weapons only: which Combat Mode this weapon trains; omitted means "melee" (every pre-#7
-   * weapon in data/index.ts relies on this default rather than declaring it explicitly). */
-  combatMode?: CombatMode;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }
@@ -116,6 +133,10 @@ export interface MonsterDef {
   maxHit: number;
   /** Ticks between monster attacks. */
   attackSpeed: number;
+  /** The bonus half of the Monster's defence roll, per Attack Type (#99) — defenceLevel stays as
+   * the level half. Every Monster ships a uniform vector this wave (today's hardcoded 0); wave 4/4
+   * gives real weak spots. */
+  def: Record<AttackType, number>;
   dropTable: DropTableEntry[];
 }
 
@@ -239,8 +260,17 @@ export interface Snapshot {
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed
-     * fresh each snapshot from `content.items` — harmless to persist in a save, ignored on load. */
-    bonuses: { atkBonus: number; strBonus: number; defBonus: number; attackSpeed: number };
+     * fresh each snapshot from `content.items` — harmless to persist in a save, ignored on load.
+     * Since #99: atkBonus/strBonus come from the equipped weapon only (armour no longer carries
+     * them); `attackType` is the equipped weapon's own type (unarmed = "crush", the OSRS punch
+     * type); `def` is the per-Attack-Type sum across every equipped Gear Slot. */
+    bonuses: {
+      attackType: AttackType;
+      atkBonus: number;
+      strBonus: number;
+      def: Record<AttackType, number>;
+      attackSpeed: number;
+    };
     /** The player's currency balance (#59) — a number on the player, not an Item stack; the Bank
      * is the sole store for every other Item. */
     gold: number;

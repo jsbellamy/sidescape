@@ -12,11 +12,11 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       id: "shortbow",
       name: "Shortbow",
       slot: "weapon",
+      attackType: "ranged",
       atkBonus: 5,
       strBonus: 4,
-      defBonus: 0,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 5,
-      combatMode: "ranged",
       value: 25,
     });
 
@@ -26,11 +26,11 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       id: "apprentice-staff",
       name: "Apprentice Staff",
       slot: "weapon",
+      attackType: "magic",
       atkBonus: 4,
       strBonus: 5,
-      defBonus: 0,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 6,
-      combatMode: "magic",
       value: 25,
     });
   });
@@ -41,9 +41,9 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     expect(ids.indexOf("shade-blade")).toBeLessThan(ids.indexOf("apprentice-staff"));
   });
 
-  it("every other weapon in Content leaves combatMode unset, defaulting to melee", () => {
+  it("every other weapon in Content declares a melee attackType (stab/slash/crush)", () => {
     // Ranged/Magic weapons across #7 (starter tier) and #13 (iron/steel/mithril tiers) — every
-    // other weapon in Content must leave combatMode unset.
+    // other weapon in Content must declare a melee attackType (#99 derives Combat Mode from it).
     const rangedAndMagicWeaponIds = new Set([
       "shortbow",
       "apprentice-staff",
@@ -59,7 +59,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     );
     expect(otherWeapons.length).toBeGreaterThan(0);
     for (const weapon of otherWeapons) {
-      expect(weapon.kind === "equipment" && weapon.combatMode).toBeUndefined();
+      expect(weapon.kind === "equipment" && weapon.attackType).toMatch(/^(stab|slash|crush)$/);
     }
   });
 

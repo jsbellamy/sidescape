@@ -9,7 +9,7 @@ A themed location the player selects (e.g. Lumbry Meadows, Bone Crypt). Holds se
 _Avoid_: zone, map, region
 
 **Monster**:
-An enemy inside an **Area** that the player farms. Has HP, attack/defence stats, an attack cadence in **Ticks**, and exactly one **Drop Table**.
+An enemy inside an **Area** that the player farms. Has HP, attack/defence stats (including a per-**Attack Type** **Defence Vector**), an attack cadence in **Ticks**, and exactly one **Drop Table**.
 _Avoid_: mob, enemy, NPC
 
 **Skill**:
@@ -21,8 +21,16 @@ The player's training selector — Accurate / Aggressive / Defensive — which d
 _Avoid_: stance, mode
 
 **Combat Mode**:
-Melee, Ranged, or Magic — the family a weapon belongs to, fixed by the weapon itself (e.g. a sword is melee, a Shortbow is Ranged, an Apprentice Staff is Magic). Decides which Skill an attack's kill XP trains: melee routes through Combat Style, while Ranged and Magic each train their own Skill directly. Orthogonal to Combat Style — picking a Combat Style never changes Combat Mode, and vice versa.
+Melee, Ranged, or Magic — the family a weapon belongs to, derived from the weapon's own **Attack Type** (stab/slash/crush → melee, ranged → Ranged, magic → Magic). Decides which Skill an attack's kill XP trains: melee routes through Combat Style, while Ranged and Magic each train their own Skill directly. Orthogonal to Combat Style — picking a Combat Style never changes Combat Mode, and vice versa.
 _Avoid_: stance, style (reserved for Combat Style)
+
+**Attack Type**:
+One of stab, slash, crush, ranged, or magic — the single type a weapon attacks with, fixed by the weapon itself (a dagger is stab, a sword is slash, a mace is crush, a Shortbow is ranged, an Apprentice Staff is magic); a weapon has exactly one, never a per-swing choice. Melee's three sub-types (stab/slash/crush) all fall under the melee **Combat Mode**, which is derived from Attack Type rather than stored separately. The player's accuracy roll checks the defending Monster's **Defence Vector** entry for the attacker's own Attack Type, so a Monster's weak spot is simply the type it defends worst.
+_Avoid_: attack style (reserved for Combat Style), damage type
+
+**Defence Vector**:
+A piece of Equipment's or a Monster's defence bonus, broken out per **Attack Type** rather than a single scalar — five numbers (stab/slash/crush/ranged/magic) instead of one. An accuracy roll checks the Defence Vector entry matching the attacker's own Attack Type; the level half of the roll (Defence Skill for the player, `defenceLevel` for a Monster) stays a single number, untouched.
+_Avoid_: defence bonus (singular, pre-Combat-Depth terminology), resistance
 
 **Tick**:
 The 600ms unit of game time. All combat timing (attack speeds, regen) is expressed in Ticks.
@@ -40,7 +48,7 @@ _Avoid_: loot (as a noun for a single item)
 Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
-An **Item** worn in one of five **Gear Slots**, granting attack / strength / defence bonuses.
+An **Item** worn in one of five **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus, for weapons only, attack/strength bonuses and an **Attack Type** of its own.
 _Avoid_: gear (alone), armor (as the general term)
 
 **Gear Slot**:
