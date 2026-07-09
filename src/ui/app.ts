@@ -17,6 +17,8 @@ import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
 import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
+import { resolveProp } from "./props";
+import { resolveTheme } from "./theme";
 
 /** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
  * key order (a plain object, not guaranteed stable across engines/serialization). */
@@ -197,6 +199,12 @@ export function mountApp(
   // reacts to the Engine's own events, adding no new Engine state.
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // Scene backdrop (#80): the most recently resolved Area id, remembered so idle stretches (e.g.
+  // right after a Dungeon completes and ejects to idle) keep showing that Area's theme instead of
+  // reverting to the first-unlocked one — see resolveTheme's own doc for the full priority order.
+  // Presentation-only, in-memory (never the Snapshot/save), same boundary as sortKey/panelState.
+  let lastAreaId: string | null = null;
+
   /** Shows the LEFT (Areas) panel and the RIGHT panel's active tab (if any), hiding the rest;
    * highlights the matching tab button and the left arrow. Does not itself notify WindowChrome or
    * persist — callers that change `leftOpen`/`rightTab` do that via `syncPanels` below. */
@@ -349,6 +357,23 @@ export function mountApp(
                 </div>`;
       })
       .join("");
+  }
+
+  /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
+   * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
+   * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
+   * and shows/hides the activity's foreground prop (Smithing's anvil, this wave — see props.ts).
+   * Updates `lastAreaId` whenever an Area-following activity resolves one, so later idle stretches
+   * keep showing the most recently visited Area rather than flashing back to the first-unlocked. */
+  function renderBackdrop(snap: Snapshot): void {
+    const resolved = resolveTheme(snap, content, lastAreaId);
+    if (resolved.areaId) lastAreaId = resolved.areaId;
+    el<HTMLElement>("#backdrop").dataset["theme"] = resolved.theme;
+
+    const prop = resolveProp(snap);
+    const propEl = el<HTMLElement>("#activity-prop");
+    propEl.hidden = prop === null;
+    propEl.className = prop ? `prop-${prop}` : "";
   }
 
   /** Renders the main column's "scene": the current Dungeon banner (if any), the player HP bar,
@@ -547,6 +572,7 @@ export function mountApp(
     const snap = engine.snapshot();
     const { player, monster, fishing, dungeon, smithing, bank } = snap;
 
+    renderBackdrop(snap);
     renderScene(dungeon, player, monster, fishing, smithing);
     renderFoodSlots(player.foodSlots, bank.items);
     renderXpRow(player.skills);
@@ -607,6 +633,13 @@ export function mountApp(
         <span id="gold"></span>
       </div>
       <section id="scene">
+        <div id="backdrop" aria-hidden="true">
+          <div class="layer-sky"></div>
+          <div class="layer-mid"></div>
+          <div class="layer-near"></div>
+          <div class="backdrop-overlay"></div>
+          <div id="activity-prop" hidden></div>
+        </div>
         <div id="toast-container"></div>
         <div id="sprite-row">
           <div id="monster-sprite-wrap" class="sprite-wrap">

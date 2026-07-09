@@ -12,6 +12,7 @@ export const fixtureContent: Content = {
       name: "Test Meadow",
       monsterIds: ["dummy"],
       fishingSpotIds: ["pond"],
+      theme: "meadow",
     },
     {
       id: "crypt",
@@ -19,6 +20,7 @@ export const fixtureContent: Content = {
       unlockedByDungeonId: "gauntlet",
       monsterIds: ["brute"],
       fishingSpotIds: ["deep-pond"],
+      theme: "crypt",
     },
   ],
   monsters: [

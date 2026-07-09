@@ -11,6 +11,7 @@ export const content: Content = {
       name: "Lumbry Meadows",
       monsterIds: ["chicken", "cow", "goblin"],
       fishingSpotIds: ["shrimp-pool"],
+      theme: "meadow",
     },
     {
       id: "darkroot-forest",
@@ -18,12 +19,14 @@ export const content: Content = {
       unlockedByDungeonId: "meadow-depths",
       monsterIds: ["wolf", "goblin-warrior", "bandit"],
       fishingSpotIds: ["trout-run"],
+      theme: "forest",
     },
     {
       id: "old-sewers",
       name: "Old Sewers",
       unlockedByDungeonId: "darkroot-hollow",
       monsterIds: ["giant-rat", "zombie", "skeleton"],
+      theme: "sewer",
     },
     // Bone Crypt (#11): endgame Area holding the single boss-tier Crypt Shade, gated by the
     // Sewer King Dungeon (hosted in Old Sewers) rather than an Old Sewers Monster.
@@ -32,6 +35,7 @@ export const content: Content = {
       name: "Bone Crypt",
       unlockedByDungeonId: "sewer-king",
       monsterIds: ["crypt-shade"],
+      theme: "crypt",
     },
   ],
   monsters: [
