@@ -35,6 +35,19 @@ const BASE_H = 460;
  * stays flush and the main column effectively slides right inside the (now wider) window instead.
  * Wrapped in `.catch(console.error)` exactly like the existing close-button guard, so `npm run
  * dev` in a plain browser (no Tauri APIs) degrades to in-page flex layout with no window resize.
+ *
+ * Reconciling with `tauri-plugin-window-state` (#66, registered Rust-side in src-tauri/src/lib.rs):
+ * the plugin restores the window's last-seen x/y/width/height on window creation, before this
+ * module's `mountApp` call runs — so its restored width may be stale (e.g. expanded, if a panel
+ * was open at last close). No extra boot wiring is needed here: `mountApp` (src/ui/app.ts) already
+ * calls `syncPanels()` once at the end of mount, which reads the persisted panel state from
+ * localStorage (`sidescape-ui-panels`, independent of the plugin's save file) and calls this
+ * adapter's `setPanels`, above — recomputing width from `BASE_W` + open panels and overriding
+ * whatever width the plugin restored. Because `applyPanels` always re-queries `outerPosition()`
+ * fresh (see above) rather than caching an anchor, that first post-restore call already derives
+ * its x-shift from the plugin-restored position, so repeated open/close/relaunch cycles don't
+ * drift the window. Only width is ever app-owned this way; x/y otherwise stay as the plugin
+ * restored them (aside from the panel x-shift), clamped by the screen-edge rule above.
  */
 function createTauriWindowChrome(): WindowChrome {
   let wasLeftOpen = false;
