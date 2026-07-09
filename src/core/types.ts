@@ -180,7 +180,16 @@ export type EngineEvent =
       type: "chest-opened";
       dungeonId: string;
       items: { itemId: string; qty: number; band: DropBand }[];
-    };
+    }
+  /** A sweep of the Loot Zone into the Bank (#60) — fired by leaving combat (selectFishingSpot,
+   * selectRecipe, enterDungeon, dungeon completion) or by the on-demand lootAll() command. Lists
+   * only the stacks actually banked; a stack that needed a new Bank Slot at capacity stays in the
+   * Loot Zone and is left out. Never fires when nothing moved. */
+  | { type: "looted"; items: { itemId: string; qty: number }[] }
+  /** Death mid-Dungeon-run (#60): the run is abandoned (mirrors the existing death/ejection
+   * handling) AND the Loot Zone is emptied — the failed run's own drops are lost, not banked.
+   * Open-world death is unchanged: no sweep, no loss, same fight resumes. */
+  | { type: "dungeon-failed"; dungeonId: string; lostItems: { itemId: string; qty: number }[] };
 
 export interface SkillSnapshot {
   level: number;
@@ -220,6 +229,12 @@ export interface Snapshot {
     /** Derived, not stored: the gold cost of the next `buyBankSlots()` call. */
     nextSlotsPrice: number;
   };
+  /** The Loot Zone (#60): a small buffer, capped at LOOT_ZONE_CAPACITY stacks, that combat Drops
+   * (kill Drops and Dungeon Chest items) land in on their way to the Bank, instead of going there
+   * directly — a sibling store to `bank`, not a subset of it. Currency Drops still bypass it
+   * straight to `player.gold`; non-combat outputs (Catches, Smithing outputs) still go straight to
+   * the Bank, unchanged. Swept into the Bank on leaving combat, or on demand via `lootAll()`. */
+  lootZone: { itemId: string; qty: number }[];
   areas: {
     id: string;
     name: string;

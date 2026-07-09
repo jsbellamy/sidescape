@@ -359,6 +359,15 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     el("#character-totals").textContent =
       `+${b.atkBonus} atk +${b.strBonus} str def ${b.defBonus} spd ${b.attackSpeed}t`;
 
+    const lootZone = snap.lootZone;
+    const lootStrip = el<HTMLElement>("#loot-strip");
+    lootStrip.hidden = lootZone.length === 0;
+    el("#loot-strip-items").innerHTML = lootZone
+      .map(
+        (s) => `<li class="loot-chip" data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</li>`,
+      )
+      .join("");
+
     const used = bank.items.length;
     el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
     const buySlotsBtn = el<HTMLButtonElement>("#buy-slots-btn");
@@ -482,6 +491,10 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     </section>
     <section id="xp-row"></section>
     <section id="picker"></section>
+    <section id="loot-strip" hidden>
+      <ul id="loot-strip-items"></ul>
+      <button id="loot-all-btn" data-loot-all>Loot all</button>
+    </section>
     <section id="panels">
       <div id="tab-row" class="tab-row">
         ${TABS.map((tab) => `<button data-tab="${tab.id}">${tab.label}</button>`).join("")}
@@ -531,6 +544,28 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
   engine.on("overflow-lost", (e) =>
     feedLine(`⚠ Bank full — ${itemName(e.itemId)} lost!`, "overflow"),
   );
+  // Loot Zone (#60): a sweep (auto-loot on leaving combat, or the Loot all button) banks whatever
+  // fits and leaves the rest in the zone — check the post-sweep Snapshot for leftovers right here,
+  // rather than a per-render check, so the warning fires once per sweep instead of spamming every
+  // Tick while the zone sits non-empty.
+  engine.on("looted", (e) => {
+    if (e.items.length <= 3) {
+      for (const item of [...e.items].reverse()) {
+        feedLine(`Banked ${item.qty} ${itemName(item.itemId)}`, "loot");
+      }
+    } else {
+      feedLine(`Banked ${e.items.length} stacks of loot`, "loot");
+    }
+    if (engine.snapshot().lootZone.length > 0) {
+      feedLine("⚠ Bank full — loot left behind", "overflow");
+    }
+  });
+  engine.on("dungeon-failed", (e) => {
+    for (const item of [...e.lostItems].reverse()) {
+      feedLine(`-${item.qty} ${itemName(item.itemId)}`, "dungeon-failed");
+    }
+    feedLine("💀 Run failed — loot lost!", "dungeon-failed");
+  });
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
   engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${itemName(e.itemId)}`, "craft"));
   engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
@@ -629,6 +664,18 @@ export function mountApp(engine: Engine, root: HTMLElement, content: Content): M
     if (def.kind === "food") {
       engine.eatFood(itemId); // logs its own feed line via the food-eaten listener above
       render();
+    }
+  });
+
+  el("#loot-all-btn").addEventListener("click", () => {
+    const before = engine.snapshot().lootZone.length;
+    engine.lootAll(); // logs its own feed line via the looted subscription above, if anything moved
+    const after = engine.snapshot().lootZone.length;
+    render();
+    // If something moved, the looted listener above already logged the leftover check itself; this
+    // covers the otherwise-silent case where the sweep moved nothing at all (no looted event fires).
+    if (after > 0 && after === before) {
+      feedLine("⚠ Bank full — loot left behind", "overflow");
     }
   });
 

@@ -24,6 +24,7 @@ describe("makeSnapshot", () => {
     });
     expect(snap.player.gold).toBe(0);
     expect(snap.bank.items).toEqual([]);
+    expect(snap.lootZone).toEqual([]);
     expect(snap.player.respawning).toBe(false);
     expect(snap.player.combatStyle).toBe("accurate");
     expect(snap.player.autoEatThreshold).toBe(0);

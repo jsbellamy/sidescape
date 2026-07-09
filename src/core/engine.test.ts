@@ -27,12 +27,20 @@ function fiercerDummyContent() {
   };
 }
 
-/** Pump Ticks until the Bank holds `itemId` (or fail the test) — passive Drops land in the Bank
- * (#59), never a carried inventory. */
+/** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
+ * loot it all into the Bank — combat Drops land in the Loot Zone first, not the Bank directly
+ * (#60), and most callers just want the item banked so they can equip/sell/eat it. */
 function grindFor(engine: ReturnType<typeof freshEngine>, itemId: string, maxTicks = 20_000) {
   for (let i = 0; i < maxTicks; i++) {
     engine.tick();
-    if (engine.snapshot().bank.items.some((s) => s.itemId === itemId)) return;
+    const snap = engine.snapshot();
+    if (
+      snap.bank.items.some((s) => s.itemId === itemId) ||
+      snap.lootZone.some((s) => s.itemId === itemId)
+    ) {
+      engine.lootAll();
+      return;
+    }
   }
   throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
 }
@@ -215,7 +223,23 @@ describe("taking damage, Food, death and Respawn", () => {
   });
 
   it("auto-eats Food below half HP, never overhealing", () => {
-    const engine = createEngine(fiercerDummyContent(), seededRng(42));
+    // Food (meat) is now itself a combat Drop, which lands in the Loot Zone rather than the Bank
+    // (#60) — auto-eat only ever reads from the Bank, so seed it directly instead of relying on
+    // incidental kill Drops reaching it mid-fight.
+    const engine = createEngine(
+      fiercerDummyContent(),
+      seededRng(42),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5, // makeSnapshot's own default is 0 (Off) — freshState's is 0.5
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        },
+        bank: { items: [{ itemId: "meat", qty: 20 }] },
+      }),
+    );
     let ate = 0;
     engine.on("food-eaten", (e) => {
       ate++;
@@ -527,7 +551,8 @@ describe("Equipment and gates", () => {
     let equipped = false;
     for (let i = 0; i < ticks; i++) {
       armed.tick();
-      if (!equipped && armed.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")) {
+      if (!equipped && armed.snapshot().lootZone.some((s) => s.itemId === "bronze-sword")) {
+        armed.lootAll();
         armed.equip("bronze-sword");
         equipped = true;
       }
@@ -756,6 +781,7 @@ describe("Selling items", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
     for (let i = 0; i < 3000; i++) engine.tick();
+    engine.lootAll();
     const owned = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     expect(owned).toBeGreaterThan(1);
 
@@ -926,25 +952,9 @@ describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", 
     });
   }
 
-  it("a sellable passive arrival (Drop) needing a new stack at full capacity is auto-sold: credits qty*value gold and emits overflow-sold, not overflow-lost", () => {
-    const engine = createEngine(fixtureContent, seededRng(1), fullBankSnapshot());
-    const sold: { itemId: string; qty: number; gold: number }[] = [];
-    const lost: { itemId: string; qty: number }[] = [];
-    engine.on("overflow-sold", (e) => sold.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
-    engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
-
-    engine.selectMonster("dummy");
-    // dummy's Drop Table: gold (currency, bypasses the Bank entirely) and meat/bronze-sword/
-    // lucky-charm (all sellable) — grind until one of the sellable, non-"bar" drops lands.
-    for (let i = 0; i < 20_000 && sold.length === 0; i++) engine.tick();
-
-    expect(sold.length).toBeGreaterThan(0);
-    expect(lost).toEqual([]);
-    const [event] = sold;
-    expect(event).toBeDefined();
-    expect(engine.snapshot().player.gold).toBeGreaterThanOrEqual(event!.gold);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]); // still just "bar"
-  });
+  // A kill Drop needing a new stack at full BANK capacity no longer overflows here at all (#60):
+  // kill Drops land in the Loot Zone first, which has its own separate 10-stack capacity and its
+  // own overflow scenario — see "Loot Zone (#60)" below for that coverage instead.
 
   it("an unsellable passive arrival needing a new stack at full capacity is discarded and emits overflow-lost, crediting no gold", () => {
     const noValueContent = {
@@ -2077,6 +2087,427 @@ describe("Dungeons", () => {
       );
       expect(restored.snapshot().player.completedDungeonIds).toEqual([]);
       expect(restored.snapshot().areas.find((a) => a.id === "crypt")?.unlocked).toBe(false);
+    });
+  });
+});
+
+describe("Loot Zone (#60)", () => {
+  /** Extends fixtureContent with 6-7 inert Material items ("junk-N"), purely so a test can pre-fill
+   * the 10-stack Loot Zone with items that are NOT among dummy's own Drop Table entries (meat,
+   * bronze-sword, lucky-charm) — fixtureContent alone doesn't have enough "other" items to reach
+   * 10 distinct stacks. */
+  function junkContent(junkCount: number) {
+    return {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        ...Array.from({ length: junkCount }, (_, i) => ({
+          kind: "material" as const,
+          id: `junk-${i}`,
+          name: `Junk ${i}`,
+          value: 1,
+        })),
+      ],
+    };
+  }
+
+  it("kill Drops land in the Loot Zone, not the Bank, while combat continues; currency still credits gold directly, bypassing both", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 2000; i++) engine.tick();
+    const snap = engine.snapshot();
+    expect(snap.bank.items).toEqual([]); // nothing reached the Bank mid-combat
+    expect(snap.lootZone.length).toBeGreaterThan(0); // but Drops did land somewhere
+    expect(snap.lootZone.some((s) => s.itemId === "gold")).toBe(false); // currency never enters the zone
+    expect(snap.player.gold).toBeGreaterThan(0); // credited straight to gold instead
+  });
+
+  it("Dungeon Chest items land in the Loot Zone too, at the moment the Chest opens, before the same-Tick auto-sweep clears it", () => {
+    const guaranteedChestContent = {
+      ...fixtureContent,
+      dungeons: fixtureContent.dungeons.map((d) =>
+        d.id === "gauntlet"
+          ? { ...d, chest: d.chest.map((entry) => ({ ...entry, chance: 1 })) }
+          : d,
+      ),
+    };
+    const engine = createEngine(guaranteedChestContent, seededRng(5));
+    engine.enterDungeon("gauntlet");
+    let zoneAtChestOpen: { itemId: string; qty: number }[] | undefined;
+    engine.on("chest-opened", () => {
+      zoneAtChestOpen = engine.snapshot().lootZone;
+    });
+    let completed = false;
+    engine.on("dungeon-completed", () => {
+      completed = true;
+    });
+    for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+
+    expect(completed).toBe(true);
+    expect(zoneAtChestOpen).toBeDefined();
+    expect(zoneAtChestOpen!.some((s) => s.itemId === "bronze-sword")).toBe(true);
+    expect(engine.snapshot().lootZone).toEqual([]); // then swept away by the same-Tick auto-loot
+    expect(engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")).toBe(true);
+  });
+
+  it("an 11th distinct zone stack auto-sells (sellable) or discards (unsellable), the same overflow rule/events as a full Bank (#59); a sweep never touches the overflowed items", () => {
+    const content = junkContent(7);
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({
+        lootZone: [
+          { itemId: "bar", qty: 1 },
+          { itemId: "bow", qty: 1 },
+          { itemId: "staff", qty: 1 },
+          { itemId: "junk-0", qty: 1 },
+          { itemId: "junk-1", qty: 1 },
+          { itemId: "junk-2", qty: 1 },
+          { itemId: "junk-3", qty: 1 },
+          { itemId: "junk-4", qty: 1 },
+          { itemId: "junk-5", qty: 1 },
+          { itemId: "junk-6", qty: 1 }, // 10 stacks: the zone is already at capacity
+        ],
+      }),
+    );
+    const sold: { itemId: string; qty: number; gold: number }[] = [];
+    const lost: { itemId: string; qty: number }[] = [];
+    engine.on("overflow-sold", (e) => sold.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
+    engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
+
+    engine.selectMonster("dummy");
+    // dummy's Drop Table (meat/bronze-sword/lucky-charm) are all brand-new to this zone — any of
+    // them landing is a genuine 11th stack.
+    for (let i = 0; i < 20_000 && sold.length === 0 && lost.length === 0; i++) engine.tick();
+
+    expect(sold.length + lost.length).toBeGreaterThan(0);
+    expect(engine.snapshot().lootZone).toHaveLength(10); // unchanged — overflow never touches the zone
+  });
+
+  it("a Drop that tops up an existing zone stack always fits, even with the zone already holding 10 stacks", () => {
+    const content = junkContent(6);
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({
+        lootZone: [
+          { itemId: "meat", qty: 1 }, // one of dummy's own Drops — already has a stack here
+          { itemId: "bow", qty: 1 },
+          { itemId: "staff", qty: 1 },
+          { itemId: "junk-0", qty: 1 },
+          { itemId: "junk-1", qty: 1 },
+          { itemId: "junk-2", qty: 1 },
+          { itemId: "junk-3", qty: 1 },
+          { itemId: "junk-4", qty: 1 },
+          { itemId: "junk-5", qty: 1 },
+          { itemId: "bar", qty: 1 }, // 10 stacks: the zone is already at capacity
+        ],
+      }),
+    );
+    let overflowed = false;
+    engine.on("overflow-sold", () => {
+      overflowed = true;
+    });
+    engine.on("overflow-lost", () => {
+      overflowed = true;
+    });
+
+    engine.selectMonster("dummy");
+    for (
+      let i = 0;
+      i < 20_000 && (engine.snapshot().lootZone.find((s) => s.itemId === "meat")?.qty ?? 0) <= 1;
+      i++
+    ) {
+      engine.tick();
+    }
+
+    expect(overflowed).toBe(false);
+    expect(engine.snapshot().lootZone).toHaveLength(10); // still exactly 10 stacks
+    const meatQty = engine.snapshot().lootZone.find((s) => s.itemId === "meat")?.qty ?? 0;
+    expect(meatQty).toBeGreaterThan(1); // topped up despite the zone already being "full"
+  });
+
+  describe("Auto-loot sweep triggers", () => {
+    it("selectFishingSpot sweeps the Loot Zone into the Bank before switching activity", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+      );
+      const looted: { itemId: string; qty: number }[][] = [];
+      engine.on("looted", (e) => looted.push(e.items));
+
+      engine.selectFishingSpot("pond");
+
+      expect(engine.snapshot().lootZone).toEqual([]);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
+      expect(looted).toEqual([[{ itemId: "meat", qty: 3 }]]);
+    });
+
+    it("selectRecipe sweeps the Loot Zone into the Bank before switching activity", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }] },
+          lootZone: [{ itemId: "meat", qty: 3 }],
+        }),
+      );
+      const looted: { itemId: string; qty: number }[][] = [];
+      engine.on("looted", (e) => looted.push(e.items));
+
+      engine.selectRecipe("test-sword");
+
+      expect(engine.snapshot().lootZone).toEqual([]);
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([{ itemId: "meat", qty: 3 }]),
+      );
+      expect(looted).toEqual([[{ itemId: "meat", qty: 3 }]]);
+    });
+
+    it("enterDungeon sweeps the Loot Zone into the Bank before the run starts — open-world loot is banked first", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ lootZone: [{ itemId: "meat", qty: 5 }] }),
+      );
+
+      engine.enterDungeon("gauntlet");
+
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
+      expect(engine.snapshot().lootZone).toEqual([]); // the run starts with an empty zone
+    });
+
+    it("dungeon completion sweeps the run's own Loot Zone (wave Drops + Chest) into the Bank", () => {
+      const engine = dungeonEngine(5); // known seed: completes "gauntlet" within 5000 Ticks
+      let completed = false;
+      engine.on("dungeon-completed", () => {
+        completed = true;
+      });
+      engine.enterDungeon("gauntlet");
+      for (let i = 0; i < 5000 && !completed; i++) engine.tick();
+
+      expect(completed).toBe(true);
+      expect(engine.snapshot().lootZone).toEqual([]); // a fresh Bank has plenty of room
+      expect(engine.snapshot().bank.items.length).toBeGreaterThan(0);
+    });
+
+    it("selectMonster does NOT sweep — switching Monsters, or abandoning a Dungeon run, leaves the zone exactly as-is", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+      );
+      const looted: unknown[] = [];
+      engine.on("looted", (e) => looted.push(e));
+
+      engine.selectMonster("dummy");
+
+      expect(engine.snapshot().lootZone).toEqual([{ itemId: "meat", qty: 3 }]);
+      expect(engine.snapshot().bank.items).toEqual([]);
+      expect(looted).toEqual([]);
+    });
+
+    it("open-world death does NOT sweep or touch the Loot Zone at all — the same fight resumes with the zone untouched", () => {
+      const engine = createEngine(
+        fiercerDummyContent(),
+        seededRng(42),
+        makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+      );
+      engine.selectMonster("dummy");
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      engine.on("dungeon-failed", () => {
+        throw new Error("dungeon-failed must never fire for open-world death");
+      });
+      for (let i = 0; i < 5000 && !died; i++) engine.tick();
+
+      expect(died).toBe(true);
+      const meatQty = engine.snapshot().lootZone.find((s) => s.itemId === "meat")?.qty ?? 0;
+      expect(meatQty).toBeGreaterThanOrEqual(3); // the seeded stack survives untouched (maybe topped up)
+      expect(engine.snapshot().bank.items).toEqual([]); // never swept
+    });
+  });
+
+  describe("Dungeon runs are all-or-nothing for loot too (owner amendment)", () => {
+    it("death mid-Dungeon-run empties the Loot Zone (the failed run's own Drops are lost, not banked) and emits dungeon-failed with exactly the lost stacks", () => {
+      // fiercerDummyContent's "dummy" is calibrated (elsewhere in this file) to eventually kill the
+      // player by attrition over a few thousand Ticks while still landing kills of its own along the
+      // way — but gauntlet's stock 2-wave run finishes (ejecting to idle) long before that exposure
+      // accumulates. Stretch it to many "dummy" Waves before the Boss so there's enough runway for
+      // both a kill (Wave 1 alone, dummy only has 3 HP) and, eventually, a death.
+      const base = fiercerDummyContent();
+      const manyWavesContent = {
+        ...base,
+        dungeons: base.dungeons.map((d) =>
+          d.id === "gauntlet" ? { ...d, waves: [...Array(20).fill("dummy"), "boss-dummy"] } : d,
+        ),
+      };
+      const engine = createEngine(manyWavesContent, seededRng(3)); // seed pinned: produces a real
+      // (non-currency) Drop before the eventual death, so the Loot Zone genuinely has something to
+      // lose — not just a hypothetically-empty one.
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      let failed: { dungeonId: string; lostItems: { itemId: string; qty: number }[] } | undefined;
+      engine.on("dungeon-failed", (e) => {
+        failed = { dungeonId: e.dungeonId, lostItems: [...e.lostItems] };
+      });
+      engine.enterDungeon("gauntlet");
+      let sawNonEmptyZone = false;
+      for (let i = 0; i < 5000 && !died; i++) {
+        engine.tick();
+        if (engine.snapshot().lootZone.length > 0) sawNonEmptyZone = true;
+      }
+
+      expect(died).toBe(true);
+      expect(sawNonEmptyZone).toBe(true); // the run did accumulate its own Loot Zone stacks first
+      expect(failed).toBeDefined();
+      expect(failed!.dungeonId).toBe("gauntlet");
+      expect(failed!.lostItems.length).toBeGreaterThan(0);
+      expect(engine.snapshot().lootZone).toEqual([]); // emptied, not swept
+      expect(engine.snapshot().bank.items).toEqual([]); // none of the lost stacks reached the Bank
+    });
+
+    it("open-world death is unchanged: no dungeon-failed, no loss, the same fight resumes", () => {
+      const engine = createEngine(fiercerDummyContent(), seededRng(42));
+      engine.selectMonster("dummy");
+      let died = false;
+      engine.on("death", () => {
+        died = true;
+      });
+      const failures: unknown[] = [];
+      engine.on("dungeon-failed", (e) => failures.push(e));
+      for (let i = 0; i < 5000 && !died; i++) engine.tick();
+
+      expect(died).toBe(true);
+      expect(failures).toEqual([]);
+    });
+  });
+
+  describe("Sweep semantics: bank what fits, leave the rest, never sell", () => {
+    it("a sweep banks a top-up plus a stack that already has room, and leaves a stack needing a NEW Bank Slot in the zone untouched — never sold", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 }, // full: 1/1, holding "bar"
+          lootZone: [
+            { itemId: "bar", qty: 2 }, // tops up the existing Bank stack — always fits
+            { itemId: "meat", qty: 3 }, // needs a brand-new Bank Slot — Bank is full, stays put
+          ],
+        }),
+      );
+      const looted: { itemId: string; qty: number }[][] = [];
+      engine.on("looted", (e) => looted.push(e.items));
+      const overflowEvents: unknown[] = [];
+      engine.on("overflow-sold", (e) => overflowEvents.push(e));
+      engine.on("overflow-lost", (e) => overflowEvents.push(e));
+
+      engine.lootAll();
+
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 3 }]);
+      expect(engine.snapshot().lootZone).toEqual([{ itemId: "meat", qty: 3 }]); // left behind, not sold
+      expect(looted).toEqual([[{ itemId: "bar", qty: 2 }]]);
+      expect(overflowEvents).toEqual([]); // a sweep never sells — only zone-full overflow does that
+    });
+
+    it("lootAll is idempotent and never throws — against an empty zone, a partially-blocked one, or repeated calls", () => {
+      const empty = freshEngine();
+      expect(() => empty.lootAll()).not.toThrow();
+      expect(() => empty.lootAll()).not.toThrow();
+      expect(empty.snapshot().lootZone).toEqual([]);
+
+      const blocked = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          lootZone: [{ itemId: "meat", qty: 3 }],
+        }),
+      );
+      expect(() => blocked.lootAll()).not.toThrow();
+      const afterFirst = blocked.snapshot().lootZone;
+      expect(() => blocked.lootAll()).not.toThrow(); // second call moves nothing new — still no throw
+      expect(blocked.snapshot().lootZone).toEqual(afterFirst);
+    });
+  });
+
+  describe("save/load", () => {
+    it("the Loot Zone persists across save/load", () => {
+      const original = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          lootZone: [
+            { itemId: "meat", qty: 4 },
+            { itemId: "bar", qty: 1 },
+          ],
+        }),
+      );
+      const saved = original.snapshot();
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+      );
+
+      expect(restored.snapshot().lootZone).toEqual(
+        expect.arrayContaining([
+          { itemId: "meat", qty: 4 },
+          { itemId: "bar", qty: 1 },
+        ]),
+      );
+      expect(restored.snapshot().lootZone).toHaveLength(2);
+    });
+
+    it("a pre-#60 save with no lootZone key at all loads with an empty zone", () => {
+      const legacySave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          respawning: false,
+        },
+        monster: null,
+        areas: [],
+        // no lootZone key: simulates a save written before this feature shipped
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      expect(restored.snapshot().lootZone).toEqual([]);
+    });
+
+    it("Loot Zone entries for an unknown itemId, the currency id, or an invalid qty are dropped on load", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          lootZone: [
+            { itemId: "unobtainium", qty: 3 },
+            { itemId: "gold", qty: 50 }, // currency never legitimately sits in the zone — dropped
+            { itemId: "meat", qty: 0 },
+            { itemId: "bronze-sword", qty: 1.5 },
+            { itemId: "lucky-charm", qty: 2 },
+          ],
+        }),
+      );
+      expect(engine.snapshot().lootZone).toEqual([{ itemId: "lucky-charm", qty: 2 }]);
     });
   });
 });
