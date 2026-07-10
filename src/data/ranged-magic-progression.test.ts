@@ -343,3 +343,42 @@ describe("Magic tier progression (#13)", () => {
     expect(engine.snapshot().player.skills.magic.xp).toBeGreaterThan(0);
   });
 });
+
+/** #121: magic gear is drop-only (the owner cut a magic Crafting line, #76), while melee/ranged
+ * both gained production ladders this wave (Smithing, Crafting leather/jewelry, arrow-strength
+ * tiers). Compensation lever is the Spell ladder itself: baseMaxHit is the whole of magic's
+ * damage output (magic ignores strBonus, see engine.ts's magic branch of
+ * playerAccuracyAndMaxHit), so raising it directly closes the gap. Owner's decision (#76,
+ * quoted on #101's pinned tuning note): "we can compensate by making it naturally stronger but
+ * the gear is only by drops". Applied a ~x1.5 compensation multiplier to the pre-#121 ladder
+ * (air 4 -> 6, water 6 -> 9, earth 8 -> 12) and a slightly steeper x1.6 at the top (fire 10 ->
+ * 16), so a mage's per-cast ceiling roughly tracks a comparably-invested melee/ranged setup once
+ * the per-cast rune cost (#119) and the x1.5 element-weakness upside on weak Monsters are priced
+ * in — an exact DPS match isn't the bar, "roughly on par" is. */
+describe("Magic compensation tuning (#121)", () => {
+  it("spell baseMaxHit values are raised by the drop-only-gear compensation factor", () => {
+    const bySpell = Object.fromEntries(content.spells.map((s) => [s.id, s.baseMaxHit]));
+    expect(bySpell).toEqual({
+      "air-strike": 6,
+      "water-strike": 9,
+      "earth-strike": 12,
+      "fire-strike": 16,
+    });
+  });
+
+  it("a Fire Strike-casting mage's observed max hit reaches the new #121 baseline, never exceeding it and clearing the pre-#121 ceiling", () => {
+    const engine = createEngine(content, seededRng(2024), darkrootGraduateSaveMagic());
+    expect(() => engine.selectMonster("wolf")).not.toThrow();
+
+    let maxDamage = 0;
+    engine.on("attack", (e) => {
+      if (e.actor === "player") maxDamage = Math.max(maxDamage, e.damage);
+    });
+    for (let i = 0; i < 6000; i++) engine.tick();
+
+    // Beats the pre-#121 fire-strike ceiling (10), proving the new baseline is actually in play...
+    expect(maxDamage).toBeGreaterThan(10);
+    // ...and never exceeds the new baseMaxHit (16) itself.
+    expect(maxDamage).toBeLessThanOrEqual(16);
+  });
+});

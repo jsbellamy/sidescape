@@ -1580,13 +1580,21 @@ export const content: Content = {
     },
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.
-  // Tuning defaults, flagged as such — wave 4/4 (#102) is the real content pass (monster
-  // weaknesses); this wave only needs a levelReq-1 spell plus a plausible progression to exist.
+  // Magic compensation tuning (#121): magic gear is drop-only — the owner cut a magic Crafting
+  // line (#76) — while melee/ranged both got production ladders this wave (Smithing, Crafting
+  // leather/jewelry, arrow-strength tiers). baseMaxHit IS magic's entire damage output (magic
+  // ignores strBonus), so it's the compensation lever: owner's decision, quoted on #101's pinned
+  // tuning note — "we can compensate by making it naturally stronger but the gear is only by
+  // drops". Applied a ~x1.5 multiplier to the pre-#121 ladder (air 4 -> 6, water 6 -> 9, earth 8
+  // -> 12) and a steeper x1.6 at the top (fire 10 -> 16), targeting a mage's per-cast ceiling
+  // roughly on par with a comparably-invested melee/ranged setup once the per-cast rune cost
+  // (#119) and the x1.5 element-weakness upside on weak Monsters are priced in — parity is a
+  // rough target, not an exact DPS match.
   spells: [
-    { id: "air-strike", name: "Air Strike", element: "air", levelReq: 1, baseMaxHit: 4 },
-    { id: "water-strike", name: "Water Strike", element: "water", levelReq: 5, baseMaxHit: 6 },
-    { id: "earth-strike", name: "Earth Strike", element: "earth", levelReq: 9, baseMaxHit: 8 },
-    { id: "fire-strike", name: "Fire Strike", element: "fire", levelReq: 13, baseMaxHit: 10 },
+    { id: "air-strike", name: "Air Strike", element: "air", levelReq: 1, baseMaxHit: 6 },
+    { id: "water-strike", name: "Water Strike", element: "water", levelReq: 5, baseMaxHit: 9 },
+    { id: "earth-strike", name: "Earth Strike", element: "earth", levelReq: 9, baseMaxHit: 12 },
+    { id: "fire-strike", name: "Fire Strike", element: "fire", levelReq: 13, baseMaxHit: 16 },
   ],
   // Fixed-price vendor (#119): sells the arrow tiers and four Element runes above — see the
   // economy-check comment on the ammo items themselves for the price arithmetic.
