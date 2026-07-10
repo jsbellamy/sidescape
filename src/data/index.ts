@@ -4,6 +4,16 @@ import type { Content } from "../core/types";
  * v1 starter content: Lumbry Meadows. Data only — conforms to core types,
  * never imports engine code (ADR-0001).
  */
+// Combat Depth wave 4/4 (#102) monster re-stat: every Monster below gets a real per-Attack-Type
+// `def` vector so it has a genuine weak spot (its lowest `def` entry, >=~40% below its strongest
+// at that Monster's tier) instead of wave 1-3's uniform-zero placeholder. Rules of thumb encoded
+// per-Monster below: soft beasts (chicken/cow/giant-rat/wolf) are weak to slash; light-armoured
+// humanoids (goblin family/bandit) are weak to stab; bony undead (skeleton) are weak to crush;
+// ethereal/caster Monsters (hollow-warden/crypt-shade) defend melee well and lean on a non-melee
+// or off-melee weak spot; every Monster keeps decent-but-beatable def in its non-weak types so the
+// matrix rewards switching without punishing ignoring it into unwinnability. Only bosses plus the
+// Zombie carry a `weakElement`, keeping Magic's ×1.5 multiplier a boss tool. Exact numbers are
+// tuning defaults, flagged as such — a later balance pass may retune them.
 export const content: Content = {
   areas: [
     {
@@ -47,8 +57,9 @@ export const content: Content = {
       defenceLevel: 1,
       maxHit: 1,
       attackSpeed: 4,
-      attackType: "crush",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "stab",
+      // Soft beast, weak to slash.
+      def: { stab: 3, slash: 1, crush: 3, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 2, chance: 1, band: "guaranteed" },
         { itemId: "cooked-meat", qty: 1, chance: 0.3, band: "common" },
@@ -64,7 +75,8 @@ export const content: Content = {
       maxHit: 1,
       attackSpeed: 5,
       attackType: "crush",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Soft beast, weak to slash.
+      def: { stab: 3, slash: 1, crush: 4, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 5, chance: 1, band: "guaranteed" },
         { itemId: "cooked-meat", qty: 1, chance: 0.5, band: "common" },
@@ -83,8 +95,9 @@ export const content: Content = {
       defenceLevel: 3,
       maxHit: 2,
       attackSpeed: 4,
-      attackType: "slash",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "crush",
+      // Light-armoured humanoid, weak to stab.
+      def: { stab: 1, slash: 3, crush: 3, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 8, chance: 1, band: "guaranteed" },
         { itemId: "cooked-meat", qty: 1, chance: 0.25, band: "common" },
@@ -104,7 +117,8 @@ export const content: Content = {
       maxHit: 3,
       attackSpeed: 5,
       attackType: "slash",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Soft beast, weak to slash (its own attack type — hide isn't armour).
+      def: { stab: 4, slash: 1, crush: 4, ranged: 3, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 15, chance: 1, band: "guaranteed" },
         { itemId: "cooked-trout", qty: 1, chance: 0.35, band: "common" },
@@ -121,8 +135,9 @@ export const content: Content = {
       defenceLevel: 8,
       maxHit: 4,
       attackSpeed: 4,
-      attackType: "stab",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "slash",
+      // Light-armoured humanoid, weak to stab.
+      def: { stab: 3, slash: 8, crush: 6, ranged: 5, magic: 4 },
       dropTable: [
         { itemId: "gold", qty: 20, chance: 1, band: "guaranteed" },
         { itemId: "cooked-trout", qty: 1, chance: 0.3, band: "common" },
@@ -140,8 +155,10 @@ export const content: Content = {
       defenceLevel: 10,
       maxHit: 5,
       attackSpeed: 5,
-      attackType: "ranged",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "stab",
+      // Light-armoured humanoid, weak to stab (its own attack type — a raider's own leathers
+      // don't stop a matching point).
+      def: { stab: 4, slash: 9, crush: 8, ranged: 7, magic: 6 },
       dropTable: [
         { itemId: "gold", qty: 25, chance: 1, band: "guaranteed" },
         { itemId: "cooked-trout", qty: 1, chance: 0.28, band: "common" },
@@ -160,7 +177,8 @@ export const content: Content = {
       maxHit: 3,
       attackSpeed: 4,
       attackType: "crush",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Light-armoured humanoid, weak to stab.
+      def: { stab: 2, slash: 5, crush: 5, ranged: 4, magic: 3 },
       dropTable: [{ itemId: "gold", qty: 12, chance: 1, band: "guaranteed" }],
     },
     {
@@ -171,8 +189,9 @@ export const content: Content = {
       defenceLevel: 8,
       maxHit: 4,
       attackSpeed: 4,
-      attackType: "slash",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "crush",
+      // Light-armoured humanoid, weak to stab.
+      def: { stab: 3, slash: 8, crush: 8, ranged: 6, magic: 5 },
       dropTable: [{ itemId: "gold", qty: 20, chance: 1, band: "guaranteed" }],
     },
     // Old Sewers (#10): roughly double Darkroot Forest's hp/damage, mapping wolf -> giant-rat,
@@ -186,13 +205,16 @@ export const content: Content = {
       maxHit: 6,
       attackSpeed: 5,
       attackType: "stab",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Soft beast, weak to slash.
+      def: { stab: 8, slash: 3, crush: 7, ranged: 5, magic: 4 },
       dropTable: [
         { itemId: "gold", qty: 30, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.35, band: "common" },
         { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
         // Ranged tier progression (#13): steel-tier bow, demoable from Old Sewers' own Monsters.
         { itemId: "steel-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // Gap-fill crush weapon (#102): no steel-bar Material exists, so steel-mace is drop-only.
+        { itemId: "steel-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
       ],
     },
     {
@@ -204,7 +226,10 @@ export const content: Content = {
       maxHit: 8,
       attackSpeed: 4,
       attackType: "crush",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Shambling undead flesh, weak to slash; carries a weakElement (fire) as one of the two
+      // non-boss exceptions.
+      def: { stab: 10, slash: 6, crush: 14, ranged: 8, magic: 7 },
+      weakElement: "fire",
       dropTable: [
         { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
@@ -221,13 +246,16 @@ export const content: Content = {
       defenceLevel: 20,
       maxHit: 10,
       attackSpeed: 5,
-      attackType: "stab",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "slash",
+      // Bony undead, weak to crush.
+      def: { stab: 14, slash: 20, crush: 8, ranged: 12, magic: 10 },
       dropTable: [
         { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.28, band: "common" },
         { itemId: "steel-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "steel-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
+        // Gap-fill slash weapon (#102): no steel-bar Material exists, so steel-sword is drop-only.
+        { itemId: "steel-sword", qty: 1, chance: 1 / 28, band: "uncommon" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "darkroot-hollow".
@@ -239,8 +267,11 @@ export const content: Content = {
       defenceLevel: 14,
       maxHit: 6,
       attackSpeed: 4,
-      attackType: "crush",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "magic",
+      // Caster boss, defends melee's edged/pointed types well but its hollow armour shatters
+      // under blunt force; carries a weakElement (fire) as a boss.
+      def: { stab: 12, slash: 14, crush: 6, ranged: 10, magic: 16 },
+      weakElement: "fire",
       dropTable: [{ itemId: "gold", qty: 30, chance: 1, band: "guaranteed" }],
     },
     // Sewer King Dungeon (#11): dungeon-only boss hosted in Old Sewers, absent from every Area's
@@ -253,8 +284,10 @@ export const content: Content = {
       defenceLevel: 28,
       maxHit: 12,
       attackSpeed: 4,
-      attackType: "slash",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackType: "crush",
+      // Light-armoured humanoid boss, weak to stab; carries a weakElement (earth) as a boss.
+      def: { stab: 12, slash: 22, crush: 24, ranged: 18, magic: 16 },
+      weakElement: "earth",
       dropTable: [{ itemId: "gold", qty: 70, chance: 1, band: "guaranteed" }],
     },
     // Bone Crypt (#11): the endgame Area's single boss-tier Monster, roughly double Old Sewers'
@@ -269,7 +302,10 @@ export const content: Content = {
       maxHit: 22,
       attackSpeed: 5,
       attackType: "magic",
-      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      // Ethereal caster boss, defends melee well and is weak to ranged; carries a weakElement
+      // (fire) as a boss.
+      def: { stab: 30, slash: 32, crush: 28, ranged: 8, magic: 36 },
+      weakElement: "fire",
       dropTable: [
         { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },
         { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
@@ -282,6 +318,10 @@ export const content: Content = {
         // the one Monster, so both land on Crypt Shade's own Drop Table.
         { itemId: "mithril-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
         { itemId: "mithril-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // Gap-fill slash/crush weapons (#102): no mithril-bar Material exists, so both are
+        // drop-only; Bone Crypt has only the one Monster, so both land here too.
+        { itemId: "mithril-sword", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "mithril-mace", qty: 1, chance: 1 / 30, band: "uncommon" },
       ],
     },
   ],
@@ -321,13 +361,30 @@ export const content: Content = {
       attackSpeed: 5,
       value: 20,
     },
+    // Gap-fill crush weapon (Combat Depth #102): no mace exists at any tier before this — atk/str
+    // land between the tier's dagger and sword, same attackSpeed as the sword/dagger family.
+    {
+      kind: "equipment",
+      id: "bronze-mace",
+      name: "Bronze Mace",
+      icon: "bronze-mace",
+      slot: "weapon",
+      attackType: "crush",
+      atkBonus: 6,
+      strBonus: 5,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 15,
+    },
     {
       kind: "equipment",
       id: "leather-body",
       name: "Leather Body",
       icon: "leather-body",
       slot: "body",
-      def: { stab: 4, slash: 4, crush: 4, ranged: 4, magic: 4 },
+      // Armour re-stat (#102, tuning defaults): modest melee def, the anti-caster choice — its
+      // magic def beats every metal body's at its own tier.
+      def: { stab: 3, slash: 3, crush: 3, ranged: 3, magic: 7 },
       value: 15,
     },
     {
@@ -336,7 +393,9 @@ export const content: Content = {
       name: "Bronze Shield",
       icon: "bronze-shield",
       slot: "shield",
-      def: { stab: 3, slash: 3, crush: 3, ranged: 3, magic: 3 },
+      // Armour re-stat (#102, tuning defaults): metal — strong vs stab/slash/ranged, weaker vs
+      // crush, no magic def at the starter tier.
+      def: { stab: 4, slash: 4, crush: 2, ranged: 3, magic: 0 },
       value: 12,
     },
     {
@@ -345,7 +404,8 @@ export const content: Content = {
       name: "Goblin Charm",
       icon: "goblin-charm",
       slot: "head",
-      def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
+      // Armour re-stat (#102, tuning defaults): keeps its flavor, given a small magic lean.
+      def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 3 },
       value: 150,
     },
     {
@@ -375,7 +435,9 @@ export const content: Content = {
       name: "Iron Chainbody",
       icon: "iron-chainbody",
       slot: "body",
-      def: { stab: 8, slash: 8, crush: 8, ranged: 8, magic: 8 },
+      // Armour re-stat (#102, tuning defaults): metal — strong vs stab/slash/ranged, weaker vs
+      // crush, low magic def.
+      def: { stab: 10, slash: 10, crush: 5, ranged: 9, magic: 1 },
       value: 60,
     },
     {
@@ -384,7 +446,7 @@ export const content: Content = {
       name: "Iron Kiteshield",
       icon: "iron-kiteshield",
       slot: "shield",
-      def: { stab: 7, slash: 7, crush: 7, ranged: 7, magic: 7 },
+      def: { stab: 8, slash: 8, crush: 4, ranged: 7, magic: 1 },
       value: 50,
     },
     {
@@ -393,8 +455,36 @@ export const content: Content = {
       name: "Iron Full Helm",
       icon: "iron-full-helm",
       slot: "head",
-      def: { stab: 4, slash: 4, crush: 4, ranged: 4, magic: 4 },
+      def: { stab: 5, slash: 5, crush: 2, ranged: 4, magic: 0 },
       value: 120,
+    },
+    // Gap-fill iron-tier slash/crush weapons (Combat Depth #102): only bronze-sword existed
+    // before this at any tier; mace atk/str land between the tier's dagger and sword.
+    {
+      kind: "equipment",
+      id: "iron-sword",
+      name: "Iron Sword",
+      icon: "iron-sword",
+      slot: "weapon",
+      attackType: "slash",
+      atkBonus: 12,
+      strBonus: 10,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 45,
+    },
+    {
+      kind: "equipment",
+      id: "iron-mace",
+      name: "Iron Mace",
+      icon: "iron-mace",
+      slot: "weapon",
+      attackType: "crush",
+      atkBonus: 11,
+      strBonus: 9,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 40,
     },
     // Append-only: ids are referenced by saves (Food Slots persist an itemId, #61), so never
     // reorder above. Content order no longer drives autoEat — that's Food Slot order now.
@@ -430,7 +520,9 @@ export const content: Content = {
       name: "Steel Chainbody",
       icon: "steel-chainbody",
       slot: "body",
-      def: { stab: 14, slash: 14, crush: 14, ranged: 14, magic: 14 },
+      // Armour re-stat (#102, tuning defaults): metal — dominates iron's vector in stab/slash/
+      // ranged/crush, magic def still low.
+      def: { stab: 16, slash: 16, crush: 8, ranged: 14, magic: 1 },
       value: 100,
     },
     {
@@ -439,7 +531,7 @@ export const content: Content = {
       name: "Steel Kiteshield",
       icon: "steel-kiteshield",
       slot: "shield",
-      def: { stab: 12, slash: 12, crush: 12, ranged: 12, magic: 12 },
+      def: { stab: 13, slash: 13, crush: 6, ranged: 11, magic: 1 },
       value: 85,
     },
     {
@@ -448,8 +540,37 @@ export const content: Content = {
       name: "Steel Full Helm",
       icon: "steel-full-helm",
       slot: "head",
-      def: { stab: 7, slash: 7, crush: 7, ranged: 7, magic: 7 },
+      def: { stab: 8, slash: 8, crush: 4, ranged: 7, magic: 0 },
       value: 140,
+    },
+    // Gap-fill steel-tier slash/crush weapons (Combat Depth #102). No steel-bar Material exists
+    // (steel Equipment has always been drop-only, like steel-kiteshield/steel-full-helm above) —
+    // sourced the same way, from Old Sewers' own Monsters' Drop Tables.
+    {
+      kind: "equipment",
+      id: "steel-sword",
+      name: "Steel Sword",
+      icon: "steel-sword",
+      slot: "weapon",
+      attackType: "slash",
+      atkBonus: 17,
+      strBonus: 14,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 90,
+    },
+    {
+      kind: "equipment",
+      id: "steel-mace",
+      name: "Steel Mace",
+      icon: "steel-mace",
+      slot: "weapon",
+      attackType: "crush",
+      atkBonus: 16,
+      strBonus: 13,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 80,
     },
     {
       kind: "food",
@@ -481,7 +602,10 @@ export const content: Content = {
       name: "Mithril Chainbody",
       icon: "mithril-chainbody",
       slot: "body",
-      def: { stab: 20, slash: 20, crush: 20, ranged: 20, magic: 20 },
+      // Armour re-stat (#102, tuning defaults): metal — dominates steel's vector in stab/slash/
+      // ranged/crush; magic def turns slightly negative at this top tier (heavy metal draws
+      // spells in).
+      def: { stab: 22, slash: 22, crush: 11, ranged: 19, magic: -2 },
       value: 160,
     },
     {
@@ -490,7 +614,7 @@ export const content: Content = {
       name: "Mithril Kiteshield",
       icon: "mithril-kiteshield",
       slot: "shield",
-      def: { stab: 18, slash: 18, crush: 18, ranged: 18, magic: 18 },
+      def: { stab: 18, slash: 18, crush: 9, ranged: 15, magic: -1 },
       value: 140,
     },
     {
@@ -499,8 +623,37 @@ export const content: Content = {
       name: "Mithril Full Helm",
       icon: "mithril-full-helm",
       slot: "head",
-      def: { stab: 10, slash: 10, crush: 10, ranged: 10, magic: 10 },
+      def: { stab: 11, slash: 11, crush: 5, ranged: 9, magic: -1 },
       value: 220,
+    },
+    // Gap-fill mithril-tier slash/crush weapons (Combat Depth #102). No mithril-bar Material
+    // exists (mithril Equipment has always been drop-only) — sourced the same way, from Bone
+    // Crypt's own Monster (Crypt Shade)'s Drop Table.
+    {
+      kind: "equipment",
+      id: "mithril-sword",
+      name: "Mithril Sword",
+      icon: "mithril-sword",
+      slot: "weapon",
+      attackType: "slash",
+      atkBonus: 22,
+      strBonus: 18,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 160,
+    },
+    {
+      kind: "equipment",
+      id: "mithril-mace",
+      name: "Mithril Mace",
+      icon: "mithril-mace",
+      slot: "weapon",
+      attackType: "crush",
+      atkBonus: 21,
+      strBonus: 17,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 5,
+      value: 150,
     },
     {
       kind: "equipment",
@@ -722,6 +875,17 @@ export const content: Content = {
       xp: 30,
       craftTicks: 10,
     },
+    // Gap-fill crush weapon (#102): mirrors bronze-sword's recipe pattern, level-gated between
+    // bronze-dagger and bronze-sword.
+    {
+      id: "bronze-mace",
+      name: "Bronze Mace",
+      levelReq: 6,
+      inputs: [{ itemId: "bronze-bar", qty: 2 }],
+      outputItemId: "bronze-mace",
+      xp: 20,
+      craftTicks: 9,
+    },
     {
       id: "iron-dagger",
       name: "Iron Dagger",
@@ -739,6 +903,26 @@ export const content: Content = {
       outputItemId: "iron-chainbody",
       xp: 80,
       craftTicks: 15,
+    },
+    // Gap-fill slash/crush weapons (#102): mirror bronze-sword/bronze-mace's recipe pattern,
+    // level-gated between iron-dagger and iron-chainbody.
+    {
+      id: "iron-mace",
+      name: "Iron Mace",
+      levelReq: 16,
+      inputs: [{ itemId: "iron-bar", qty: 2 }],
+      outputItemId: "iron-mace",
+      xp: 65,
+      craftTicks: 13,
+    },
+    {
+      id: "iron-sword",
+      name: "Iron Sword",
+      levelReq: 18,
+      inputs: [{ itemId: "iron-bar", qty: 2 }],
+      outputItemId: "iron-sword",
+      xp: 70,
+      craftTicks: 14,
     },
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.

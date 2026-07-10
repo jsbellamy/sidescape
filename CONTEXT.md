@@ -44,6 +44,10 @@ _Avoid_: damage type (reserved for **Attack Type**)
 A Monster's optional `weakElement` and the ×1.5 damage bonus a matching **Spell** deals against it — the ONE damage-side modifier in the otherwise accuracy-only Hybrid combat model (every other Skill/Attack Type change is an accuracy or max-hit shift, never a multiplier). Keys off the `attack` event's `hit` flag: an accuracy miss never gets it, a zero-damage hit still does.
 _Avoid_: resistance (reserved for **Defence Vector**), elemental wheel (not implemented — explicit per-Monster weakness only)
 
+**Weak Spot**:
+A Monster's lowest **Defence Vector** entry — the **Attack Type** it defends worst, so the type most rewarding to switch a weapon to. UI-derived (`src/ui/app.ts`), not a stored field: ties break by ATTACK_TYPES order (stab, slash, crush, ranged, magic). Distinct from **Weakness**, which is `weakElement`-based and Magic-only; a Monster always has a Weak Spot, but only some carry a `weakElement` too.
+_Avoid_: weakness (reserved for the `weakElement` mechanic above), soft spot
+
 **Tick**:
 The 600ms unit of game time. All combat timing (attack speeds, regen) is expressed in Ticks.
 _Avoid_: frame, step, cycle
