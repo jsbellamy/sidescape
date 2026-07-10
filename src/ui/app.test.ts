@@ -2337,13 +2337,19 @@ describe("Combat feedback (#4)", () => {
     vi.useRealTimers();
   });
 
-  /** Pumps `ticks` engine Ticks, calling `app.render()` after each — the documented contract for
-   * `MountedApp.render()` — without advancing fake timers, so every splat/toast fired along the
-   * way is still present in the DOM afterwards for assertions. */
-  function pump(engine: ReturnType<typeof createEngine>, app: { render(): void }, ticks: number) {
+  /** Pumps `ticks` engine Ticks without advancing fake timers, so every splat/toast fired along
+   * the way is still present in the DOM afterwards for assertions. Splat-only tests deliberately
+   * skip `render`: attack events append splats during `tick()` itself, whereas re-rendering the
+   * complete workspace 400 times measures unrelated panel markup rather than combat feedback. */
+  function pump(
+    engine: ReturnType<typeof createEngine>,
+    app: { render(): void },
+    ticks: number,
+    renderEachTick = true,
+  ) {
     for (let i = 0; i < ticks; i++) {
       engine.tick();
-      app.render();
+      if (renderEachTick) app.render();
     }
   }
 
@@ -2354,7 +2360,7 @@ describe("Combat feedback (#4)", () => {
     // dummy's low defence gives the level-1 player's melee attack ~50% hit chance (worked in the
     // issue investigation from combat.ts's formulas) — 400 Ticks (~100 attacks at speed 4) all but
     // guarantees both a hit and a miss land on both sides.
-    pump(engine, app, 400);
+    pump(engine, app, 400, false);
 
     const hitSplats = [...root.querySelectorAll("#monster-splats .splat-hit")];
     expect(hitSplats.length).toBeGreaterThan(0);
@@ -2364,7 +2370,7 @@ describe("Combat feedback (#4)", () => {
   it("shows a blue '0' miss splat over the Monster when the player's attack misses", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
-    pump(engine, app, 400);
+    pump(engine, app, 400, false);
 
     const missSplats = [...root.querySelectorAll("#monster-splats .splat-miss")];
     expect(missSplats.length).toBeGreaterThan(0);
@@ -2374,7 +2380,7 @@ describe("Combat feedback (#4)", () => {
   it("shows both hit and miss splats over the Player as the Monster's attacks land", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
-    pump(engine, app, 400);
+    pump(engine, app, 400, false);
 
     expect(root.querySelectorAll("#player-splats .splat-hit").length).toBeGreaterThan(0);
     expect(root.querySelectorAll("#player-splats .splat-miss").length).toBeGreaterThan(0);
