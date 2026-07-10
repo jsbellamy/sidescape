@@ -45,7 +45,7 @@ npm run typecheck  # tsc --noEmit (strict flags)
 npm run build      # typecheck + bundle the frontend
 ```
 
-A husky pre-commit hook runs Prettier (staged files), then `typecheck`, then the full test suite — commits are blocked if any fail. Don't bypass it with `--no-verify`. See `CLAUDE.md` for working conventions (test-first via the Engine interface, branch-per-issue, CI must be green to merge).
+A husky pre-commit hook runs Prettier (staged files), then `typecheck`, then the full test suite — commits are blocked if any fail. Don't bypass it with `--no-verify`. See `AGENTS.md` for working conventions (test-first via the Engine interface, branch-per-issue, CI must be green to merge).
 
 ## Project layout
 

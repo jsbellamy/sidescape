@@ -3,7 +3,8 @@
 This is the source of truth for every agent working on SideScape, regardless of
 which tool or model is driving. Tool-specific files (for example `CLAUDE.md`)
 layer on top of this document; when they add nothing on a topic, the rules here
-apply.
+apply. Put changes to shared guidance here, not in a tool-specific file, so the
+guidance stays in one place for every agent.
 
 SideScape is a taskbar-sized RuneScape-like incremental idle game in a slim
 always-on-top window (320 × 640). It uses a Tauri v2 shell with a TypeScript

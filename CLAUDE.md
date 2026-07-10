@@ -6,6 +6,10 @@ test-first conventions, commands, and the git + issue workflow that apply to all
 agents. This file only adds the Claude-Code-specific layer; everything not
 restated here is governed by `AGENTS.md`.
 
+**When you change shared guidance (domain, architecture, conventions, commands,
+workflow), edit `AGENTS.md`, not this file.** Keep `CLAUDE.md` limited to
+Claude-Code specifics (skills, subagent types, Claude-only toolchain notes).
+
 ## Skills
 
 - **`/tdd`** — invoke explicitly for every Engine change, then work test-first
