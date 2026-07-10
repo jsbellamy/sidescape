@@ -193,6 +193,20 @@ etc.) without matching the source pack's own style. Swapping these for real raw-
 from a sourced CC0 pack is a follow-up, not a blocker for this wave's content pass — same note as
 the mace/sword icons above.
 
+## Gem and jewelry icons (Crafting wave, #117)
+
+`sapphire`, `emerald`, `ruby`, `sapphire-amulet`, `sapphire-ring`, `emerald-amulet`,
+`emerald-ring`, `ruby-amulet`, and `ruby-ring` (`src/assets/icons/*.png`) are **hand-drawn
+placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art
+icons" pack's on-screen size) — same escape hatch as the gap-fill mace/sword, raw-catch, and
+hide/leather icons above, not sourced from a third-party pack, so no license/provenance entry is
+needed. Each gem Material is a simple faceted-diamond silhouette (sapphire blue, emerald green,
+ruby red, each with a lighter facet highlight and a darker shadow facet); the ring icons reuse the
+same faceted gem set atop a small gold band, and the amulet icons reuse it hanging below a thin
+chain arc — one shared gem shape per tier keeps the Material and its two jewelry pieces reading as
+the same gem at a glance. Swapping these for sourced CC0 crops is a follow-up, not a blocker for
+this wave's content pass — same note as the mace/sword, raw-catch, and hide/leather icons above.
+
 ## Hide and leather/ranged-armour icons (Crafting wave, #116)
 
 `cowhide`, `wolf-hide`, `thick-hide`, `leather-chaps`, `leather-coif`, `hard-leather-body`,

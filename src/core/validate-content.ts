@@ -38,9 +38,14 @@ export function validateContent(content: Content): string[] {
   }
 
   // A weapon (any equipment with attackSpeed) must declare attackType/atkBonus/strBonus (#99);
-  // a non-weapon must NOT carry any of those weapon-only fields — armour carries only `def`.
+  // a non-weapon must NOT carry attackType or attackSpeed — jewelry (slot amulet|ring, #117) never
+  // attacks either, same as every other non-weapon. atkBonus/strBonus are otherwise weapon-only,
+  // EXCEPT on jewelry: the owner's "offence slot" decision (grilled, verbatim: "amulets/rings may
+  // carry atk/str bonuses, unlike armour") relaxes this one rule for amulet/ring only — every
+  // other armour slot (shield/head/body/legs) still rejects atk/str as before.
   for (const item of content.items) {
     if (item.kind !== "equipment") continue;
+    const isJewelry = item.slot === "amulet" || item.slot === "ring";
     if (item.attackSpeed !== undefined) {
       if (item.attackType === undefined) {
         violations.push(`weapon "${item.id}" declares no attackType`);
@@ -51,15 +56,20 @@ export function validateContent(content: Content): string[] {
       if (item.strBonus === undefined) {
         violations.push(`weapon "${item.id}" declares no strBonus`);
       }
+      if (isJewelry) {
+        violations.push(`jewelry "${item.id}" declares attackSpeed`);
+      }
     } else {
       if (item.attackType !== undefined) {
         violations.push(`non-weapon "${item.id}" declares attackType`);
       }
-      if (item.atkBonus !== undefined) {
-        violations.push(`non-weapon "${item.id}" declares atkBonus`);
-      }
-      if (item.strBonus !== undefined) {
-        violations.push(`non-weapon "${item.id}" declares strBonus`);
+      if (!isJewelry) {
+        if (item.atkBonus !== undefined) {
+          violations.push(`non-weapon "${item.id}" declares atkBonus`);
+        }
+        if (item.strBonus !== undefined) {
+          violations.push(`non-weapon "${item.id}" declares strBonus`);
+        }
       }
     }
   }

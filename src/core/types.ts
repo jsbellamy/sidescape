@@ -53,7 +53,12 @@ export type CombatStyle = "accurate" | "aggressive" | "defensive";
  * field: it's derived from the weapon's `attackType` (stab|slash|crush -> melee, ranged -> ranged,
  * magic -> magic) — see weaponCombatModeFor in engine.ts, the one source of truth. */
 export type CombatMode = "melee" | "ranged" | "magic";
-export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs";
+/** Append-only, load-bearing order — GEAR_SLOT_ORDER (ui/app.ts) renders the Character panel's
+ * tiles in this order. `amulet`/`ring` (#117, Crafting's jewelry line) are an OFFENCE slot,
+ * mechanically distinct from the other four armour slots (owner decision, grilled: "amulets/rings
+ * may carry atk/str bonuses, unlike armour") — see EquipmentDef.atkBonus/strBonus's own doc and
+ * validateContent's amulet/ring carve-out. */
+export type GearSlot = "weapon" | "shield" | "head" | "body" | "legs" | "amulet" | "ring";
 export type DropBand = "guaranteed" | "common" | "uncommon" | "rare";
 
 /** Fraction of max HP below which `autoEat` kicks in; 0 disables it entirely. */
@@ -84,11 +89,14 @@ export interface EquipmentDef {
   slot: GearSlot;
   /** Weapons only, required-by-validation (validateContent, #99): omitted on armour — see
    * ATTACK_TYPES. Combat Mode (melee/ranged/magic) is derived from this, not stored separately;
-   * see weaponCombatModeFor in engine.ts. */
+   * see weaponCombatModeFor in engine.ts. Jewelry (slot amulet|ring) is NEVER a weapon — it may
+   * carry atkBonus/strBonus (below) but must never carry this or attackSpeed (#117). */
   attackType?: AttackType;
-  /** Weapons only, required-by-validation: like attackSpeed, armour must NOT declare these. */
+  /** Weapons only, PLUS jewelry (slot amulet|ring, #117) — the owner's "offence slot" decision:
+   * amulets/rings may carry atk/str bonuses, mechanically distinct from every other armour slot,
+   * which must NOT declare these (validateContent enforces both halves of this rule). */
   atkBonus?: number;
-  /** Weapons only, required-by-validation: like attackSpeed, armour must NOT declare these. */
+  /** Weapons only, PLUS jewelry (slot amulet|ring, #117) — see atkBonus's doc above. */
   strBonus?: number;
   /** Every piece's defence, per Attack Type (#99) — replaces the old scalar defBonus. All five
    * keys are required (a compile error forces every content site to update). */

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { attackRoll, defenceRoll, effectiveLevel, hitChance } from "./combat";
+import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { __setModifierSourcesForTest, createEngine } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
@@ -1269,6 +1269,92 @@ describe("Snapshot player.bonuses (#26)", () => {
     engine.equip("bronze-sword");
 
     expect(engine.snapshot().player.bonuses.atkBonus).toBe(10);
+  });
+});
+
+describe("Jewelry Gear Slots (#117): amulet/ring are an offence slot, unlike armour", () => {
+  it("a fresh engine's equipment snapshot has amulet and ring, both null", () => {
+    const snap = freshEngine().snapshot();
+    expect(snap.player.equipment.amulet).toBeNull();
+    expect(snap.player.equipment.ring).toBeNull();
+  });
+
+  it("a pre-#117 save (no amulet/ring keys at all in player.equipment) loads with both defaulting to null", () => {
+    const legacySave = {
+      player: {
+        hp: 10,
+        maxHp: 10,
+        combatLevel: 3,
+        combatStyle: "aggressive",
+        autoEatThreshold: 0.5,
+        skills: {
+          attack: { level: 1, xp: 0 },
+          strength: { level: 1, xp: 0 },
+          defence: { level: 1, xp: 0 },
+          hitpoints: { level: 10, xp: xpForLevel(10) },
+        },
+        // no amulet/ring keys: simulates a save written before this Gear Slot existed.
+        equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+        respawning: false,
+      },
+      monster: null,
+      areas: [],
+    };
+    expect(() =>
+      createEngine(fixtureContent, seededRng(1), JSON.parse(JSON.stringify(legacySave))),
+    ).not.toThrow();
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      JSON.parse(JSON.stringify(legacySave)),
+    );
+    expect(engine.snapshot().player.equipment.amulet).toBeNull();
+    expect(engine.snapshot().player.equipment.ring).toBeNull();
+  });
+
+  it("equipping a strBonus-carrying amulet raises gearBonus/strBonus (and so the melee max hit) with no engine change beyond validation", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "lucky-amulet", qty: 1 }] } }),
+    );
+    expect(engine.snapshot().player.bonuses.strBonus).toBe(0);
+
+    engine.equip("lucky-amulet");
+
+    const bonuses = engine.snapshot().player.bonuses;
+    expect(engine.snapshot().player.equipment.amulet).toBe("lucky-amulet");
+    expect(bonuses.atkBonus).toBe(5); // lucky-amulet's own atkBonus
+    expect(bonuses.strBonus).toBe(8); // lucky-amulet's own strBonus, summed by gearBonus()
+    // The same strBonus total feeds combat's maxHit formula (combat.ts) — no separate engine
+    // change was needed for jewelry to reach the damage roll (#117): gearBonus() already summed
+    // across every equipped slot before this issue; only validateContent was gating it out.
+    // (level 99 so the formula's floor() can't mask the difference the way it would at level 1.)
+    const eff = effectiveLevel(99, "strength", "aggressive");
+    expect(maxHit(eff, bonuses.strBonus)).toBeGreaterThan(maxHit(eff, 0));
+  });
+
+  it("equipping a ring stacks its own bonuses alongside an already-equipped amulet's", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "lucky-amulet", qty: 1 },
+            { itemId: "lucky-ring", qty: 1 },
+          ],
+        },
+      }),
+    );
+    engine.equip("lucky-amulet");
+    engine.equip("lucky-ring");
+
+    const bonuses = engine.snapshot().player.bonuses;
+    expect(engine.snapshot().player.equipment.ring).toBe("lucky-ring");
+    expect(bonuses.atkBonus).toBe(5 + 3);
+    expect(bonuses.strBonus).toBe(8 + 4);
+    expect(bonuses.def.magic).toBe(1 + 0);
   });
 });
 

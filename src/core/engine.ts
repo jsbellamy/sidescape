@@ -272,7 +272,15 @@ function freshState(_content: Content): State {
     bank: new Map(),
     bankCapacity: BANK_START_CAPACITY,
     lootZone: new Map(),
-    equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+    equipment: {
+      weapon: null,
+      shield: null,
+      head: null,
+      body: null,
+      legs: null,
+      amulet: null,
+      ring: null,
+    },
     respawnTicksLeft: 0,
     regenTicks: 0,
     completedDungeonIds: new Set(),
@@ -300,7 +308,9 @@ function loadHp(saved: Snapshot, maxHp: number): number {
 }
 
 /** Per GearSlot, keeps the saved itemId only if it resolves to an EquipmentDef whose `slot`
- * matches that slot; otherwise the slot loads empty. Closes both dangling and wrong-slot refs. */
+ * matches that slot; otherwise the slot loads empty. Closes both dangling and wrong-slot refs.
+ * Tolerant of a pre-#117 save whose `player.equipment` has no amulet/ring keys at all: they
+ * simply fall through to this literal's own `null` defaults, same as any other missing key. */
 function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, string | null> {
   const equipment: Record<GearSlot, string | null> = {
     weapon: null,
@@ -308,6 +318,8 @@ function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, stri
     head: null,
     body: null,
     legs: null,
+    amulet: null,
+    ring: null,
   };
   const savedEquipment: Partial<Record<GearSlot, unknown>> | undefined = saved.player?.equipment;
   if (!savedEquipment) return equipment;

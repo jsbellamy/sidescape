@@ -136,6 +136,101 @@ describe("validateContent", () => {
     expect(validateContent(content)).toContain('non-weapon "cursed-shield" declares attackType');
   });
 
+  it("permits atkBonus/strBonus on jewelry (amulet/ring slots, #117 — the owner's offence-slot decision)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "test-amulet",
+          name: "Test Amulet",
+          icon: "goblin-charm",
+          slot: "amulet" as const,
+          atkBonus: 3,
+          strBonus: 2,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
+        },
+        {
+          kind: "equipment" as const,
+          id: "test-ring",
+          name: "Test Ring",
+          icon: "goblin-charm",
+          slot: "ring" as const,
+          atkBonus: 2,
+          strBonus: 1,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        },
+      ],
+    };
+    expect(validateContent(content)).toEqual([]);
+  });
+
+  it("still rejects attackType on jewelry (#117) — jewelry never attacks, same as every other non-weapon", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "cursed-amulet",
+          name: "Cursed Amulet",
+          icon: "goblin-charm",
+          slot: "amulet" as const,
+          attackType: "crush" as const,
+          atkBonus: 3,
+          strBonus: 2,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
+        },
+      ],
+    };
+    expect(validateContent(content)).toContain('non-weapon "cursed-amulet" declares attackType');
+  });
+
+  it("still rejects attackSpeed on jewelry (#117)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "cursed-ring",
+          name: "Cursed Ring",
+          icon: "goblin-charm",
+          slot: "ring" as const,
+          attackType: "crush" as const,
+          atkBonus: 2,
+          strBonus: 1,
+          attackSpeed: 4,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        },
+      ],
+    };
+    expect(validateContent(content)).toContain('jewelry "cursed-ring" declares attackSpeed');
+  });
+
+  it("still rejects atkBonus/strBonus on ordinary armour (non-jewelry, non-weapon) slots (#117 does not widen this)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "cursed-shield-2",
+          name: "Cursed Shield 2",
+          icon: "bronze-shield",
+          slot: "shield" as const,
+          atkBonus: 5,
+          strBonus: 5,
+          def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
+        },
+      ],
+    };
+    const violations = validateContent(content);
+    expect(violations).toContain('non-weapon "cursed-shield-2" declares atkBonus');
+    expect(violations).toContain('non-weapon "cursed-shield-2" declares strBonus');
+  });
+
   it("reports a dangling area.monsterIds reference", () => {
     const content: Content = {
       ...fixtureContent,

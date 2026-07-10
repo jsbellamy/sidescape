@@ -136,6 +136,9 @@ export const content: Content = {
         { itemId: "iron-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
         // #116: hide drop — see the economy-check comment above the Crafting recipes below.
         { itemId: "wolf-hide", qty: 1, chance: 0.4, band: "common" },
+        // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
+        // jewelry Crafting recipes below.
+        { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
       ],
     },
     {
@@ -157,6 +160,9 @@ export const content: Content = {
         { itemId: "iron-bar", qty: 1, chance: 0.25, band: "common" },
         // Magic tier progression (#13): iron-tier staff, demoable from Darkroot Forest's own Monsters.
         { itemId: "iron-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
+        // jewelry Crafting recipes below.
+        { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
       ],
     },
     {
@@ -178,6 +184,9 @@ export const content: Content = {
         { itemId: "iron-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "iron-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         { itemId: "iron-bar", qty: 1, chance: 0.3, band: "common" },
+        // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
+        // jewelry Crafting recipes below.
+        { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "meadow-depths".
@@ -231,6 +240,9 @@ export const content: Content = {
         { itemId: "steel-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
         // #116: hide drop — see the economy-check comment above the Crafting recipes below.
         { itemId: "thick-hide", qty: 1, chance: 0.35, band: "common" },
+        // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
+        // Crafting recipes below.
+        { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
       ],
     },
     {
@@ -253,6 +265,9 @@ export const content: Content = {
         { itemId: "steel-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         // Magic tier progression (#13): steel-tier staff, demoable from Old Sewers' own Monsters.
         { itemId: "steel-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
+        // Crafting recipes below.
+        { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
       ],
     },
     {
@@ -274,6 +289,9 @@ export const content: Content = {
         { itemId: "steel-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         // Gap-fill slash weapon (#102): no steel-bar Material exists, so steel-sword is drop-only.
         { itemId: "steel-sword", qty: 1, chance: 1 / 28, band: "uncommon" },
+        // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
+        // Crafting recipes below.
+        { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "darkroot-hollow".
@@ -341,6 +359,9 @@ export const content: Content = {
         // drop-only; Bone Crypt has only the one Monster, so both land here too.
         { itemId: "mithril-sword", qty: 1, chance: 1 / 30, band: "uncommon" },
         { itemId: "mithril-mace", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // #117: gem drop (Bone Crypt -> Ruby) — see the gem-economy comment above the jewelry
+        // Crafting recipes below.
+        { itemId: "ruby", qty: 1, chance: 1 / 220, band: "rare" },
       ],
     },
   ],
@@ -868,6 +889,85 @@ export const content: Content = {
       def: { stab: 3, slash: 3, crush: 4, ranged: 10, magic: 8 },
       value: 60,
     },
+    // Crafting wave (#117): Crafting's jewelry line — gem Materials, dropped by Monsters in the
+    // three tiered Areas (see the "#117: gem drop" comments on wolf/goblin-warrior/bandit,
+    // giant-rat/zombie/skeleton, and crypt-shade's dropTables above) and consumed by the jewelry
+    // Crafting recipes below. Append-only — after hard-leather-body, never earlier.
+    { kind: "material", id: "sapphire", name: "Sapphire", icon: "sapphire", value: 15 },
+    { kind: "material", id: "emerald", name: "Emerald", icon: "emerald", value: 30 },
+    { kind: "material", id: "ruby", name: "Ruby", icon: "ruby", value: 60 },
+    // Jewelry (#117): the amulet/ring Gear Slots (types.ts) are an OFFENCE slot (owner decision,
+    // grilled, verbatim: "amulets/rings may carry atk/str bonuses, unlike armour") — mechanically
+    // distinct from every other armour slot above, which never carries atk/str. Each gem tier's
+    // atk/str stays well under the matching-tier weapon's own (e.g. ruby-amulet's 10/7 vs
+    // mithril-dagger's 19/15) so jewelry augments a build rather than replacing its weapon choice,
+    // plus a small magic-leaning def vector (a gem pendant/band, not armour plating).
+    {
+      kind: "equipment",
+      id: "sapphire-amulet",
+      name: "Sapphire Amulet",
+      icon: "sapphire-amulet",
+      slot: "amulet",
+      atkBonus: 3,
+      strBonus: 2,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
+      value: 60,
+    },
+    {
+      kind: "equipment",
+      id: "sapphire-ring",
+      name: "Sapphire Ring",
+      icon: "sapphire-ring",
+      slot: "ring",
+      atkBonus: 2,
+      strBonus: 1,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      value: 50,
+    },
+    {
+      kind: "equipment",
+      id: "emerald-amulet",
+      name: "Emerald Amulet",
+      icon: "emerald-amulet",
+      slot: "amulet",
+      atkBonus: 6,
+      strBonus: 4,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 2 },
+      value: 120,
+    },
+    {
+      kind: "equipment",
+      id: "emerald-ring",
+      name: "Emerald Ring",
+      icon: "emerald-ring",
+      slot: "ring",
+      atkBonus: 4,
+      strBonus: 2,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
+      value: 100,
+    },
+    {
+      kind: "equipment",
+      id: "ruby-amulet",
+      name: "Ruby Amulet",
+      icon: "ruby-amulet",
+      slot: "amulet",
+      atkBonus: 10,
+      strBonus: 7,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 3 },
+      value: 220,
+    },
+    {
+      kind: "equipment",
+      id: "ruby-ring",
+      name: "Ruby Ring",
+      icon: "ruby-ring",
+      slot: "ring",
+      atkBonus: 6,
+      strBonus: 4,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 2 },
+      value: 180,
+    },
   ],
   fishingSpots: [
     // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
@@ -1157,6 +1257,90 @@ export const content: Content = {
       inputs: [{ itemId: "thick-hide", qty: 2 }],
       outputItemId: "hard-leather-body",
       xp: 70,
+      craftTicks: 8,
+    },
+    // Crafting wave (#117): the #113 chassis's jewelry line — gems (see the "#117: gem drop"
+    // comments on Darkroot/Old-Sewers/Bone-Crypt Monsters' dropTables above) cut straight to
+    // amulet/ring jewelry (Crafting's own #76 framing, verbatim: "ranged and jewelry/trinkets for
+    // crafting" — this is the jewelry half; #116 shipped the ranged-armour half). levelReqs
+    // interleave INTO the existing leather ladder (12/16 sit between craft-leather-coif's 8 and
+    // craft-hard-leather-coif's 20) rather than appending after it, then extend the ladder upward
+    // for the emerald/ruby tiers (35-50), past the leather ladder's own top (30).
+    //
+    // Gem-drop-rate economy (owner-mandated, "a rare sink, not a grind ladder" — verbatim from the
+    // issue): jewelry is NOT meant to be farmable the way leather is; it's an occasional bonus a
+    // farmer stumbles into while grinding the Area for its usual kill-XP/gold, not something worth
+    // camping for. Chances are picked in the issue's own ~1/64-1/256 rare-band range, scaled down
+    // through the tiers as Areas get slower to clear (assumed farmer kill rates below are rough,
+    // same "worked example" spirit as the leather-ladder comment above, not measured):
+    // - Darkroot Forest (wolf/goblin-warrior/bandit, chance 1/96 each): ~300 kills/hr assumed ->
+    //   combined ~9.4 Sapphire/hr, enough for 1-2 craft-sapphire-ring/-amulet per short session.
+    // - Old Sewers (giant-rat/zombie/skeleton, chance 1/140 each): ~200 kills/hr assumed ->
+    //   combined ~4.3 Emerald/hr, a handful per multi-hour session.
+    // - Bone Crypt (crypt-shade only, chance 1/220): ~100 kills/hr assumed (single boss-tier
+    //   Monster) -> ~0.45 Ruby/hr — the endgame gem stays a rare highlight-reel drop, not a
+    //   craftable-every-session item.
+    // Recipe xp (40-130, scaling with tier) is a bonus on top of the leather ladder's own xp/hr,
+    // never the primary Crafting-leveling path — consistent with the gem supply being the
+    // bottleneck (same "drop rate gates the pace, not craft speed" shape as #116's leather line).
+    {
+      id: "craft-sapphire-ring",
+      name: "Sapphire Ring",
+      skill: "crafting",
+      levelReq: 12,
+      inputs: [{ itemId: "sapphire", qty: 1 }],
+      outputItemId: "sapphire-ring",
+      xp: 40,
+      craftTicks: 5,
+    },
+    {
+      id: "craft-sapphire-amulet",
+      name: "Sapphire Amulet",
+      skill: "crafting",
+      levelReq: 16,
+      inputs: [{ itemId: "sapphire", qty: 1 }],
+      outputItemId: "sapphire-amulet",
+      xp: 50,
+      craftTicks: 6,
+    },
+    {
+      id: "craft-emerald-ring",
+      name: "Emerald Ring",
+      skill: "crafting",
+      levelReq: 35,
+      inputs: [{ itemId: "emerald", qty: 1 }],
+      outputItemId: "emerald-ring",
+      xp: 70,
+      craftTicks: 6,
+    },
+    {
+      id: "craft-emerald-amulet",
+      name: "Emerald Amulet",
+      skill: "crafting",
+      levelReq: 40,
+      inputs: [{ itemId: "emerald", qty: 1 }],
+      outputItemId: "emerald-amulet",
+      xp: 85,
+      craftTicks: 7,
+    },
+    {
+      id: "craft-ruby-ring",
+      name: "Ruby Ring",
+      skill: "crafting",
+      levelReq: 45,
+      inputs: [{ itemId: "ruby", qty: 1 }],
+      outputItemId: "ruby-ring",
+      xp: 110,
+      craftTicks: 7,
+    },
+    {
+      id: "craft-ruby-amulet",
+      name: "Ruby Amulet",
+      skill: "crafting",
+      levelReq: 50,
+      inputs: [{ itemId: "ruby", qty: 1 }],
+      outputItemId: "ruby-amulet",
+      xp: 130,
       craftTicks: 8,
     },
   ],
