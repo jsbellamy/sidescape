@@ -95,6 +95,13 @@ and `npm test`.
   directly on `main`.
 - Finish with a pull request that includes `Closes #<N>` in its body.
 - CI (typecheck and tests) must be green before merge.
+- Before opening a pull request, turn every issue acceptance criterion into an
+  explicit evidence row. Put the complete checklist in the PR body: identify
+  each criterion, state whether it is met, and cite a test, code location,
+  command result, or manual verification. Never mark a criterion met from a
+  related test alone. A visual/native behavior needs an automated end-to-end
+  assertion or a named manual Tauri check with the observed result. If any row
+  lacks evidence, the issue is not ready to merge or close.
 - Never bypass the pre-commit hook with `--no-verify`.
 - Use `gh` from the repository; if it is not on `PATH`, use
   `/opt/homebrew/bin/gh`.
@@ -118,6 +125,15 @@ available, choose a capable coding agent permitted by the current runtime, give
 it a bounded task with clear acceptance criteria, and review its result. If
 subagents are unavailable, complete the task directly. Keep delegated work
 within the same architecture, testing, and verification requirements above.
+
+The orchestrator independently owns the acceptance gate. Before approving a
+merge, it must re-read the live issue, make its own criterion-by-criterion
+checklist, inspect the diff and tests at the seams named by each criterion,
+and run or obtain the required manual/native evidence. Green CI and a
+scope-matching file list are necessary but never sufficient. Do not merge a
+PR—and therefore do not allow its `Closes #<N>` reference to close the
+issue—when any acceptance row is missing, contradicted, untested at the right
+seam, or only claimed by the implementer.
 
 A reusable issue-implementation subagent is defined in
 `.agents/issue-implementer.md`. Tool-specific runtimes may provide their own

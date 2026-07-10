@@ -21,12 +21,19 @@ runtime supports worktrees.
    - Exercise UI changes with DOM integration tests.
    - Run `npm run typecheck` and focused test files during implementation.
    - Run the full `npm test` suite before publishing.
-5. Commit only the issue's changes. Let the pre-commit hook run; never use
+5. Before publishing, make an **Acceptance criteria** matrix containing every
+   checkbox from the live issue. For each row, state `met` plus specific
+   evidence: a test name, code location, command result, or manual native-app
+   observation. Do not infer a visual/integration criterion from a unit test;
+   run the named manual check or an end-to-end equivalent. If any row cannot
+   be supported, stop and report the issue as incomplete rather than opening a
+   completion PR.
+6. Commit only the issue's changes. Let the pre-commit hook run; never use
    `--no-verify`. Push with `git push -u origin <branch>`, then create a pull
-   request whose body includes a summary, verification details, and
-   `Closes #<N>`.
-6. Report the PR URL, what was built, test results, and anything deliberately
-   left out of scope.
+   request whose body includes a summary, verification details, the complete
+   acceptance-criteria matrix, and `Closes #<N>`.
+7. Report the PR URL, what was built, test results, the full
+   criterion-by-criterion matrix, and anything deliberately left out of scope.
 
 ## Constraints
 
