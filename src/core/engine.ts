@@ -574,6 +574,58 @@ function loadState(saved: Snapshot, content: Content): State {
 }
 
 /**
+ * Modifier-aggregation layer (#114): the single place that collects percentage boosts from every
+ * active source — active potion (#F), owned pets (#H), later gear upgrades (#67) — and folds them
+ * into effective Skill levels and action speeds before combat math and tick cadence ever see them.
+ * `pct` is a fraction (0.2 == +20%). Sources this wave: none (see `activeModifierSources` below),
+ * so both aggregators resolve to the ×1 identity everywhere they're applied.
+ */
+type ModifierTarget = SkillName | "fishing-speed" | "production-speed";
+interface ModifierSource {
+  target: ModifierTarget;
+  pct: number;
+}
+
+/** Backing list for `activeModifierSources` below. Empty this wave (#114); mutable only through
+ * the test-only seam (`__setModifierSourcesForTest`) until #F/#H push real sources here. */
+const modifierSources: ModifierSource[] = [];
+
+/** Test-only injection seam for the modifier-aggregation layer (#114) — pushes a `ModifierSource`
+ * onto `activeModifierSources()` without exposing any other Engine internal. Not part of the
+ * public Engine API (no `createEngine` instance carries or needs it); production code never calls
+ * this. #F/#H's own real sources replace `activeModifierSources`'s body once built. */
+export function __setModifierSourcesForTest(sources: ModifierSource[]): void {
+  modifierSources.length = 0;
+  modifierSources.push(...sources);
+}
+
+/** Every currently-active modifier. Empty this wave (#114): #F appends the active potion, #H
+ * appends owned pets.
+ * #F/#H append here */
+function activeModifierSources(): ModifierSource[] {
+  return modifierSources;
+}
+
+/** Aggregate level multiplier for a Skill: 1 + Σ(source boost fractions targeting it). Applied in
+ * `playerAccuracyAndMaxHit` to every combat effective level (magic max hit excepted — it's
+ * spell-driven, not Strength-derived). */
+function skillLevelMultiplier(skill: SkillName): number {
+  let bonus = 0;
+  for (const src of activeModifierSources()) if (src.target === skill) bonus += src.pct;
+  return 1 + bonus;
+}
+
+/** Aggregate speed multiplier for an action kind (fishing catch, production craft): the factor an
+ * action's tick cost is DIVIDED by when its cooldown re-arms (a faster action = larger
+ * multiplier). 1 = no sources, so `Math.round(baseTicks / 1)` is the pre-#114 cadence unchanged. */
+function actionSpeedMultiplier(kind: "fishing" | "production"): number {
+  const target: ModifierTarget = kind === "fishing" ? "fishing-speed" : "production-speed";
+  let bonus = 0;
+  for (const src of activeModifierSources()) if (src.target === target) bonus += src.pct;
+  return 1 + bonus;
+}
+
+/**
  * `content`/`rng` as before; `saved` resumes a Snapshot (tolerant field-by-field load, see
  * loadState); `now` (#69) is the clock `snapshot()` stamps `savedAt` from on every call — defaults
  * to `Date.now`, mirroring `rng`'s injected-randomness precedent, so tests can pin `savedAt` to a
@@ -977,26 +1029,39 @@ export function createEngine(
   function playerAccuracyAndMaxHit(): { atkRoll: number; max: number } {
     const mode = weaponCombatModeFor(state.equipment.weapon, content);
     if (mode === "ranged") {
-      const eff = effectiveLevel(level("ranged"), "ranged", state.combatStyle);
+      const eff = Math.floor(
+        effectiveLevel(level("ranged"), "ranged", state.combatStyle) *
+          skillLevelMultiplier("ranged"),
+      );
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
         max: maxHit(eff, gearBonus("strBonus")),
       };
     }
     if (mode === "magic") {
-      const eff = effectiveLevel(level("magic"), "magic", state.combatStyle);
+      const eff = Math.floor(
+        effectiveLevel(level("magic"), "magic", state.combatStyle) * skillLevelMultiplier("magic"),
+      );
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
+        // Magic max hit is the resolved Spell's own baseMaxHit (#101), not Strength-derived —
+        // left unmultiplied here on purpose (#114): a magic-damage source is out of scope this wave.
         max: resolvedSpell().baseMaxHit,
       };
     }
     return {
       atkRoll: attackRoll(
-        effectiveLevel(level("attack"), "attack", state.combatStyle),
+        Math.floor(
+          effectiveLevel(level("attack"), "attack", state.combatStyle) *
+            skillLevelMultiplier("attack"),
+        ),
         gearBonus("atkBonus"),
       ),
       max: maxHit(
-        effectiveLevel(level("strength"), "strength", state.combatStyle),
+        Math.floor(
+          effectiveLevel(level("strength"), "strength", state.combatStyle) *
+            skillLevelMultiplier("strength"),
+        ),
         gearBonus("strBonus"),
       ),
     };
@@ -1213,7 +1278,12 @@ export function createEngine(
     const spot = fishingSpotDef(activity.spotId);
     activity.catchCooldown -= 1;
     if (activity.catchCooldown > 0) return;
-    activity.catchCooldown = spot.catchTicks;
+    // #114: divided by the aggregate fishing-speed multiplier (1 = no sources, so this re-arms to
+    // spot.catchTicks unchanged, same as before this wave).
+    activity.catchCooldown = Math.max(
+      1,
+      Math.round(spot.catchTicks / actionSpeedMultiplier("fishing")),
+    );
     if (rng.next() < spot.catchChance) {
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
@@ -1246,7 +1316,12 @@ export function createEngine(
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
 
     if (canCraftRecipe(recipe)) {
-      activity.craftCooldown = recipe.craftTicks;
+      // #114: divided by the aggregate production-speed multiplier (1 = no sources, so this
+      // re-arms to recipe.craftTicks unchanged, same as before this wave).
+      activity.craftCooldown = Math.max(
+        1,
+        Math.round(recipe.craftTicks / actionSpeedMultiplier("production")),
+      );
     } else {
       state.activity = null;
     }
