@@ -109,3 +109,60 @@ sourcing five more pixel-art packs, for the same reason CLAUDE.md's "no game eng
 rendering" already prefers — zero license risk, and swapping any one theme to a real sprite sheet
 later is a one-line `background-image` change per layer (see the comment above the per-theme rules
 in `src/styles.css`), no structural change.
+
+## Item icons (#78)
+
+Every `ItemDef` (`src/data/index.ts`) has a required `icon` key resolved through
+`src/ui/icons.ts` (mirrors `sprites.ts`'s pattern), rendered at `image-rendering: pixelated`
+like the combat sprites. Two CC0 packs cover the full 33-item set (weapons, armour, food,
+materials, currency, the goblin charm accessory):
+
+| Coverage                                                                                 | Pack                                         | Author                     | License | Source                                                                      |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------- | ------- | --------------------------------------------------------------------------- |
+| Daggers, swords, bows, staves, chain/leather bodies, helms, food, bars, coins, the charm | 496 pixel art icons for medieval/fantasy RPG | Henrique Lazarini (7Soul1) | CC0 1.0 | https://opengameart.org/content/496-pixel-art-icons-for-medievalfantasy-rpg |
+| Kite shields (bronze/iron/steel/mithril)                                                 | kite shield [64x64]                          | LordNeo                    | CC0     | https://opengameart.org/content/kite-shield-64x64                           |
+
+- **496 pixel art icons for medieval/fantasy RPG** (Henrique Lazarini / 7Soul1, CC0 1.0 —
+  confirmed on the OpenGameArt submission page, which documents the artist's own re-license from
+  an earlier CC-BY 3.0 to CC0): a set of individually-named 32×32-canvas (34×34 with a 1px
+  transparent margin) pixel-art icons covering weapons, armour, food, and misc RPG items.
+  `src/assets/icons/*.png` (all entries except the four kite shields below) are unmodified
+  single-icon crops from this pack, renamed to match their `ItemDef.icon` key
+  (e.g. `W_Sword001.png` → `bronze-sword.png`, `I_GoldCoin.png` → `gold.png`,
+  `A_Armour03.png` → `mithril-chainbody.png`). Four tiers of the same base item share the same
+  source pack but different named files (e.g. the four dagger tiers use four distinct
+  `W_Dagger0NN.png` icons) so each tier reads as visually distinct, not just recoloured.
+- **kite shield [64x64]** (LordNeo, CC0 — confirmed on the OpenGameArt submission page): a set of
+  64×64 kite-shield variants (plain/bronze/copper/mithril/gold). `bronze-shield.png`,
+  `iron-kiteshield.png`, `steel-kiteshield.png`, and `mithril-kiteshield.png` are unmodified
+  single-variant crops, picked for a bronze→iron→steel→mithril tint progression. This pack's
+  larger native canvas (64×64 vs. the 496-pack's 34×34) is left as-is rather than resampled —
+  `image-rendering: pixelated` plus the tile's own fixed CSS box already normalize on-screen size
+  the same way the combat sprites do across mismatched native resolutions (see "Sprite packs"
+  above).
+
+<details>
+<summary>Full source-file mapping (`src/assets/icons/<icon key>.png` ← source pack filename)</summary>
+
+| Icon key         | Source file                | Icon key           | Source file                 |
+| ---------------- | -------------------------- | ------------------ | --------------------------- |
+| apprentice-staff | `W_Staff01.png`            | mithril-chainbody  | `A_Armour03.png`            |
+| bronze-bar       | `I_BronzeBar.png`          | mithril-dagger     | `W_Dagger017.png`           |
+| bronze-dagger    | `W_Dagger004.png`          | mithril-full-helm  | `C_Elm03.png`               |
+| bronze-shield    | `a_shield_kite_bronze.png` | mithril-kiteshield | `a_shield_kite_mithril.png` |
+| bronze-sword     | `W_Sword001.png`           | mithril-shortbow   | `W_Bow16.png`               |
+| cooked-meat      | `I_C_Meat.png`             | mithril-staff      | `W_Staff06.png`             |
+| cooked-pike      | `I_C_Fish.png`             | shade-blade        | `W_Sword016.png`            |
+| cooked-shrimp    | `I_FishTail.png`           | shortbow           | `W_Bow02.png`               |
+| cooked-trout     | `I_C_RawFish.png`          | steel-chainbody    | `A_Clothing01.png`          |
+| goblin-charm     | `Ac_Necklace03.png`        | steel-dagger       | `W_Dagger007.png`           |
+| gold             | `I_GoldCoin.png`           | steel-full-helm    | `C_Elm04.png`               |
+| iron-bar         | `I_SilverBar.png`          | steel-kiteshield   | `a_shield_kite_0.png`       |
+| iron-chainbody   | `A_Armor04.png`            | steel-shortbow     | `W_Bow07.png`               |
+| iron-dagger      | `W_Dagger014.png`          | steel-staff        | `W_Staff08.png`             |
+| iron-full-helm   | `C_Elm01.png`              | leather-body       | `A_Armour01.png`            |
+| iron-kiteshield  | `a_shield_kite_copper.png` |                    |                             |
+| iron-shortbow    | `W_Bow01.png`              |                    |                             |
+| iron-staff       | `W_Staff04.png`            |                    |                             |
+
+</details>

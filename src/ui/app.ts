@@ -19,6 +19,8 @@ import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
 import { resolveProp } from "./props";
 import { resolveTheme } from "./theme";
+import { itemIcon } from "./icons";
+import { formatQty } from "./format";
 
 /** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
  * key order (a plain object, not guaranteed stable across engines/serialization). */
@@ -36,7 +38,9 @@ const TOAST_DISMISS_MS = 2500;
 const FLASH_DURATION_MS = 400;
 
 /** Abbreviated Attack Type labels for the compact defence-vector readout (#99) — terse to fit the
- * 320px Character panel budget (#78's icon pass will restyle later). */
+ * 320px Character panel budget. Rendered inside the shared hover panel/Bank detail strip since
+ * #78's icon pass (item tiles carry only icon + qty; per-piece stats moved off the always-visible
+ * row). */
 const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
   stab: "st",
   slash: "sl",
@@ -194,6 +198,10 @@ export function mountApp(
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same slot's [+], or
   // picking a Food from the chooser, closes it (set back to null).
   let openFoodChooserSlot: number | null = null;
+  // Which Bank tile (if any) is selected, driving the detail strip below the grid (#78) — purely
+  // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
+  // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
+  let selectedBankItem: string | null = null;
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -239,6 +247,46 @@ export function mountApp(
   function sellPrice(itemId: string): number | undefined {
     const def = content.items.find((i) => i.id === itemId);
     return def && def.kind !== "currency" ? def.value : undefined;
+  }
+
+  /** One compact line per stat-worthy fact about an item — equipment's own `equipmentStatParts`
+   * joined onto a single line (#99's defence-vector readout lives here now: #78 moved per-piece
+   * stats off the always-visible slot row and into this shared hover-panel/detail-strip
+   * treatment); Food's heal amount plus its sell value if any; a sellable Material's value;
+   * nothing extra for currency (its name alone is enough). Shared by the Bank detail strip and
+   * the `#item-tooltip` hover panel so the two never drift apart. */
+  function itemDetailLines(itemId: string): string[] {
+    const def = content.items.find((i) => i.id === itemId);
+    if (!def) return [];
+    switch (def.kind) {
+      case "equipment":
+        return [equipmentStatParts(def).join(" ")];
+      case "food": {
+        const lines = [`Heals ${def.heals}`];
+        if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
+        return lines;
+      }
+      case "material":
+        return def.value !== undefined ? [`Worth ${def.value}g`] : [];
+      case "currency":
+        return [];
+    }
+  }
+
+  /** `<img>` for `itemId`'s icon (#78) — resolved through `icons.ts`'s no-fallback registry, same
+   * discipline as `itemName`/`sellPrice` above: every Content item has a real icon key, so there's
+   * no placeholder branch here. */
+  function iconMarkup(itemId: string): string {
+    const def = content.items.find((i) => i.id === itemId);
+    const src = def ? itemIcon(def.icon) : "";
+    return `<img class="icon pixel" src="${src}" alt="${itemName(itemId)}" />`;
+  }
+
+  /** Icon + a corner quantity badge (`formatQty`) — the standard Bank/Food-Slot/Loot tile body.
+   * Character Gear Slot tiles use `iconMarkup` alone (a worn piece is always qty 1, so a badge
+   * would just be noise). */
+  function tileMarkup(itemId: string, qty: number): string {
+    return `${iconMarkup(itemId)}<span class="tile-qty">×${formatQty(qty)}</span>`;
   }
 
   /** One tooltip line per Drop Table entry: item name, quantity, band, and human-readable chance. */
@@ -316,6 +364,38 @@ export function mountApp(
     flashTimer = setTimeout(() => overlay.classList.remove("flash-rare"), FLASH_DURATION_MS);
   }
 
+  /** Fills the shared `#item-tooltip` hover panel (#78) with `itemId`'s name plus
+   * `itemDetailLines` — the same lines the Bank detail strip shows, so a Character/Food/Loot tile
+   * (which has no detail strip of its own) still surfaces #99's defence-vector readout and every
+   * other per-item stat purely through hover. */
+  function fillTooltip(itemId: string): void {
+    const lines = itemDetailLines(itemId);
+    el<HTMLElement>("#item-tooltip").innerHTML =
+      `<p class="tooltip-name">${itemName(itemId)}</p>` +
+      lines.map((line) => `<p class="tooltip-stat">${line}</p>`).join("");
+  }
+
+  /** Positions `#item-tooltip` (a `position: fixed` element, so viewport coordinates apply
+   * directly) just below-right of `anchor`, clamped inside the viewport (#78: "clamp it inside
+   * the window bounds") rather than letting it spill off the always-on-top window's edge. Falls
+   * back to the app's own base 320×640 design size when `window.innerWidth/Height` or the
+   * tooltip's own measured size aren't available (e.g. a layout-less test environment) so the
+   * clamp math stays sane rather than silently no-op-ing. */
+  function positionTooltip(anchor: HTMLElement): void {
+    const tip = el<HTMLElement>("#item-tooltip");
+    const anchorRect = anchor.getBoundingClientRect();
+    const viewportW = window.innerWidth || 320;
+    const viewportH = window.innerHeight || 640;
+    const tipW = tip.offsetWidth || 150;
+    const tipH = tip.offsetHeight || 50;
+    const margin = 8;
+
+    const left = Math.min(Math.max(0, anchorRect.left + margin), Math.max(0, viewportW - tipW));
+    const top = Math.min(Math.max(0, anchorRect.bottom + margin), Math.max(0, viewportH - tipH));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
   /** Renders the 3-slot Active Food Slot bar (#61), near the player HP bar: a filled slot shows
    * name/qty (click = eatFromSlot) plus a small ✕ (click = unassignFoodSlot); an empty slot shows
    * a `[+]` that opens a chooser listing the Bank's Food stacks (click one = assignFoodSlot).
@@ -332,7 +412,9 @@ export function mountApp(
       .map((slot, i) => {
         if (slot) {
           return `<div class="food-slot filled" data-slot="${i}">
-                    <button class="food-slot-eat" data-eat="${i}">${itemName(slot.itemId)} ×${slot.qty}</button>
+                    <button class="food-slot-eat tile" data-eat="${i}" data-item="${slot.itemId}">
+                      ${tileMarkup(slot.itemId, slot.qty)}
+                    </button>
                     <button class="food-slot-unassign" data-unassign="${i}" title="Unassign">✕</button>
                   </div>`;
         }
@@ -467,8 +549,12 @@ export function mountApp(
     }).join("");
   }
 
-  /** Renders the Character tab panel: worn Gear Slots, derived stat totals, the Combat Style and
-   * auto-eat threshold segmented controls' active states, and the auto-sell-duplicates checkbox. */
+  /** Renders the Character tab panel: worn Gear Slots as icon tiles, derived stat totals, the
+   * Combat Style and auto-eat threshold segmented controls' active states, and the
+   * auto-sell-duplicates checkbox. A filled slot's own stats (#99's defence-vector readout
+   * included) no longer sit on the always-visible row (#78) — they're one hover away on
+   * `#item-tooltip`, same as every other item tile; `#character-totals` (the aggregate) stays put
+   * since it's the one number that's always worth showing without a hover. */
   function renderCharacter(player: Snapshot["player"]): void {
     root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
@@ -482,12 +568,12 @@ export function mountApp(
 
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
-      const def = itemId ? content.items.find((i) => i.id === itemId) : undefined;
-      const label = def ? def.name : "—";
-      const stats = def && def.kind === "equipment" ? equipmentStatParts(def).join(" ") : "";
-      return `<li data-slot="${slot}"><span class="slot">${slot}</span> <span class="slot-item">${label}</span>${
-        stats ? ` <span class="slot-stats">${stats}</span>` : ""
-      }</li>`;
+      if (!itemId) {
+        return `<div class="tile tile-empty" data-slot="${slot}">
+                  <span class="tile-empty-mark" aria-label="${slot} (empty)">—</span>
+                </div>`;
+      }
+      return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${iconMarkup(itemId)}</div>`;
     }).join("");
 
     const b = player.bonuses;
@@ -495,20 +581,24 @@ export function mountApp(
       `+${b.atkBonus} atk +${b.strBonus} str ${defVectorLabel(b.def)} spd ${b.attackSpeed}t`;
   }
 
-  /** Renders the main column's Loot Zone strip: hidden while empty, otherwise one chip per stack. */
+  /** Renders the main column's Loot Zone strip: hidden while empty, otherwise one icon+qty tile
+   * per stack. */
   function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
     const lootStrip = el<HTMLElement>("#loot-strip");
     lootStrip.hidden = lootZone.length === 0;
     el("#loot-strip-items").innerHTML = lootZone
       .map(
-        (s) => `<li class="loot-chip" data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</li>`,
+        (s) =>
+          `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
       )
       .join("");
   }
 
   /** Renders the Bank tab panel: the sort-row's active toggle, the capacity header + buy-slots
-   * button, and the sorted stack list with its per-row Equip/Sell buttons. `gold` (rather than the
-   * whole player) is all the buy-slots button's disabled check needs. */
+   * button, and the sorted stack grid (#78: `<button class="tile">`s carrying only icon + qty
+   * badge — the click-to-select detail strip below shows the name/stats/Equip/Sell buttons that
+   * used to sit inline on each row). `gold` (rather than the whole player) is all the buy-slots
+   * button's disabled check needs. */
   function renderBank(bank: Snapshot["bank"], gold: number): void {
     root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
@@ -520,30 +610,56 @@ export function mountApp(
     buySlotsBtn.textContent = `Buy +10 slots (${bank.nextSlotsPrice}g)`;
     buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
 
-    el("#bank").innerHTML = sortStacks(bank.items, sortKey, content)
-      .map((s) => {
-        const def = content.items.find((i) => i.id === s.itemId);
-        const cls =
-          def?.kind === "equipment"
-            ? "equippable"
-            : def?.kind === "food"
-              ? "eatable"
-              : def?.kind === "material"
-                ? "material"
-                : "";
-        const price = sellPrice(s.itemId);
-        const sellBtn =
-          price !== undefined
-            ? `<button class="sell-btn" data-sell="${s.itemId}">Sell ${price}g</button>`
-            : "";
-        const equipBtn =
-          def?.kind === "equipment"
-            ? `<button class="equip-btn" data-equip="${s.itemId}">Equip</button>`
-            : "";
-        return `<li class="${cls}" data-item="${s.itemId}">
-                  ${itemName(s.itemId)} ×${s.qty}${equipBtn}${sellBtn}</li>`;
-      })
+    const stacks = sortStacks(bank.items, sortKey, content);
+    // A selected Bank tile can vanish from under the detail strip (its last unit sold/equipped,
+    // or a re-sort/filter that no longer surfaces it) — drop a selection that no longer resolves
+    // to a stack so the detail strip hides itself instead of showing stale Equip/Sell buttons.
+    if (selectedBankItem && !stacks.some((s) => s.itemId === selectedBankItem)) {
+      selectedBankItem = null;
+    }
+
+    el("#bank").innerHTML = stacks
+      .map(
+        (s) =>
+          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === selectedBankItem}">
+             ${tileMarkup(s.itemId, s.qty)}
+           </button>`,
+      )
       .join("");
+
+    renderBankDetail(stacks);
+  }
+
+  /** Renders the Bank's detail strip (#78): hidden while nothing is selected, otherwise the
+   * selected stack's name/qty, `itemDetailLines` stats, and its Equip/Sell buttons — the same
+   * `data-equip`/`data-sell` attributes the old inline row buttons carried, so command wiring
+   * (#59's dispatch-order rule included) is unchanged, just relocated. */
+  function renderBankDetail(stacks: { itemId: string; qty: number }[]): void {
+    const detail = el<HTMLElement>("#bank-detail");
+    const stack = selectedBankItem ? stacks.find((s) => s.itemId === selectedBankItem) : undefined;
+    if (!stack) {
+      detail.hidden = true;
+      detail.innerHTML = "";
+      return;
+    }
+
+    const def = content.items.find((i) => i.id === stack.itemId);
+    const price = sellPrice(stack.itemId);
+    const sellBtn =
+      price !== undefined
+        ? `<button class="sell-btn" data-sell="${stack.itemId}">Sell ${price}g</button>`
+        : "";
+    const equipBtn =
+      def?.kind === "equipment"
+        ? `<button class="equip-btn" data-equip="${stack.itemId}">Equip</button>`
+        : "";
+
+    detail.hidden = false;
+    detail.innerHTML = `<p class="detail-name">${itemName(stack.itemId)} ×${formatQty(stack.qty)}</p>
+      ${itemDetailLines(stack.itemId)
+        .map((line) => `<p class="detail-stat">${line}</p>`)
+        .join("")}
+      <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
   }
 
   /** Renders the Smithing tab panel's recipe list: each Recipe's inputs (with owned quantities),
@@ -624,6 +740,7 @@ export function mountApp(
 
   root.innerHTML = `
     <div id="flash-overlay"></div>
+    <div id="item-tooltip" class="item-tooltip" hidden></div>
     <div id="left-panel" class="side-panel" hidden>
       <p class="panel-title">Areas</p>
       <section id="picker"></section>
@@ -676,7 +793,7 @@ export function mountApp(
         </div>
         <div data-tab-panel="character" class="tab-panel">
           <p class="panel-title">Character</p>
-          <ul id="character-slots"></ul>
+          <div id="character-slots" class="tile-grid"></div>
           <p id="character-totals" class="totals-row"></p>
           <div id="style-row" class="style-row">
             ${Object.entries(STYLE_LABELS)
@@ -699,12 +816,12 @@ export function mountApp(
           <p class="panel-title">
             <span id="bank-header"></span>
             <button id="buy-slots-btn" data-buy-slots></button>
-            <span class="hint">(Equip/Sell buttons; Food is eaten from the Food Slot bar)</span>
           </p>
           <div id="sort-row" class="style-row">
             ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
           </div>
-          <ul id="bank"></ul>
+          <div id="bank" class="tile-grid"></div>
+          <div id="bank-detail" class="detail-strip" hidden></div>
         </div>
         <div data-tab-panel="smithing" class="tab-panel">
           <p class="panel-title">Smithing</p>
@@ -854,11 +971,24 @@ export function mountApp(
     }
   });
 
+  // Bank grid (#78): clicking a tile selects it (re-clicking the already-selected tile
+  // deselects), driving the detail strip below — the grid itself never calls the Engine.
   el("#bank").addEventListener("click", (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(".tile[data-item]");
+    if (!tile) return;
+    const itemId = tile.dataset["item"];
+    if (!itemId) return;
+    selectedBankItem = selectedBankItem === itemId ? null : itemId;
+    render();
+  });
+
+  // Bank detail strip (#78): the Equip/Sell buttons that used to sit inline on each Bank row now
+  // live here instead, carrying the same data-equip/data-sell attributes.
+  // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip
+  // rule): the Sell button fires before Equip. Bank rows no longer eat (#61 moved eating to the
+  // Food Slot bar) — a Food row's only actions left are Equip (never applicable) and Sell.
+  el("#bank-detail").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
-    // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip
-    // rule): the Sell button fires before Equip. Bank rows no longer eat (#61 moved eating to the
-    // Food Slot bar) — a Food row's only actions left are Equip (never applicable) and Sell.
     const sellId = target.dataset["sell"];
     if (sellId) {
       engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
@@ -871,6 +1001,30 @@ export function mountApp(
       engine.equip(equipId); // logs its own feed line via the equipped listener above
       render();
     }
+  });
+
+  // Shared item-tooltip hover panel (#78): delegated on `root` itself so it covers every
+  // Bank/Character/Food-Slot/Loot tile (anything carrying `data-item`) with one listener, rather
+  // than per-panel wiring that could drift. `mouseover`/`mouseout` (not `mouseenter`/`mouseleave`,
+  // which don't bubble) so delegation from `root` works at all; the `relatedTarget` check on
+  // `mouseout` keeps the tooltip open while the pointer moves between a tile's own child elements
+  // (e.g. its `<img>` and the qty badge `<span>`) instead of flickering.
+  root.addEventListener("mouseover", (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>("[data-item]");
+    if (!tile) return;
+    const itemId = tile.dataset["item"];
+    if (!itemId) return;
+    fillTooltip(itemId);
+    positionTooltip(tile);
+    el<HTMLElement>("#item-tooltip").hidden = false;
+  });
+
+  root.addEventListener("mouseout", (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>("[data-item]");
+    if (!tile) return;
+    const related = (event as MouseEvent).relatedTarget as Node | null;
+    if (related && tile.contains(related)) return;
+    el<HTMLElement>("#item-tooltip").hidden = true;
   });
 
   // Food Slot bar (#61): dispatch order is load-bearing — data-unassign (✕) is checked before the

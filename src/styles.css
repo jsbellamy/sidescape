@@ -502,26 +502,23 @@ body {
   position: relative;
 }
 
-.food-slot-eat,
+/* .food-slot-eat also carries .tile (#78 — icon + qty badge instead of a text row), so its own
+   rule here only needs to override .tile's sizing to fill the slot; .food-slot-add stays a plain
+   text/glyph button (there's no item to show an icon for until one's assigned). */
+.food-slot-eat {
+  width: 100%;
+}
+
 .food-slot-add {
   width: 100%;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
-  color: var(--text);
-  font-size: 11px;
-  padding: 3px 16px 3px 4px;
-  cursor: pointer;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.food-slot-add {
-  text-align: center;
   color: var(--text-dim);
+  font-size: 11px;
   padding: 3px 4px;
+  cursor: pointer;
+  text-align: center;
 }
 
 .food-slot-eat:hover,
@@ -712,14 +709,13 @@ body {
   min-width: 0;
 }
 
+/* .loot-chip also carries .tile (#78 — icon + qty badge instead of a text chip); this rule just
+   caps its size so a row of chips stays compact rather than stretching to the grid's usual tile
+   size. */
 .loot-chip {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  font-size: 11px;
-  padding: 2px 6px;
-  white-space: nowrap;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
 }
 
 #loot-all-btn {
@@ -778,26 +774,8 @@ body {
   justify-content: space-between;
 }
 
-#character-slots,
-#inventory,
 #feed {
   list-style: none;
-}
-
-#character-slots .slot {
-  display: inline-block;
-  width: 52px;
-  color: var(--text-dim);
-}
-
-#character-slots .slot-item {
-  color: var(--text);
-}
-
-#character-slots .slot-stats {
-  float: right;
-  color: var(--text-dim);
-  font-size: 11px;
 }
 
 .totals-row {
@@ -812,41 +790,141 @@ body {
   margin-bottom: 4px;
 }
 
-#inventory .equippable {
+/* Icon-tile grid (#78): shared by the Bank, Character Gear Slots, and (via #loot-strip-items'
+   own flex-row, not this grid — see below) Loot chips. A tile carries only an icon + qty badge;
+   Bank tiles are clickable (select → detail strip), Character tiles are hover-only (no click
+   action exists for worn gear). */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 4px;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+  cursor: default;
+}
+
+button.tile {
   cursor: pointer;
-  color: #7db3d5;
 }
 
-#inventory .equippable:hover {
-  text-decoration: underline;
+button.tile:hover {
+  border-color: var(--accent);
 }
 
-#inventory .eatable {
-  cursor: pointer;
-  color: #7dd58f;
+.tile[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-#inventory .eatable:hover {
-  text-decoration: underline;
+.tile .icon {
+  max-width: 100%;
+  max-height: 100%;
 }
 
-#inventory .material {
+.tile-qty {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-size: 9px;
+  line-height: 1.4;
+  padding: 0 3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tile-empty {
+  border-style: dashed;
+}
+
+.tile-empty-mark {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Bank detail strip (#78): filled when a Bank tile is selected, hidden otherwise. Replaces the
+   old always-visible per-row name/stats/Equip/Sell text. */
+.detail-strip {
+  margin-top: 6px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.detail-name {
+  color: var(--text);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.detail-stat {
   color: var(--text-dim);
 }
 
-.sell-btn {
-  float: right;
+.detail-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sell-btn,
+.equip-btn {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--accent);
   font-size: 10px;
-  padding: 1px 5px;
+  padding: 2px 6px;
   cursor: pointer;
 }
 
-.sell-btn:hover {
+.sell-btn:hover,
+.equip-btn:hover {
   border-color: var(--accent);
+}
+
+/* Shared item hover panel (#78): one `#item-tooltip` div, filled/positioned/shown on any
+   `[data-item]` tile's mouseover (see app.ts) and hidden on mouseout — a custom multi-line panel
+   rather than the native `title` attribute, so it can show the same name + stat lines as the Bank
+   detail strip. `position: fixed` so the clamp math in app.ts's positionTooltip can work directly
+   in viewport coordinates. */
+.item-tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: 160px;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.item-tooltip[hidden] {
+  display: none;
+}
+
+.tooltip-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.tooltip-stat {
+  color: var(--text-dim);
 }
 
 .deposit-btn,
@@ -864,10 +942,6 @@ body {
 .deposit-btn:hover,
 .withdraw-btn:hover {
   border-color: var(--accent);
-}
-
-#bank {
-  list-style: none;
 }
 
 #buy-slots-btn {

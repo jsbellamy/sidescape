@@ -8,10 +8,22 @@ import { content } from "./index";
 describe("Smithing content", () => {
   it("Bronze Bar and Iron Bar are stackable, unequippable, uneatable Materials", () => {
     const bronzeBar = content.items.find((i) => i.id === "bronze-bar");
-    expect(bronzeBar).toEqual({ kind: "material", id: "bronze-bar", name: "Bronze Bar", value: 8 });
+    expect(bronzeBar).toEqual({
+      kind: "material",
+      id: "bronze-bar",
+      name: "Bronze Bar",
+      icon: "bronze-bar",
+      value: 8,
+    });
 
     const ironBar = content.items.find((i) => i.id === "iron-bar");
-    expect(ironBar).toEqual({ kind: "material", id: "iron-bar", name: "Iron Bar", value: 20 });
+    expect(ironBar).toEqual({
+      kind: "material",
+      id: "iron-bar",
+      name: "Iron Bar",
+      icon: "iron-bar",
+      value: 20,
+    });
   });
 
   it("materials are appended after existing items (append-only: cooked-shrimp still precedes them)", () => {

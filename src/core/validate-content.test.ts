@@ -24,7 +24,10 @@ describe("validateContent", () => {
   it("reports two currency items", () => {
     const content: Content = {
       ...fixtureContent,
-      items: [...fixtureContent.items, { kind: "currency", id: "gems", name: "Gems" }],
+      items: [
+        ...fixtureContent.items,
+        { kind: "currency", id: "gems", name: "Gems", icon: "gold" },
+      ],
     };
     const violations = validateContent(content);
     expect(violations).toHaveLength(1);
@@ -73,12 +76,33 @@ describe("validateContent", () => {
           kind: "equipment" as const,
           id: "plain-shield",
           name: "Plain Shield",
+          icon: "bronze-shield",
           slot: "shield" as const,
           def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
         },
       ],
     };
     expect(validateContent(content)).toEqual([]);
+  });
+
+  it("reports an item that declares no icon (#78)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.id !== "bronze-sword") return i;
+        const { icon: _dropped, ...iconless } = i;
+        return iconless as unknown as (typeof fixtureContent.items)[number];
+      }),
+    };
+    expect(validateContent(content)).toContain('item "bronze-sword" declares no icon');
+  });
+
+  it("reports an item with an empty-string icon", () => {
+    const content: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => (i.id === "bronze-sword" ? { ...i, icon: "" } : i)),
+    };
+    expect(validateContent(content)).toContain('item "bronze-sword" declares no icon');
   });
 
   it("reports a weapon that declares no attackType (#99)", () => {
@@ -102,6 +126,7 @@ describe("validateContent", () => {
           kind: "equipment" as const,
           id: "cursed-shield",
           name: "Cursed Shield",
+          icon: "bronze-shield",
           slot: "shield" as const,
           attackType: "crush" as const,
           def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
