@@ -5,9 +5,12 @@ import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WindowChrome } from "./app";
+import type { WorkspaceChrome } from "./app";
 
-const noopWindowChrome: WindowChrome = { setPanels: () => {} };
+const noopWindowChrome: WorkspaceChrome = {
+  getCapacity: () => Promise.resolve(3),
+  setCardCount: () => {},
+};
 
 function mountWith(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
   const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));

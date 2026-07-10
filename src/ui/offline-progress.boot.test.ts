@@ -5,7 +5,7 @@ import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WindowChrome } from "./app";
+import type { WorkspaceChrome } from "./app";
 import {
   buildAwayCard,
   computeOfflineTicks,
@@ -15,7 +15,10 @@ import {
 } from "./offline-progress";
 
 const TICK_MS = 600;
-const noopWindowChrome: WindowChrome = { setPanels: () => {} };
+const noopWindowChrome: WorkspaceChrome = {
+  getCapacity: () => Promise.resolve(3),
+  setCardCount: () => {},
+};
 
 /**
  * Replays main.ts's own boot order (#69) without importing main.ts itself — main.ts also wires up

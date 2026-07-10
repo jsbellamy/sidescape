@@ -25,27 +25,62 @@ body {
   user-select: none;
 }
 
+/* Cards on glass (#138 §4, #151 §2): the root chain paints nothing — no opaque ancestor spans the
+   union — so the desktop shows through everywhere outside an actual card. Each card draws its own
+   opaque glass with its own radius + shadow, and the CARD_GAP between them is real transparency. */
 html,
 :root,
 body {
   background: transparent;
 }
-#compact-widget-shell,
+
+/* The transparent union. Vertical composition (#151 §1): the compact widget and the management row
+   stack instead of sitting side-by-side. `data-anchor` (set by the chrome seam in main.ts) decides
+   which is on top — a "top" anchor keeps the compact widget up top and grows cards downward, so the
+   management row is ordered after it; the default (bottom / no anchor) keeps the row above. The row
+   height tracks the live clamped card height via `--card-h`, which main.ts sets from workspaceRect;
+   the compact widget takes the remaining vertical space so its inner scene keeps a definite height. */
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* CARD_GAP */
+  overflow: hidden;
+  background: transparent;
+  --card-h: 600px; /* DEFAULT_CARD_H; overridden per-open by main.ts */
+}
+#app[data-anchor="top"] #management-row {
+  order: 1;
+}
+
+#management-row {
+  flex: 0 0 auto;
+  height: var(--card-h);
+  display: flex;
+  gap: 8px; /* CARD_GAP between two/three cards */
+  justify-content: center;
+  align-items: stretch;
+}
+#management-row[hidden] {
+  display: none;
+}
+
 #compact-widget {
+  width: 320px; /* MIN_COMPACT_W / DEFAULT_COMPACT_W; does not stretch to the wider card row (#138 §4) */
+  flex: 1 1 auto;
+  min-height: 0;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   overflow: hidden;
-}
-.management-row {
   display: flex;
-  gap: 8px;
-  justify-content: center;
-  align-items: stretch;
+  flex-direction: column;
 }
+
 .management-card {
-  flex: 0 0 300px;
+  flex: 0 0 300px; /* CARD_W */
   width: 300px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -104,26 +139,15 @@ body {
   color: var(--text);
 }
 
-/* Three-column shell (#62): [left panel][main column][right panel]. The main column is the
-   activity core and is always visible; the side panels are hidden entirely when closed (both via
-   the `hidden` attribute here, and via WindowChrome shrinking the actual OS window around them in
-   the real Tauri build — see main.ts). */
-#app {
-  height: calc(100% - 28px);
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-}
-
 .pixel {
   image-rendering: pixelated;
 }
 
+/* A management card's scrollable body (#138): the card itself is the opaque glass (.management-card
+   above); this adds the inner padding and type scale. The old per-side left/right borders are gone
+   — each card now carries its own border/radius/shadow as a free-floating card. */
 .side-panel {
-  flex: 0 0 300px;
-  width: 300px;
   padding: 8px;
-  overflow-y: auto;
   font-size: 12px;
 }
 
@@ -131,17 +155,12 @@ body {
   display: none;
 }
 
-#left-panel {
-  border-right: 1px solid var(--border);
-}
-
-#right-panel {
-  border-left: 1px solid var(--border);
-}
-
+/* The compact widget's activity core, below its own titlebar. Fills the widget card vertically so
+   #scene keeps a definite height for its absolutely-positioned parallax backdrop. */
 #main-column {
-  flex: 1 1 320px;
-  min-width: 0;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 8px;

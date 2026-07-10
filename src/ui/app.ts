@@ -201,11 +201,6 @@ export interface WorkspaceChrome {
   getCapacity(): Promise<1 | 2 | 3>;
   setCardCount(cardCount: number): void;
 }
-/** @deprecated compatibility adapter for pre-workspace DOM tests. */
-export interface WindowChrome {
-  /** `left`/`right` are the panel's new open/closed state, not a delta. */
-  setPanels(left: boolean, right: boolean): void;
-}
 
 /** Presentation-only panel/tab state (#62) — localStorage only, never the Snapshot/save (same
  * boundary as the sort choice, #26, and the SFX mute preference, #20). `tab: null` means the
@@ -261,7 +256,7 @@ export function mountApp(
   engine: Engine,
   root: HTMLElement,
   content: Content,
-  windowChrome: WorkspaceChrome | WindowChrome,
+  windowChrome: WorkspaceChrome,
 ): MountedApp {
   // Presentation-only side panel state (#62): LEFT (Areas) is independent of the RIGHT tab strip,
   // where `rightTab: null` means the right panel is closed. Restored from localStorage below.
@@ -304,7 +299,7 @@ export function mountApp(
   let lastAreaId: string | null = null;
 
   /** Shows the LEFT (Areas) panel and the RIGHT panel's active tab (if any), hiding the rest;
-   * highlights the matching tab button and the left arrow. Does not itself notify WindowChrome or
+   * highlights the matching tab button and the left arrow. Does not itself notify WorkspaceChrome or
    * persist — callers that change `leftOpen`/`rightTab` do that via `syncPanels` below. */
   function renderTabs(): void {
     el<HTMLElement>("#left-panel").hidden = !leftOpen;
@@ -317,18 +312,21 @@ export function mountApp(
       panel.hidden = panel.dataset["tabPanel"] !== rightTab;
     });
     el<HTMLElement>("#right-panel").hidden = rightTab === null;
-    el<HTMLElement>("#management-row").dataset["anchor"] = "top";
+    // Collapse the whole row when no card is open, so the transparent union has no phantom CARD_GAP
+    // above/below the compact widget — the window is exactly compact-sized while closed.
+    el<HTMLElement>("#management-row").hidden = !leftOpen && rightTab === null;
   }
 
-  /** Re-renders panel visibility, notifies `WindowChrome` of the new open/closed flags (the
-   * seam main.ts's real Tauri adapter resizes the window from), and persists the choice to
-   * localStorage (#62) — never the Snapshot/save. Called after every LEFT/RIGHT panel change,
-   * including the initial restore-from-localStorage on mount. */
+  /** Re-renders panel visibility, notifies `WorkspaceChrome` of the new open-card *count* (the
+   * seam main.ts's real Tauri adapter resizes/anchors the transparent window from, and that #136
+   * extends from two cards to three), and persists the choice to localStorage (#62) — never the
+   * Snapshot/save. Called after every LEFT/RIGHT panel change, including the initial
+   * restore-from-localStorage on mount, so the window matches on every mount, not just the next
+   * toggle. */
   function syncPanels(): void {
     renderTabs();
     const count = Number(leftOpen) + Number(rightTab !== null);
-    if ("setCardCount" in windowChrome) windowChrome.setCardCount(count);
-    else windowChrome.setPanels(leftOpen, rightTab !== null);
+    windowChrome.setCardCount(count);
     // Retain only tab preference; legacy open flags must not survive a relaunch.
     // Legacy key remains writable for a smooth upgrade, but its open flags are ignored at boot.
     savePanelState({ left: leftOpen, tab: rightTab ?? restoredPanels.tab });
@@ -1126,6 +1124,24 @@ export function mountApp(
     </section>
     </div>
     <section id="compact-widget">
+    <header id="titlebar" data-tauri-drag-region>
+      <span data-tauri-drag-region>SideScape</span>
+      <div id="titlebar-controls">
+        <button id="export-save" title="Export save to clipboard">📤</button>
+        <button id="import-save" title="Import save from clipboard">📥</button>
+        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊</button>
+        <button id="close-btn" title="Quit">✕</button>
+      </div>
+    </header>
+    <div id="import-panel" hidden>
+      <p>Paste a save below, then Apply. This overwrites your current save.</p>
+      <textarea id="import-textarea" rows="4"></textarea>
+      <p id="import-error" hidden></p>
+      <div id="import-actions">
+        <button id="import-apply">Apply</button>
+        <button id="import-cancel">Cancel</button>
+      </div>
+    </div>
     <div id="main-column">
       <div id="chrome-row">
         <button id="left-arrow" data-toggle-left title="Areas">◂</button>
@@ -1663,7 +1679,7 @@ export function mountApp(
   buildPicker();
   render();
   // Applies the panel state restored from localStorage above (or the closed-both default on a
-  // fresh install) and notifies WindowChrome once up front, so the real Tauri adapter (main.ts)
+  // fresh install) and notifies WorkspaceChrome once up front, so the real Tauri adapter (main.ts)
   // sizes/positions the OS window to match on every mount, not just on the next toggle.
   syncPanels();
 

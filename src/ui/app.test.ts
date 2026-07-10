@@ -6,14 +6,17 @@ import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WindowChrome } from "./app";
+import type { WorkspaceChrome } from "./app";
 
-/** A do-nothing WindowChrome for tests that don't care about window resize/position (the vast
+/** A do-nothing WorkspaceChrome for tests that don't care about window resize/position (the vast
  * majority) — mirrors main.ts's real Tauri adapter's `.catch(console.error)`-guarded contract
  * without any Tauri API access, same shape as the browser-degrade path `npm run dev` uses. Tests
- * that specifically exercise the panel-toggle seam (see "Side panels (#62)" below) pass their own
- * spy instead, to assert `setPanels` is called with the right flags. */
-const noopWindowChrome: WindowChrome = { setPanels: () => {} };
+ * that specifically exercise the card-count seam (see "Workspace cards" below) pass their own spy
+ * instead, to assert `setCardCount` is called with the right open-card count. */
+const noopWindowChrome: WorkspaceChrome = {
+  getCapacity: () => Promise.resolve(3),
+  setCardCount: () => {},
+};
 
 /** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
  * loot it all into the Bank, mirroring core/engine.test.ts's grindFor — combat Drops land in the
@@ -664,18 +667,19 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
   });
 });
 
-describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window sideways)", () => {
+describe("Workspace cards (#138: LEFT Areas arrow + RIGHT tab strip open floating cards)", () => {
   function spyWindowChrome() {
-    const calls: Array<[boolean, boolean]> = [];
-    const chrome: WindowChrome = {
-      setPanels: (left, right) => {
-        calls.push([left, right]);
+    const calls: number[] = [];
+    const chrome: WorkspaceChrome = {
+      getCapacity: () => Promise.resolve(3),
+      setCardCount: (count) => {
+        calls.push(count);
       },
     };
     return { chrome, calls };
   }
 
-  function mountWithChrome(chrome: WindowChrome) {
+  function mountWithChrome(chrome: WorkspaceChrome) {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
     const app = mountApp(engine, root, fixtureContent, chrome);
@@ -688,45 +692,39 @@ describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window
     expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
   });
 
-  it("mounting calls WindowChrome.setPanels(false, false) exactly once when both panels start closed", () => {
+  it("boot sync requests zero cards exactly once when both panels start closed (#151 §3/§6)", () => {
     const { chrome, calls } = spyWindowChrome();
     mountWithChrome(chrome);
-    expect(calls).toEqual([[false, false]]);
+    expect(calls).toEqual([0]);
   });
 
-  it("the left arrow toggles the Areas panel and calls setPanels with the left flag", () => {
+  it("the left arrow toggles the Areas card and reports the open-card count", () => {
     const { chrome, calls } = spyWindowChrome();
     const { root } = mountWithChrome(chrome);
     calls.length = 0; // ignore the initial mount call
 
     root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
     expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
-    expect(calls).toEqual([[true, false]]);
+    expect(calls).toEqual([1]);
 
     root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
     expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
-    expect(calls).toEqual([
-      [true, false],
-      [false, false],
-    ]);
+    expect(calls).toEqual([1, 0]);
   });
 
-  it("opening a right tab calls setPanels with the right flag; re-clicking it calls setPanels(…, false)", () => {
+  it("opening a right tab reports one card; re-clicking it reports zero", () => {
     const { chrome, calls } = spyWindowChrome();
     const { root } = mountWithChrome(chrome);
     calls.length = 0;
 
     root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-    expect(calls).toEqual([[false, true]]);
+    expect(calls).toEqual([1]);
 
     root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-    expect(calls).toEqual([
-      [false, true],
-      [false, false],
-    ]);
+    expect(calls).toEqual([1, 0]);
   });
 
-  it("both sides can be open at once, and each is reflected independently in setPanels", () => {
+  it("both sides can be open at once, and the count reflects them together", () => {
     const { chrome, calls } = spyWindowChrome();
     const { root } = mountWithChrome(chrome);
     calls.length = 0;
@@ -736,14 +734,11 @@ describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window
 
     expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
-    expect(calls).toEqual([
-      [true, false],
-      [true, true],
-    ]);
+    expect(calls).toEqual([1, 2]);
 
-    // Closing the left side leaves the right side open, and vice versa.
+    // Closing the left side leaves the right card open (count back to one).
     root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
-    expect(calls[calls.length - 1]).toEqual([false, true]);
+    expect(calls[calls.length - 1]).toBe(1);
     expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
   });
 
@@ -783,10 +778,114 @@ describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window
 
       expect(root2.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
       expect(root2.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
-      expect(calls2).toEqual([[false, false]]);
+      expect(calls2).toEqual([0]);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("Vertical cards-on-glass composition (#151 §1/§2)", () => {
+  it("builds one transparent union (#app) with the management row and the opaque compact widget as siblings", () => {
+    const { root } = mount(1);
+    const managementRow = root.querySelector<HTMLElement>("#management-row");
+    const compact = root.querySelector<HTMLElement>("#compact-widget");
+    expect(managementRow).not.toBeNull();
+    expect(compact).not.toBeNull();
+    expect(managementRow?.parentElement).toBe(root); // #app
+    expect(compact?.parentElement).toBe(root);
+    // Default DOM order (bottom / no anchor) keeps the management row before the compact widget;
+    // CSS `order` flips it for a "top" anchor.
+    const relation = managementRow!.compareDocumentPosition(compact!);
+    expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("nests the titlebar and its export/import/mute/close controls inside the compact widget card", () => {
+    const { root } = mount(1);
+    const compact = root.querySelector<HTMLElement>("#compact-widget");
+    expect(root.querySelector("#titlebar")?.closest("#compact-widget")).toBe(compact);
+    for (const id of ["#export-save", "#import-save", "#mute-toggle", "#close-btn"]) {
+      expect(root.querySelector(id)?.closest("#compact-widget")).toBe(compact);
+    }
+    // No opaque shell wraps the union any more — the old #compact-widget-shell is gone.
+    expect(root.querySelector("#compact-widget-shell")).toBeNull();
+  });
+
+  it("collapses the management row while both cards are closed, and reveals it once one opens", () => {
+    const { root } = mount(1);
+    expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(false);
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
+  });
+});
+
+describe("Cards on glass — close interactions and drag regions (#138 §4/§5, #151 §6)", () => {
+  it("clicking the transparent glass (document.body itself) closes every open card", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    // Mount into document.body so the body-level glass-click handler has a real body to fire on.
+    document.body.innerHTML = "";
+    const root = document.createElement("main");
+    document.body.appendChild(root);
+    try {
+      mountApp(engine, root, fixtureContent, noopWindowChrome);
+      root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+      root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+      expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
+      expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
+      expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
+    } finally {
+      document.body.innerHTML = "";
+    }
+  });
+
+  it("a card's own close button closes only that card, leaving the other open", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
+
+    root.querySelector<HTMLButtonElement>("[data-close-right]")?.click();
+    expect(root.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false); // still open
+
+    root.querySelector<HTMLButtonElement>("[data-close-left]")?.click();
+    expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
+  });
+
+  it("card headers are Tauri drag regions but their close buttons are not", () => {
+    const { root } = mount(1);
+    for (const id of ["#left-panel", "#right-panel"]) {
+      const header = root.querySelector<HTMLElement>(`${id} .management-card-header`);
+      expect(header?.hasAttribute("data-tauri-drag-region")).toBe(true);
+      const closeBtn = header?.querySelector<HTMLElement>(".card-close");
+      expect(closeBtn).not.toBeNull();
+      expect(closeBtn?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    }
+  });
+
+  it("opening, switching, and closing cards never mutates the Engine's Snapshot (presentation-only)", () => {
+    const { engine, root } = mount(1);
+    // `savedAt` is re-stamped on every snapshot() call, so drop it before comparing state.
+    const stateOf = () => {
+      const { savedAt: _savedAt, ...rest } = engine.snapshot();
+      return JSON.stringify(rest);
+    };
+    const before = stateOf();
+
+    root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click(); // switch tabs
+    root.querySelector<HTMLButtonElement>("[data-close-left]")?.click();
+    root.querySelector<HTMLButtonElement>("[data-close-right]")?.click();
+
+    expect(stateOf()).toBe(before);
   });
 });
 

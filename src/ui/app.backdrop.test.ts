@@ -6,9 +6,12 @@ import { makeSnapshot } from "../core/make-snapshot";
 import { content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WindowChrome } from "./app";
+import type { WorkspaceChrome } from "./app";
 
-const noopWindowChrome: WindowChrome = { setPanels: () => {} };
+const noopWindowChrome: WorkspaceChrome = {
+  getCapacity: () => Promise.resolve(3),
+  setCardCount: () => {},
+};
 
 describe("scene backdrop (#80)", () => {
   it("prepends #backdrop, with its three parallax layers, as the first child of #scene — ahead of #sprite-row/bars/toasts in DOM order (the z-order pin, alongside styles.css's negative z-index)", () => {

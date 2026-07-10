@@ -87,9 +87,12 @@ export function workspaceRect(args: WorkspaceRectArgs): WorkspaceRectResult {
     if (center < midpoint - ANCHOR_DEADBAND) anchor = "top";
     else if (center > midpoint + ANCHOR_DEADBAND) anchor = "bottom";
     else {
+      // Inside the deadband, pick the side the cards extend *into* that has more room: a "top"
+      // anchor keeps the compact widget up top and grows cards downward, so it wants more space
+      // *below*; a "bottom" anchor grows cards upward and wants more space above. Ties use "bottom".
       const above = center - (monitor?.y ?? center);
       const below = monitor ? monitor.y + monitor.height - center : center;
-      anchor = above > below ? "top" : "bottom";
+      anchor = below > above ? "top" : "bottom";
     }
   }
   // Recover the compact point from the old union when changing open-card count, then center it.
