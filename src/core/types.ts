@@ -62,6 +62,10 @@ export interface EquipmentDef {
   kind: "equipment";
   id: string;
   name: string;
+  /** Key resolved through the UI's `src/ui/icons.ts` registry (core itself never touches the
+   * asset) — required and validated (validateContent, #78), same discipline as a weapon's
+   * attackSpeed (#90): no placeholder/fallback icon exists in the UI. */
+  icon: string;
   slot: GearSlot;
   /** Weapons only, required-by-validation (validateContent, #99): omitted on armour — see
    * ATTACK_TYPES. Combat Mode (melee/ranged/magic) is derived from this, not stored separately;
@@ -84,6 +88,8 @@ export interface FoodDef {
   kind: "food";
   id: string;
   name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
+  icon: string;
   heals: number;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
@@ -93,6 +99,8 @@ export interface CurrencyDef {
   kind: "currency";
   id: string;
   name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
+  icon: string;
 }
 
 /** A Smithing input/output ingredient (e.g. a Bar). Stackable, unequippable, uneatable; sellable
@@ -103,6 +111,8 @@ export interface MaterialDef {
   kind: "material";
   id: string;
   name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
+  icon: string;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }

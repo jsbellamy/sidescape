@@ -67,16 +67,21 @@ export const fixtureContent: Content = {
       dropTable: [{ itemId: "gold", qty: 10, chance: 1, band: "guaranteed" }],
     },
   ],
+  // icon (#78): every value below reuses a real key from src/ui/icons.ts's registry (the same
+  // keys the v1 Content in src/data/index.ts uses) rather than a fixture-only key, so UI tests
+  // that mount this Content (app.sprites.test.ts, app.backdrop.test.ts, etc.) render real icons
+  // through the same no-fallback registry lookup as production Content — never a special case.
   items: [
-    { kind: "currency", id: "gold", name: "Gold" },
-    { kind: "food", id: "meat", name: "Cooked Meat", heals: 4, value: 3 },
+    { kind: "currency", id: "gold", name: "Gold", icon: "gold" },
+    { kind: "food", id: "meat", name: "Cooked Meat", icon: "cooked-meat", heals: 4, value: 3 },
     // A second Food (#61): lets Food Slot tests exercise a swap (a slot occupied by a DIFFERENT
     // Food) independently of "meat", which most other fixtures already lean on.
-    { kind: "food", id: "bread", name: "Bread", heals: 2, value: 1 },
+    { kind: "food", id: "bread", name: "Bread", icon: "cooked-trout", heals: 2, value: 1 },
     {
       kind: "equipment",
       id: "bronze-sword",
       name: "Bronze Sword",
+      icon: "bronze-sword",
       slot: "weapon",
       attackType: "slash",
       atkBonus: 10,
@@ -89,17 +94,19 @@ export const fixtureContent: Content = {
       kind: "equipment",
       id: "lucky-charm",
       name: "Lucky Charm",
+      icon: "goblin-charm",
       slot: "head",
       def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
       value: 100,
     },
-    { kind: "material", id: "bar", name: "Test Bar", value: 5 },
+    { kind: "material", id: "bar", name: "Test Bar", icon: "bronze-bar", value: 5 },
     // Ranged/Magic fixtures (#7): same atk/str/speed as bronze-sword above, so XP-routing tests
     // can swap weapons without also changing the damage math being exercised.
     {
       kind: "equipment",
       id: "bow",
       name: "Test Bow",
+      icon: "shortbow",
       slot: "weapon",
       attackType: "ranged",
       atkBonus: 10,
@@ -112,6 +119,7 @@ export const fixtureContent: Content = {
       kind: "equipment",
       id: "staff",
       name: "Test Staff",
+      icon: "apprentice-staff",
       slot: "weapon",
       attackType: "magic",
       atkBonus: 10,

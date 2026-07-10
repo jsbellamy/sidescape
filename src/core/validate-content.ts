@@ -20,6 +20,14 @@ export function validateContent(content: Content): string[] {
     violations.push(`Content defines ${currencyCount} currency items, expected exactly 1`);
   }
 
+  // Every Item must declare a non-empty icon (#78): resolved through the UI's icons.ts registry,
+  // never a placeholder/fallback in the UI itself — same discipline as a weapon's attackSpeed.
+  for (const item of content.items) {
+    if (!item.icon) {
+      violations.push(`item "${item.id}" declares no icon`);
+    }
+  }
+
   // Weapons must declare attackSpeed (#90): the Engine's UNARMED_SPEED fallback is for the
   // truly-unarmed case (weapon slot empty), not a default for content authors to lean on.
   for (const item of content.items) {

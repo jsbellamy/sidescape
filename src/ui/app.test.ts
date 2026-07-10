@@ -62,6 +62,23 @@ function mount(seed: number) {
   return { engine, root, app };
 }
 
+/** Clicks a Bank tile to select it (#78: Equip/Sell now live in the detail strip below the grid,
+ * not inline on the tile itself), returning the tile so callers can assert on it if they want. */
+function selectBankTile(root: HTMLElement, itemId: string): HTMLElement | null {
+  const tile = root.querySelector<HTMLElement>(`#bank .tile[data-item="${itemId}"]`);
+  tile?.click();
+  return tile;
+}
+
+/** Dispatches a bubbling `mouseover` on `el` (#78's shared `#item-tooltip` hover panel is wired
+ * with delegation on the mount root, not a per-tile listener, so a real bubbling event is what
+ * the app actually reacts to — not a direct method call), then returns the tooltip element for
+ * assertions. */
+function hoverTile(root: HTMLElement, el: Element): HTMLElement | null {
+  el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  return root.querySelector<HTMLElement>("#item-tooltip");
+}
+
 describe("mountApp", () => {
   it("renders the Monster picker for every unlocked Area, gating locked ones", () => {
     const { root } = mount(1);
@@ -123,9 +140,8 @@ describe("mountApp", () => {
     expect(meatQty).toBeGreaterThan(0);
     const hpBefore = engine.snapshot().player.hp;
 
-    const meatLi = root.querySelector<HTMLLIElement>('#bank li[data-item="meat"]');
-    expect(meatLi).not.toBeNull();
-    meatLi?.click();
+    const meatTile = selectBankTile(root, "meat"); // clicking a tile only selects it (#78)
+    expect(meatTile).not.toBeNull();
 
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0).toBe(meatQty);
     expect(engine.snapshot().player.hp).toBe(hpBefore);
@@ -161,11 +177,11 @@ describe("mountApp", () => {
     const root = document.createElement("main");
     mountApp(engine, root, noValueContent, noopWindowChrome);
 
-    const meatLi = root.querySelector('#bank li[data-item="meat"]');
-    expect(meatLi?.querySelector('[data-sell="meat"]')?.textContent).toBe("Sell 3g");
+    selectBankTile(root, "meat");
+    expect(root.querySelector('#bank-detail [data-sell="meat"]')?.textContent).toBe("Sell 3g");
 
-    const charmLi = root.querySelector('#bank li[data-item="lucky-charm"]');
-    expect(charmLi?.querySelector('[data-sell="lucky-charm"]')).toBeNull();
+    selectBankTile(root, "lucky-charm");
+    expect(root.querySelector('#bank-detail [data-sell="lucky-charm"]')).toBeNull();
   });
 
   it("clicking sell sells exactly one unit of Equipment, credits gold, logs a feed line, and does not equip it", () => {
@@ -183,7 +199,10 @@ describe("mountApp", () => {
     const goldBefore = engine.snapshot().player.gold;
     expect(swordQty).toBeGreaterThan(0);
 
-    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="bronze-sword"]');
+    selectBankTile(root, "bronze-sword");
+    const sellBtn = root.querySelector<HTMLButtonElement>(
+      '#bank-detail [data-sell="bronze-sword"]',
+    );
     expect(sellBtn?.textContent).toBe("Sell 20g");
     sellBtn?.click();
 
@@ -208,7 +227,8 @@ describe("mountApp", () => {
     const meatQty = engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty ?? 0;
     const hpBefore = engine.snapshot().player.hp;
 
-    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="meat"]');
+    selectBankTile(root, "meat");
+    const sellBtn = root.querySelector<HTMLButtonElement>('#bank-detail [data-sell="meat"]');
     expect(sellBtn?.textContent).toBe("Sell 3g");
     sellBtn?.click();
 
@@ -837,7 +857,10 @@ describe("Bank", () => {
       bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
     });
 
-    const equipBtn = root.querySelector<HTMLButtonElement>('[data-equip="bronze-sword"]');
+    selectBankTile(root, "bronze-sword");
+    const equipBtn = root.querySelector<HTMLButtonElement>(
+      '#bank-detail [data-equip="bronze-sword"]',
+    );
     expect(equipBtn).not.toBeNull();
     equipBtn?.click();
 
@@ -855,17 +878,19 @@ describe("Bank", () => {
         ],
       },
     });
-    expect(root.querySelector('#bank li[data-item="meat"] [data-equip]')).toBeNull();
-    expect(root.querySelector('#bank li[data-item="bar"] [data-equip]')).toBeNull();
+    selectBankTile(root, "meat");
+    expect(root.querySelector("#bank-detail [data-equip]")).toBeNull();
+    selectBankTile(root, "bar");
+    expect(root.querySelector("#bank-detail [data-equip]")).toBeNull();
   });
 
-  it("clicking a Food row in the Bank (not the Equip/Sell buttons) does nothing — Food is eaten from the Food Slot bar, not the Bank (#61)", () => {
+  it("clicking a Food tile in the Bank (not the Equip/Sell buttons) does nothing — Food is eaten from the Food Slot bar, not the Bank (#61)", () => {
     const { engine, root } = bankMount({
       player: { hp: 5, maxHp: 10, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
       bank: { items: [{ itemId: "meat", qty: 3 }] },
     });
 
-    root.querySelector<HTMLLIElement>('#bank li[data-item="meat"]')?.click();
+    selectBankTile(root, "meat"); // selecting a tile only opens the detail strip (#78)
 
     expect(engine.snapshot().player.hp).toBe(5);
     expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
@@ -884,6 +909,7 @@ describe("Bank", () => {
           kind: "material" as const,
           id: `junk-${i}`,
           name: `Junk ${i}`,
+          icon: "bronze-bar",
           value: 1,
         })),
       ],
@@ -1033,7 +1059,10 @@ describe("Food Slot bar (#61)", () => {
     expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
     expect(engine.snapshot().bank.items).toEqual([]);
     expect(root.querySelector(".food-slot-chooser")).toBeNull(); // closed after picking
-    expect(root.querySelector('[data-eat="0"]')?.textContent).toMatch(/cooked meat.*5/i);
+    const eatTile = root.querySelector<HTMLElement>('[data-eat="0"]');
+    expect(eatTile?.dataset["item"]).toBe("meat"); // #78: icon + qty tile, not a text row
+    expect(eatTile?.querySelector("img")?.alt).toBe("Cooked Meat");
+    expect(eatTile?.querySelector(".tile-qty")?.textContent).toBe("×5");
   });
 
   it("clicking a filled slot eats one and logs a feed line", () => {
@@ -1244,10 +1273,12 @@ describe("Fishing", () => {
 });
 
 describe("Character panel (#26)", () => {
-  it("shows — for every empty Gear Slot on a fresh engine", () => {
+  it("shows an empty tile (no data-item) for every empty Gear Slot on a fresh engine", () => {
     const { root } = mount(1);
     for (const slot of ["weapon", "shield", "head", "body", "legs"]) {
-      expect(root.querySelector(`[data-slot="${slot}"] .slot-item`)?.textContent).toBe("—");
+      const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
+      expect(tile?.classList.contains("tile-empty")).toBe(true);
+      expect(tile?.dataset["item"]).toBeUndefined();
     }
   });
 
@@ -1261,30 +1292,37 @@ describe("Character panel (#26)", () => {
     );
   });
 
-  it("shows a weapon's own attack type, atk/str/speed and defence vector on its slot row", () => {
+  // #78 moved a filled slot's own stats off the always-visible row and onto the shared
+  // #item-tooltip hover panel — #99's defence-vector readout is folded in there, not deleted.
+  it("shows a weapon's own attack type, atk/str/speed and defence vector on hover", () => {
     const { engine, root, app } = mount(1);
     engine.selectMonster("dummy");
     grindFor(engine, "bronze-sword");
     engine.equip("bronze-sword");
     app.render();
 
-    const weaponRow = root.querySelector('[data-slot="weapon"]');
-    expect(weaponRow?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
-    expect(weaponRow?.querySelector(".slot-stats")?.textContent).toBe(
+    const weaponTile = root.querySelector<HTMLElement>('[data-slot="weapon"]');
+    expect(weaponTile?.dataset["item"]).toBe("bronze-sword");
+    const tooltip = hoverTile(root, weaponTile as Element);
+    expect(tooltip?.hidden).toBe(false);
+    expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Bronze Sword");
+    expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
       `slash +10 atk +30 str ${ZERO_DEF_VECTOR} spd 4t`,
     );
   });
 
-  it("shows an armor piece's defence vector only (no atk/str/speed line noise)", () => {
+  it("shows an armor piece's defence vector only (no atk/str/speed line noise) on hover", () => {
     const { engine, root, app } = mount(1);
     engine.selectMonster("dummy");
     grindFor(engine, "lucky-charm");
     engine.equip("lucky-charm");
     app.render();
 
-    const headRow = root.querySelector('[data-slot="head"]');
-    expect(headRow?.querySelector(".slot-item")?.textContent).toBe("Lucky Charm");
-    expect(headRow?.querySelector(".slot-stats")?.textContent).toBe(
+    const headTile = root.querySelector<HTMLElement>('[data-slot="head"]');
+    expect(headTile?.dataset["item"]).toBe("lucky-charm");
+    const tooltip = hoverTile(root, headTile as Element);
+    expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Lucky Charm");
+    expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
       "st 1 · sl 1 · cr 1 · rn 1 · mg 1",
     );
   });
@@ -1322,7 +1360,10 @@ describe("Equip via Bank click emits the equipped event (#26, #59)", () => {
     grindFor(engine, "bronze-sword");
     app.render();
 
-    const equipBtn = root.querySelector<HTMLButtonElement>('[data-equip="bronze-sword"]');
+    selectBankTile(root, "bronze-sword");
+    const equipBtn = root.querySelector<HTMLButtonElement>(
+      '#bank-detail [data-equip="bronze-sword"]',
+    );
     expect(equipBtn).not.toBeNull();
     equipBtn?.click();
 
@@ -1338,7 +1379,8 @@ describe("Equip via Bank click emits the equipped event (#26, #59)", () => {
     grindFor(engine, "bronze-sword");
     app.render();
 
-    root.querySelector<HTMLButtonElement>('[data-equip="bronze-sword"]')?.click();
+    selectBankTile(root, "bronze-sword");
+    root.querySelector<HTMLButtonElement>('#bank-detail [data-equip="bronze-sword"]')?.click();
 
     expect(equipped).toEqual(["bronze-sword"]);
   });
@@ -1350,18 +1392,21 @@ describe("Equip via Bank click emits the equipped event (#26, #59)", () => {
     app.render();
 
     // Before the click: still banked, and the weapon slot is empty.
-    expect(root.querySelector('#bank li[data-item="bronze-sword"]')).not.toBeNull();
-    const weaponRowBefore = root.querySelector('[data-slot="weapon"]');
-    expect(weaponRowBefore?.querySelector(".slot-item")?.textContent).toBe("—");
+    expect(root.querySelector('#bank .tile[data-item="bronze-sword"]')).not.toBeNull();
+    const weaponTileBefore = root.querySelector<HTMLElement>('[data-slot="weapon"]');
+    expect(weaponTileBefore?.classList.contains("tile-empty")).toBe(true);
 
-    root.querySelector<HTMLButtonElement>('[data-equip="bronze-sword"]')?.click();
+    selectBankTile(root, "bronze-sword");
+    root.querySelector<HTMLButtonElement>('#bank-detail [data-equip="bronze-sword"]')?.click();
 
     // The click handler calls render() itself (no explicit app.render() needed here) — the DOM
     // should already reflect the equip.
-    expect(root.querySelector('#bank li[data-item="bronze-sword"]')).toBeNull();
-    const weaponRowAfter = root.querySelector('[data-slot="weapon"]');
-    expect(weaponRowAfter?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
-    expect(weaponRowAfter?.querySelector(".slot-stats")?.textContent).toBe(
+    expect(root.querySelector('#bank .tile[data-item="bronze-sword"]')).toBeNull();
+    const weaponTileAfter = root.querySelector<HTMLElement>('[data-slot="weapon"]');
+    expect(weaponTileAfter?.dataset["item"]).toBe("bronze-sword");
+    const tooltip = hoverTile(root, weaponTileAfter as Element);
+    expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Bronze Sword");
+    expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
       "slash +10 atk +30 str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
     );
     expect(engine.snapshot().bank.items.some((s) => s.itemId === "bronze-sword")).toBe(false);
@@ -1391,7 +1436,9 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   }
 
   function bankIds(root: HTMLElement) {
-    return [...root.querySelectorAll<HTMLLIElement>("#bank li")].map((li) => li.dataset["item"]);
+    return [...root.querySelectorAll<HTMLElement>("#bank .tile")].map(
+      (tile) => tile.dataset["item"],
+    );
   }
 
   it("renders a Kind | Value | Name control row above the Bank list", () => {
@@ -1461,7 +1508,10 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
     // sorted order is now: lucky-charm, bronze-sword, meat — bronze-sword sits in the middle row.
 
-    const sellBtn = root.querySelector<HTMLButtonElement>('[data-sell="bronze-sword"]');
+    selectBankTile(root, "bronze-sword");
+    const sellBtn = root.querySelector<HTMLButtonElement>(
+      '#bank-detail [data-sell="bronze-sword"]',
+    );
     expect(sellBtn).not.toBeNull();
     sellBtn?.click();
 
@@ -1664,20 +1714,15 @@ describe("Smithing (#28)", () => {
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "bronze-sword")?.qty).toBe(1);
   });
 
-  it("a Material Bank row is neither equippable nor eatable, but still sellable", () => {
+  it("a Material Bank tile is neither equippable nor eatable, but still sellable", () => {
     const { engine, root, app } = mountWithBars(2);
     app.render();
-    const barLi = root.querySelector('#bank li[data-item="bar"]');
-    expect(barLi?.classList.contains("equippable")).toBe(false);
-    expect(barLi?.classList.contains("eatable")).toBe(false);
-    expect(barLi?.classList.contains("material")).toBe(true);
-    expect(barLi?.querySelector('[data-sell="bar"]')?.textContent).toBe("Sell 5g");
-    expect(barLi?.querySelector('[data-equip="bar"]')).toBeNull();
 
-    // Clicking the row itself (not a button) neither equips nor eats it — no HP change, no
-    // equipped/food-eaten feed line, and the Material still sits in the Bank.
     const hpBefore = engine.snapshot().player.hp;
-    (barLi as HTMLElement)?.click();
+    selectBankTile(root, "bar"); // selecting only opens the detail strip — no equip/eat side effect
+
+    expect(root.querySelector('#bank-detail [data-sell="bar"]')?.textContent).toBe("Sell 5g");
+    expect(root.querySelector('#bank-detail [data-equip="bar"]')).toBeNull();
     expect(engine.snapshot().player.hp).toBe(hpBefore);
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "bar")?.qty).toBe(2);
   });
@@ -1913,9 +1958,9 @@ describe("Save → remount round-trip (#9)", () => {
 
     // The fresh mount's DOM already reflects the restored state without any further action.
     expect(root2.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
-    const weaponRow = root2.querySelector('[data-slot="weapon"]');
-    expect(weaponRow?.querySelector(".slot-item")?.textContent).toBe("Bronze Sword");
-    expect(root2.querySelector('#bank li[data-item="bronze-sword"]')).toBeNull();
+    const weaponTile = root2.querySelector<HTMLElement>('[data-slot="weapon"]');
+    expect(weaponTile?.dataset["item"]).toBe("bronze-sword");
+    expect(root2.querySelector('#bank .tile[data-item="bronze-sword"]')).toBeNull();
     const attackXp = Math.floor(after.player.skills.attack.xp);
     expect(root2.querySelector<HTMLElement>('[data-skill="attack"]')?.title).toBe(
       `attack: ${attackXp} xp`,
@@ -1957,9 +2002,12 @@ describe("Save → remount round-trip (#9)", () => {
 
     // The fresh mount's DOM already reflects the restored Food Slot and Loot Zone without any
     // further action.
-    expect(root2.querySelector('[data-eat="0"]')?.textContent).toMatch(/cooked meat.*5/i);
+    const eatTile = root2.querySelector<HTMLElement>('[data-eat="0"]');
+    expect(eatTile?.dataset["item"]).toBe("meat");
+    expect(eatTile?.querySelector(".tile-qty")?.textContent).toBe("×5");
     expect(root2.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
     const chip = root2.querySelector<HTMLLIElement>("#loot-strip-items .loot-chip");
-    expect(chip?.textContent).toBe("Test Bar ×2");
+    expect(chip?.dataset["item"]).toBe("bar");
+    expect(chip?.querySelector(".tile-qty")?.textContent).toBe("×2");
   });
 });

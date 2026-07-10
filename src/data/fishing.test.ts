@@ -56,6 +56,7 @@ describe("Fishing content", () => {
       kind: "food",
       id: "cooked-shrimp",
       name: "Cooked Shrimp",
+      icon: "cooked-shrimp",
       heals: 3,
       value: 2,
     });

@@ -2716,6 +2716,7 @@ describe("Loot Zone (#60)", () => {
           kind: "material" as const,
           id: `junk-${i}`,
           name: `Junk ${i}`,
+          icon: "bronze-bar",
           value: 1,
         })),
       ],
