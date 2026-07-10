@@ -67,7 +67,9 @@ behaviour with DOM integration tests.
 - Preserve intentional duplication documented by an ADR. In particular,
   `STYLE_SKILL` and `STYLE_BOOST` represent separate domain facts and must stay
   separate unless a new ADR supersedes ADR-0002.
-- Assets must be CC0 and their provenance must be recorded in `docs/assets.md`.
+- **Assets** are original art following `docs/art-style.md`, generated via
+  `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with
+  provenance recorded in `docs/assets.md`.
 
 ## Commands
 
