@@ -127,9 +127,10 @@ function skillProgress(skill: SkillSnapshot): number {
 /**
  * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
  * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
- * Skills #62, Cooking #115) means adding an entry here plus a matching `[data-tab-panel]` section
- * in the `#tab-panels` markup; no other code in this file needs to change. Order here is display
- * order in the tab strip (Skills, Character, Bank, Smithing, Cooking, Loot Feed).
+ * Skills #62, Cooking #115, Crafting #116) means adding an entry here plus a matching
+ * `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this file needs to
+ * change. Order here is display order in the tab strip (Skills, Character, Bank, Smithing,
+ * Cooking, Crafting, Loot Feed).
  */
 const TABS = [
   { id: "skills", label: "Skills" },
@@ -137,6 +138,7 @@ const TABS = [
   { id: "bank", label: "Bank" },
   { id: "smithing", label: "Smithing" },
   { id: "cooking", label: "Cooking" },
+  { id: "crafting", label: "Crafting" },
   { id: "loot", label: "Loot Feed" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -508,14 +510,17 @@ export function mountApp(
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
     if (production) {
-      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115) picks its
-      // own emoji here; Crafting/Herblore pick theirs in their own slices, not authored here.
+      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115) and
+      // Crafting (#116) pick their own emoji here; Herblore picks its own in its own slice, not
+      // authored here.
       const label =
         production.skill === "smithing"
           ? "🔨 Smithing"
           : production.skill === "cooking"
             ? "🍳 Cooking"
-            : production.skill;
+            : production.skill === "crafting"
+              ? "🧵 Crafting"
+              : production.skill;
       el("#monster-name").textContent = `${label}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
@@ -745,6 +750,29 @@ export function mountApp(
       .join("");
   }
 
+  /** Renders the Crafting tab panel's recipe list (#116): mirrors renderSmithing/renderCooking
+   * exactly, filtered to `skill === "crafting"` instead — Herblore adds its own tab the same way
+   * in its own slice. */
+  function renderCrafting(bankItems: Snapshot["bank"]["items"], craftingLevel: number): void {
+    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
+    el("#crafting-recipes").innerHTML = content.recipes
+      .filter((recipe) => recipe.skill === "crafting")
+      .map((recipe) => {
+        const inputsLine = recipe.inputs
+          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
+          .join(", ");
+        const underLeveled = craftingLevel < recipe.levelReq;
+        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
+        const disabled = underLeveled || shortOnInputs;
+        return `<li data-recipe-row="${recipe.id}">
+                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
+                  <p class="recipe-inputs">${inputsLine}</p>
+                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
+                </li>`;
+      })
+      .join("");
+  }
+
   /** Dispatcher (#39): reads the latest Snapshot, then calls each per-panel renderer in turn. No
    * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
   function render(): void {
@@ -760,6 +788,7 @@ export function mountApp(
     renderBank(bank, player.gold);
     renderSmithing(bank.items, player.skills.smithing.level);
     renderCooking(bank.items, player.skills.cooking.level);
+    renderCrafting(bank.items, player.skills.crafting.level);
   }
 
   function buildPicker(): void {
@@ -895,6 +924,10 @@ export function mountApp(
         <div data-tab-panel="cooking" class="tab-panel">
           <p class="panel-title">Cooking</p>
           <ul id="cooking-recipes"></ul>
+        </div>
+        <div data-tab-panel="crafting" class="tab-panel">
+          <p class="panel-title">Crafting</p>
+          <ul id="crafting-recipes"></ul>
         </div>
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
@@ -1171,6 +1204,13 @@ export function mountApp(
   });
 
   el("#cooking-recipes").addEventListener("click", (event) => {
+    const recipeId = (event.target as HTMLElement).dataset["recipe"];
+    if (!recipeId) return;
+    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
+    render();
+  });
+
+  el("#crafting-recipes").addEventListener("click", (event) => {
     const recipeId = (event.target as HTMLElement).dataset["recipe"];
     if (!recipeId) return;
     engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription

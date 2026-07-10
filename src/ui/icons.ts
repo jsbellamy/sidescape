@@ -8,8 +8,12 @@ import cookedMeatUrl from "../assets/icons/cooked-meat.png";
 import cookedPikeUrl from "../assets/icons/cooked-pike.png";
 import cookedShrimpUrl from "../assets/icons/cooked-shrimp.png";
 import cookedTroutUrl from "../assets/icons/cooked-trout.png";
+import cowhideUrl from "../assets/icons/cowhide.png";
 import goblinCharmUrl from "../assets/icons/goblin-charm.png";
 import goldUrl from "../assets/icons/gold.png";
+import hardLeatherBodyUrl from "../assets/icons/hard-leather-body.png";
+import hardLeatherChapsUrl from "../assets/icons/hard-leather-chaps.png";
+import hardLeatherCoifUrl from "../assets/icons/hard-leather-coif.png";
 import ironBarUrl from "../assets/icons/iron-bar.png";
 import ironChainbodyUrl from "../assets/icons/iron-chainbody.png";
 import ironDaggerUrl from "../assets/icons/iron-dagger.png";
@@ -20,6 +24,8 @@ import ironShortbowUrl from "../assets/icons/iron-shortbow.png";
 import ironStaffUrl from "../assets/icons/iron-staff.png";
 import ironSwordUrl from "../assets/icons/iron-sword.png";
 import leatherBodyUrl from "../assets/icons/leather-body.png";
+import leatherChapsUrl from "../assets/icons/leather-chaps.png";
+import leatherCoifUrl from "../assets/icons/leather-coif.png";
 import mithrilChainbodyUrl from "../assets/icons/mithril-chainbody.png";
 import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
@@ -42,6 +48,8 @@ import steelMaceUrl from "../assets/icons/steel-mace.png";
 import steelShortbowUrl from "../assets/icons/steel-shortbow.png";
 import steelStaffUrl from "../assets/icons/steel-staff.png";
 import steelSwordUrl from "../assets/icons/steel-sword.png";
+import thickHideUrl from "../assets/icons/thick-hide.png";
+import wolfHideUrl from "../assets/icons/wolf-hide.png";
 
 /**
  * Item-icon registry (#78), keyed by `ItemDef.icon` (a key, not a URL — Core never touches the
@@ -100,6 +108,16 @@ const icons: Record<string, string> = {
   "raw-shrimp": rawShrimpUrl,
   "raw-trout": rawTroutUrl,
   "raw-pike": rawPikeUrl,
+  // Crafting wave (#116) hides + leather/ranged armour: hand-drawn placeholder pixel art (same
+  // escape hatch as the gap-fill maces/swords and raw catches above — see docs/assets.md).
+  cowhide: cowhideUrl,
+  "wolf-hide": wolfHideUrl,
+  "thick-hide": thickHideUrl,
+  "leather-chaps": leatherChapsUrl,
+  "leather-coif": leatherCoifUrl,
+  "hard-leather-body": hardLeatherBodyUrl,
+  "hard-leather-chaps": hardLeatherChapsUrl,
+  "hard-leather-coif": hardLeatherCoifUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

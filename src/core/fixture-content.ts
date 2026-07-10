@@ -134,6 +134,11 @@ export const fixtureContent: Content = {
     // fixture's stand-in for raw-beef/raw-shrimp/etc. "test-cook" (recipes, below) converts it
     // back to "meat" (Food), mirroring the real cook-beef/cook-shrimp/etc. Recipes.
     { kind: "material", id: "raw-fish", name: "Raw Fish", icon: "iron-bar", value: 3 },
+    // Crafting fixture (#116): stand-in for cowhide/wolf-hide/thick-hide — "test-craft" (recipes,
+    // below) converts it into "lucky-charm" (equipment), mirroring the real craft-leather-*
+    // Recipes' hide -> armour conversion. icon reuses the real "cowhide" key (registered in
+    // src/ui/icons.ts, same discipline as every other fixture item above).
+    { kind: "material", id: "hide", name: "Test Hide", icon: "cowhide", value: 2 },
     // Ranged/Magic fixtures (#7): same atk/str/speed as bronze-sword above, so XP-routing tests
     // can swap weapons without also changing the damage math being exercised.
     {
@@ -233,6 +238,19 @@ export const fixtureContent: Content = {
       levelReq: 1,
       inputs: [{ itemId: "raw-fish", qty: 1 }],
       outputItemId: "meat",
+      xp: 15,
+      craftTicks: 3,
+    },
+    // Crafting fixture (#116): converts "hide" into "lucky-charm" (equipment), mirroring the real
+    // craft-leather-body Recipe — lets Crafting-tab/XP-routing tests run without touching the real
+    // v1 Content.
+    {
+      id: "test-craft",
+      name: "Craft Vest",
+      skill: "crafting",
+      levelReq: 1,
+      inputs: [{ itemId: "hide", qty: 1 }],
+      outputItemId: "lucky-charm",
       xp: 15,
       craftTicks: 3,
     },
