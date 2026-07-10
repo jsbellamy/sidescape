@@ -637,16 +637,6 @@ export function createEngine(
     return equippedDefs().reduce((sum, def) => sum + def.def[type], 0);
   }
 
-  /** Interim monster-offence stand-in (#99): monsters don't have their own attackType yet (wave
-   * 2/4 gives them one and swaps this for `gearDef(monster.attackType)`), so until then a
-   * Monster's attack rolls against the mean of the player's five per-type defence sums, rounded
-   * down. With the uniform vectors this wave ships, every gearDef(type) is equal, so this equals
-   * today's scalar defBonus exactly — monster accuracy is unchanged. */
-  function gearDefAverage(): number {
-    const total = ATTACK_TYPES.reduce((sum, type) => sum + gearDef(type), 0);
-    return Math.floor(total / ATTACK_TYPES.length);
-  }
-
   /** Gold per unit if `def` can be sold; undefined for currency or anything without a value. */
   function sellValue(def: ItemDef): number | undefined {
     return def.kind === "currency" ? undefined : def.value;
@@ -1092,7 +1082,7 @@ export function createEngine(
     const atkRoll = attackRoll(monster.attackLevel + 8, 0);
     const defRoll = defenceRoll(
       effectiveLevel(level("defence"), "defence", state.combatStyle),
-      gearDefAverage(),
+      gearDef(monster.attackType),
     );
     const { hit, damage } = rollDamage(hitChance(atkRoll, defRoll), monster.maxHit);
     state.hp = Math.max(0, state.hp - damage);

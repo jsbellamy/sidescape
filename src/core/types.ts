@@ -140,6 +140,10 @@ export interface MonsterDef {
   maxHit: number;
   /** Ticks between monster attacks. */
   attackSpeed: number;
+  /** The Monster's own offence Attack Type (#100) — its accuracy roll routes against the player's
+   * armour Defence Vector entry for this type (`gearDef(monster.attackType)`), the mirror of the
+   * player's own routing (#99). Required, so every content site must pick one. */
+  attackType: AttackType;
   /** The bonus half of the Monster's defence roll, per Attack Type (#99) — defenceLevel stays as
    * the level half. Every Monster ships a uniform vector this wave (today's hardcoded 0); wave 4/4
    * gives real weak spots. */

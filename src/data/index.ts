@@ -47,6 +47,7 @@ export const content: Content = {
       defenceLevel: 1,
       maxHit: 1,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 2, chance: 1, band: "guaranteed" },
@@ -62,6 +63,7 @@ export const content: Content = {
       defenceLevel: 1,
       maxHit: 1,
       attackSpeed: 5,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 5, chance: 1, band: "guaranteed" },
@@ -81,6 +83,7 @@ export const content: Content = {
       defenceLevel: 3,
       maxHit: 2,
       attackSpeed: 4,
+      attackType: "slash",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 8, chance: 1, band: "guaranteed" },
@@ -100,6 +103,7 @@ export const content: Content = {
       defenceLevel: 4,
       maxHit: 3,
       attackSpeed: 5,
+      attackType: "slash",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 15, chance: 1, band: "guaranteed" },
@@ -117,6 +121,7 @@ export const content: Content = {
       defenceLevel: 8,
       maxHit: 4,
       attackSpeed: 4,
+      attackType: "stab",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 20, chance: 1, band: "guaranteed" },
@@ -135,6 +140,7 @@ export const content: Content = {
       defenceLevel: 10,
       maxHit: 5,
       attackSpeed: 5,
+      attackType: "ranged",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 25, chance: 1, band: "guaranteed" },
@@ -153,6 +159,7 @@ export const content: Content = {
       defenceLevel: 5,
       maxHit: 3,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 12, chance: 1, band: "guaranteed" }],
     },
@@ -164,6 +171,7 @@ export const content: Content = {
       defenceLevel: 8,
       maxHit: 4,
       attackSpeed: 4,
+      attackType: "slash",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 20, chance: 1, band: "guaranteed" }],
     },
@@ -177,6 +185,7 @@ export const content: Content = {
       defenceLevel: 8,
       maxHit: 6,
       attackSpeed: 5,
+      attackType: "stab",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 30, chance: 1, band: "guaranteed" },
@@ -194,6 +203,7 @@ export const content: Content = {
       defenceLevel: 16,
       maxHit: 8,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
@@ -211,6 +221,7 @@ export const content: Content = {
       defenceLevel: 20,
       maxHit: 10,
       attackSpeed: 5,
+      attackType: "stab",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
@@ -228,6 +239,7 @@ export const content: Content = {
       defenceLevel: 14,
       maxHit: 6,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 30, chance: 1, band: "guaranteed" }],
     },
@@ -241,6 +253,7 @@ export const content: Content = {
       defenceLevel: 28,
       maxHit: 12,
       attackSpeed: 4,
+      attackType: "slash",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 70, chance: 1, band: "guaranteed" }],
     },
@@ -255,6 +268,7 @@ export const content: Content = {
       defenceLevel: 44,
       maxHit: 22,
       attackSpeed: 5,
+      attackType: "magic",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },

@@ -9,7 +9,7 @@ A themed location the player selects (e.g. Lumbry Meadows, Bone Crypt). Holds se
 _Avoid_: zone, map, region
 
 **Monster**:
-An enemy inside an **Area** that the player farms. Has HP, attack/defence stats (including a per-**Attack Type** **Defence Vector**), an attack cadence in **Ticks**, and exactly one **Drop Table**.
+An enemy inside an **Area** that the player farms. Has HP, attack/defence stats (including a per-**Attack Type** **Defence Vector**), an attack cadence in **Ticks**, and exactly one **Drop Table**. Attacks the player with one **Attack Type** of its own; the player's armour **Defence Vector** opposes it, the mirror of how the player's own weapon attacks against the Monster's Defence Vector.
 _Avoid_: mob, enemy, NPC
 
 **Skill**:

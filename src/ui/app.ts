@@ -424,7 +424,8 @@ export function mountApp(
 
       const def = content.monsters.find((m) => m.id === monster.id);
       if (def) {
-        monsterStats.textContent = `Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t`;
+        const attackTypeLabel = def.attackType.charAt(0).toUpperCase() + def.attackType.slice(1);
+        monsterStats.textContent = `${attackTypeLabel} · Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t`;
         monsterStats.hidden = false;
       } else {
         monsterStats.textContent = "";
