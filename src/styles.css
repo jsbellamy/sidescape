@@ -522,6 +522,40 @@ body {
   animation: toast-in 150ms ease-out;
 }
 
+/* Offline-progress summary: unlike short combat toasts, this wraps inside the compact scene. */
+.away-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  max-width: 280px;
+  pointer-events: auto;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text);
+  text-align: left;
+  animation: toast-in 150ms ease-out;
+}
+
+.away-card-heading {
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.away-card-line {
+  margin: 0;
+}
+
+.away-card-dismiss {
+  float: right;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
 @keyframes toast-in {
   0% {
     opacity: 0;

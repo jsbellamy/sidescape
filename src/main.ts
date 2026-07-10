@@ -11,11 +11,11 @@ import { mountApp } from "./ui/app";
 import type { WorkspaceChrome } from "./ui/app";
 import { mountSfx } from "./ui/sfx";
 import {
-  buildAwaySummaryToast,
+  buildAwayCard,
   computeOfflineTicks,
   OFFLINE_CAP_TICKS,
   pumpOffline,
-  showAwaySummaryToast,
+  showAwayCard,
 } from "./ui/offline-progress";
 import { decodeSave, encodeSave } from "./ui/save-transfer";
 import type { Snapshot } from "./core/types";
@@ -217,12 +217,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // `savedAt` (pre-#69) or one saved just now both yield 0 Ticks — the pump is skipped entirely.
   const bootNow = Date.now();
   const offlineTicks = computeOfflineTicks(savedSnapshot?.savedAt, bootNow, TICK_MS);
-  let awaySummaryText: string | null = null;
+  let awayCard = null;
   if (offlineTicks > 0) {
     const awayMs = bootNow - (savedSnapshot?.savedAt as number);
     const capped = offlineTicks >= OFFLINE_CAP_TICKS;
     const summary = pumpOffline(engine, offlineTicks);
-    awaySummaryText = buildAwaySummaryToast(summary, awayMs, capped);
+    awayCard = buildAwayCard(summary, awayMs, capped);
   }
 
   const root = document.querySelector<HTMLElement>("#app");
@@ -234,8 +234,8 @@ window.addEventListener("DOMContentLoaded", () => {
   mountSfx(engine, muteToggle);
 
   // Shown only after mountApp (so #toast-container exists) and only once the pump above is fully
-  // done — one aggregate toast, never per-event Loot Feed/toast spam from the away Ticks.
-  if (awaySummaryText) showAwaySummaryToast(root, awaySummaryText);
+  // done — one aggregate card, never per-event Loot Feed/toast spam from the away Ticks.
+  if (awayCard) showAwayCard(root, awayCard);
 
   setInterval(() => {
     engine.tick();

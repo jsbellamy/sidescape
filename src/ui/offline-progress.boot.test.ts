@@ -7,11 +7,11 @@ import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
 import type { WindowChrome } from "./app";
 import {
-  buildAwaySummaryToast,
+  buildAwayCard,
   computeOfflineTicks,
   OFFLINE_CAP_TICKS,
   pumpOffline,
-  showAwaySummaryToast,
+  showAwayCard,
 } from "./offline-progress";
 
 const TICK_MS = 600;
@@ -31,15 +31,15 @@ function bootWithOfflinePump(
 ) {
   const root = document.createElement("main");
   const ticks = computeOfflineTicks(savedAt, now, TICK_MS);
-  let toastText: string | null = null;
+  let awayCard = null;
   if (ticks > 0) {
     const capped = ticks >= OFFLINE_CAP_TICKS;
     const summary = pumpOffline(engine, ticks);
-    toastText = buildAwaySummaryToast(summary, now - (savedAt as number), capped);
+    awayCard = buildAwayCard(summary, now - (savedAt as number), capped);
   }
   const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
-  if (toastText) showAwaySummaryToast(root, toastText);
-  return { root, app, ticks, toastText };
+  if (awayCard) showAwayCard(root, awayCard);
+  return { root, app, ticks, awayCard };
 }
 
 describe("offline-progress boot wiring", () => {
@@ -61,7 +61,7 @@ describe("offline-progress boot wiring", () => {
     expect(root.querySelector("#ticker")?.textContent).toBe("");
   });
 
-  it("shows exactly one toast whose text matches buildAwaySummaryToast's own output", () => {
+  it("shows exactly one card whose content matches buildAwayCard's own output", () => {
     const now = 10_000_000_000;
     const savedAt = now - 60 * 60 * 1000; // 1h ago
     const savedSnap = {
@@ -73,16 +73,16 @@ describe("offline-progress boot wiring", () => {
     const twin = createEngine(fixtureContent, seededRng(1), savedSnap);
     const ticks = computeOfflineTicks(savedAt, now, TICK_MS);
     const expectedSummary = pumpOffline(twin, ticks);
-    const expectedText = buildAwaySummaryToast(expectedSummary, now - savedAt, false);
+    const expectedCard = buildAwayCard(expectedSummary, now - savedAt, false);
 
     const engine = createEngine(fixtureContent, seededRng(1), savedSnap);
-    const { root, toastText } = bootWithOfflinePump(engine, savedAt, now);
+    const { root, awayCard } = bootWithOfflinePump(engine, savedAt, now);
 
-    expect(expectedText).not.toBeNull();
-    expect(toastText).toBe(expectedText);
-    const toasts = root.querySelectorAll("#toast-container .toast");
-    expect(toasts.length).toBe(1);
-    expect(toasts[0]?.textContent).toBe(expectedText);
+    expect(expectedCard).not.toBeNull();
+    expect(awayCard).toEqual(expectedCard);
+    const cards = root.querySelectorAll("#toast-container .away-card");
+    expect(cards.length).toBe(1);
+    expect(cards[0]?.textContent).toContain(expectedCard?.heading);
   });
 
   it("shows no toast when reopened with no elapsed time (savedAt just now)", () => {
@@ -92,11 +92,11 @@ describe("offline-progress boot wiring", () => {
       savedAt: now,
     });
 
-    const { root, ticks, toastText } = bootWithOfflinePump(engine, now, now);
+    const { root, ticks, awayCard } = bootWithOfflinePump(engine, now, now);
 
     expect(ticks).toBe(0);
-    expect(toastText).toBeNull();
-    expect(root.querySelectorAll("#toast-container .toast").length).toBe(0);
+    expect(awayCard).toBeNull();
+    expect(root.querySelectorAll("#toast-container .away-card").length).toBe(0);
   });
 
   it("shows no toast for a pre-#69 save with no savedAt at all", () => {
@@ -107,11 +107,11 @@ describe("offline-progress boot wiring", () => {
     delete legacySave["savedAt"];
     const engine = createEngine(fixtureContent, seededRng(1), legacySave as never);
 
-    const { root, ticks, toastText } = bootWithOfflinePump(engine, undefined, now);
+    const { root, ticks, awayCard } = bootWithOfflinePump(engine, undefined, now);
 
     expect(ticks).toBe(0);
-    expect(toastText).toBeNull();
-    expect(root.querySelectorAll("#toast-container .toast").length).toBe(0);
+    expect(awayCard).toBeNull();
+    expect(root.querySelectorAll("#toast-container .away-card").length).toBe(0);
   });
 
   it("clamps a very long absence to the 8h cap and labels it '8h+'", () => {
@@ -122,9 +122,9 @@ describe("offline-progress boot wiring", () => {
       savedAt,
     });
 
-    const { toastText, ticks } = bootWithOfflinePump(engine, savedAt, now);
+    const { awayCard, ticks } = bootWithOfflinePump(engine, savedAt, now);
 
     expect(ticks).toBe(OFFLINE_CAP_TICKS);
-    expect(toastText).toContain("8h+");
+    expect(awayCard?.heading).toContain("8h+");
   });
 });

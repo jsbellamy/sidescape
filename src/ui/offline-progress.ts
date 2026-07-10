@@ -26,17 +26,22 @@ export function computeOfflineTicks(
   return Math.min(Math.floor(elapsed / tickMs), OFFLINE_CAP_TICKS);
 }
 
-/** One aggregate "while you were away" tally — everything `buildAwaySummaryToast` needs, and
+/** A Skill that crossed at least one level during offline progress, paired with its final level. */
+export interface OfflineLevelUp {
+  skill: SkillName;
+  /** Final level after the offline pump, from the post-pump Snapshot. */
+  level: number;
+}
+
+/** One aggregate "while you were away" tally — everything `buildAwayCard` needs, and
  * nothing per-event: kills/level-ups/deaths are counted as they happen during the pump, while
  * gold/XP deltas are cleanest as a before/after Snapshot diff (a single pass, immune to
  * intermediate spends like auto-sold duplicates or Smithing material costs). */
 export interface OfflineSummary {
   ticks: number;
   kills: number;
-  /** Distinct Skills that leveled up at least once during the pump, in the order first crossed —
-   * a level-up toast during normal play names the Skill, so the aggregate does too, without
-   * spamming one entry per level gained. */
-  levelUpSkills: SkillName[];
+  /** Distinct Skills that leveled up at least once during the pump, in the order first crossed. */
+  levelUps: OfflineLevelUp[];
   deaths: number;
   goldDelta: number;
   xpDelta: number;
@@ -81,7 +86,7 @@ export function pumpOffline(engine: Engine, ticks: number): OfflineSummary {
   return {
     ticks,
     kills,
-    levelUpSkills,
+    levelUps: levelUpSkills.map((skill) => ({ skill, level: after.player.skills[skill].level })),
     deaths,
     goldDelta: after.player.gold - before.player.gold,
     xpDelta,
@@ -101,47 +106,78 @@ export function formatAwayDuration(ms: number, capped: boolean): string {
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
-/** Builds the one terse "while you were away" toast line, or `null` when there's nothing to show
- * (no Ticks pumped, or a pump that happened to do nothing notable — e.g. nothing was selected).
- * Order mirrors the acceptance criteria: duration, kills, level-ups, gold delta, XP delta, deaths
- * last (the rare, notable case). */
-export function buildAwaySummaryToast(
+export interface AwayCardModel {
+  heading: string;
+  lines: string[];
+}
+
+/** Builds the multi-line "while you were away" card, or `null` when there's nothing to show
+ * (no Ticks pumped, or a pump that happened to do nothing notable — e.g. nothing was selected). */
+export function buildAwayCard(
   summary: OfflineSummary,
   awayMs: number,
   capped: boolean,
-): string | null {
+): AwayCardModel | null {
   if (summary.ticks === 0) return null;
   const notable =
     summary.kills > 0 ||
-    summary.levelUpSkills.length > 0 ||
+    summary.levelUps.length > 0 ||
     summary.deaths > 0 ||
     summary.goldDelta !== 0 ||
     summary.xpDelta !== 0;
   if (!notable) return null;
 
-  const parts = [`While you were away (${formatAwayDuration(awayMs, capped)}):`];
-  if (summary.kills > 0) parts.push(`${summary.kills} kill${summary.kills === 1 ? "" : "s"}`);
-  if (summary.levelUpSkills.length > 0) {
-    parts.push(`level up: ${summary.levelUpSkills.join(", ")}`);
+  const lines: string[] = [];
+  if (summary.kills > 0) lines.push(`⚔ ${summary.kills} kill${summary.kills === 1 ? "" : "s"}`);
+  if (summary.levelUps.length > 0) {
+    const levels = summary.levelUps
+      .map(({ skill, level }) => `${skill[0]?.toUpperCase()}${skill.slice(1)} → ${level}`)
+      .join(" · ");
+    lines.push(`⭐ ${levels}`);
   }
   if (summary.goldDelta !== 0) {
-    parts.push(`${summary.goldDelta > 0 ? "+" : ""}${summary.goldDelta}g`);
+    lines.push(`🪙 ${summary.goldDelta > 0 ? "+" : ""}${summary.goldDelta}g`);
   }
-  if (summary.xpDelta > 0) parts.push(`+${Math.round(summary.xpDelta)} xp`);
-  if (summary.deaths > 0) parts.push(`${summary.deaths} death${summary.deaths === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+  if (summary.xpDelta > 0) lines.push(`✨ +${Math.round(summary.xpDelta)} xp`);
+  if (summary.deaths > 0)
+    lines.push(`💀 ${summary.deaths} death${summary.deaths === 1 ? "" : "s"}`);
+  return { heading: `While you were away (${formatAwayDuration(awayMs, capped)})`, lines };
 }
 
-/** Appends the away-summary toast to `root`'s `#toast-container`, auto-dismissing after
- * `dismissMs` — mirrors ui/app.ts's own `showLevelUpToast`, duplicated rather than imported since
- * that one is a private closure inside `mountApp`. Called once, after `mountApp` (so the
- * container exists) and after the pump (so this is the only toast the away-time ever produces). */
-export function showAwaySummaryToast(root: ParentNode, text: string, dismissMs = 6000): void {
+/** Appends the away-summary card to `root`'s `#toast-container`. The card self-dismisses after
+ * `dismissMs` or immediately on any click. Called once after `mountApp`, once the container exists. */
+export function showAwayCard(root: ParentNode, model: AwayCardModel, dismissMs = 15_000): void {
   const container = root.querySelector<HTMLElement>("#toast-container");
   if (!container) return;
-  const toast = document.createElement("div");
-  toast.className = "toast";
-  toast.textContent = text;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), dismissMs);
+  const card = document.createElement("div");
+  card.className = "away-card";
+
+  const heading = document.createElement("p");
+  heading.className = "away-card-heading";
+  heading.textContent = model.heading;
+  const dismiss = document.createElement("button");
+  dismiss.className = "away-card-dismiss";
+  dismiss.title = "Dismiss";
+  dismiss.textContent = "×";
+  heading.appendChild(dismiss);
+  card.appendChild(heading);
+
+  for (const line of model.lines) {
+    const paragraph = document.createElement("p");
+    paragraph.className = "away-card-line";
+    paragraph.textContent = line;
+    card.appendChild(paragraph);
+  }
+
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+  const removeCard = (): void => {
+    if (dismissTimer !== undefined) {
+      clearTimeout(dismissTimer);
+      dismissTimer = undefined;
+    }
+    card.remove();
+  };
+  card.addEventListener("click", removeCard);
+  container.appendChild(card);
+  dismissTimer = setTimeout(removeCard, dismissMs);
 }
