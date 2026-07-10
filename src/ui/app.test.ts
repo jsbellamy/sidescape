@@ -247,8 +247,9 @@ describe("Monster stats line", () => {
 
     const stats = root.querySelector<HTMLElement>("#monster-stats");
     expect(stats?.hidden).toBe(false);
-    // "dummy"'s attackType is "crush" (fixture-content.ts).
-    expect(stats?.textContent).toBe("Crush · Atk 1 · Def 1 · Max hit 1 · Speed 4t");
+    // "dummy"'s attackType is "crush" (fixture-content.ts); its def vector is uniform-zero, so
+    // the weak spot tie-breaks to "stab" (first in ATTACK_TYPES order).
+    expect(stats?.textContent).toBe("Crush · Atk 1 · Def 1 · Max hit 1 · Speed 4t · Weak: stab");
   });
 
   it("updates the stats line when a different Monster is selected", () => {
@@ -264,9 +265,32 @@ describe("Monster stats line", () => {
     mountApp(engine, root, fixtureContent, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
 
-    // "brute"'s attackType is "crush" too (fixture-content.ts).
+    // "brute"'s attackType is "crush" too (fixture-content.ts); same uniform-zero def vector.
     expect(root.querySelector("#monster-stats")?.textContent).toBe(
-      "Crush · Atk 40 · Def 40 · Max hit 8 · Speed 4t",
+      "Crush · Atk 40 · Def 40 · Max hit 8 · Speed 4t · Weak: stab",
+    );
+  });
+
+  it("shows the lowest def-vector entry as the weak spot, plus weakElement when the Monster declares one (#102)", () => {
+    const weakToSlashWithFire = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              def: { stab: 5, slash: 1, crush: 5, ranged: 5, magic: 5 },
+              weakElement: "fire" as const,
+            }
+          : m,
+      ),
+    };
+    const engine = createEngine(weakToSlashWithFire, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, weakToSlashWithFire, noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    expect(root.querySelector("#monster-stats")?.textContent).toBe(
+      "Crush · Atk 1 · Def 1 · Max hit 1 · Speed 4t · Weak: slash · Weak: fire",
     );
   });
 

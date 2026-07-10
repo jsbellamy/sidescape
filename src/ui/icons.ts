@@ -1,6 +1,7 @@
 import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
 import bronzeBarUrl from "../assets/icons/bronze-bar.png";
 import bronzeDaggerUrl from "../assets/icons/bronze-dagger.png";
+import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
 import bronzeShieldUrl from "../assets/icons/bronze-shield.png";
 import bronzeSwordUrl from "../assets/icons/bronze-sword.png";
 import cookedMeatUrl from "../assets/icons/cooked-meat.png";
@@ -14,23 +15,29 @@ import ironChainbodyUrl from "../assets/icons/iron-chainbody.png";
 import ironDaggerUrl from "../assets/icons/iron-dagger.png";
 import ironFullHelmUrl from "../assets/icons/iron-full-helm.png";
 import ironKiteshieldUrl from "../assets/icons/iron-kiteshield.png";
+import ironMaceUrl from "../assets/icons/iron-mace.png";
 import ironShortbowUrl from "../assets/icons/iron-shortbow.png";
 import ironStaffUrl from "../assets/icons/iron-staff.png";
+import ironSwordUrl from "../assets/icons/iron-sword.png";
 import leatherBodyUrl from "../assets/icons/leather-body.png";
 import mithrilChainbodyUrl from "../assets/icons/mithril-chainbody.png";
 import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
 import mithrilKiteshieldUrl from "../assets/icons/mithril-kiteshield.png";
+import mithrilMaceUrl from "../assets/icons/mithril-mace.png";
 import mithrilShortbowUrl from "../assets/icons/mithril-shortbow.png";
 import mithrilStaffUrl from "../assets/icons/mithril-staff.png";
+import mithrilSwordUrl from "../assets/icons/mithril-sword.png";
 import shadeBladeUrl from "../assets/icons/shade-blade.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
 import steelDaggerUrl from "../assets/icons/steel-dagger.png";
 import steelFullHelmUrl from "../assets/icons/steel-full-helm.png";
 import steelKiteshieldUrl from "../assets/icons/steel-kiteshield.png";
+import steelMaceUrl from "../assets/icons/steel-mace.png";
 import steelShortbowUrl from "../assets/icons/steel-shortbow.png";
 import steelStaffUrl from "../assets/icons/steel-staff.png";
+import steelSwordUrl from "../assets/icons/steel-sword.png";
 
 /**
  * Item-icon registry (#78), keyed by `ItemDef.icon` (a key, not a URL — Core never touches the
@@ -73,6 +80,16 @@ const icons: Record<string, string> = {
   "steel-kiteshield": steelKiteshieldUrl,
   "steel-shortbow": steelShortbowUrl,
   "steel-staff": steelStaffUrl,
+  // Gap-fill maces/swords (Combat Depth #102): placeholder pixel-art icons hand-drawn for this
+  // wave (not third-party — see docs/assets.md), tier-tinted to match the existing bronze/iron/
+  // steel/mithril palette.
+  "bronze-mace": bronzeMaceUrl,
+  "iron-mace": ironMaceUrl,
+  "iron-sword": ironSwordUrl,
+  "steel-mace": steelMaceUrl,
+  "steel-sword": steelSwordUrl,
+  "mithril-mace": mithrilMaceUrl,
+  "mithril-sword": mithrilSwordUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

@@ -166,3 +166,14 @@ materials, currency, the goblin charm accessory):
 | iron-staff       | `W_Staff04.png`            |                    |                             |
 
 </details>
+
+## Gap-fill mace/sword icons (Combat Depth #102)
+
+`bronze-mace`, `iron-mace`, `steel-mace`, `mithril-mace`, `iron-sword`, `steel-sword`, and
+`mithril-sword` (`src/assets/icons/*.png`) are **hand-drawn placeholder pixel art**, generated for
+this wave (a simple flanged-mace-head / crossguard-blade silhouette, 34×34, tier-tinted to match
+the existing bronze/iron/steel/mithril palette) — not sourced from a third-party pack, so no
+license/provenance entry is needed. They intentionally do not match the "496 pixel art icons"
+pack's style used above; swapping them for real `W_Mace0NN.png` / `W_Sword0NN.png` crops from that
+same CC0 pack (already licensed for this repo) is a follow-up, not a blocker for this wave's
+content pass.

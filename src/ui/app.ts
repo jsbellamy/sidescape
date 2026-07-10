@@ -56,6 +56,13 @@ function defVectorLabel(def: Record<AttackType, number>): string {
   return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
 }
 
+/** A Monster's weak spot (Combat Depth #102): the lowest entry in its defence vector, ties broken
+ * by ATTACK_TYPES order — UI-derived, not stored on MonsterDef (monster stats are static content,
+ * matching the W2-4 pattern of never widening Snapshot for renderable-from-Content data). */
+function weakSpot(def: Record<AttackType, number>): AttackType {
+  return ATTACK_TYPES.reduce((weakest, t) => (def[t] < def[weakest] ? t : weakest));
+}
+
 /** One line per stat on `def`: the weapon's own attack type (weapon rows only), non-zero
  * atk/str bonuses, the compact defence vector (#99, always shown — it's the piece's whole
  * defensive contribution), and the weapon's own speed for weapon-slot items. */
@@ -520,7 +527,8 @@ export function mountApp(
       const def = content.monsters.find((m) => m.id === monster.id);
       if (def) {
         const attackTypeLabel = def.attackType.charAt(0).toUpperCase() + def.attackType.slice(1);
-        monsterStats.textContent = `${attackTypeLabel} · Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t`;
+        const weakSuffix = ` · Weak: ${weakSpot(def.def)}${def.weakElement ? ` · Weak: ${def.weakElement}` : ""}`;
+        monsterStats.textContent = `${attackTypeLabel} · Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t${weakSuffix}`;
         monsterStats.hidden = false;
       } else {
         monsterStats.textContent = "";
