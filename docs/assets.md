@@ -220,3 +220,19 @@ a fur-tuft edge, `thick-hide` a darker, bulkier brown). `leather-chaps`/`leather
 uses a darker, studded variant of the same shapes to read as a visibly tougher tier. Swapping these
 for sourced CC0 crops is a follow-up, not a blocker for this wave's content pass — same note as the
 mace/sword and raw-catch icons above.
+
+## Herb and potion icons (Herblore wave, #118)
+
+`guam-herb`, `marrentill-herb`, `tarromin-herb`, `harralander-herb`, `strength-potion`,
+`attack-potion`, `fishing-potion`, and `production-potion` (`src/assets/icons/*.png`) are
+**hand-drawn placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496
+pixel art icons" pack's on-screen size) — same escape hatch as the gap-fill mace/sword, raw-catch,
+hide/leather, and gem/jewelry icons above, not sourced from a third-party pack, so no
+license/provenance entry is needed. Each herb Material is a simple stem-and-leaves sprig,
+tier-tinted (`guam-herb` bright green, `marrentill-herb` teal, `tarromin-herb` olive-yellow,
+`harralander-herb` deep green) so the four read as a progression at a glance, mirroring the gem
+icons' one-shape-per-tier approach. Each potion Item is a round-bottomed corked flask, the liquid
+fill colored to its target (`strength-potion` red, `attack-potion` orange, `fishing-potion` blue,
+`production-potion` purple) with a small highlight ellipse for a glass-shine cue. Swapping these
+for sourced CC0 crops is a follow-up, not a blocker for this wave's content pass — same note as the
+mace/sword, raw-catch, hide/leather, and gem/jewelry icons above.

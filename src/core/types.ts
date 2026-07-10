@@ -73,6 +73,15 @@ export type AutoEatThreshold = (typeof AUTO_EAT_THRESHOLDS)[number];
  * priority, 1→2→3. */
 export type FoodSlot = { itemId: string; qty: number } | null;
 
+/** The single active-potion loadout slot (#118), sibling to FoodSlot above but singular (an
+ * array of one wouldn't add anything — only one potion may ever be active, owner decision, see
+ * PotionDef's own doc). `itemId` = the potion type; `qty` = potions remaining in the slot
+ * INCLUDING the currently-open one; `charges` = charges left on the open potion. `null` = none
+ * active. Unlike a Food Slot, a potion slot is NEVER assigned-but-empty: charges hitting 0 with
+ * qty 1 clears the whole slot to null in the same Tick (see engine.ts's charge-decrement wiring),
+ * so a non-null slot always has both qty > 0 and charges > 0. */
+export type PotionSlot = { itemId: string; qty: number; charges: number } | null;
+
 /** Source of randomness; next() returns a float in [0, 1). */
 export interface Rng {
   next(): number;
@@ -140,7 +149,32 @@ export interface MaterialDef {
   value?: number;
 }
 
-export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef;
+/** A Herblore-brewed charge potion (#118): grants a `boostPct` boost to `target` — a combat
+ * SkillName raises that Skill's EFFECTIVE level (folded into `skillLevelMultiplier`, engine.ts's
+ * modifier-aggregation layer, #114), while "fishing-speed"/"production-speed" shorten that
+ * activity's action cadence (`actionSpeedMultiplier`, same layer). `charges` is how many
+ * qualifying actions ONE open potion lasts before it's consumed — see `Snapshot.player.potionSlot`
+ * for the qualifying-action rules per target kind. Only one potion may be active at a time (owner
+ * decision, grilled: "the player can only have 1 active potion at a time") via the single Potion
+ * Slot, so potions never stack with each other. */
+export interface PotionDef {
+  kind: "potion";
+  id: string;
+  name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
+  icon: string;
+  target: SkillName | "fishing-speed" | "production-speed";
+  /** Boost fraction, e.g. 0.20 = +20%. */
+  boostPct: number;
+  /** Qualifying actions one open potion lasts before it's consumed: a combat-Skill target counts
+   * a player attack (`playerAttack`), "fishing-speed" counts a catch attempt (`fishingTick`),
+   * "production-speed" counts a craft completion (`productionTick`). */
+  charges: number;
+  /** Gold per unit when sold from the Bank; omit to make it unsellable. */
+  value?: number;
+}
+
+export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef | PotionDef;
 
 export interface RecipeDef {
   id: string;
@@ -328,6 +362,10 @@ export interface Snapshot {
     /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT (3): replaces free-form
      * eat-from-Bank. See FoodSlot's own doc for the home/routing/priority rules. */
     foodSlots: FoodSlot[];
+    /** The active-potion loadout slot (#118) — see PotionSlot's own doc for the shape/rules.
+     * Tolerant load: missing/pre-#118 -> null (a save-shape slice, like foodSlots/spell before
+     * it). */
+    potionSlot: PotionSlot;
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed

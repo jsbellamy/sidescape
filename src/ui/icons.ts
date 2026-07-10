@@ -1,4 +1,5 @@
 import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
+import attackPotionUrl from "../assets/icons/attack-potion.png";
 import bronzeBarUrl from "../assets/icons/bronze-bar.png";
 import bronzeDaggerUrl from "../assets/icons/bronze-dagger.png";
 import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
@@ -12,8 +13,11 @@ import cowhideUrl from "../assets/icons/cowhide.png";
 import emeraldUrl from "../assets/icons/emerald.png";
 import emeraldAmuletUrl from "../assets/icons/emerald-amulet.png";
 import emeraldRingUrl from "../assets/icons/emerald-ring.png";
+import fishingPotionUrl from "../assets/icons/fishing-potion.png";
 import goblinCharmUrl from "../assets/icons/goblin-charm.png";
 import goldUrl from "../assets/icons/gold.png";
+import guamHerbUrl from "../assets/icons/guam-herb.png";
+import harralanderHerbUrl from "../assets/icons/harralander-herb.png";
 import hardLeatherBodyUrl from "../assets/icons/hard-leather-body.png";
 import hardLeatherChapsUrl from "../assets/icons/hard-leather-chaps.png";
 import hardLeatherCoifUrl from "../assets/icons/hard-leather-coif.png";
@@ -29,6 +33,7 @@ import ironSwordUrl from "../assets/icons/iron-sword.png";
 import leatherBodyUrl from "../assets/icons/leather-body.png";
 import leatherChapsUrl from "../assets/icons/leather-chaps.png";
 import leatherCoifUrl from "../assets/icons/leather-coif.png";
+import marrentillHerbUrl from "../assets/icons/marrentill-herb.png";
 import mithrilChainbodyUrl from "../assets/icons/mithril-chainbody.png";
 import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
@@ -37,6 +42,7 @@ import mithrilMaceUrl from "../assets/icons/mithril-mace.png";
 import mithrilShortbowUrl from "../assets/icons/mithril-shortbow.png";
 import mithrilStaffUrl from "../assets/icons/mithril-staff.png";
 import mithrilSwordUrl from "../assets/icons/mithril-sword.png";
+import productionPotionUrl from "../assets/icons/production-potion.png";
 import rawBeefUrl from "../assets/icons/raw-beef.png";
 import rawPikeUrl from "../assets/icons/raw-pike.png";
 import rawShrimpUrl from "../assets/icons/raw-shrimp.png";
@@ -57,6 +63,8 @@ import steelMaceUrl from "../assets/icons/steel-mace.png";
 import steelShortbowUrl from "../assets/icons/steel-shortbow.png";
 import steelStaffUrl from "../assets/icons/steel-staff.png";
 import steelSwordUrl from "../assets/icons/steel-sword.png";
+import strengthPotionUrl from "../assets/icons/strength-potion.png";
+import tarrominHerbUrl from "../assets/icons/tarromin-herb.png";
 import thickHideUrl from "../assets/icons/thick-hide.png";
 import wolfHideUrl from "../assets/icons/wolf-hide.png";
 
@@ -139,6 +147,17 @@ const icons: Record<string, string> = {
   "emerald-ring": emeraldRingUrl,
   "ruby-amulet": rubyAmuletUrl,
   "ruby-ring": rubyRingUrl,
+  // Herblore wave (#118): herb Materials + charge potions, hand-drawn placeholder pixel art (same
+  // escape hatch as the gap-fill mace/sword, raw-catch, hide/leather, and gem/jewelry icons above
+  // — see docs/assets.md).
+  "guam-herb": guamHerbUrl,
+  "marrentill-herb": marrentillHerbUrl,
+  "tarromin-herb": tarrominHerbUrl,
+  "harralander-herb": harralanderHerbUrl,
+  "strength-potion": strengthPotionUrl,
+  "attack-potion": attackPotionUrl,
+  "fishing-potion": fishingPotionUrl,
+  "production-potion": productionPotionUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
-import { __setModifierSourcesForTest, createEngine } from "./engine";
+import { __setModifierSourcesForTest, createEngine, UNARMED_SPEED } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
@@ -2055,6 +2055,66 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
         }),
       ),
     ).not.toThrow();
+  });
+
+  it("a missing player.potionSlot (pre-#118 save) loads null", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot());
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+  });
+
+  it("player.potionSlot naming an unknown itemId loads null", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { potionSlot: { itemId: "unobtainium", qty: 5, charges: 3 } },
+      }),
+    );
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+  });
+
+  it("player.potionSlot naming a non-Potion item (e.g. Food) loads null", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { potionSlot: { itemId: "meat", qty: 5, charges: 3 } } }),
+    );
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+  });
+
+  it("player.potionSlot with a non-positive qty or charges loads null", () => {
+    const zeroQty = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { potionSlot: { itemId: "strength-potion", qty: 0, charges: 3 } },
+      }),
+    );
+    expect(zeroQty.snapshot().player.potionSlot).toBeNull();
+
+    const zeroCharges = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { potionSlot: { itemId: "strength-potion", qty: 5, charges: 0 } },
+      }),
+    );
+    expect(zeroCharges.snapshot().player.potionSlot).toBeNull();
+  });
+
+  it("a valid player.potionSlot loads normally alongside the rest of the sweep", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { potionSlot: { itemId: "strength-potion", qty: 4, charges: 2 } },
+      }),
+    );
+    expect(engine.snapshot().player.potionSlot).toEqual({
+      itemId: "strength-potion",
+      qty: 4,
+      charges: 2,
+    });
   });
 
   it("a valid Snapshot still round-trips unchanged (no behavioural change for clean saves)", () => {
@@ -4736,5 +4796,333 @@ describe("Modifier-aggregation layer (#114)", () => {
     const boosted = catchesOver(60);
 
     expect(boosted).toBeGreaterThan(baseline);
+  });
+});
+
+/**
+ * Herblore + charge potions (#118): the Potion Slot mirrors Active Food Slots (#61) but singular
+ * — see PotionSlot's own doc (types.ts). fixtureContent's "strength-potion" (target "strength",
+ * boostPct 0.2, charges 3) and "fishing-potion" (target "fishing-speed", boostPct 0.5, charges 3)
+ * exercise the two qualifying-action kinds independently; "production-potion" (target
+ * "production-speed", same shape) covers the third. "herb" + the "test-brew" Recipe (skill
+ * "herblore") exercise the Herblore Recipe chassis itself.
+ */
+describe("Herblore and Potion Slot (#118)", () => {
+  describe("assignPotionSlot", () => {
+    it("moves the entire Bank stock into the slot, opening it with the PotionDef's charges", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 5 }] } }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "strength-potion",
+        qty: 5,
+        charges: 3,
+      });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("throws for an unknown itemId or a non-Potion item", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+      );
+      expect(() => engine.assignPotionSlot("unobtainium")).toThrow(/potion/i);
+      expect(() => engine.assignPotionSlot("meat")).toThrow(/potion/i);
+    });
+
+    it("throws when the Bank holds zero of the Potion", () => {
+      const engine = freshEngine();
+      expect(() => engine.assignPotionSlot("strength-potion")).toThrow(/own/i);
+    });
+
+    it("re-assigning the same potion type tops up qty, keeping the open one's remaining charges", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "strength-potion", qty: 4 }] },
+          player: { potionSlot: { itemId: "strength-potion", qty: 2, charges: 1 } },
+        }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      // qty adds (2 + 4 = 6); charges stays at the already-open potion's remaining 1 — no reset,
+      // the buff (and its drain progress) carries through unbroken.
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "strength-potion",
+        qty: 6,
+        charges: 1,
+      });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("swap: assigning a DIFFERENT potion consumes the open one (qty-1 returns to the Bank)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "fishing-potion", qty: 2 }] },
+          player: { potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 } },
+        }),
+      );
+      engine.assignPotionSlot("fishing-potion");
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "fishing-potion",
+        qty: 2,
+        charges: 3,
+      });
+      // The open strength-potion (charges 2, still > 0) is consumed/wasted; qty-1 = 2 return.
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "strength-potion", qty: 2 }]);
+    });
+
+    it('a bank-full swap throws "bank is full", mutating nothing', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bar", qty: 1 },
+              { itemId: "fishing-potion", qty: 2 },
+            ],
+            capacity: 1,
+          },
+          player: { potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 } },
+        }),
+      );
+      expect(() => engine.assignPotionSlot("fishing-potion")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "strength-potion",
+        qty: 3,
+        charges: 2,
+      });
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bar", qty: 1 },
+          { itemId: "fishing-potion", qty: 2 },
+        ]),
+      );
+    });
+  });
+
+  describe("unassignPotionSlot", () => {
+    it("consumes the open potion, returning qty-1 to the Bank, and clears the slot to null", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { potionSlot: { itemId: "strength-potion", qty: 5, charges: 2 } } }),
+      );
+      engine.unassignPotionSlot();
+      expect(engine.snapshot().player.potionSlot).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "strength-potion", qty: 4 }]);
+    });
+
+    it("a qty-1 slot unassigns to an empty Bank entry (nothing returns)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { potionSlot: { itemId: "strength-potion", qty: 1, charges: 2 } } }),
+      );
+      engine.unassignPotionSlot();
+      expect(engine.snapshot().player.potionSlot).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("is a harmless no-op when already null", () => {
+      const engine = freshEngine();
+      expect(() => engine.unassignPotionSlot()).not.toThrow();
+      expect(engine.snapshot().player.potionSlot).toBeNull();
+    });
+
+    it('throws "bank is full" when the returning stock needs a new Bank Slot at capacity', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          player: { potionSlot: { itemId: "strength-potion", qty: 5, charges: 2 } },
+        }),
+      );
+      expect(() => engine.unassignPotionSlot()).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "strength-potion",
+        qty: 5,
+        charges: 2,
+      });
+    });
+  });
+
+  describe("charge decrement (the tick side)", () => {
+    it("a combat-Skill-target potion decrements once per resolved player attack", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      // "control-dummy": never dies, never attacks back — isolates the player's own attack cadence.
+      engine.selectMonster("control-dummy");
+      for (let i = 0; i < UNARMED_SPEED; i++) engine.tick(); // one resolved player attack
+      expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
+    });
+
+    it('auto-continues from the stack: charges hitting 0 with qty>1 consumes one and reopens with fresh charges ("buff stays unbroken")', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 2 }] } }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      engine.selectMonster("control-dummy");
+      for (let i = 0; i < UNARMED_SPEED * 3; i++) engine.tick(); // 3 resolved player attacks
+      // charges: 3 -> 2 -> 1 -> 0 on the 3rd attack; qty 2 > 1, so it auto-continues: qty 1,
+      // charges reset to the PotionDef's own 3 — the buff (still target "strength") never lapses.
+      expect(engine.snapshot().player.potionSlot).toEqual({
+        itemId: "strength-potion",
+        qty: 1,
+        charges: 3,
+      });
+    });
+
+    it("clears to null: charges hitting 0 with qty===1 ends the buff", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      engine.selectMonster("control-dummy");
+      for (let i = 0; i < UNARMED_SPEED * 3; i++) engine.tick(); // 3 resolved player attacks
+      expect(engine.snapshot().player.potionSlot).toBeNull();
+    });
+
+    it("a fishing-speed potion decrements once per catch ATTEMPT (fishingTick), regardless of the catch roll", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "fishing-potion", qty: 1 }] } }),
+      );
+      engine.assignPotionSlot("fishing-potion");
+      engine.selectFishingSpot("pond"); // catchTicks 3, catchChance 1 — always succeeds
+      for (let i = 0; i < 3; i++) engine.tick(); // one catch attempt
+      expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
+    });
+
+    it("a production-speed potion decrements once per craft COMPLETION (productionTick), for any Recipe's skill", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bar", qty: 5 },
+              { itemId: "production-potion", qty: 1 },
+            ],
+          },
+        }),
+      );
+      engine.assignPotionSlot("production-potion");
+      engine.selectRecipe("test-sword"); // skill "smithing" — the wiring is skill-agnostic
+      for (let i = 0; i < 3; i++) engine.tick(); // one craft completion (craftTicks 3)
+      expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
+    });
+
+    it("a potion whose target doesn't match the current activity never drains (a Strength potion untouched while fishing)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
+      );
+      engine.assignPotionSlot("strength-potion");
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < 30; i++) engine.tick(); // several catch attempts
+      expect(engine.snapshot().player.potionSlot?.charges).toBe(3); // never ticked down
+    });
+  });
+
+  describe("feeds the modifier-aggregation layer (#114)", () => {
+    it("an active Strength potion raises the observed player max hit in melee combat", () => {
+      function meleeDamages(withPotion: boolean, ticks = 1000): number[] {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(99),
+          makeSnapshot({
+            player: {
+              skills: {
+                attack: { level: 90, xp: xpForLevel(90) },
+                strength: { level: 90, xp: xpForLevel(90) },
+                hitpoints: { level: 20, xp: xpForLevel(20) },
+              },
+            },
+            // A huge stack so the buff never lapses mid-sample (250-ish attacks over 1000 Ticks
+            // unarmed, well under charges 3 * qty 1000 worth of auto-continues).
+            bank: { items: withPotion ? [{ itemId: "strength-potion", qty: 1000 }] : [] },
+          }),
+        );
+        if (withPotion) engine.assignPotionSlot("strength-potion");
+        // "control-dummy": never dies (so damage never clamps to remaining Monster HP) and never
+        // attacks back, isolating the player's own max-hit ceiling.
+        engine.selectMonster("control-dummy");
+        const damages: number[] = [];
+        engine.on("attack", (e) => {
+          if (e.actor === "player") damages.push(e.damage);
+        });
+        for (let i = 0; i < ticks; i++) engine.tick();
+        expect(damages.length).toBeGreaterThan(0);
+        return damages;
+      }
+
+      const baseline = meleeDamages(false);
+      const boosted = meleeDamages(true);
+
+      // maxHit(101, 0) = 10 at ×1 (baseline); floor(101 * 1.2) = 121 -> maxHit(121, 0) = 12 with
+      // the potion's own boostPct 0.2 active — mirrors the #114 suite's own worked example above,
+      // now fed by a real potion source instead of the test-only seam.
+      expect(Math.max(...baseline)).toBe(10);
+      expect(Math.max(...boosted)).toBe(12);
+    });
+
+    it("an active fishing-speed potion shortens the Catch cadence", () => {
+      function catchesOver(withPotion: boolean, ticks = 60): number {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(1),
+          makeSnapshot({
+            bank: { items: withPotion ? [{ itemId: "fishing-potion", qty: 1000 }] : [] },
+          }),
+        );
+        if (withPotion) engine.assignPotionSlot("fishing-potion");
+        let caught = 0;
+        engine.on("fish-caught", () => caught++);
+        engine.selectFishingSpot("pond");
+        for (let i = 0; i < ticks; i++) engine.tick();
+        return caught;
+      }
+
+      const baseline = catchesOver(false);
+      const boosted = catchesOver(true);
+
+      expect(boosted).toBeGreaterThan(baseline);
+    });
+  });
+
+  describe("Herblore Recipe chassis", () => {
+    it("a herblore Recipe crafts a Potion and grants Herblore XP", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "herb", qty: 1 }] } }),
+      );
+      engine.selectRecipe("test-brew"); // skill "herblore", levelReq 1, craftTicks 3, xp 20
+      for (let i = 0; i < 3; i++) engine.tick();
+      const snap = engine.snapshot();
+      expect(snap.bank.items).toEqual(
+        expect.arrayContaining([{ itemId: "strength-potion", qty: 1 }]),
+      );
+      expect(snap.player.skills.herblore.xp).toBe(20);
+    });
   });
 });

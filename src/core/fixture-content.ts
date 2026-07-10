@@ -194,6 +194,42 @@ export const fixtureContent: Content = {
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       value: 40,
     },
+    // Herblore fixtures (#118): "herb" stands in for a real herb Material (e.g. guam-herb),
+    // "strength-potion"/"fishing-potion" for real charge potions — lets Potion-Slot/charge-
+    // decrement/modifier-feed tests run without touching the real v1 Content. Two targets (a
+    // combat Skill and "fishing-speed") so tests can exercise both qualifying-action kinds
+    // independently. icon reuses real icons.ts keys, same discipline as every other fixture item.
+    { kind: "material", id: "herb", name: "Test Herb", icon: "sapphire", value: 4 },
+    {
+      kind: "potion",
+      id: "strength-potion",
+      name: "Test Strength Potion",
+      icon: "emerald",
+      target: "strength",
+      boostPct: 0.2,
+      charges: 3,
+      value: 10,
+    },
+    {
+      kind: "potion",
+      id: "fishing-potion",
+      name: "Test Fishing Potion",
+      icon: "ruby",
+      target: "fishing-speed",
+      boostPct: 0.5,
+      charges: 3,
+      value: 10,
+    },
+    {
+      kind: "potion",
+      id: "production-potion",
+      name: "Test Production Potion",
+      icon: "wolf-hide",
+      target: "production-speed",
+      boostPct: 0.5,
+      charges: 3,
+      value: 10,
+    },
   ],
   fishingSpots: [
     // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting. itemId is a
@@ -279,6 +315,18 @@ export const fixtureContent: Content = {
       inputs: [{ itemId: "hide", qty: 1 }],
       outputItemId: "lucky-charm",
       xp: 15,
+      craftTicks: 3,
+    },
+    // Herblore fixture (#118): converts "herb" into "strength-potion" — mirrors test-cook/
+    // test-craft's role for their own Skills.
+    {
+      id: "test-brew",
+      name: "Brew Strength Potion",
+      skill: "herblore",
+      levelReq: 1,
+      inputs: [{ itemId: "herb", qty: 1 }],
+      outputItemId: "strength-potion",
+      xp: 20,
       craftTicks: 3,
     },
   ],

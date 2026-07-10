@@ -572,7 +572,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Crafting, Loot Feed — none active and the right panel closed by default", () => {
+  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Crafting, Herblore, Loot Feed — none active and the right panel closed by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
@@ -582,6 +582,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
       "Smithing",
       "Cooking",
       "Crafting",
+      "Herblore",
       "Loot Feed",
     ]);
 
@@ -1985,6 +1986,159 @@ describe("Crafting (#116)", () => {
     expect(engine.snapshot().player.skills.crafting.xp).toBeGreaterThan(0);
     expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "lucky-charm")?.qty).toBe(1);
+  });
+});
+
+describe("Herblore (#118)", () => {
+  function mountWithHerb(qty: number, seed = 1) {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(seed),
+      makeSnapshot({ bank: { items: [{ itemId: "herb", qty }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    return { engine, root, app };
+  }
+
+  it("renders a Herblore recipe row for the fixture's test-brew Recipe, with level req and owned counts", () => {
+    const { root } = mountWithHerb(0);
+    root.querySelector<HTMLButtonElement>('[data-tab="herblore"]')?.click();
+
+    const row = root.querySelector('[data-recipe-row="test-brew"]');
+    expect(row?.textContent).toContain("Brew Strength Potion");
+    expect(row?.textContent).toContain("Lvl 1");
+    expect(row?.textContent).toContain("1× Test Herb (have 0)");
+  });
+
+  it("disables the Craft button when short on inputs, enables it once inputs are sufficient", () => {
+    const short = mountWithHerb(0);
+    expect(short.root.querySelector<HTMLButtonElement>('[data-recipe="test-brew"]')?.disabled).toBe(
+      true,
+    );
+
+    const enough = mountWithHerb(1);
+    expect(
+      enough.root.querySelector<HTMLButtonElement>('[data-recipe="test-brew"]')?.disabled,
+    ).toBe(false);
+  });
+
+  it("clicking Craft starts the Recipe, showing the Herblore scene (🧪) and hiding the Monster HP bar/sprite", () => {
+    const { root } = mountWithHerb(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-brew"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe(
+      "🧪 Herblore: Brew Strength Potion",
+    );
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector("#monster-sprite") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("shows the cauldron foreground prop while Herblore is active", () => {
+    const { root } = mountWithHerb(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-brew"]')?.click();
+
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe("prop-cauldron");
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
+  });
+
+  it("logs a feed line and grants Herblore XP (never Smithing) when a craft completes, banking a Potion", () => {
+    const { engine, root, app } = mountWithHerb(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-brew"]')?.click();
+
+    for (let i = 0; i < 3; i++) engine.tick(); // test-brew.craftTicks === 3
+    app.render();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/crafted.*strength potion/i);
+    expect(engine.snapshot().player.skills.herblore.xp).toBeGreaterThan(0);
+    expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "strength-potion")?.qty).toBe(1);
+  });
+});
+
+describe("Potion Slot tile (#118)", () => {
+  function potionMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    // The Potion Slot lives on the Character tab panel (#118) — open it, mirroring how a real
+    // user would reach it (the panel is hidden by default, #62).
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
+    return { engine, root, app };
+  }
+
+  it("an empty slot shows a [+] that opens a chooser listing only the Bank's Potion stacks", () => {
+    const { root } = potionMount({
+      bank: {
+        items: [
+          { itemId: "strength-potion", qty: 5 },
+          { itemId: "fishing-potion", qty: 2 },
+          { itemId: "meat", qty: 1 }, // Food — must never show up as a Potion choice
+          { itemId: "bar", qty: 1 }, // a Material — must never show up as a Potion choice
+        ],
+      },
+    });
+    expect(root.querySelector("[data-potion-add]")).not.toBeNull();
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull(); // closed by default
+
+    root.querySelector<HTMLButtonElement>("[data-potion-add]")?.click();
+
+    const chooser = root.querySelector(".potion-slot-chooser");
+    expect(chooser).not.toBeNull();
+    expect(chooser?.querySelector('[data-potion-assign="strength-potion"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-potion-assign="fishing-potion"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-potion-assign="meat"]')).toBeNull();
+    expect(chooser?.querySelector('[data-potion-assign="bar"]')).toBeNull();
+  });
+
+  it("an empty slot's chooser shows a hint when the Bank has no Potions at all", () => {
+    const { root } = potionMount();
+    root.querySelector<HTMLButtonElement>("[data-potion-add]")?.click();
+    expect(root.querySelector(".potion-slot-chooser .hint")?.textContent).toMatch(/no potions/i);
+  });
+
+  it("re-clicking the same [+] dismisses the chooser without assigning", () => {
+    const { root } = potionMount({ bank: { items: [{ itemId: "strength-potion", qty: 5 }] } });
+    root.querySelector<HTMLButtonElement>("[data-potion-add]")?.click();
+    expect(root.querySelector(".potion-slot-chooser")).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>("[data-potion-add]")?.click();
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull();
+  });
+
+  it("picking a Potion from the chooser assigns it (moving the whole Bank stock, opening at full charges) and closes the chooser", () => {
+    const { engine, root } = potionMount({
+      bank: { items: [{ itemId: "strength-potion", qty: 5 }] },
+    });
+    root.querySelector<HTMLButtonElement>("[data-potion-add]")?.click();
+    root.querySelector<HTMLButtonElement>('[data-potion-assign="strength-potion"]')?.click();
+
+    expect(engine.snapshot().player.potionSlot).toEqual({
+      itemId: "strength-potion",
+      qty: 5,
+      charges: 3,
+    });
+    expect(engine.snapshot().bank.items).toEqual([]);
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull(); // closed after picking
+
+    const filledTile = root.querySelector<HTMLElement>(
+      '.potion-slot-tile.filled .tile[data-item="strength-potion"]',
+    );
+    expect(filledTile?.querySelector("img")?.alt).toBe("Test Strength Potion");
+    expect(filledTile?.querySelector(".tile-qty")?.textContent).toBe("×5");
+    expect(root.querySelector(".potion-slot-charges")?.textContent).toBe("3/3");
+  });
+
+  it("clicking ✕ unassigns the slot, consuming the open potion and returning qty-1 to the Bank", () => {
+    const { engine, root } = potionMount({
+      player: { potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 } },
+    });
+
+    root.querySelector<HTMLButtonElement>("[data-potion-unassign]")?.click();
+
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "strength-potion", qty: 2 }]);
+    expect(root.querySelector("[data-potion-add]")).not.toBeNull(); // now renders as empty
   });
 });
 

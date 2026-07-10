@@ -16,6 +16,7 @@ import type {
   FoodSlot,
   ItemDef,
   MonsterDef,
+  PotionSlot,
   RecipeDef,
   SpellDef,
   CombatStyle,
@@ -86,6 +87,9 @@ interface State {
   /** The Active Food Slot loadout (#61), fixed length FOOD_SLOT_COUNT; see FoodSlot's own doc
    * (types.ts) for the home/routing/priority rules. */
   foodSlots: FoodSlot[];
+  /** The active-potion loadout slot (#118) — see PotionSlot's own doc (types.ts) for the
+   * shape/qualifying-action rules. */
+  potionSlot: PotionSlot;
   activity: Activity;
   /** The player's currency balance (#59) — gold stopped being an item stack; the Bank below is
    * the sole store for every other Item. */
@@ -136,6 +140,21 @@ export interface Engine {
   /** Eats one unit from Food Slot `slotIndex` (no-overheal, same math as the old `eatFood`).
    * Throws on an out-of-range index, or a `null`/qty-0 slot. */
   eatFromSlot(slotIndex: number): void;
+  /** Assigns `itemId` (must be a Potion the player owns) to the single Potion Slot (#118): moves
+   * the entire Bank stock into the slot and opens one (`qty` = the moved stock, `charges` =
+   * `PotionDef.charges`) — mirrors `assignFoodSlot`'s "the slot is that Item's home" shape, but
+   * singular. Re-assigning the SAME potion type already open tops up `qty` in place (the open
+   * potion's remaining `charges` are kept, buff stays unbroken) rather than wasting it. If a
+   * DIFFERENT potion is already open with `charges > 0`, that potion is consumed/wasted first and
+   * `qty - 1` of it returns to the Bank (owner decision, grilled: "if a player swaps a potion
+   * while there are charges left, it also consumes the potion") — same bank-full throw as
+   * `assignFoodSlot`'s swap if that return needs a new Bank Slot. Throws on an unknown/non-Potion
+   * itemId or zero owned. */
+  assignPotionSlot(itemId: string): void;
+  /** Clears the Potion Slot back to `null`: the open potion is consumed/wasted (same rule as a
+   * swap above) and `qty - 1` of it returns to the Bank (same bank-full throw as
+   * `assignFoodSlot`'s unassign). No-op if the slot is already `null`. */
+  unassignPotionSlot(): void;
   sell(itemId: string, qty?: number): void;
   buyBankSlots(): void;
   /** Sweeps the Loot Zone into the Bank on demand (#60) — the same sweep auto-loot runs on
@@ -267,6 +286,7 @@ function freshState(_content: Content): State {
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
     autoSellDuplicates: DEFAULT_AUTO_SELL_DUPLICATES,
     foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
+    potionSlot: null,
     activity: null,
     gold: 0,
     bank: new Map(),
@@ -356,6 +376,22 @@ function loadFoodSlots(saved: Snapshot, content: Content): FoodSlot[] {
     slots.push({ itemId: def.id, qty: validQty });
   }
   return slots;
+}
+
+/** Tolerant load of `player.potionSlot` (#118): missing/pre-#118 -> null (a save-shape slice,
+ * same tolerance as `foodSlots`/`spell` before it). An itemId that doesn't resolve to a PotionDef
+ * -> null. qty/charges are coerced to finite positive integers; unlike a Food Slot, a Potion Slot
+ * is NEVER assigned-but-empty (see PotionSlot's own doc), so a non-positive qty OR charges both
+ * collapse the whole slot to null rather than loading a partially-valid one. */
+function loadPotionSlot(saved: Snapshot, content: Content): PotionSlot {
+  const raw = saved.player?.potionSlot as
+    { itemId?: unknown; qty?: unknown; charges?: unknown } | null | undefined;
+  if (!raw) return null;
+  const itemId: unknown = raw.itemId;
+  const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+  if (def?.kind !== "potion") return null;
+  if (!isPositiveIntQty(raw.qty) || !isPositiveIntQty(raw.charges)) return null;
+  return { itemId: def.id, qty: raw.qty, charges: raw.charges };
 }
 
 /** True for a finite positive integer — the shared qty validity check every loadState migration
@@ -573,6 +609,7 @@ function loadState(saved: Snapshot, content: Content): State {
       : DEFAULT_AUTO_EAT_THRESHOLD,
     autoSellDuplicates: loadAutoSellDuplicates(saved),
     foodSlots: loadFoodSlots(saved, content),
+    potionSlot: loadPotionSlot(saved, content),
     activity,
     gold,
     bank,
@@ -587,10 +624,9 @@ function loadState(saved: Snapshot, content: Content): State {
 
 /**
  * Modifier-aggregation layer (#114): the single place that collects percentage boosts from every
- * active source — active potion (#F), owned pets (#H), later gear upgrades (#67) — and folds them
- * into effective Skill levels and action speeds before combat math and tick cadence ever see them.
- * `pct` is a fraction (0.2 == +20%). Sources this wave: none (see `activeModifierSources` below),
- * so both aggregators resolve to the ×1 identity everywhere they're applied.
+ * active source — the active potion (#118), owned pets (#H), later gear upgrades (#67) — and
+ * folds them into effective Skill levels and action speeds before combat math and tick cadence
+ * ever see them. `pct` is a fraction (0.2 == +20%).
  */
 type ModifierTarget = SkillName | "fishing-speed" | "production-speed";
 interface ModifierSource {
@@ -598,43 +634,19 @@ interface ModifierSource {
   pct: number;
 }
 
-/** Backing list for `activeModifierSources` below. Empty this wave (#114); mutable only through
- * the test-only seam (`__setModifierSourcesForTest`) until #F/#H push real sources here. */
+/** Test-only extra sources folded into every `createEngine` instance's `activeModifierSources()`
+ * (below) on top of that instance's own real potion source. Empty in production; mutable only
+ * through the test-only seam (`__setModifierSourcesForTest`) until #H pushes owned-pet sources
+ * here too. */
 const modifierSources: ModifierSource[] = [];
 
 /** Test-only injection seam for the modifier-aggregation layer (#114) — pushes a `ModifierSource`
- * onto `activeModifierSources()` without exposing any other Engine internal. Not part of the
- * public Engine API (no `createEngine` instance carries or needs it); production code never calls
- * this. #F/#H's own real sources replace `activeModifierSources`'s body once built. */
+ * onto every engine instance's `activeModifierSources()` without exposing any other Engine
+ * internal. Not part of the public Engine API (no `createEngine` instance carries or needs it);
+ * production code never calls this. #H's own real pet sources replace this seam once built. */
 export function __setModifierSourcesForTest(sources: ModifierSource[]): void {
   modifierSources.length = 0;
   modifierSources.push(...sources);
-}
-
-/** Every currently-active modifier. Empty this wave (#114): #F appends the active potion, #H
- * appends owned pets.
- * #F/#H append here */
-function activeModifierSources(): ModifierSource[] {
-  return modifierSources;
-}
-
-/** Aggregate level multiplier for a Skill: 1 + Σ(source boost fractions targeting it). Applied in
- * `playerAccuracyAndMaxHit` to every combat effective level (magic max hit excepted — it's
- * spell-driven, not Strength-derived). */
-function skillLevelMultiplier(skill: SkillName): number {
-  let bonus = 0;
-  for (const src of activeModifierSources()) if (src.target === skill) bonus += src.pct;
-  return 1 + bonus;
-}
-
-/** Aggregate speed multiplier for an action kind (fishing catch, production craft): the factor an
- * action's tick cost is DIVIDED by when its cooldown re-arms (a faster action = larger
- * multiplier). 1 = no sources, so `Math.round(baseTicks / 1)` is the pre-#114 cadence unchanged. */
-function actionSpeedMultiplier(kind: "fishing" | "production"): number {
-  const target: ModifierTarget = kind === "fishing" ? "fishing-speed" : "production-speed";
-  let bonus = 0;
-  for (const src of activeModifierSources()) if (src.target === target) bonus += src.pct;
-  return 1 + bonus;
 }
 
 /**
@@ -766,6 +778,62 @@ export function createEngine(
 
   function weaponSpeed(): number {
     return weaponSpeedFor(state.equipment.weapon, content);
+  }
+
+  /** Every currently-active modifier source (#114): this instance's own real potion source
+   * (#118 — the active Potion Slot, when `charges > 0`) plus whatever `__setModifierSourcesForTest`
+   * injected. Only one potion is ever active (the single Potion Slot), so at most one potion
+   * source is ever folded in here — no same-type stacking. */
+  function activeModifierSources(): ModifierSource[] {
+    const sources = [...modifierSources];
+    const slot = state.potionSlot;
+    if (slot && slot.charges > 0) {
+      const def = content.items.find((i) => i.id === slot.itemId);
+      if (def?.kind === "potion") sources.push({ target: def.target, pct: def.boostPct });
+    }
+    return sources;
+  }
+
+  /** Aggregate level multiplier for a Skill: 1 + Σ(source boost fractions targeting it). Applied in
+   * `playerAccuracyAndMaxHit` to every combat effective level (magic max hit excepted — it's
+   * spell-driven, not Strength-derived). */
+  function skillLevelMultiplier(skill: SkillName): number {
+    let bonus = 0;
+    for (const src of activeModifierSources()) if (src.target === skill) bonus += src.pct;
+    return 1 + bonus;
+  }
+
+  /** Aggregate speed multiplier for an action kind (fishing catch, production craft): the factor
+   * an action's tick cost is DIVIDED by when its cooldown re-arms (a faster action = larger
+   * multiplier). 1 = no sources, so `Math.round(baseTicks / 1)` is the pre-#114 cadence unchanged. */
+  function actionSpeedMultiplier(kind: "fishing" | "production"): number {
+    const target: ModifierTarget = kind === "fishing" ? "fishing-speed" : "production-speed";
+    let bonus = 0;
+    for (const src of activeModifierSources()) if (src.target === target) bonus += src.pct;
+    return 1 + bonus;
+  }
+
+  /** Decrements the active potion's remaining charges by 1 IF `matchesTarget` accepts its
+   * `PotionDef.target` — the shared "qualifying action" rule (#118): `playerAttack` passes a
+   * predicate matching any combat-Skill target, `fishingTick`/`productionTick` each pass one
+   * matching their own speed target only, so a potion whose target doesn't match the current
+   * activity simply doesn't drain (a Strength potion doesn't tick down while fishing). At 0
+   * charges with `qty > 1`: auto-continue — consume one, reopen with fresh charges, buff stays
+   * unbroken. At 0 charges with `qty === 1`: the slot clears to null, buff ends. No-op when the
+   * slot is empty or holds an unresolvable itemId. */
+  function decrementPotionCharge(matchesTarget: (target: ModifierTarget) => boolean): void {
+    const slot = state.potionSlot;
+    if (!slot) return;
+    const def = content.items.find((i) => i.id === slot.itemId);
+    if (def?.kind !== "potion" || !matchesTarget(def.target)) return;
+    slot.charges -= 1;
+    if (slot.charges > 0) return;
+    slot.qty -= 1;
+    if (slot.qty > 0) {
+      slot.charges = def.charges;
+    } else {
+      state.potionSlot = null;
+    }
   }
 
   function rollDamage(chance: number, max: number): { hit: boolean; damage: number } {
@@ -1097,6 +1165,10 @@ export function createEngine(
     activity.monsterHp -= damage;
     awardCombatXp(damage);
     emit({ type: "attack", actor: "player", damage, hit });
+    // Charge decrement (#118): a resolved player attack is the qualifying action for every
+    // combat-Skill-targeted potion, regardless of which Skill this particular swing trained —
+    // "fishing-speed"/"production-speed" targets never match here (see the two other call sites).
+    decrementPotionCharge((target) => target !== "fishing-speed" && target !== "production-speed");
     if (activity.monsterHp <= 0) {
       emit({ type: "kill", monsterId: monster.id });
       rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
@@ -1167,6 +1239,7 @@ export function createEngine(
         autoEatThreshold: state.autoEatThreshold,
         autoSellDuplicates: state.autoSellDuplicates,
         foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
+        potionSlot: state.potionSlot ? { ...state.potionSlot } : null,
         skills,
         equipment: { ...state.equipment },
         bonuses: {
@@ -1296,6 +1369,9 @@ export function createEngine(
       1,
       Math.round(spot.catchTicks / actionSpeedMultiplier("fishing")),
     );
+    // Charge decrement (#118): the qualifying action for a "fishing-speed" potion is a catch
+    // ATTEMPT, not a successful Catch — decremented here regardless of the roll below.
+    decrementPotionCharge((target) => target === "fishing-speed");
     if (rng.next() < spot.catchChance) {
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
@@ -1327,6 +1403,10 @@ export function createEngine(
     addToBank(recipe.outputItemId, 1);
     grantXp(recipe.skill, recipe.xp);
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
+    // Charge decrement (#118): the qualifying action for a "production-speed" potion is a craft
+    // COMPLETION — this point, reached every time the cooldown elapses (a craft always resolves
+    // once started; see the doc above).
+    decrementPotionCharge((target) => target === "production-speed");
 
     if (canCraftRecipe(recipe)) {
       // #114: divided by the aggregate production-speed multiplier (1 = no sources, so this
@@ -1569,6 +1649,52 @@ export function createEngine(
       const def = content.items.find((i) => i.id === slot.itemId);
       if (!def || def.kind !== "food") throw new Error(`food slot ${slotIndex} is empty`);
       eatFromSlotAt(slotIndex, def);
+    },
+    assignPotionSlot(itemId) {
+      const def = content.items.find((i) => i.id === itemId);
+      if (!def || def.kind !== "potion") throw new Error(`${itemId} is not a Potion`);
+      const owned = state.bank.get(itemId) ?? 0;
+      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+
+      const current = state.potionSlot;
+      if (current && current.itemId === itemId) {
+        // Re-assigning the same potion type that's already open: top up the stack in place,
+        // keeping its remaining charges — the buff stays unbroken, mirrors assignFoodSlot's own
+        // "topping up a slot that already holds this Item" branch.
+        state.bank.delete(itemId);
+        state.potionSlot = { itemId, qty: current.qty + owned, charges: current.charges };
+        return;
+      }
+      if (current && current.charges > 0) {
+        // Swap: the open potion is consumed/wasted (owner's rule); qty-1 of it returns to the
+        // Bank. itemId's own Bank stack is about to fully clear (its ENTIRE stock moves into the
+        // slot below), which may itself free the Bank Slot the swap-back needs — mirrors
+        // assignFoodSlot's own pull-then-check ordering.
+        const remaining = current.qty - 1;
+        if (remaining > 0) {
+          if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
+            throw new Error("bank is full");
+          }
+          state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + remaining);
+        }
+      }
+
+      state.bank.delete(itemId);
+      state.potionSlot = { itemId, qty: owned, charges: def.charges };
+    },
+    unassignPotionSlot() {
+      const current = state.potionSlot;
+      if (!current) return; // already unassigned — harmless no-op
+      // The open potion is consumed/wasted (same rule as a swap above; PotionSlot's invariant
+      // guarantees charges > 0 whenever the slot is non-null, so this always applies).
+      const remaining = current.qty - 1;
+      if (remaining > 0) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + remaining);
+      }
+      state.potionSlot = null;
     },
     sell(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
