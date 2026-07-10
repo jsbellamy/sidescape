@@ -664,6 +664,24 @@ export function mountApp(
     }).join("");
   }
 
+  /** Renders the Pets tab panel's collection grid (#120): one tile per `content.pets` entry, in
+   * Content order — never filtered down, so the roster itself previews what's collectible. An
+   * owned pet's tile renders normally; an unobtained one is dimmed via `.tile-unowned` (CSS
+   * greyscale/opacity) rather than hidden — "owned lit, unobtained greyed" is the issue's own
+   * instruction. No qty badge (`tileMarkup`'s corner badge) since pets aren't stackable Items,
+   * just `iconMarkup`'s bare `<img>`, mirroring a Character Gear Slot tile. */
+  function renderPets(ownedPets: string[]): void {
+    const owned = new Set(ownedPets);
+    el("#pets-grid").innerHTML = content.pets
+      .map((pet) => {
+        const isOwned = owned.has(pet.id);
+        return `<div class="tile${isOwned ? "" : " tile-unowned"}" data-pet="${pet.id}" title="${pet.name}">
+                  <img class="icon pixel" src="${itemIcon(pet.icon)}" alt="${pet.name}" />
+                </div>`;
+      })
+      .join("");
+  }
+
   /** Renders the Vendor tab panel's fixed-price buy list (#119): mirrors renderSmithing's own
    * name/level-row/action-button shape (reusing its `.recipe-name`/`.craft-btn` CSS classes rather
    * than inventing a parallel set), substituting the gold price for a level requirement and a
@@ -1031,6 +1049,7 @@ export function mountApp(
     renderRunePouch(player.runePouch, bank.items);
     renderXpRow(player.skills);
     renderCharacter(player);
+    renderPets(player.ownedPets);
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
     renderVendor(bank, player.gold);
@@ -1142,6 +1161,8 @@ export function mountApp(
           <div id="quiver-slot" class="potion-slot"></div>
           <p class="panel-subtitle">Rune Pouch</p>
           <div id="rune-pouch" class="food-slots"></div>
+          <p class="panel-subtitle">Pets</p>
+          <div id="pets-grid" class="tile-grid"></div>
           <div id="style-row" class="style-row">
             ${Object.entries(STYLE_LABELS)
               .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
@@ -1261,6 +1282,16 @@ export function mountApp(
     const text = e.need === "arrow" ? "🏹 Out of arrows!" : `🔮 Out of ${e.element} runes!`;
     showToast(text);
     feedLine(`⚠ ${text}`, "overflow");
+  });
+  // Pet drop (#120): a never-before-owned pet — celebratory, reusing the rare-Drop band's own
+  // screen-flash + toast + feed-line treatment (the issue's own "reuse the rare-drop band/flash
+  // presentation" instruction), rather than inventing a parallel severity.
+  engine.on("pet-dropped", (e) => {
+    const name = content.pets.find((p) => p.id === e.petId)?.name ?? e.petId;
+    const text = `🐾 New pet: ${name}!`;
+    feedLine(text, "pet-dropped");
+    showToast(text);
+    triggerRareFlash();
   });
   engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
   engine.on("dungeon-completed", (e) => {

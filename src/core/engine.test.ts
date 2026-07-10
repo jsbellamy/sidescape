@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
-import { __setModifierSourcesForTest, createEngine, UNARMED_SPEED } from "./engine";
+import {
+  __setModifierSourcesForTest,
+  __setPetDropChanceForTest,
+  createEngine,
+  UNARMED_SPEED,
+} from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
@@ -2117,6 +2122,25 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
     });
   });
 
+  it("a missing player.ownedPets (pre-#120 save) loads as an empty Set (#120)", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot());
+    expect(engine.snapshot().player.ownedPets).toEqual([]);
+  });
+
+  it("player.ownedPets drops unknown/renamed pet ids but keeps every real one (#120)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { ownedPets: ["test-combat-pet", "no-such-pet", "test-fishing-pet"] },
+      }),
+    );
+    expect(engine.snapshot().player.ownedPets.sort()).toEqual([
+      "test-combat-pet",
+      "test-fishing-pet",
+    ]);
+  });
+
   it("a valid Snapshot still round-trips unchanged (no behavioural change for clean saves)", () => {
     // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
     // calls a millisecond apart would flake this equality — pin the clock instead.
@@ -3091,9 +3115,10 @@ describe("Loot Zone (#60)", () => {
           d.id === "gauntlet" ? { ...d, waves: [...Array(20).fill("dummy"), "boss-dummy"] } : d,
         ),
       };
-      const engine = createEngine(manyWavesContent, seededRng(3)); // seed pinned: produces a real
+      const engine = createEngine(manyWavesContent, seededRng(8)); // seed pinned: produces a real
       // (non-currency) Drop before the eventual death, so the Loot Zone genuinely has something to
-      // lose — not just a hypothetically-empty one.
+      // lose — not just a hypothetically-empty one. (Re-pinned for #120: pets' own per-kill roll
+      // consumes an extra rng.next() draw, shifting the sequence downstream of every kill.)
       let died = false;
       engine.on("death", () => {
         died = true;
@@ -3413,8 +3438,7 @@ describe("Auto-sell duplicate Equipment (#63)", () => {
   it("applies to Dungeon Chest items too, not just kill Drops", () => {
     // Only the bronze-sword ENTRY's chance is zeroed (leaving its rng.next() draw in place, same
     // as fixtureContent's own dungeon-completes-within-5000-ticks tests) rather than replacing the
-    // whole Drop Table, so the wave-kill rng sequence stays identical to the known-good "seed 5
-    // completes gauntlet" fixture above — only the Chest is a new deterministic source of bronze-sword.
+    // whole Drop Table, so the Chest is the only new deterministic source of bronze-sword.
     const content = {
       ...fixtureContent,
       monsters: fixtureContent.monsters.map((m) =>
@@ -3437,10 +3461,14 @@ describe("Auto-sell duplicate Equipment (#63)", () => {
       ),
     };
     // Seeded off a real fresh-engine Snapshot (not makeSnapshot's fixture defaults, e.g. Accurate
-    // style / level-1 HP) plus one override, so the wave-kill rng sequence matches the known-good
-    // "seed 5 completes gauntlet" fixture above exactly, with only a pre-owned bronze-sword added.
+    // style / level-1 HP) plus one override, so wave kills start from a realistic state, with only
+    // a pre-owned bronze-sword added. Seed 3 pinned: the run completes within budget and neither
+    // "dummy" low-chance entry (meat 0.25, lucky-charm 1/128) happens to roll positive along the
+    // way, so the Bank ends up holding exactly the Chest's (duplicate-sold) bronze-sword and
+    // nothing else (#120: pets' own per-kill roll consumes an extra rng.next() draw per kill,
+    // shifting which of these low-chance rolls land).
     const freshSnap = createEngine(content, seededRng(0)).snapshot();
-    const engine = createEngine(content, seededRng(5), {
+    const engine = createEngine(content, seededRng(3), {
       ...freshSnap,
       bank: { ...freshSnap.bank, items: [{ itemId: "bronze-sword", qty: 1 }] },
     });
@@ -4272,7 +4300,12 @@ describe("Ranged and Magic Skills (#7)", () => {
       // calls a millisecond apart would flake this equality — pin the clock instead.
       const original = createEngine(
         fixtureContent,
-        seededRng(42),
+        // Seed 1 pinned: at tick 200 the player is NOT mid-Respawn (#120: pets' own per-kill roll
+        // consumes an extra rng.next() draw, shifting which Ticks land a kill/death — hp:0 +
+        // respawning:true is a real state that can never round-trip, since respawnTicksLeft is
+        // deliberately never persisted (loadState always resumes un-respawning) and loadHp clamps
+        // a saved hp back up to 1; this test wants a clean, round-trippable capture instead).
+        seededRng(1),
         // Ranged now requires a loaded Quiver (#119).
         makeSnapshot({
           player: { equipment: { weapon: "bow" }, quiver: { itemId: "arrow", qty: 100_000 } },
@@ -4835,6 +4868,155 @@ describe("Modifier-aggregation layer (#114)", () => {
     const boosted = catchesOver(60);
 
     expect(boosted).toBeGreaterThan(baseline);
+  });
+});
+
+/**
+ * Pets (#120): very-rare drops from a qualifying action (a kill, a Catch, a craft completion) or a
+ * specific Boss, each granting a small ALWAYS-ON modifier once owned — no active-pet slot, no
+ * charges (owner decision, grilled: "All owned always-on"). `__setPetDropChanceForTest` (mirrors
+ * `__setModifierSourcesForTest`'s own test-only seam) forces or rules out a roll deterministically
+ * so these tests don't need to grind hundreds of thousands of Ticks against the real
+ * 1-in-2000/1-in-300 production chances. fixtureContent's "pet-target" (hp 1, maxHit 0) exists
+ * purely so a kill-driven roll can be forced within a handful of Ticks.
+ */
+describe("Pets (#120)", () => {
+  afterEach(() => __setPetDropChanceForTest(null)); // never leak an override into later tests
+
+  it('a kill rolls the killed action\'s "combat" pet at the tuning chance, entering ownedPets and firing pet-dropped', () => {
+    __setPetDropChanceForTest({ action: 1, boss: 1 });
+    const engine = freshEngine(3);
+    engine.selectMonster("pet-target");
+    let droppedId: string | undefined;
+    engine.on("pet-dropped", (e) => {
+      droppedId = e.petId;
+    });
+    for (let i = 0; i < 2000 && droppedId === undefined; i++) engine.tick();
+    expect(droppedId).toBe("test-combat-pet");
+    expect(engine.snapshot().player.ownedPets).toContain("test-combat-pet");
+  });
+
+  it('a Catch success (not merely an attempt) rolls the "fishing" pet', () => {
+    __setPetDropChanceForTest({ action: 1, boss: 1 });
+    const engine = freshEngine(1);
+    engine.selectFishingSpot("pond"); // catchChance 1 (fixtureContent): every attempt succeeds
+    let droppedId: string | undefined;
+    engine.on("pet-dropped", (e) => {
+      droppedId = e.petId;
+    });
+    for (let i = 0; i < 10 && droppedId === undefined; i++) engine.tick();
+    expect(droppedId).toBe("test-fishing-pet");
+    expect(engine.snapshot().player.ownedPets).toContain("test-fishing-pet");
+  });
+
+  it('a craft completion rolls the "production" pet', () => {
+    __setPetDropChanceForTest({ action: 1, boss: 1 });
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 1 }] } }),
+    );
+    engine.selectRecipe("test-sword"); // craftTicks 3, 1 bar in the Bank — completes once
+    let droppedId: string | undefined;
+    engine.on("pet-dropped", (e) => {
+      droppedId = e.petId;
+    });
+    for (let i = 0; i < 10 && droppedId === undefined; i++) engine.tick();
+    expect(droppedId).toBe("test-production-pet");
+    expect(engine.snapshot().player.ownedPets).toContain("test-production-pet");
+  });
+
+  it("an already-owned pet never re-rolls, even at chance 1", () => {
+    __setPetDropChanceForTest({ action: 1, boss: 1 });
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { ownedPets: ["test-combat-pet"] } }),
+    );
+    engine.selectMonster("pet-target");
+    let dropped = false;
+    engine.on("pet-dropped", () => {
+      dropped = true;
+    });
+    for (let i = 0; i < 200; i++) engine.tick();
+    expect(dropped).toBe(false);
+    expect(engine.snapshot().player.ownedPets).toEqual(["test-combat-pet"]);
+  });
+
+  it("a boss pet only drops from its source.boss Monster, never from an ordinary kill, even at chance 1", () => {
+    __setPetDropChanceForTest({ action: 1, boss: 1 });
+    const engine = freshEngine(5);
+    engine.selectMonster("pet-target"); // NOT "boss-dummy" — test-boss-pet's source.boss
+    const droppedIds: string[] = [];
+    engine.on("pet-dropped", (e) => droppedIds.push(e.petId));
+    // pet-target's ~25%-per-attack kill rate (50% hit chance x 50% chance the 0/1 damage roll
+    // lands 1) at attackSpeed 4 gives ~25 expected kills over 400 Ticks — comfortably enough for
+    // at least one at chance 1.
+    for (let i = 0; i < 400; i++) engine.tick();
+    expect(droppedIds).toContain("test-combat-pet");
+    expect(droppedIds).not.toContain("test-boss-pet");
+  });
+
+  it("killing the matching source.boss Monster rolls its own boss pet", () => {
+    __setPetDropChanceForTest({ action: 0, boss: 1 }); // isolate: only the boss pet can ever roll
+    const engine = freshEngine(5);
+    engine.selectMonster("boss-dummy"); // fixtureContent's own "gauntlet" Dungeon boss
+    let droppedId: string | undefined;
+    engine.on("pet-dropped", (e) => {
+      droppedId = e.petId;
+    });
+    for (let i = 0; i < 2000 && droppedId === undefined; i++) engine.tick();
+    expect(droppedId).toBe("test-boss-pet");
+  });
+
+  it("every owned pet's modifier is always-on via activeModifierSources (#114) — no slot, no charges", () => {
+    function meleeDamages(
+      ownedPets: string[] = [],
+      potionSlot: { itemId: string; qty: number; charges: number } | null = null,
+    ): number[] {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(99),
+        makeSnapshot({
+          player: {
+            skills: {
+              attack: { level: 90, xp: xpForLevel(90) },
+              strength: { level: 90, xp: xpForLevel(90) },
+              hitpoints: { level: 20, xp: xpForLevel(20) },
+            },
+            ownedPets,
+            potionSlot,
+          },
+        }),
+      );
+      // "control-dummy" (hp 999, maxHit 0, defenceLevel 1): never dies mid-sample and never
+      // attacks back, mirroring the #114 potion/pet-source tests above.
+      engine.selectMonster("control-dummy");
+      const damages: number[] = [];
+      engine.on("attack", (e) => {
+        if (e.actor === "player") damages.push(e.damage);
+      });
+      for (let i = 0; i < 1000; i++) engine.tick();
+      expect(damages.length).toBeGreaterThan(0);
+      return damages;
+    }
+
+    const baseline = meleeDamages();
+    const petOwned = meleeDamages(["test-combat-pet"]);
+    // "test-combat-pet" targets strength at boostPct 0.2 (fixtureContent) — no slot/charges
+    // involved (unlike the potion below), it's unconditional purely from being in ownedPets.
+    expect(Math.max(...petOwned)).toBeGreaterThan(Math.max(...baseline));
+
+    // Composes ADDITIVELY with an active potion targeting the same Skill (#114's own aggregation
+    // rule: "level multipliers stack additively within a target, then multiply the effective
+    // level once") — pet alone (+20%) vs pet + potion (+20% + 20% = +40%) should raise the
+    // ceiling further still.
+    const potionPlusPet = meleeDamages(["test-combat-pet"], {
+      itemId: "strength-potion",
+      qty: 99,
+      charges: 3,
+    });
+    expect(Math.max(...potionPlusPet)).toBeGreaterThan(Math.max(...petOwned));
   });
 });
 

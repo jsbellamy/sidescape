@@ -1070,6 +1070,14 @@ button.tile:hover {
   font-size: 11px;
 }
 
+/* Pets grid (#120): an unobtained pet's tile stays in the grid (the roster previews what's
+   collectible) but dims via greyscale + reduced opacity, mirroring the OSRS-collection-log
+   convention of "silhouette until earned" without hiding the tile outright. */
+.tile-unowned .icon {
+  filter: grayscale(1) brightness(0.6);
+  opacity: 0.45;
+}
+
 /* Bank detail strip (#78): filled when a Bank tile is selected, hidden otherwise. Replaces the
    old always-visible per-row name/stats/Equip/Sell text. */
 .detail-strip {
@@ -1213,6 +1221,13 @@ button.tile:hover {
 .dungeon-completed,
 .chest-header {
   color: #e6c35c;
+  font-weight: 700;
+}
+
+/* Pet drop (#120): a never-before-owned pet is celebratory, same weight as drop-rare/
+   dungeon-completed above. */
+.pet-dropped {
+  color: var(--accent);
   font-weight: 700;
 }
 

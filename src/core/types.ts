@@ -174,6 +174,29 @@ export interface PotionDef {
   value?: number;
 }
 
+/** A very-rare drop (#120) from a qualifying action (a combat kill, a fishing Catch, a production
+ * craft completion) or a specific Boss — NOT an Item (never touches the Bank), a collection
+ * instead: once obtained, a pet is owned forever and its `boostPct` modifier is ALWAYS ON, folded
+ * into `activeModifierSources()` (engine.ts, #114) unconditionally alongside the active potion —
+ * no active-pet slot, no charges (owner decision, grilled: "All owned always-on" — power
+ * accumulates with the collection, bounded by the pet roster itself, one of each). `target` is the
+ * same shape #114/`PotionDef.target` use. `source` decides which qualifying action can roll this
+ * pet: "combat" (any kill), "fishing" (any Catch), "production" (any craft), or `{ boss }` — only
+ * a kill of THAT Monster id (a Dungeon boss or an open-world boss-tier Monster). */
+export interface PetDef {
+  id: string;
+  name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind; a PetDef isn't an
+   * ItemDef, but validateContent/icons.ts hold it to the identical "required + registered"
+   * discipline. */
+  icon: string;
+  target: SkillName | "fishing-speed" | "production-speed";
+  /** Boost fraction, e.g. 0.01 = +1% — deliberately tiny: every owned pet contributes forever, so
+   * the roster's boosts sum rather than replace each other (unlike a single-slot potion). */
+  boostPct: number;
+  source: "combat" | "fishing" | "production" | { boss: string /* monsterId */ };
+}
+
 /** Ammo (#119): the resource ranged/magic attacks consume — an arrow from the Quiver, or a rune
  * from the Rune Pouch (see `Snapshot.player.quiver`/`runePouch`). Two independent stores, not a
  * shared ammo slot (owner decision, grilled, verbatim: "The player has access to both all the
@@ -323,6 +346,7 @@ export interface Content {
   recipes: RecipeDef[];
   spells: SpellDef[];
   vendor: VendorEntry[];
+  pets: PetDef[];
 }
 
 export type EngineEvent =
@@ -379,7 +403,11 @@ export type EngineEvent =
    * `element` set) — see `playerAttack`'s ammo-gate (engine.ts, #119). Fires once per DEPLETION,
    * not once per Tick the resource sits empty: the swing keeps skipping silently every Tick after
    * the first until ammo is loaded again. Melee never emits this. */
-  | { type: "out-of-ammo"; need: "arrow" | "rune"; element?: Element };
+  | { type: "out-of-ammo"; need: "arrow" | "rune"; element?: Element }
+  /** A never-before-owned Pet (#120) just rolled on a qualifying action (a kill, a Catch, or a
+   * craft completion) — see `PetDef.source`. Fires once per NEW pet only; an already-owned pet
+   * never re-rolls, so this never fires twice for the same `petId`. */
+  | { type: "pet-dropped"; petId: string };
 
 export interface SkillSnapshot {
   level: number;
@@ -446,6 +474,10 @@ export interface Snapshot {
     gold: number;
     respawning: boolean;
     completedDungeonIds: string[];
+    /** Pet ids the player owns (#120) — every owned pet's modifier is always-on, no active-pet
+     * slot (see PetDef's own doc). Append-only, stored internally as a `Set<string>` (mirrors
+     * `completedDungeonIds`), serialised to an array here. Tolerant load: missing/pre-#120-> []. */
+    ownedPets: string[];
   };
   monster: { id: string; name: string; hp: number; maxHp: number } | null;
   fishing: { spotId: string; name: string } | null;

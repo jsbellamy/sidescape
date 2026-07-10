@@ -17,6 +17,7 @@ import emeraldUrl from "../assets/icons/emerald.png";
 import emeraldAmuletUrl from "../assets/icons/emerald-amulet.png";
 import emeraldRingUrl from "../assets/icons/emerald-ring.png";
 import fireRuneUrl from "../assets/icons/fire-rune.png";
+import fishingFrogUrl from "../assets/icons/fishing-frog.png";
 import fishingPotionUrl from "../assets/icons/fishing-potion.png";
 import goblinCharmUrl from "../assets/icons/goblin-charm.png";
 import goldUrl from "../assets/icons/gold.png";
@@ -34,6 +35,7 @@ import ironMaceUrl from "../assets/icons/iron-mace.png";
 import ironShortbowUrl from "../assets/icons/iron-shortbow.png";
 import ironStaffUrl from "../assets/icons/iron-staff.png";
 import ironSwordUrl from "../assets/icons/iron-sword.png";
+import kilnCatUrl from "../assets/icons/kiln-cat.png";
 import leatherBodyUrl from "../assets/icons/leather-body.png";
 import leatherChapsUrl from "../assets/icons/leather-chaps.png";
 import leatherCoifUrl from "../assets/icons/leather-coif.png";
@@ -52,6 +54,7 @@ import rawBeefUrl from "../assets/icons/raw-beef.png";
 import rawPikeUrl from "../assets/icons/raw-pike.png";
 import rawShrimpUrl from "../assets/icons/raw-shrimp.png";
 import rawTroutUrl from "../assets/icons/raw-trout.png";
+import rockGolemUrl from "../assets/icons/rock-golem.png";
 import rubyUrl from "../assets/icons/ruby.png";
 import rubyAmuletUrl from "../assets/icons/ruby-amulet.png";
 import rubyRingUrl from "../assets/icons/ruby-ring.png";
@@ -59,6 +62,7 @@ import sapphireUrl from "../assets/icons/sapphire.png";
 import sapphireAmuletUrl from "../assets/icons/sapphire-amulet.png";
 import sapphireRingUrl from "../assets/icons/sapphire-ring.png";
 import shadeBladeUrl from "../assets/icons/shade-blade.png";
+import shadeWispUrl from "../assets/icons/shade-wisp.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
 import steelArrowUrl from "../assets/icons/steel-arrow.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
@@ -175,6 +179,15 @@ const icons: Record<string, string> = {
   "water-rune": waterRuneUrl,
   "earth-rune": earthRuneUrl,
   "fire-rune": fireRuneUrl,
+  // Pets wave (#120) starter roster: hand-drawn placeholder pixel art (same escape hatch as the
+  // gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, herb/potion, and arrow/rune icons
+  // above — see docs/assets.md). Keyed by `PetDef.icon`, resolved through this SAME registry as
+  // every `ItemDef.icon` — a pet isn't an Item, but its icon key is validated/rendered exactly
+  // the same way.
+  "rock-golem": rockGolemUrl,
+  "fishing-frog": fishingFrogUrl,
+  "kiln-cat": kilnCatUrl,
+  "shade-wisp": shadeWispUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

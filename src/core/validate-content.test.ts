@@ -471,7 +471,57 @@ describe("validateContent", () => {
       recipes: [],
       spells: fixtureContent.spells,
       vendor: [],
+      pets: [],
     };
     expect(validateContent(content)).toEqual([]);
+  });
+
+  describe("Pets (#120)", () => {
+    it("reports a pet that declares no icon", () => {
+      const content: Content = {
+        ...fixtureContent,
+        pets: fixtureContent.pets.map((p) => {
+          if (p.id !== "test-combat-pet") return p;
+          const { icon: _dropped, ...iconless } = p;
+          return iconless as unknown as (typeof fixtureContent.pets)[number];
+        }),
+      };
+      expect(validateContent(content)).toContain('pet "test-combat-pet" declares no icon');
+    });
+
+    it("reports a pet with an empty-string icon", () => {
+      const content: Content = {
+        ...fixtureContent,
+        pets: fixtureContent.pets.map((p) => (p.id === "test-combat-pet" ? { ...p, icon: "" } : p)),
+      };
+      expect(validateContent(content)).toContain('pet "test-combat-pet" declares no icon');
+    });
+
+    it("reports a boss pet whose source.boss doesn't resolve to a real Monster", () => {
+      const content: Content = {
+        ...fixtureContent,
+        pets: fixtureContent.pets.map((p) =>
+          p.id === "test-boss-pet" ? { ...p, source: { boss: "no-such-monster" } } : p,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'pet "test-boss-pet" source boss "no-such-monster" not found',
+      );
+    });
+
+    it("reports a duplicate pet id", () => {
+      const combatPet = fixtureContent.pets.find((p) => p.id === "test-combat-pet")!;
+      const content: Content = {
+        ...fixtureContent,
+        pets: [...fixtureContent.pets, { ...combatPet }],
+      };
+      expect(validateContent(content)).toContain(
+        'pets contains 2 entries with id "test-combat-pet"',
+      );
+    });
+
+    it("a valid pet roster (one per source plus a boss pet) reports nothing", () => {
+      expect(validateContent(fixtureContent)).toEqual([]);
+    });
   });
 });

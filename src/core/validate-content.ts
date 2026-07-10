@@ -181,6 +181,19 @@ export function validateContent(content: Content): string[] {
     }
   }
 
+  // Pets (#120): a non-empty icon (same discipline as every ItemDef.icon, even though a PetDef
+  // isn't an ItemDef) and, for a boss pet, a `source.boss` that resolves to a real Monster
+  // (mirrors the dropTable itemId -> items check above).
+  for (const pet of content.pets) {
+    if (!pet.icon) {
+      violations.push(`pet "${pet.id}" declares no icon`);
+    }
+    if (typeof pet.source === "object" && !monsterIds.has(pet.source.boss)) {
+      violations.push(`pet "${pet.id}" source boss "${pet.source.boss}" not found`);
+    }
+  }
+  violations.push(...duplicateIds(content.pets, "pets"));
+
   return violations;
 }
 

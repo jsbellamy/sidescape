@@ -254,3 +254,20 @@ stone tablet carved with a simple glyph, tinted to its Element (`air-rune` pale 
 glance, mirroring the gem icons' one-shape-per-tier approach. Swapping these for sourced CC0 crops
 is a follow-up, not a blocker for this wave's content pass — same note as every hand-drawn
 placeholder set above.
+
+## Pet icons (Pets wave, #120)
+
+`rock-golem`, `fishing-frog`, `kiln-cat`, and `shade-wisp` (`src/assets/icons/*.png`) are
+**hand-drawn placeholder pixel art**, generated for this wave (17×17 working grid, upscaled 2× with
+nearest-neighbour resampling to the same 34×34 canvas the "496 pixel art icons" pack's on-screen
+size uses) — same escape hatch as every hand-drawn placeholder set above, not sourced from a
+third-party pack, so no license/provenance entry is needed. `PetDef.icon` is resolved through the
+SAME `src/ui/icons.ts` registry as every `ItemDef.icon` (a pet isn't an Item, but its icon key is
+required/validated/rendered under the identical discipline — see `PetDef`'s own doc, core/types.ts).
+Each pet is a simple silhouette reading at a glance as its source: `rock-golem` (the "combat" pet) a
+squat blocky grey-brown golem with a moss-green facet accent and glowing eyes; `fishing-frog` (the
+"fishing" pet) a sitting green frog with pale belly and a blue water-droplet accent; `kiln-cat`
+(the "production" pet) a sitting orange tabby cat with a small ember accent; `shade-wisp` (the boss
+pet, tied to Bone Crypt's `crypt-shade`) a small translucent-lavender ghost wisp with a glowing
+core, echoing the wraith it's tied to. Swapping these for sourced CC0 crops is a follow-up, not a
+blocker for this wave's content pass — same note as every hand-drawn placeholder set above.
