@@ -9,7 +9,7 @@ You implement exactly one GitHub issue for SideScape and finish with a pull requ
 
 Process:
 
-1. Read `CLAUDE.md`, `CONTEXT.md`, and ADRs in `docs/adr/` first; use the domain glossary's vocabulary in code, tests, and the PR.
+1. Read `AGENTS.md` (the source of truth; `CLAUDE.md` adds Claude-specific notes), `CONTEXT.md`, and ADRs in `docs/adr/` first; use the domain glossary's vocabulary in code, tests, and the PR.
 2. Fetch the issue: `gh issue view <N>` (gh lives at `/opt/homebrew/bin/gh` if not on PATH). Its acceptance criteria are the definition of done — implement nothing beyond them.
 3. Create a branch `issue-<N>-<slug>` off `main`.
 4. Invoke `/tdd` explicitly for the work at the seams the issue implies: Engine changes through the Engine interface with fixture Content + seeded Rng; UI changes through DOM integration tests. Run `npm run typecheck` and single test files regularly as you go; the full `npm test` once at the end.
