@@ -1599,4 +1599,42 @@ export const content: Content = {
     { itemId: "earth-rune", price: 3 },
     { itemId: "fire-rune", price: 3 },
   ],
+  // Starter pet roster (#120): one per source (combat/fishing/production) plus one boss pet, tied
+  // to Bone Crypt's own boss-tier Monster ("crypt-shade" — see monsters above, "carries a real
+  // weakElement... boss tool"). Every boostPct is deliberately tiny (all-owned-additive: a fully
+  // collected roster sums its boosts, unlike the single-slot potion) — tuning, not spec.
+  pets: [
+    {
+      id: "rock-golem",
+      name: "Rock Golem",
+      icon: "rock-golem",
+      target: "strength",
+      boostPct: 0.01,
+      source: "combat",
+    },
+    {
+      id: "fishing-frog",
+      name: "Fishing Frog",
+      icon: "fishing-frog",
+      target: "fishing-speed",
+      boostPct: 0.01,
+      source: "fishing",
+    },
+    {
+      id: "kiln-cat",
+      name: "Kiln Cat",
+      icon: "kiln-cat",
+      target: "production-speed",
+      boostPct: 0.01,
+      source: "production",
+    },
+    {
+      id: "shade-wisp",
+      name: "Shade Wisp",
+      icon: "shade-wisp",
+      target: "magic",
+      boostPct: 0.02,
+      source: { boss: "crypt-shade" },
+    },
+  ],
 };

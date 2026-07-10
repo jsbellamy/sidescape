@@ -17,6 +17,7 @@ import type {
   FoodSlot,
   ItemDef,
   MonsterDef,
+  PetDef,
   PotionSlot,
   RecipeDef,
   SpellDef,
@@ -122,6 +123,9 @@ interface State {
   respawnTicksLeft: number;
   regenTicks: number;
   completedDungeonIds: Set<string>;
+  /** Owned Pet ids (#120) — mirrors completedDungeonIds' Set shape; see Snapshot.player.ownedPets'
+   * own doc for the append-only/serialisation rules. */
+  ownedPets: Set<string>;
 }
 
 type EventHandler<T extends EngineEvent["type"]> = (
@@ -232,6 +236,14 @@ const LOOT_ZONE_CAPACITY = 10;
  * modifier in the otherwise accuracy-only Hybrid combat model: a spell whose element matches
  * `monster.weakElement` deals this much more damage. Tuning default, not spec. */
 const ELEMENT_WEAKNESS_MULT = 1.5;
+
+/** Pets (#120): tiny per-qualifying-action chance to roll that action's pet (see `rollPetDrop`;
+ * an already-owned pet is skipped, never re-rolled). Boss pets use a higher constant: a boss kill
+ * is itself a far rarer event than an ordinary kill/Catch/craft, so its own pet needs a higher
+ * per-kill chance to land at a comparable real-world rate. Both are tuning, not spec — see
+ * `__setPetDropChanceForTest` for how tests override them instead of grinding for real. */
+const PET_DROP_CHANCE = 1 / 2000;
+const BOSS_PET_DROP_CHANCE = 1 / 300;
 
 /** Bank Slot capacity: 1 slot = 1 item stack, regardless of stack quantity. */
 const BANK_START_CAPACITY = 100;
@@ -352,6 +364,7 @@ function freshState(_content: Content): State {
     respawnTicksLeft: 0,
     regenTicks: 0,
     completedDungeonIds: new Set(),
+    ownedPets: new Set(),
   };
 }
 
@@ -602,6 +615,18 @@ function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Conte
   return completed;
 }
 
+/** Owned Pet ids (#120): keeps only entries that are strings naming a real PetDef, dropping
+ * anything else (unknown/renamed ids, stray non-strings) — mirrors loadCompletedDungeonIds' own
+ * filter-to-known-ids pattern. Unlike completedDungeonIds, there is no pre-#120 migration to
+ * reconstruct: missing/non-array simply means "no pets yet" -> an empty Set (a fresh save-shape
+ * slice, same tolerance as potionSlot/quiver before it). */
+function loadOwnedPets(saved: Snapshot, content: Content): Set<string> {
+  const petIds = new Set(content.pets.map((p) => p.id));
+  const raw: unknown = saved.player?.ownedPets;
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.filter((id): id is string => typeof id === "string" && petIds.has(id)));
+}
+
 /** Whether `bank` covers at least one craft of `recipe` (mirrors the Engine's own
  * canCraftRecipe, duplicated here because loadState runs before the Engine's closures exist). */
 function canCraftFromBank(recipe: RecipeDef, bank: Map<string, number>): boolean {
@@ -719,14 +744,15 @@ function loadState(saved: Snapshot, content: Content): State {
     respawnTicksLeft: 0,
     regenTicks: 0,
     completedDungeonIds: loadCompletedDungeonIds(saved, content),
+    ownedPets: loadOwnedPets(saved, content),
   };
 }
 
 /**
  * Modifier-aggregation layer (#114): the single place that collects percentage boosts from every
- * active source — the active potion (#118), owned pets (#H), later gear upgrades (#67) — and
- * folds them into effective Skill levels and action speeds before combat math and tick cadence
- * ever see them. `pct` is a fraction (0.2 == +20%).
+ * active source — the active potion (#118), every owned pet (#120, unconditional — no slot, no
+ * charges), later gear upgrades (#67) — and folds them into effective Skill levels and action
+ * speeds before combat math and tick cadence ever see them. `pct` is a fraction (0.2 == +20%).
  */
 type ModifierTarget = SkillName | "fishing-speed" | "production-speed";
 interface ModifierSource {
@@ -735,18 +761,39 @@ interface ModifierSource {
 }
 
 /** Test-only extra sources folded into every `createEngine` instance's `activeModifierSources()`
- * (below) on top of that instance's own real potion source. Empty in production; mutable only
- * through the test-only seam (`__setModifierSourcesForTest`) until #H pushes owned-pet sources
- * here too. */
+ * (below) on top of that instance's own real potion source AND real owned-pet sources (#120).
+ * Empty in production; mutable only through the test-only seam (`__setModifierSourcesForTest`). */
 const modifierSources: ModifierSource[] = [];
 
 /** Test-only injection seam for the modifier-aggregation layer (#114) — pushes a `ModifierSource`
  * onto every engine instance's `activeModifierSources()` without exposing any other Engine
  * internal. Not part of the public Engine API (no `createEngine` instance carries or needs it);
- * production code never calls this. #H's own real pet sources replace this seam once built. */
+ * production code never calls this. */
 export function __setModifierSourcesForTest(sources: ModifierSource[]): void {
   modifierSources.length = 0;
   modifierSources.push(...sources);
+}
+
+/** Test-only override for PET_DROP_CHANCE/BOSS_PET_DROP_CHANCE (#120) — mirrors
+ * `__setModifierSourcesForTest`'s seam: production code never calls this. Lets a seeded-Rng test
+ * force (or reliably rule out) a pet drop deterministically instead of grinding hundreds of
+ * thousands of Ticks against the real 1-in-2000/1-in-300 chance. `null` resets both back to the
+ * real production constants. */
+let petDropChanceOverride: { action: number; boss: number } | null = null;
+export function __setPetDropChanceForTest(chance: { action: number; boss: number } | null): void {
+  petDropChanceOverride = chance;
+}
+
+/** The per-action pet-drop chance in effect right now: the real `PET_DROP_CHANCE` tuning
+ * constant, or `__setPetDropChanceForTest`'s override when a test has set one. */
+function currentPetDropChance(): number {
+  return petDropChanceOverride?.action ?? PET_DROP_CHANCE;
+}
+
+/** Sibling to `currentPetDropChance` for boss pets — the real `BOSS_PET_DROP_CHANCE`, or the
+ * test override's own `boss` value. */
+function currentBossPetDropChance(): number {
+  return petDropChanceOverride?.boss ?? BOSS_PET_DROP_CHANCE;
 }
 
 /**
@@ -880,12 +927,18 @@ export function createEngine(
     return weaponSpeedFor(state.equipment.weapon, content);
   }
 
-  /** Every currently-active modifier source (#114): this instance's own real potion source
-   * (#118 — the active Potion Slot, when `charges > 0`) plus whatever `__setModifierSourcesForTest`
-   * injected. Only one potion is ever active (the single Potion Slot), so at most one potion
-   * source is ever folded in here — no same-type stacking. */
+  /** Every currently-active modifier source (#114): every owned pet (#120 — unconditional, no
+   * slot/charges, so a fully-collected roster folds in every one of them every call) PLUS this
+   * instance's own real potion source (#118 — the active Potion Slot, when `charges > 0`) PLUS
+   * whatever `__setModifierSourcesForTest` injected. Only one potion is ever active (the single
+   * Potion Slot), so at most one potion source is ever folded in here — no same-type stacking;
+   * pets have no such limit (that's the point — see PetDef's own doc). */
   function activeModifierSources(): ModifierSource[] {
     const sources = [...modifierSources];
+    for (const petId of state.ownedPets) {
+      const pet = content.pets.find((p) => p.id === petId);
+      if (pet) sources.push({ target: pet.target, pct: pet.boostPct });
+    }
     const slot = state.potionSlot;
     if (slot && slot.charges > 0) {
       const def = content.items.find((i) => i.id === slot.itemId);
@@ -911,6 +964,23 @@ export function createEngine(
     let bonus = 0;
     for (const src of activeModifierSources()) if (src.target === target) bonus += src.pct;
     return 1 + bonus;
+  }
+
+  /** Pet roll (#120): the shared "roll every candidate pet at `chance`" step behind every
+   * qualifying action (a kill, a Catch, a craft completion) — `candidates` is already filtered by
+   * the caller to the pets whose `source` matches THIS action (a plain "combat"/"fishing"/
+   * "production" pet, or a `{ boss }` pet whose id matches the just-killed Monster). An
+   * already-owned pet is skipped entirely rather than rolled-and-ignored (the owner's "unique,
+   * never re-rolls" rule), so a fully-collected roster costs nothing per action beyond the array
+   * scan. */
+  function rollPetDrop(candidates: PetDef[], chance: number): void {
+    for (const pet of candidates) {
+      if (state.ownedPets.has(pet.id)) continue;
+      if (rng.next() < chance) {
+        state.ownedPets.add(pet.id);
+        emit({ type: "pet-dropped", petId: pet.id });
+      }
+    }
   }
 
   /** Decrements the active potion's remaining charges by 1 IF `matchesTarget` accepts its
@@ -1337,6 +1407,17 @@ export function createEngine(
     decrementPotionCharge((target) => target !== "fishing-speed" && target !== "production-speed");
     if (activity.monsterHp <= 0) {
       emit({ type: "kill", monsterId: monster.id });
+      // Pet roll (#120): a kill is the "combat" pet's qualifying action, PLUS this specific
+      // Monster's own boss pet (if any) — both roll independently, incl. dungeon waves/boss
+      // (this branch is shared by CombatActivity and DungeonActivity alike).
+      rollPetDrop(
+        content.pets.filter((p) => p.source === "combat"),
+        currentPetDropChance(),
+      );
+      rollPetDrop(
+        content.pets.filter((p) => typeof p.source === "object" && p.source.boss === monster.id),
+        currentBossPetDropChance(),
+      );
       rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
       if (activity.kind === "dungeon") {
         handleDungeonKill(activity);
@@ -1423,6 +1504,7 @@ export function createEngine(
         gold: state.gold,
         respawning: state.respawnTicksLeft > 0,
         completedDungeonIds: [...state.completedDungeonIds],
+        ownedPets: [...state.ownedPets],
       },
       monster:
         monsterDef && fight
@@ -1547,6 +1629,13 @@ export function createEngine(
       // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so
       // arriveAtHome always falls through to the ordinary Bank top-up/overflow rules.
       arriveAtHome(spot.itemId, 1);
+      // Pet roll (#120): a successful Catch (not merely an attempt — mirrors the "qualifying
+      // action" language in the issue, distinct from the charge-decrement rule just above, which
+      // fires on every attempt) is the "fishing" pet's qualifying action.
+      rollPetDrop(
+        content.pets.filter((p) => p.source === "fishing"),
+        currentPetDropChance(),
+      );
     }
   }
 
@@ -1571,6 +1660,13 @@ export function createEngine(
     addToBank(recipe.outputItemId, 1);
     grantXp(recipe.skill, recipe.xp);
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
+    // Pet roll (#120): a craft COMPLETION (this point, reached every time the cooldown elapses)
+    // is the "production" pet's qualifying action — mirrors the charge-decrement's own "completion,
+    // not attempt" rule just below.
+    rollPetDrop(
+      content.pets.filter((p) => p.source === "production"),
+      currentPetDropChance(),
+    );
     // Charge decrement (#118): the qualifying action for a "production-speed" potion is a craft
     // COMPLETION — this point, reached every time the cooldown elapses (a craft always resolves
     // once started; see the doc above).

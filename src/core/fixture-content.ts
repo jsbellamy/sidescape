@@ -96,6 +96,22 @@ export const fixtureContent: Content = {
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" }],
     },
+    // Pets fixture (#120): hp 1 (any hit kills it) and never attacks back (maxHit 0) — lets a
+    // seeded-Rng pet-roll test grind kills fast without a fiercer-Monster/high-level-player setup.
+    // Absent from every Area's monsterIds, same as boss-dummy/weak-dummy/control-dummy above —
+    // selectMonster doesn't require Area membership.
+    {
+      id: "pet-target",
+      name: "Pet Target",
+      hp: 1,
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 0,
+      attackSpeed: 4,
+      attackType: "crush",
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      dropTable: [],
+    },
   ],
   // icon (#78): every value below reuses a real key from src/ui/icons.ts's registry (the same
   // keys the v1 Content in src/data/index.ts uses) rather than a fixture-only key, so UI tests
@@ -405,5 +421,47 @@ export const fixtureContent: Content = {
     { itemId: "water-rune", price: 3 },
     { itemId: "earth-rune", price: 3 },
     { itemId: "fire-rune", price: 3 },
+  ],
+  // Pets (#120): one per source (combat/fishing/production) plus one boss pet keyed to the
+  // "gauntlet" Dungeon's own boss ("boss-dummy", monsters above) — lets a boss-pet test kill that
+  // Monster directly (selectMonster doesn't require Area/Dungeon membership) without running a
+  // full Dungeon. icon reuses real icons.ts keys, same discipline as every other fixture entry.
+  pets: [
+    // boostPct 0.2 (not the real content's tiny ~0.01) deliberately mirrors "strength-potion"
+    // below's own 0.2 — big enough to move the observed max-hit ceiling in a modifier-feed test
+    // (#114) without RNG noise masking it; real Content pets stay tiny since they're all-owned-
+    // additive (see PetDef's own doc), fixtures just need to be OBSERVABLE.
+    {
+      id: "test-combat-pet",
+      name: "Test Combat Pet",
+      icon: "goblin-charm",
+      target: "strength",
+      boostPct: 0.2,
+      source: "combat",
+    },
+    {
+      id: "test-fishing-pet",
+      name: "Test Fishing Pet",
+      icon: "sapphire",
+      target: "fishing-speed",
+      boostPct: 0.5,
+      source: "fishing",
+    },
+    {
+      id: "test-production-pet",
+      name: "Test Production Pet",
+      icon: "emerald",
+      target: "production-speed",
+      boostPct: 0.5,
+      source: "production",
+    },
+    {
+      id: "test-boss-pet",
+      name: "Test Boss Pet",
+      icon: "ruby",
+      target: "defence",
+      boostPct: 0.01,
+      source: { boss: "boss-dummy" },
+    },
   ],
 };

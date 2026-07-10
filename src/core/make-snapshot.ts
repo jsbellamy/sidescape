@@ -90,6 +90,7 @@ function baseSnapshot(): Snapshot {
       gold: 0,
       respawning: false,
       completedDungeonIds: [],
+      ownedPets: [],
     },
     monster: null,
     fishing: null,
