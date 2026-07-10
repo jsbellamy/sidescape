@@ -11,6 +11,6 @@ import type { Snapshot } from "../core/types";
  * Returns a `prop-<key>` CSS class suffix (see styles.css), or null for "no prop this activity".
  */
 export function resolveProp(snap: Snapshot): string | null {
-  if (snap.smithing) return "anvil";
+  if (snap.production) return "anvil";
   return null;
 }

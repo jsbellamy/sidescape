@@ -1,5 +1,8 @@
 /** Ordered list of Skills; order is load-bearing for the XP row render order. Ranged and Magic
- * (#7) are appended, never inserted earlier — mirrors items.ts's own append-only convention. */
+ * (#7) are appended, never inserted earlier — mirrors items.ts's own append-only convention.
+ * Cooking/crafting/herblore (#113, the Production & Consumables wave's chosen chassis) are
+ * appended after magic for the same reason: no content ships for them this slice (#113 is the
+ * chassis only), but the chassis they ride — RecipeDef.skill/selectRecipe — is skill-agnostic. */
 export const SKILL_NAMES = [
   "attack",
   "strength",
@@ -9,6 +12,9 @@ export const SKILL_NAMES = [
   "smithing",
   "ranged",
   "magic",
+  "cooking",
+  "crafting",
+  "herblore",
 ] as const;
 export type SkillName = (typeof SKILL_NAMES)[number];
 
@@ -131,12 +137,15 @@ export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef;
 export interface RecipeDef {
   id: string;
   name: string;
-  /** Smithing level required to select this Recipe. */
+  /** The Skill this Recipe trains and gates on (#113 — was implicitly "smithing" before the
+   * multi-skill production chassis; Cooking/Crafting/Herblore ride this same field). */
+  skill: SkillName;
+  /** Level in `skill` required to select this Recipe. */
   levelReq: number;
   inputs: { itemId: string; qty: number }[];
   /** Item produced per craft; always qty 1 (see the item-crafted event). */
   outputItemId: string;
-  /** Smithing XP per craft. */
+  /** XP in `skill` per craft. */
   xp: number;
   /** Ticks per craft. */
   craftTicks: number;
@@ -341,9 +350,13 @@ export interface Snapshot {
    * existing HP-bar rendering works untouched. 1-based wave, mid-run only — never persisted
    * across a reload (a reload is an abandon, see engine.ts's loadState). */
   dungeon: { id: string; name: string; wave: number; totalWaves: number } | null;
-  /** Sibling to monster/fishing/dungeon; at most one of the four is non-null at a time (#28's
-   * four-way mutual exclusion). Unlike dungeon, Smithing RESUMES on load like fishing does. */
-  smithing: { recipeId: string; name: string } | null;
+  /** Sibling to monster/fishing/dungeon; at most one of the five is non-null at a time (#28's
+   * mutual exclusion). Like fishing, a production activity RESUMES on load. Renamed from
+   * `smithing` (#113, the multi-skill production chassis) to `production`, carrying `skill` so
+   * the UI can label any Skill's Recipe generically, not just Smithing's. Tolerant load reads
+   * `production ?? smithing` (engine.ts's loadState) so a pre-#113 save (which stored `smithing`,
+   * `{ recipeId, name }` with no skill) still resumes — skill is resolved from the recipe. */
+  production: { recipeId: string; name: string; skill: SkillName } | null;
   bank: {
     items: { itemId: string; qty: number }[];
     capacity: number;

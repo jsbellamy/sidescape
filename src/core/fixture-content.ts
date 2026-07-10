@@ -200,6 +200,7 @@ export const fixtureContent: Content = {
     {
       id: "test-sword",
       name: "Test Sword",
+      skill: "smithing",
       levelReq: 1,
       inputs: [{ itemId: "bar", qty: 1 }],
       outputItemId: "bronze-sword",
@@ -210,6 +211,7 @@ export const fixtureContent: Content = {
     {
       id: "test-charm",
       name: "Test Charm",
+      skill: "smithing",
       levelReq: 20,
       inputs: [{ itemId: "bar", qty: 3 }],
       outputItemId: "lucky-charm",

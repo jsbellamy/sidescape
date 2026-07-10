@@ -480,14 +480,14 @@ export function mountApp(
 
   /** Renders the main column's "scene": the current Dungeon banner (if any), the player HP bar,
    * the gold counter in the chrome row directly above it, and whichever of Monster / Fishing Spot
-   * / Smithing Recipe is active (or the "pick a monster" placeholder). Decomposed from the old
+   * / production Recipe is active (or the "pick a monster" placeholder). Decomposed from the old
    * monolithic `render()` (#39) — DOM output is unchanged. */
   function renderScene(
     dungeon: Snapshot["dungeon"],
     player: Snapshot["player"],
     monster: Snapshot["monster"],
     fishing: Snapshot["fishing"],
-    smithing: Snapshot["smithing"],
+    production: Snapshot["production"],
   ): void {
     const dungeonHeader = el<HTMLElement>("#dungeon-header");
     if (dungeon) {
@@ -506,8 +506,11 @@ export function mountApp(
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
-    if (smithing) {
-      el("#monster-name").textContent = `🔨 Smithing: ${smithing.name}`;
+    if (production) {
+      // Smithing keeps its exact label this wave (byte-identical, #113); other Skills pick their
+      // own emoji in their own slices (Cooking/Crafting/Herblore), not authored here.
+      const label = production.skill === "smithing" ? "🔨 Smithing" : production.skill;
+      el("#monster-name").textContent = `${label}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
       monsterStats.hidden = true;
@@ -690,10 +693,13 @@ export function mountApp(
   }
 
   /** Renders the Smithing tab panel's recipe list: each Recipe's inputs (with owned quantities),
-   * level gate, and a Craft button disabled while under-leveled or short on inputs. */
+   * level gate, and a Craft button disabled while under-leveled or short on inputs. Filtered to
+   * `skill === "smithing"` (#113: `content.recipes` now spans every production Skill, but this
+   * tab is Smithing's own — Cooking/Crafting/Herblore add their own tabs in their own slices). */
   function renderSmithing(bankItems: Snapshot["bank"]["items"], smithingLevel: number): void {
     const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
     el("#smithing-recipes").innerHTML = content.recipes
+      .filter((recipe) => recipe.skill === "smithing")
       .map((recipe) => {
         const inputsLine = recipe.inputs
           .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
@@ -714,10 +720,10 @@ export function mountApp(
    * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
   function render(): void {
     const snap = engine.snapshot();
-    const { player, monster, fishing, dungeon, smithing, bank } = snap;
+    const { player, monster, fishing, dungeon, production, bank } = snap;
 
     renderBackdrop(snap);
-    renderScene(dungeon, player, monster, fishing, smithing);
+    renderScene(dungeon, player, monster, fishing, production);
     renderFoodSlots(player.foodSlots, bank.items);
     renderXpRow(player.skills);
     renderCharacter(player);

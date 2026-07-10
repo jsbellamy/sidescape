@@ -38,6 +38,9 @@ function baseSnapshot(): Snapshot {
     smithing: { level: 1, xp: 0 },
     ranged: { level: 1, xp: 0 },
     magic: { level: 1, xp: 0 },
+    cooking: { level: 1, xp: 0 },
+    crafting: { level: 1, xp: 0 },
+    herblore: { level: 1, xp: 0 },
   };
   const combatLevel = Math.floor(
     (skills.attack.level + skills.strength.level + skills.defence.level + skills.hitpoints.level) /
@@ -80,7 +83,7 @@ function baseSnapshot(): Snapshot {
     monster: null,
     fishing: null,
     dungeon: null,
-    smithing: null,
+    production: null,
     bank: { items: [], capacity: 100, nextSlotsPrice: 1000 },
     lootZone: [],
     areas: fixtureContent.areas.map((area) => {
