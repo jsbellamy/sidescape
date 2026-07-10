@@ -1,14 +1,16 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
 import {
-  buildAwaySummaryToast,
+  buildAwayCard,
   computeOfflineTicks,
   formatAwayDuration,
   OFFLINE_CAP_TICKS,
   pumpOffline,
+  showAwayCard,
 } from "./offline-progress";
 
 const TICK_MS = 600;
@@ -100,15 +102,20 @@ describe("pumpOffline", () => {
     expect(summary.kills).toBeGreaterThan(0); // the Training Dummy dies fast (3 HP) — sanity check
   });
 
-  it("records each Skill that leveled up only once, regardless of how many levels it gained", () => {
+  it("records each levelled-up Skill once, in first-crossed order, with its post-pump level", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(5),
       makeSnapshot({ fishing: { spotId: "pond", name: "Test Pond" } }),
     );
     const summary = pumpOffline(engine, OFFLINE_CAP_TICKS); // plenty of Catches to level up repeatedly
-    const fishingCount = summary.levelUpSkills.filter((s) => s === "fishing").length;
-    expect(fishingCount).toBeLessThanOrEqual(1);
+    expect(summary.levelUps.map(({ skill }) => skill)).toEqual(["fishing"]);
+    expect(summary.levelUps).toEqual(
+      summary.levelUps.map(({ skill }) => ({
+        skill,
+        level: engine.snapshot().player.skills[skill].level,
+      })),
+    );
   });
 
   it("stops attributing events to the summary once the pump has returned", () => {
@@ -153,63 +160,117 @@ describe("formatAwayDuration", () => {
   });
 });
 
-describe("buildAwaySummaryToast", () => {
+describe("buildAwayCard", () => {
   it("returns null when zero Ticks were pumped", () => {
-    const summary = { ticks: 0, kills: 0, levelUpSkills: [], deaths: 0, goldDelta: 0, xpDelta: 0 };
-    expect(buildAwaySummaryToast(summary, 0, false)).toBeNull();
+    const summary = { ticks: 0, kills: 0, levelUps: [], deaths: 0, goldDelta: 0, xpDelta: 0 };
+    expect(buildAwayCard(summary, 0, false)).toBeNull();
   });
 
   it("returns null when Ticks pumped but nothing notable happened (nothing was selected)", () => {
     const summary = {
       ticks: 500,
       kills: 0,
-      levelUpSkills: [],
+      levelUps: [],
       deaths: 0,
       goldDelta: 0,
       xpDelta: 0,
     };
-    expect(buildAwaySummaryToast(summary, 300_000, false)).toBeNull();
+    expect(buildAwayCard(summary, 300_000, false)).toBeNull();
   });
 
-  it("reports kills, level-ups, gold delta, XP delta, and deaths when notable", () => {
+  it("builds ordered lines for kills, levels, gold, XP, and deaths when notable", () => {
     const summary = {
       ticks: 6_000,
       kills: 12,
-      levelUpSkills: ["strength" as const, "hitpoints" as const],
+      levelUps: [
+        { skill: "strength" as const, level: 43 },
+        { skill: "hitpoints" as const, level: 11 },
+      ],
       deaths: 2,
       goldDelta: 60,
       xpDelta: 480,
     };
-    const text = buildAwaySummaryToast(summary, 60 * 60_000, false);
-    expect(text).toContain("1h");
-    expect(text).toContain("12 kill");
-    expect(text).toContain("strength, hitpoints");
-    expect(text).toContain("+60g");
-    expect(text).toContain("+480 xp");
-    expect(text).toContain("2 deaths");
+    expect(buildAwayCard(summary, 60 * 60_000, false)).toEqual({
+      heading: "While you were away (1h)",
+      lines: [
+        "⚔ 12 kills",
+        "⭐ Strength → 43 · Hitpoints → 11",
+        "🪙 +60g",
+        "✨ +480 xp",
+        "💀 2 deaths",
+      ],
+    });
   });
 
   it("is notable on gold/XP delta alone, even with no kills/level-ups/deaths (e.g. Smithing)", () => {
     const summary = {
       ticks: 300,
       kills: 0,
-      levelUpSkills: [],
+      levelUps: [],
       deaths: 0,
       goldDelta: 0,
       xpDelta: 50,
     };
-    expect(buildAwaySummaryToast(summary, 180_000, false)).not.toBeNull();
+    expect(buildAwayCard(summary, 180_000, false)).not.toBeNull();
   });
 
   it("shows the capped '8h+' duration when the pump hit OFFLINE_CAP_TICKS", () => {
     const summary = {
       ticks: OFFLINE_CAP_TICKS,
       kills: 1,
-      levelUpSkills: [],
+      levelUps: [],
       deaths: 0,
       goldDelta: 5,
       xpDelta: 12,
     };
-    expect(buildAwaySummaryToast(summary, 999_999_999, true)).toContain("8h+");
+    expect(buildAwayCard(summary, 999_999_999, true)?.heading).toContain("8h+");
+  });
+});
+
+describe("showAwayCard", () => {
+  afterEach(() => vi.useRealTimers());
+
+  function rootWithToastContainer(): HTMLElement {
+    const root = document.createElement("main");
+    root.innerHTML = '<div id="toast-container"></div>';
+    return root;
+  }
+
+  const model = {
+    heading: "While you were away (6h 12m)",
+    lines: ["⚔ 45 kills", "⭐ Attack → 43 · Magic → 11", "🪙 +1240g", "✨ +5020 xp", "💀 2 deaths"],
+  };
+
+  it("renders the heading, dismiss button, and a paragraph for every line", () => {
+    const root = rootWithToastContainer();
+    showAwayCard(root, model);
+
+    const card = root.querySelector<HTMLElement>(".away-card");
+    expect(card).not.toBeNull();
+    expect(card?.querySelector(".away-card-heading")?.textContent).toContain(model.heading);
+    expect(card?.querySelector<HTMLButtonElement>(".away-card-dismiss")?.title).toBe("Dismiss");
+    expect(
+      [...(card?.querySelectorAll(".away-card-line") ?? [])].map((line) => line.textContent),
+    ).toEqual(model.lines);
+  });
+
+  it("removes the card immediately on click and clears its pending timer", () => {
+    vi.useFakeTimers();
+    const root = rootWithToastContainer();
+    showAwayCard(root, model);
+    const card = root.querySelector<HTMLElement>(".away-card");
+    card?.click();
+    expect(root.querySelector(".away-card")).toBeNull();
+    expect(() => vi.advanceTimersByTime(15_000)).not.toThrow();
+  });
+
+  it("auto-dismisses after the configured delay and tolerates a subsequent click", () => {
+    vi.useFakeTimers();
+    const root = rootWithToastContainer();
+    showAwayCard(root, model, 15_000);
+    const card = root.querySelector<HTMLElement>(".away-card");
+    vi.advanceTimersByTime(15_000);
+    expect(root.querySelector(".away-card")).toBeNull();
+    expect(() => card?.click()).not.toThrow();
   });
 });
