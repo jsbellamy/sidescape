@@ -66,6 +66,36 @@ export const fixtureContent: Content = {
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 10, chance: 1, band: "guaranteed" }],
     },
+    // Element weakness fixture pair (#101): byte-identical stats, differing only in weakElement —
+    // paired so a test can run the SAME seeded Rng against both and prove the multiplier (or its
+    // absence) rather than eyeballing statistics. Never attacks back (maxHit 0) and never dies
+    // (hp 999) mid-test. Absent from every Area's monsterIds, same as boss-dummy above —
+    // selectMonster doesn't require Area membership.
+    {
+      id: "weak-dummy",
+      name: "Weak Dummy",
+      hp: 999,
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 0,
+      attackSpeed: 4,
+      attackType: "crush",
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      weakElement: "air",
+      dropTable: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" }],
+    },
+    {
+      id: "control-dummy",
+      name: "Control Dummy",
+      hp: 999,
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 0,
+      attackSpeed: 4,
+      attackType: "crush",
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      dropTable: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" }],
+    },
   ],
   // icon (#78): every value below reuses a real key from src/ui/icons.ts's registry (the same
   // keys the v1 Content in src/data/index.ts uses) rather than a fixture-only key, so UI tests
@@ -186,5 +216,12 @@ export const fixtureContent: Content = {
       xp: 40,
       craftTicks: 5,
     },
+  ],
+  // Spells (#101): one always-castable at levelReq 1 (validateContent's own requirement) plus one
+  // gated, so level-gate tests don't need to touch the real v1 spellbook. "test-spark" is "air" so
+  // it pairs with "weak-dummy" (monsters.ts, above) for element-multiplier tests.
+  spells: [
+    { id: "test-spark", name: "Test Spark", element: "air", levelReq: 1, baseMaxHit: 5 },
+    { id: "test-blast", name: "Test Blast", element: "water", levelReq: 20, baseMaxHit: 15 },
   ],
 };

@@ -54,6 +54,10 @@ function baseSnapshot(): Snapshot {
       maxHp,
       combatLevel,
       combatStyle: "accurate",
+      // Resolved to fixtureContent's own levelReq-1 spell (#101) — mirrors engine.ts's
+      // resolvedSpell fallback for a fresh/unselected save; a caller overriding player.spell (or
+      // equipment/skills that would change which spell resolves) should also override this.
+      spell: { id: "test-spark", name: "Test Spark", element: "air" },
       autoEatThreshold: 0,
       autoSellDuplicates: true,
       foodSlots: [null, null, null],

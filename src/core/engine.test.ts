@@ -4256,3 +4256,225 @@ describe("Attack Type axis (#99)", () => {
     });
   });
 });
+
+describe("Spells (#101)", () => {
+  describe("selectSpell", () => {
+    it("throws on an unknown spell id", () => {
+      const engine = freshEngine();
+      expect(() => engine.selectSpell("no-such-spell")).toThrow(/unknown spell/);
+    });
+
+    it("throws when the player's Magic level is below the spell's levelReq", () => {
+      const engine = freshEngine(); // level 1 Magic
+      expect(() => engine.selectSpell("test-blast")).toThrow(/Magic level 20/);
+    });
+
+    it("a legal selection persists across a save/load round-trip", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
+      );
+      engine.selectSpell("test-blast");
+      expect(engine.snapshot().player.spell).toEqual({
+        id: "test-blast",
+        name: "Test Blast",
+        element: "water",
+      });
+
+      const reloaded = createEngine(fixtureContent, seededRng(1), engine.snapshot());
+      expect(reloaded.snapshot().player.spell).toEqual({
+        id: "test-blast",
+        name: "Test Blast",
+        element: "water",
+      });
+    });
+
+    it("selecting a spell does not change activity — legal any time, like setCombatStyle", () => {
+      const engine = freshEngine();
+      engine.selectMonster("dummy");
+      engine.selectSpell("test-spark");
+      expect(engine.snapshot().monster?.id).toBe("dummy");
+    });
+  });
+
+  describe("resolution: spellId null (fresh save, or an old save missing the field) falls back to the levelReq-1 spell", () => {
+    it("a fresh engine's resolved spell is the fixture's levelReq-1 spell", () => {
+      expect(freshEngine().snapshot().player.spell).toEqual({
+        id: "test-spark",
+        name: "Test Spark",
+        element: "air",
+      });
+    });
+
+    it("a pre-#101 save (no player.spell field at all) also resolves to the levelReq-1 spell", () => {
+      const saved = makeSnapshot();
+      const withoutSpell = { ...saved, player: { ...saved.player } } as unknown as Record<
+        string,
+        unknown
+      >;
+      const player = withoutSpell["player"] as Record<string, unknown>;
+      delete player["spell"];
+      const engine = createEngine(fixtureContent, seededRng(1), withoutSpell as never);
+      expect(engine.snapshot().player.spell).toEqual({
+        id: "test-spark",
+        name: "Test Spark",
+        element: "air",
+      });
+    });
+
+    it("an unknown saved spell id (dropped content) also falls back, instead of throwing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { spell: { id: "no-longer-exists", name: "x", element: "fire" } } }),
+      );
+      expect(engine.snapshot().player.spell?.id).toBe("test-spark");
+    });
+  });
+
+  describe("Magic accuracy and max hit (#101, replacing wave 1/4's interim math)", () => {
+    it("magic max hit changes with the selected spell, not with Strength level", () => {
+      function maxDamage(magicLevel: number, strengthLevel: number, spellId: string): number {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(5),
+          makeSnapshot({
+            player: {
+              skills: {
+                magic: { level: magicLevel, xp: xpForLevel(magicLevel) },
+                strength: { level: strengthLevel, xp: xpForLevel(strengthLevel) },
+                hitpoints: { level: 20, xp: xpForLevel(20) },
+              },
+              equipment: { weapon: "staff" },
+            },
+          }),
+        );
+        engine.selectSpell(spellId);
+        engine.selectMonster("control-dummy");
+        let max = 0;
+        engine.on("attack", (e) => {
+          if (e.actor === "player") max = Math.max(max, e.damage);
+        });
+        for (let i = 0; i < 2000; i++) engine.tick();
+        return max;
+      }
+
+      // Same spell (test-spark, baseMaxHit 5), Strength 1 vs 99: byte-identical ceiling — Strength
+      // never enters magic's max-hit formula (#101 dropped strBonus from the magic path entirely).
+      const lowStr = maxDamage(20, 1, "test-spark");
+      const highStr = maxDamage(20, 99, "test-spark");
+      expect(highStr).toBe(lowStr);
+
+      // Same Magic level, a stronger spell (test-blast, baseMaxHit 15): the ceiling rises.
+      const weakerSpell = maxDamage(20, 1, "test-spark");
+      const strongerSpell = maxDamage(20, 1, "test-blast");
+      expect(strongerSpell).toBeGreaterThan(weakerSpell);
+    });
+
+    it("raising Attack/Strength changes nothing about magic combat (bit-identical outcome, same seed) — accuracy is Magic level + weapon atkBonus only", () => {
+      function run(magicLevel: number, attackLevel: number, strengthLevel: number): number[] {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(77),
+          makeSnapshot({
+            player: {
+              skills: {
+                magic: { level: magicLevel, xp: xpForLevel(magicLevel) },
+                attack: { level: attackLevel, xp: xpForLevel(attackLevel) },
+                strength: { level: strengthLevel, xp: xpForLevel(strengthLevel) },
+                hitpoints: { level: 20, xp: xpForLevel(20) },
+              },
+              equipment: { weapon: "staff" },
+            },
+          }),
+        );
+        engine.selectMonster("control-dummy");
+        const damages: number[] = [];
+        engine.on("attack", (e) => {
+          if (e.actor === "player") damages.push(e.damage);
+        });
+        for (let i = 0; i < 1000; i++) engine.tick();
+        expect(damages.length).toBeGreaterThan(0);
+        return damages;
+      }
+
+      const lowAtkStr = run(40, 1, 1);
+      const highAtkStr = run(40, 99, 99);
+      expect(highAtkStr).toEqual(lowAtkStr);
+    });
+  });
+
+  describe("Element weakness multiplier (#101) — the one damage-side modifier in the Hybrid model", () => {
+    /** Runs the same seeded Rng, same player, against `monsterId` for `ticks` Ticks, returning
+     * every player `attack` event's (hit, damage) pair. Two runs built from the same seed produce
+     * byte-identical accuracy rolls and base damage rolls (`weakElement` never enters the accuracy
+     * math and the multiplier consumes no extra Rng draws) — so diffing two runs against paired
+     * fixture monsters (see fixture-content.ts's weak-dummy/control-dummy) isolates exactly what
+     * the multiplier changed, instead of eyeballing aggregate statistics. */
+    function runAttacks(
+      monsterId: string,
+      spellId: string,
+      seed: number,
+      ticks = 500,
+    ): { hit: boolean; damage: number }[] {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(seed),
+        makeSnapshot({
+          player: {
+            skills: {
+              magic: { level: 20, xp: xpForLevel(20) },
+              hitpoints: { level: 20, xp: xpForLevel(20) },
+            },
+            equipment: { weapon: "staff" },
+          },
+        }),
+      );
+      engine.selectSpell(spellId);
+      engine.selectMonster(monsterId);
+      const attacks: { hit: boolean; damage: number }[] = [];
+      engine.on("attack", (e) => {
+        if (e.actor === "player") attacks.push({ hit: e.hit, damage: e.damage });
+      });
+      for (let i = 0; i < ticks; i++) engine.tick();
+      expect(attacks.length).toBeGreaterThan(0);
+      return attacks;
+    }
+
+    it("a matching-element spell (Test Spark/air) deals floor(damage × 1.5) against a weak-to-air monster, versus the identical non-weak control run", () => {
+      const control = runAttacks("control-dummy", "test-spark", 5);
+      const weak = runAttacks("weak-dummy", "test-spark", 5);
+
+      expect(weak).toHaveLength(control.length);
+      let sawAHit = false;
+      for (let i = 0; i < control.length; i++) {
+        const c = control[i] as { hit: boolean; damage: number };
+        const w = weak[i] as { hit: boolean; damage: number };
+        expect(w.hit).toBe(c.hit); // weakElement never affects accuracy
+        expect(w.damage).toBe(Math.floor(c.damage * 1.5));
+        if (c.hit) sawAHit = true;
+      }
+      expect(sawAHit).toBe(true); // the sample actually exercised the multiplier path
+    });
+
+    it("a non-matching element (Test Blast/water) gets no multiplier against the same weak-to-air monster — byte-identical to the control run", () => {
+      const control = runAttacks("control-dummy", "test-blast", 9);
+      const mismatched = runAttacks("weak-dummy", "test-blast", 9);
+      expect(mismatched).toEqual(control);
+    });
+  });
+
+  describe("Snapshot / content shape", () => {
+    it("Content.spells is non-empty and every spell round-trips its own fields", () => {
+      const spark = fixtureContent.spells.find((s) => s.id === "test-spark");
+      expect(spark).toEqual({
+        id: "test-spark",
+        name: "Test Spark",
+        element: "air",
+        levelReq: 1,
+        baseMaxHit: 5,
+      });
+    });
+  });
+});

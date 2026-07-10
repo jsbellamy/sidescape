@@ -17,6 +17,7 @@ import type {
   ItemDef,
   MonsterDef,
   RecipeDef,
+  SpellDef,
   CombatStyle,
   Content,
   EngineEvent,
@@ -71,6 +72,12 @@ interface State {
   xp: Record<SkillName, number>;
   hp: number;
   combatStyle: CombatStyle;
+  /** The player's selected spell (Combat Depth wave 3/4, #101) — a loadout choice like
+   * `combatStyle`, legal to change any time. `null` resolves at cast time to the lowest-levelReq
+   * spell (see `resolvedSpell`); validateContent guarantees one at levelReq 1, so a fresh save can
+   * always cast. Levels only rise, so a previously-legal selection can never become illegal
+   * (no level-down guard needed). */
+  spellId: string | null;
   autoEatThreshold: AutoEatThreshold;
   /** Toggles auto-sell of duplicate Equipment (#63) — see creditCombatItem/isDuplicateEquipment. */
   autoSellDuplicates: boolean;
@@ -102,6 +109,10 @@ export interface Engine {
   selectFishingSpot(spotId: string): void;
   enterDungeon(dungeonId: string): void;
   selectRecipe(recipeId: string): void;
+  /** Selects the player's spell (Combat Depth wave 3/4, #101) — a loadout choice, not an activity:
+   * legal any time, never changes `activity`. Throws on an unknown id or a Magic level below the
+   * spell's `levelReq` (message pattern matches `selectRecipe`). */
+  selectSpell(id: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   /** Toggles auto-sell of duplicate Equipment (#63, default ON) — see creditCombatItem/
@@ -152,6 +163,11 @@ const FOOD_SLOT_COUNT = 3;
  * qty" rule. Tuning, not spec. */
 const LOOT_ZONE_CAPACITY = 10;
 
+/** Element weakness damage multiplier (Combat Depth wave 3/4, #101) — the ONE damage-side
+ * modifier in the otherwise accuracy-only Hybrid combat model: a spell whose element matches
+ * `monster.weakElement` deals this much more damage. Tuning default, not spec. */
+const ELEMENT_WEAKNESS_MULT = 1.5;
+
 /** Bank Slot capacity: 1 slot = 1 item stack, regardless of stack quantity. */
 const BANK_START_CAPACITY = 100;
 /** Tuning default: how many Bank Slots one `buyBankSlots()` purchase grants. */
@@ -183,6 +199,17 @@ const COMBAT_STYLES: readonly CombatStyle[] = ["accurate", "aggressive", "defens
 
 function isCombatStyle(value: unknown): value is CombatStyle {
   return (COMBAT_STYLES as readonly unknown[]).includes(value);
+}
+
+/** Tolerant load of `player.spell.id` (#101): the save stores the selection only, not the
+ * resolved spell — an unknown id (dropped content, corrupted save) or a missing/pre-#101 field
+ * both fall back to `null`, which resolves at cast time to the lowest-levelReq spell (see
+ * `resolvedSpell`). No level check here: levels only rise, so a previously-legal selection can
+ * never become illegal. */
+function loadSpellId(saved: Snapshot, content: Content): string | null {
+  const raw: unknown = saved.player?.spell?.id;
+  if (typeof raw !== "string") return null;
+  return content.spells.some((s) => s.id === raw) ? raw : null;
 }
 
 /** Ticks between player attacks for `weaponId`; unarmed (or an unresolvable/non-equipment id)
@@ -231,6 +258,7 @@ function freshState(_content: Content): State {
     },
     hp: 10,
     combatStyle: "aggressive",
+    spellId: null,
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
     autoSellDuplicates: DEFAULT_AUTO_SELL_DUPLICATES,
     foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
@@ -513,6 +541,7 @@ function loadState(saved: Snapshot, content: Content): State {
     xp,
     hp: loadHp(saved, maxHp),
     combatStyle: isCombatStyle(saved.player?.combatStyle) ? saved.player.combatStyle : "aggressive",
+    spellId: loadSpellId(saved, content),
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
@@ -591,6 +620,21 @@ export function createEngine(
     const def = content.recipes.find((r) => r.id === id);
     if (!def) throw new Error(`unknown recipe: ${id}`);
     return def;
+  }
+
+  function spellDef(id: string): SpellDef {
+    const def = content.spells.find((s) => s.id === id);
+    if (!def) throw new Error(`unknown spell: ${id}`);
+    return def;
+  }
+
+  /** The player's currently RESOLVED spell (#101): `state.spellId` if it still resolves, else the
+   * lowest-levelReq spell — validateContent guarantees one at levelReq 1, so this always succeeds
+   * even on a fresh save (`spellId: null`) or after content dropped a previously-selected spell. */
+  function resolvedSpell(): SpellDef {
+    const selected = state.spellId ? content.spells.find((s) => s.id === state.spellId) : undefined;
+    if (selected) return selected;
+    return content.spells.reduce((lowest, s) => (s.levelReq < lowest.levelReq ? s : lowest));
   }
 
   /** Whether the Bank covers at least one craft of `recipe`. */
@@ -909,11 +953,13 @@ export function createEngine(
 
   /** Player accuracy + max hit for the currently equipped weapon's Attack Type (#99). Melee
    * (stab/slash/crush) is byte-identical to pre-#99: Attack/Strength + Combat Style, unchanged.
-   * Ranged is mechanically real for the first time: accuracy AND max hit both derive from the
-   * Ranged skill (OSRS-style) rather than Attack/Strength — effectiveLevel already yields +8 with
-   * no Combat Style boost for a non-melee skill, so no change needed there. Magic mirrors Ranged's
-   * shape for now, keyed off the Magic skill; this is explicitly interim — wave 3/4 (Spells)
-   * replaces Magic's max hit with spell-driven damage. */
+   * Ranged is mechanically real: accuracy AND max hit both derive from the Ranged skill
+   * (OSRS-style) rather than Attack/Strength — effectiveLevel already yields +8 with no Combat
+   * Style boost for a non-melee skill, so no change needed there. Magic's accuracy mirrors
+   * Ranged's shape (keyed off the Magic skill + weapon atkBonus), but max hit comes from the
+   * resolved spell's `baseMaxHit` instead of a Strength-shaped formula (#101, replacing wave 1/4's
+   * interim level-driven magic max hit) — Magic level gates WHICH spell, the spell decides the
+   * damage; magic weapons ignore strBonus entirely. */
   function playerAccuracyAndMaxHit(): { atkRoll: number; max: number } {
     const mode = weaponCombatModeFor(state.equipment.weapon, content);
     if (mode === "ranged") {
@@ -927,7 +973,7 @@ export function createEngine(
       const eff = effectiveLevel(level("magic"), "magic", state.combatStyle);
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
-        max: maxHit(eff, gearBonus("strBonus")),
+        max: resolvedSpell().baseMaxHit,
       };
     }
     return {
@@ -948,7 +994,15 @@ export function createEngine(
     // Routed lookup (#99): the monster's weak spot is simply the type it defends worst.
     const defRoll = defenceRoll(monster.defenceLevel + 8, monster.def[weaponType]);
     const { hit, damage: rolled } = rollDamage(hitChance(atkRoll, defRoll), max);
-    const damage = Math.min(rolled, activity.monsterHp);
+    // Element weakness (#101): the ONE damage-side modifier in the Hybrid model — keyed off `hit`
+    // per the owner's rule on the `attack` event (types.ts): a miss never gets it (moot here since
+    // a miss's `rolled` is already 0), but a zero-damage HIT still applies it. Melee/ranged are
+    // elementless (weaponType !== "magic"), so this never touches their damage.
+    let elementDamage = rolled;
+    if (weaponType === "magic" && hit && monster.weakElement === resolvedSpell().element) {
+      elementDamage = Math.floor(rolled * ELEMENT_WEAKNESS_MULT);
+    }
+    const damage = Math.min(elementDamage, activity.monsterHp);
     activity.monsterHp -= damage;
     awardCombatXp(damage);
     emit({ type: "attack", actor: "player", damage, hit });
@@ -1013,6 +1067,10 @@ export function createEngine(
         maxHp: maxHp(),
         combatLevel: combatLevel(),
         combatStyle: state.combatStyle,
+        spell: (() => {
+          const spell = resolvedSpell();
+          return { id: spell.id, name: spell.name, element: spell.element };
+        })(),
         autoEatThreshold: state.autoEatThreshold,
         autoSellDuplicates: state.autoSellDuplicates,
         foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
@@ -1296,6 +1354,15 @@ export function createEngine(
       // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
       sweepLootZone();
       state.activity = { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+    },
+    selectSpell(id) {
+      const spell = spellDef(id); // throws on unknown id
+      if (level("magic") < spell.levelReq) {
+        throw new Error(`${spell.name} requires Magic level ${spell.levelReq}`);
+      }
+      // A loadout choice, not an activity (mirrors setCombatStyle): legal any time, never touches
+      // state.activity.
+      state.spellId = spell.id;
     },
     setCombatStyle(style) {
       state.combatStyle = style;

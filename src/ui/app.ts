@@ -12,6 +12,7 @@ import type {
   GearSlot,
   SkillSnapshot,
   Snapshot,
+  SpellDef,
 } from "../core/types";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
@@ -86,6 +87,18 @@ const STYLE_LABELS: Record<CombatStyle, string> = {
   aggressive: "Aggressive",
   defensive: "Defensive",
 };
+
+/** One row of the Spell picker (#101): name, a short Element tag, and — only while under-leveled
+ * — the Magic level it needs. #78's icon pass restyles this later (issue's own UI note); today
+ * it's a compact text row, mirroring the Combat Style selector it sits beside. */
+function spellRowMarkup(spell: SpellDef, magicLevel: number, selectedId: string): string {
+  const gated = magicLevel < spell.levelReq;
+  return `<button data-spell="${spell.id}" class="spell-btn ${spell.id === selectedId ? "active" : ""}" ${gated ? "disabled" : ""}>
+    <span class="spell-name">${spell.name}</span>
+    <span class="spell-element">${spell.element}</span>
+    ${gated ? `<span class="spell-req">Lvl ${spell.levelReq}</span>` : ""}
+  </button>`;
+}
 
 /** Auto-eat threshold segmented control labels, keyed by the Engine's AutoEatThreshold union. */
 const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
@@ -560,6 +573,12 @@ export function mountApp(
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
     });
 
+    // Spell picker (#101): one row per known spell (content.spells, not just castable ones),
+    // level-gated ones disabled with their req shown, the resolved selection highlighted.
+    el("#spell-row").innerHTML = content.spells
+      .map((spell) => spellRowMarkup(spell, player.skills.magic.level, player.spell?.id ?? ""))
+      .join("");
+
     root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
       btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
     });
@@ -800,6 +819,8 @@ export function mountApp(
               .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
               .join("")}
           </div>
+          <p class="panel-subtitle">Spells</p>
+          <div id="spell-row" class="spell-row"></div>
           <div id="autoeat-row" class="style-row">
             ${Object.entries(AUTO_EAT_LABELS)
               .map(
@@ -906,6 +927,18 @@ export function mountApp(
     const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
     if (style) {
       engine.setCombatStyle(style);
+      render();
+    }
+  });
+
+  // Spell picker (#101): a disabled (under-leveled) button never fires click, so no extra guard
+  // is needed here — mirrors #style-row's own pattern above.
+  el("#spell-row").addEventListener("click", (event) => {
+    const spellId = (event.target as HTMLElement).closest<HTMLElement>("[data-spell]")?.dataset[
+      "spell"
+    ];
+    if (spellId) {
+      engine.selectSpell(spellId);
       render();
     }
   });

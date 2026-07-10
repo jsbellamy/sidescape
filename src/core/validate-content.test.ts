@@ -277,7 +277,39 @@ describe("validateContent", () => {
     expect(validateContent(content)).toEqual([]);
   });
 
-  it("allows empty collections", () => {
+  it("reports zero spells (#101) — not doubled up with the redundant levelReq-1 message", () => {
+    const content: Content = { ...fixtureContent, spells: [] };
+    expect(validateContent(content)).toEqual(["Content defines no spells"]);
+  });
+
+  it("reports no spell at levelReq 1 (#101) — spellId: null could never resolve", () => {
+    const content: Content = {
+      ...fixtureContent,
+      spells: fixtureContent.spells.map((s) => (s.id === "test-spark" ? { ...s, levelReq: 2 } : s)),
+    };
+    expect(validateContent(content)).toContain("Content defines no spell with levelReq 1");
+  });
+
+  it("reports a spell with baseMaxHit < 1 (#101)", () => {
+    const content: Content = {
+      ...fixtureContent,
+      spells: fixtureContent.spells.map((s) =>
+        s.id === "test-spark" ? { ...s, baseMaxHit: 0 } : s,
+      ),
+    };
+    expect(validateContent(content)).toContain('spell "test-spark" baseMaxHit must be >= 1');
+  });
+
+  it("reports a duplicate spell id (#101)", () => {
+    const spark = fixtureContent.spells.find((s) => s.id === "test-spark")!;
+    const content: Content = {
+      ...fixtureContent,
+      spells: [...fixtureContent.spells, { ...spark }],
+    };
+    expect(validateContent(content)).toContain('spells contains 2 entries with id "test-spark"');
+  });
+
+  it("allows empty collections (spells excepted — it must keep a levelReq-1 entry)", () => {
     const content: Content = {
       areas: [],
       monsters: [],
@@ -285,6 +317,7 @@ describe("validateContent", () => {
       fishingSpots: [],
       dungeons: [],
       recipes: [],
+      spells: fixtureContent.spells,
     };
     expect(validateContent(content)).toEqual([]);
   });
