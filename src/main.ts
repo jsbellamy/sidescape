@@ -8,7 +8,7 @@ import { createEngine } from "./core/engine";
 import { mathRandomRng } from "./core/rng";
 import { content } from "./data";
 import { mountApp } from "./ui/app";
-import type { WindowChrome } from "./ui/app";
+import type { WorkspaceChrome } from "./ui/app";
 import { mountSfx } from "./ui/sfx";
 import {
   buildAwaySummaryToast,
@@ -19,7 +19,13 @@ import {
 } from "./ui/offline-progress";
 import { decodeSave, encodeSave } from "./ui/save-transfer";
 import type { Snapshot } from "./core/types";
-import { BASE_H, panelWindowRect } from "./ui/window-geometry";
+import {
+  DEFAULT_CARD_H,
+  DEFAULT_COMPACT_H,
+  DEFAULT_COMPACT_W,
+  workspaceCapacity,
+  workspaceRect,
+} from "./ui/window-geometry";
 
 const SAVE_KEY = "sidescape-save-v1";
 const TICK_MS = 600;
@@ -51,10 +57,12 @@ const TICK_MS = 600;
  * drift the window. Only width is ever app-owned this way; x/y otherwise stay as the plugin
  * restored them (aside from the panel x-shift), clamped by the screen-edge rule above.
  */
-function createTauriWindowChrome(): WindowChrome {
-  let wasLeftOpen = false;
+function createTauriWindowChrome(): WorkspaceChrome {
+  let cardCount = 0;
+  let anchor: "top" | "bottom" | null = null;
+  const compact = { width: DEFAULT_COMPACT_W, height: DEFAULT_COMPACT_H };
 
-  async function applyPanels(left: boolean, right: boolean): Promise<void> {
+  async function applyCards(nextCardCount: number): Promise<void> {
     const win = getCurrentWindow();
 
     const scaleFactor = await win.scaleFactor();
@@ -70,22 +78,35 @@ function createTauriWindowChrome(): WindowChrome {
         }
       : null;
 
-    const { width, x } = panelWindowRect({
-      currentX: currentPos.x,
-      wasLeftOpen,
-      left,
-      right,
+    const size = await win.outerSize();
+    const currentSize = size.toLogical(scaleFactor);
+    const result = workspaceRect({
+      current: {
+        x: currentPos.x,
+        y: currentPos.y,
+        width: currentSize.width,
+        height: currentSize.height,
+      },
+      compact,
+      cardHeight: DEFAULT_CARD_H,
+      wasCardCount: cardCount,
+      cardCount: nextCardCount,
+      anchor,
       monitor: monitorRect,
     });
-
-    await win.setSize(new LogicalSize(width, BASE_H));
-    await win.setPosition(new LogicalPosition(x, currentPos.y));
-    wasLeftOpen = left;
+    await win.setSize(new LogicalSize(result.width, result.height));
+    await win.setPosition(new LogicalPosition(result.x, result.y));
+    cardCount = nextCardCount;
+    anchor = result.anchor;
   }
 
   return {
-    setPanels(left: boolean, right: boolean): void {
-      applyPanels(left, right).catch(console.error);
+    async getCapacity(): Promise<1 | 2 | 3> {
+      const monitor = await currentMonitor();
+      return monitor ? workspaceCapacity(monitor.size.toLogical(monitor.scaleFactor).width) : 3;
+    },
+    setCardCount(nextCardCount: number): void {
+      applyCards(nextCardCount).catch(console.error);
     },
   };
 }
