@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance } from "./combat";
-import { createEngine } from "./engine";
+import { __setModifierSourcesForTest, createEngine } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
@@ -4567,5 +4567,100 @@ describe("Spells (#101)", () => {
         baseMaxHit: 5,
       });
     });
+  });
+});
+
+/**
+ * Modifier-aggregation layer (#114): the layer itself is internal (no Snapshot surface), so these
+ * prove the wiring the only way observable from the public Engine interface — through actual
+ * combat/fishing outcomes, injecting a source via the documented test-only seam
+ * (`__setModifierSourcesForTest`). Every other describe block in this file exercises the ×1
+ * identity implicitly: none of the 603 pre-#114 tests changed, because zero sources means both
+ * aggregators fold to 1 everywhere they're now applied.
+ */
+describe("Modifier-aggregation layer (#114)", () => {
+  afterEach(() => __setModifierSourcesForTest([])); // never leak an injected source into later tests
+
+  it("a +20% Strength modifier source raises the observed player max hit in melee combat", () => {
+    function meleeDamages(ticks = 1000): number[] {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(99),
+        makeSnapshot({
+          player: {
+            skills: {
+              attack: { level: 90, xp: xpForLevel(90) },
+              strength: { level: 90, xp: xpForLevel(90) },
+              hitpoints: { level: 20, xp: xpForLevel(20) },
+            },
+          },
+        }),
+      );
+      // "control-dummy" (hp 999, maxHit 0, defenceLevel 1, no weakElement): never dies mid-sample
+      // (so damage never clamps to remaining Monster HP) and never attacks back, isolating the
+      // player's own max-hit ceiling from anything else in play.
+      engine.selectMonster("control-dummy");
+      const damages: number[] = [];
+      engine.on("attack", (e) => {
+        if (e.actor === "player") damages.push(e.damage);
+      });
+      for (let i = 0; i < ticks; i++) engine.tick();
+      expect(damages.length).toBeGreaterThan(0);
+      return damages;
+    }
+
+    const baseline = meleeDamages();
+    __setModifierSourcesForTest([{ target: "strength", pct: 0.2 }]);
+    const boosted = meleeDamages();
+
+    // effectiveLevel(90, "strength", "aggressive") = 101 -> maxHit(101, 0) = 10 at ×1, but
+    // floor(101 * 1.2) = 121 -> maxHit(121, 0) = 12 once the source is active: a real ceiling
+    // raise, not RNG noise (attack level 90 vs control-dummy's defenceLevel 1 lands nearly every
+    // swing, so 1000 Ticks samples each ceiling many times over).
+    expect(Math.max(...boosted)).toBeGreaterThan(Math.max(...baseline));
+  });
+
+  it("a +20% Attack modifier source leaves the max hit alone but is isolated per Skill (Strength untouched)", () => {
+    __setModifierSourcesForTest([{ target: "attack", pct: 0.2 }]);
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(99),
+      makeSnapshot({
+        player: {
+          skills: {
+            attack: { level: 90, xp: xpForLevel(90) },
+            strength: { level: 90, xp: xpForLevel(90) },
+            hitpoints: { level: 20, xp: xpForLevel(20) },
+          },
+        },
+      }),
+    );
+    engine.selectMonster("control-dummy"); // hp 999: damage never clamps to remaining Monster HP
+    const damages: number[] = [];
+    engine.on("attack", (e) => {
+      if (e.actor === "player") damages.push(e.damage);
+    });
+    for (let i = 0; i < 1000; i++) engine.tick();
+    expect(damages.length).toBeGreaterThan(0);
+    // maxHit(101, 0) = 10, same ceiling as the unmodified ×1 baseline above — an Attack-targeted
+    // source must never leak into the Strength-derived max hit.
+    expect(Math.max(...damages)).toBe(10);
+  });
+
+  it("a fishing-speed modifier source shortens the Catch cadence: more fish-caught events over the same Tick window", () => {
+    function catchesOver(ticks: number): number {
+      const engine = freshEngine();
+      let caught = 0;
+      engine.on("fish-caught", () => caught++);
+      engine.selectFishingSpot("pond");
+      for (let i = 0; i < ticks; i++) engine.tick();
+      return caught;
+    }
+
+    const baseline = catchesOver(60);
+    __setModifierSourcesForTest([{ target: "fishing-speed", pct: 0.5 }]);
+    const boosted = catchesOver(60);
+
+    expect(boosted).toBeGreaterThan(baseline);
   });
 });
