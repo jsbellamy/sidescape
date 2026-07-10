@@ -31,7 +31,7 @@ for personal distribution but makes this configuration unsuitable for Mac App St
 - **Run before pushing**: `npm run typecheck` and `npm test`.
 - **Toolchain**: `npm test`/`typecheck` need only Node. `npm run tauri dev` also needs Rust (`source ~/.cargo/env` if `cargo` is missing). If `gh` isn't on PATH, it's at `/opt/homebrew/bin/gh`.
 - **Subagents**: spawn implementation subagents as the `issue-implementer` agent type (pinned to Sonnet, effort ≤ high). Never run a subagent on Fable or above high effort.
-- **Assets** must be CC0 with provenance recorded in `docs/assets.md`.
+- **Assets** are original art following `docs/art-style.md`, generated via `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with provenance recorded in `docs/assets.md`.
 
 ## Agent skills
 

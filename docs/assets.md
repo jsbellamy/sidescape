@@ -5,6 +5,12 @@ here: pack name, author, source URL, and license confirmation. New asset work
 appends a new section below — don't restructure existing sections, since
 multiple issues add to this file independently.
 
+## Original-art-first policy (#139)
+
+New assets are original art following `docs/art-style.md`, with reviewable sources and generated
+PNG output under `scripts/art/` via `npm run art`. Third-party assets remain an exception: they
+must be CC0 and have provenance recorded in this document.
+
 ## Sprite packs
 
 Used for the combat scene's player and Monster sprites (`src/ui/sprites.ts`,
