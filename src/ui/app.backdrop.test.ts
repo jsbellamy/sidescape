@@ -91,6 +91,25 @@ describe("scene backdrop (#80)", () => {
     expect(prop?.classList.contains("prop-anvil")).toBe(true);
   });
 
+  it("switches to the town theme and shows the cooking prop when Cooking starts (#115)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty: 5 }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+
+    engine.selectRecipe("test-cook");
+    app.render();
+
+    const backdrop = root.querySelector<HTMLElement>("#backdrop");
+    expect(backdrop?.dataset["theme"]).toBe("town");
+    const prop = root.querySelector<HTMLElement>("#activity-prop");
+    expect(prop?.hidden).toBe(false);
+    expect(prop?.classList.contains("prop-cooking")).toBe(true);
+  });
+
   it("shows the host Area's theme for the whole Dungeon run, including on its dungeon-only Boss wave", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");

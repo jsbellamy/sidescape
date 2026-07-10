@@ -10,6 +10,13 @@ describe("resolveProp (#80)", () => {
     expect(resolveProp(snap)).toBe("anvil");
   });
 
+  it("shows the cooking (range/campfire) prop while Cooking (#115)", () => {
+    const snap = makeSnapshot({
+      production: { recipeId: "cook-beef", name: "Cook Beef", skill: "cooking" },
+    });
+    expect(resolveProp(snap)).toBe("cooking");
+  });
+
   it("shows no prop while fighting (the Monster IS the foreground)", () => {
     const snap = makeSnapshot({
       monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },

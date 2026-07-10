@@ -289,6 +289,25 @@ body {
   );
 }
 
+/* Cooking range/campfire prop (#115): same hand-built CSS-shapes escape hatch as the anvil above
+   — a dark ring (the fire pit) topped with a warm flame silhouette. */
+.prop-cooking {
+  position: relative;
+  background: radial-gradient(circle at 50% 80%, #4a3a2a, #241a10);
+  clip-path: polygon(15% 100%, 0% 70%, 20% 55%, 80% 55%, 100% 70%, 85% 100%);
+}
+
+.prop-cooking::after {
+  content: "";
+  position: absolute;
+  left: 30%;
+  bottom: 55%;
+  width: 40%;
+  height: 55%;
+  background: linear-gradient(to top, #ff8c1a, #ffd25a);
+  clip-path: polygon(50% 0%, 80% 45%, 65% 45%, 90% 100%, 10% 100%, 35% 45%, 20% 45%);
+}
+
 #sprite-row {
   display: flex;
   align-items: flex-end;

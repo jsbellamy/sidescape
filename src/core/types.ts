@@ -203,7 +203,8 @@ export interface FishingSpotDef {
   name: string;
   /** Fishing level required to fish here. */
   levelReq: number;
-  /** Caught item; must be a FoodDef. */
+  /** Caught item; must be a MaterialDef — a raw catch (#115: fishing no longer yields Food
+   * directly). Cooking recipes (RecipeDef.skill === "cooking") convert it to Food. */
   itemId: string;
   /** Fishing XP per successful Catch. */
   xp: number;

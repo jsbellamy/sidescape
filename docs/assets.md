@@ -99,10 +99,11 @@ Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-
 ## Scene backdrops and props (#80)
 
 The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
-Theme — meadow/forest/sewer/crypt/town) and the Smithing anvil foreground prop
-(`#activity-prop.prop-anvil`) are **hand-built with plain CSS** (`linear-gradient` layers, a
-`clip-path` silhouette for the anvil) — no third-party image asset, so no license/provenance entry
-is needed for them. This invokes the issue's own escape hatch verbatim: "if a decent CC0 set can't
+Theme — meadow/forest/sewer/crypt/town), the Smithing anvil foreground prop
+(`#activity-prop.prop-anvil`), and the Cooking range/campfire foreground prop
+(`#activity-prop.prop-cooking`, #115) are **hand-built with plain CSS** (`linear-gradient` layers,
+`clip-path` silhouettes) — no third-party image asset, so no license/provenance entry is needed for
+them. This invokes the issue's own escape hatch verbatim: "if a decent CC0 set can't
 be found for a theme, hand-build that theme's layers with CSS gradients/shapes — plain-CSS is
 CLAUDE.md-native and better than a license risk." All five themes went this route rather than
 sourcing five more pixel-art packs, for the same reason CLAUDE.md's "no game engine, plain DOM/CSS
@@ -177,3 +178,16 @@ license/provenance entry is needed. They intentionally do not match the "496 pix
 pack's style used above; swapping them for real `W_Mace0NN.png` / `W_Sword0NN.png` crops from that
 same CC0 pack (already licensed for this repo) is a follow-up, not a blocker for this wave's
 content pass.
+
+## Raw catch icons (Cooking wave, #115)
+
+`raw-beef`, `raw-shrimp`, `raw-trout`, and `raw-pike` (`src/assets/icons/*.png`) are **hand-drawn
+placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art icons"
+pack's on-screen size) — same escape hatch as the gap-fill mace/sword icons above, not sourced from
+a third-party pack, so no license/provenance entry is needed. Each is a simple silhouette read at a
+glance as "raw": a marbled pink-red meat slab for `raw-beef`, a pale curled shrimp for
+`raw-shrimp`, and pale-toned fish outlines (grey-silver, speckled) for `raw-trout`/`raw-pike`,
+distinct from their cooked counterparts' existing icons (`I_C_Meat.png`-derived `cooked-meat`,
+etc.) without matching the source pack's own style. Swapping these for real raw-fish/raw-meat crops
+from a sourced CC0 pack is a follow-up, not a blocker for this wave's content pass — same note as
+the mace/sword icons above.

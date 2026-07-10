@@ -112,13 +112,14 @@ export function validateContent(content: Content): string[] {
     }
   }
 
-  // Invariant 2 & 3: fishingSpot.itemId -> items, and that item must be a Food (a Catch).
+  // Invariant 2 & 3: fishingSpot.itemId -> items, and that item must be a Material (a raw catch;
+  // #115 flipped this from Food — Cooking now makes it edible). Cooking recipes convert raw -> Food.
   for (const spot of content.fishingSpots) {
     const item = content.items.find((i) => i.id === spot.itemId);
     if (!item) {
       violations.push(`fishingSpot "${spot.id}" itemId "${spot.itemId}" not found`);
-    } else if (item.kind !== "food") {
-      violations.push(`fishingSpot "${spot.id}" itemId "${spot.itemId}" is not a Food`);
+    } else if (item.kind !== "material") {
+      violations.push(`fishingSpot "${spot.id}" itemId "${spot.itemId}" is not a Material`);
     }
   }
 

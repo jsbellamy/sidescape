@@ -41,9 +41,9 @@ describe("Old Sewers content", () => {
     }
   });
 
-  it("each Old Sewers Monster's Drop Table has guaranteed/common bands, and steel Equipment plus the stronger Food appear", () => {
+  it("each Old Sewers Monster's Drop Table has guaranteed/common bands, and steel Equipment plus the stronger raw catch (#115: Cooking's Material, not Food directly) appear", () => {
     let steelEquipmentSeen = false;
-    let cookedPikeSeen = false;
+    let rawPikeSeen = false;
     for (const monsterId of OLD_SEWERS_MONSTER_IDS) {
       const monster = content.monsters.find((m) => m.id === monsterId)!;
       const bands = new Set(monster.dropTable.map((e) => e.band));
@@ -54,11 +54,11 @@ describe("Old Sewers content", () => {
         const item = content.items.find((i) => i.id === entry.itemId);
         expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
         if (item?.kind === "equipment" && item.id.startsWith("steel-")) steelEquipmentSeen = true;
-        if (item?.id === "cooked-pike") cookedPikeSeen = true;
+        if (item?.id === "raw-pike") rawPikeSeen = true;
       }
     }
     expect(steelEquipmentSeen).toBe(true);
-    expect(cookedPikeSeen).toBe(true);
+    expect(rawPikeSeen).toBe(true);
   });
 
   it("Cooked Pike heals more than every earlier Food and steel Equipment out-bonuses its iron equivalent", () => {

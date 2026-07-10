@@ -28,6 +28,10 @@ import mithrilMaceUrl from "../assets/icons/mithril-mace.png";
 import mithrilShortbowUrl from "../assets/icons/mithril-shortbow.png";
 import mithrilStaffUrl from "../assets/icons/mithril-staff.png";
 import mithrilSwordUrl from "../assets/icons/mithril-sword.png";
+import rawBeefUrl from "../assets/icons/raw-beef.png";
+import rawPikeUrl from "../assets/icons/raw-pike.png";
+import rawShrimpUrl from "../assets/icons/raw-shrimp.png";
+import rawTroutUrl from "../assets/icons/raw-trout.png";
 import shadeBladeUrl from "../assets/icons/shade-blade.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
@@ -90,6 +94,12 @@ const icons: Record<string, string> = {
   "steel-sword": steelSwordUrl,
   "mithril-mace": mithrilMaceUrl,
   "mithril-sword": mithrilSwordUrl,
+  // Cooking wave (#115) raw catches: hand-drawn placeholder pixel art (same escape hatch as the
+  // gap-fill maces/swords above — see docs/assets.md).
+  "raw-beef": rawBeefUrl,
+  "raw-shrimp": rawShrimpUrl,
+  "raw-trout": rawTroutUrl,
+  "raw-pike": rawPikeUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than
