@@ -65,6 +65,8 @@ function baseSnapshot(): Snapshot {
       autoSellDuplicates: true,
       foodSlots: [null, null, null],
       potionSlot: null,
+      quiver: null,
+      runePouch: [],
       skills,
       equipment: {
         weapon: null,

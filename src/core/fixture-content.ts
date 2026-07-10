@@ -230,6 +230,66 @@ export const fixtureContent: Content = {
       charges: 3,
       value: 10,
     },
+    // Ammo fixtures (#119): "arrow"/"iron-arrow" are two arrow tiers (lets quiver-swap tests
+    // exercise "the previous stack returns to the Bank" independently of a single-tier fixture);
+    // one rune per Element pairs with "test-spark" (air) and "test-blast" (water) above, plus
+    // earth/fire so a fixture rune pouch can hold all four Elements at once, mirroring the real
+    // v1 spellbook's four Elements. icon reuses real icons.ts keys, same discipline as every other
+    // fixture item.
+    {
+      kind: "ammo",
+      id: "arrow",
+      name: "Test Arrow",
+      icon: "iron-bar",
+      ammoType: "arrow",
+      rangedStr: 5,
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "iron-arrow",
+      name: "Test Iron Arrow",
+      icon: "bronze-bar",
+      ammoType: "arrow",
+      rangedStr: 10,
+      value: 2,
+    },
+    {
+      kind: "ammo",
+      id: "air-rune",
+      name: "Test Air Rune",
+      icon: "sapphire",
+      ammoType: "rune",
+      element: "air",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "water-rune",
+      name: "Test Water Rune",
+      icon: "emerald",
+      ammoType: "rune",
+      element: "water",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "earth-rune",
+      name: "Test Earth Rune",
+      icon: "ruby",
+      ammoType: "rune",
+      element: "earth",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "fire-rune",
+      name: "Test Fire Rune",
+      icon: "cowhide",
+      ammoType: "rune",
+      element: "fire",
+      value: 1,
+    },
   ],
   fishingSpots: [
     // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting. itemId is a
@@ -336,5 +396,14 @@ export const fixtureContent: Content = {
   spells: [
     { id: "test-spark", name: "Test Spark", element: "air", levelReq: 1, baseMaxHit: 5 },
     { id: "test-blast", name: "Test Blast", element: "water", levelReq: 20, baseMaxHit: 15 },
+  ],
+  // Vendor (#119): fixed prices for the fixture's own ammo items above.
+  vendor: [
+    { itemId: "arrow", price: 2 },
+    { itemId: "iron-arrow", price: 4 },
+    { itemId: "air-rune", price: 3 },
+    { itemId: "water-rune", price: 3 },
+    { itemId: "earth-rune", price: 3 },
+    { itemId: "fire-rune", price: 3 },
   ],
 };

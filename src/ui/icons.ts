@@ -1,5 +1,7 @@
+import airRuneUrl from "../assets/icons/air-rune.png";
 import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
 import attackPotionUrl from "../assets/icons/attack-potion.png";
+import bronzeArrowUrl from "../assets/icons/bronze-arrow.png";
 import bronzeBarUrl from "../assets/icons/bronze-bar.png";
 import bronzeDaggerUrl from "../assets/icons/bronze-dagger.png";
 import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
@@ -10,9 +12,11 @@ import cookedPikeUrl from "../assets/icons/cooked-pike.png";
 import cookedShrimpUrl from "../assets/icons/cooked-shrimp.png";
 import cookedTroutUrl from "../assets/icons/cooked-trout.png";
 import cowhideUrl from "../assets/icons/cowhide.png";
+import earthRuneUrl from "../assets/icons/earth-rune.png";
 import emeraldUrl from "../assets/icons/emerald.png";
 import emeraldAmuletUrl from "../assets/icons/emerald-amulet.png";
 import emeraldRingUrl from "../assets/icons/emerald-ring.png";
+import fireRuneUrl from "../assets/icons/fire-rune.png";
 import fishingPotionUrl from "../assets/icons/fishing-potion.png";
 import goblinCharmUrl from "../assets/icons/goblin-charm.png";
 import goldUrl from "../assets/icons/gold.png";
@@ -34,6 +38,7 @@ import leatherBodyUrl from "../assets/icons/leather-body.png";
 import leatherChapsUrl from "../assets/icons/leather-chaps.png";
 import leatherCoifUrl from "../assets/icons/leather-coif.png";
 import marrentillHerbUrl from "../assets/icons/marrentill-herb.png";
+import mithrilArrowUrl from "../assets/icons/mithril-arrow.png";
 import mithrilChainbodyUrl from "../assets/icons/mithril-chainbody.png";
 import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
@@ -55,6 +60,7 @@ import sapphireAmuletUrl from "../assets/icons/sapphire-amulet.png";
 import sapphireRingUrl from "../assets/icons/sapphire-ring.png";
 import shadeBladeUrl from "../assets/icons/shade-blade.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
+import steelArrowUrl from "../assets/icons/steel-arrow.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
 import steelDaggerUrl from "../assets/icons/steel-dagger.png";
 import steelFullHelmUrl from "../assets/icons/steel-full-helm.png";
@@ -66,6 +72,7 @@ import steelSwordUrl from "../assets/icons/steel-sword.png";
 import strengthPotionUrl from "../assets/icons/strength-potion.png";
 import tarrominHerbUrl from "../assets/icons/tarromin-herb.png";
 import thickHideUrl from "../assets/icons/thick-hide.png";
+import waterRuneUrl from "../assets/icons/water-rune.png";
 import wolfHideUrl from "../assets/icons/wolf-hide.png";
 
 /**
@@ -158,6 +165,16 @@ const icons: Record<string, string> = {
   "attack-potion": attackPotionUrl,
   "fishing-potion": fishingPotionUrl,
   "production-potion": productionPotionUrl,
+  // Ammo wave (#119) arrow tiers + element runes: hand-drawn placeholder pixel art (same escape
+  // hatch as the gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, and herb/potion icons
+  // above — see docs/assets.md).
+  "bronze-arrow": bronzeArrowUrl,
+  "steel-arrow": steelArrowUrl,
+  "mithril-arrow": mithrilArrowUrl,
+  "air-rune": airRuneUrl,
+  "water-rune": waterRuneUrl,
+  "earth-rune": earthRuneUrl,
+  "fire-rune": fireRuneUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

@@ -236,3 +236,21 @@ fill colored to its target (`strength-potion` red, `attack-potion` orange, `fish
 `production-potion` purple) with a small highlight ellipse for a glass-shine cue. Swapping these
 for sourced CC0 crops is a follow-up, not a blocker for this wave's content pass — same note as the
 mace/sword, raw-catch, hide/leather, and gem/jewelry icons above.
+
+## Arrow and rune icons (Ammo wave, #119)
+
+`bronze-arrow`, `steel-arrow`, `mithril-arrow`, `air-rune`, `water-rune`, `earth-rune`, and
+`fire-rune` (`src/assets/icons/*.png`) are **hand-drawn placeholder pixel art**, generated for this
+wave (34×34 canvas, matching the "496 pixel art icons" pack's on-screen size) — same escape hatch
+as the gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, and herb/potion icons above, not
+sourced from a third-party pack, so no license/provenance entry is needed. Each arrow is a simple
+diagonal shaft-and-fletching silhouette with a triangular metal head, tier-tinted to the SAME
+bronze/steel/mithril palette the gap-fill mace/sword icons already use (a shared wood-brown shaft
+and pale fletching across all three tiers, only the arrowhead's metal tint changes) so the arrow
+ladder reads as the same tier progression as the rest of the weapon ladder. Each rune is a rounded
+stone tablet carved with a simple glyph, tinted to its Element (`air-rune` pale cyan-white,
+`water-rune` blue — reusing the sapphire gem icon's own blue, `earth-rune` mossy brown-green,
+`fire-rune` warm red-orange — reusing the ruby gem icon's own red) so the four read as a set at a
+glance, mirroring the gem icons' one-shape-per-tier approach. Swapping these for sourced CC0 crops
+is a follow-up, not a blocker for this wave's content pass — same note as every hand-drawn
+placeholder set above.

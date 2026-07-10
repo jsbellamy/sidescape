@@ -1060,6 +1060,88 @@ export const content: Content = {
       charges: 40,
       value: 25,
     },
+    // Ammo wave (#119): arrow tiers (ranged's own resource, feeding the Quiver) and the four
+    // Element runes (magic's resource, feeding the Rune Pouch) — both sold by the vendor below,
+    // never dropped by Monsters this wave. Append-only — after production-potion, never earlier.
+    // rangedStr climbs with tier, roughly the same spacing the dagger/bow atk/str ladders use
+    // (bronze->steel->mithril, skipping iron — three tiers matches the issue's own "bronze/steel/
+    // mithril or similar" suggestion).
+    //
+    // Economy check (owner-mandated arithmetic — see the issue's own worked numbers, §6): at
+    // ~2,000 attacks/hr (idle, ~3 ticks/attack) and 1 arrow/attack, bronze-arrow's 3g vendor price
+    // (below) costs ~6,000g/hr in ammo. Mid-game gold income runs ~15,000-20,000g/hr (e.g.
+    // giant-rat's 30g guaranteed drop x ~600 kills/hr = ~18,000g/hr, the issue's own reference
+    // rate) — 6,000/18,000 = ~33%, landing inside the issue's target ~30-40% gold-sink band:
+    // meaningful, not bankrupting. Magic mirrors this at 1 rune/cast: a rune's 3g price (below,
+    // picked to match bronze-arrow's own ratio rather than the issue's illustrative 4g) x ~2,000
+    // casts/hr is also ~6,000g/hr, the same ~33% ratio — so switching between a bow and a staff
+    // (see the Rune Pouch's own "no reload" test) never trades into a cheaper or pricier resource
+    // sink, only a different one. steel-/mithril-arrow scale the SAME ratio at their own tier's
+    // higher assumed gold income, so the sink stays proportionally ~30-40% up the whole ladder
+    // rather than compounding into a bigger bite at higher tiers.
+    {
+      kind: "ammo",
+      id: "bronze-arrow",
+      name: "Bronze Arrow",
+      icon: "bronze-arrow",
+      ammoType: "arrow",
+      rangedStr: 3,
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "steel-arrow",
+      name: "Steel Arrow",
+      icon: "steel-arrow",
+      ammoType: "arrow",
+      rangedStr: 6,
+      value: 2,
+    },
+    {
+      kind: "ammo",
+      id: "mithril-arrow",
+      name: "Mithril Arrow",
+      icon: "mithril-arrow",
+      ammoType: "arrow",
+      rangedStr: 10,
+      value: 4,
+    },
+    {
+      kind: "ammo",
+      id: "air-rune",
+      name: "Air Rune",
+      icon: "air-rune",
+      ammoType: "rune",
+      element: "air",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "water-rune",
+      name: "Water Rune",
+      icon: "water-rune",
+      ammoType: "rune",
+      element: "water",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "earth-rune",
+      name: "Earth Rune",
+      icon: "earth-rune",
+      ammoType: "rune",
+      element: "earth",
+      value: 1,
+    },
+    {
+      kind: "ammo",
+      id: "fire-rune",
+      name: "Fire Rune",
+      icon: "fire-rune",
+      ammoType: "rune",
+      element: "fire",
+      value: 1,
+    },
   ],
   fishingSpots: [
     // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
@@ -1505,5 +1587,16 @@ export const content: Content = {
     { id: "water-strike", name: "Water Strike", element: "water", levelReq: 5, baseMaxHit: 6 },
     { id: "earth-strike", name: "Earth Strike", element: "earth", levelReq: 9, baseMaxHit: 8 },
     { id: "fire-strike", name: "Fire Strike", element: "fire", levelReq: 13, baseMaxHit: 10 },
+  ],
+  // Fixed-price vendor (#119): sells the arrow tiers and four Element runes above — see the
+  // economy-check comment on the ammo items themselves for the price arithmetic.
+  vendor: [
+    { itemId: "bronze-arrow", price: 3 },
+    { itemId: "steel-arrow", price: 6 },
+    { itemId: "mithril-arrow", price: 10 },
+    { itemId: "air-rune", price: 3 },
+    { itemId: "water-rune", price: 3 },
+    { itemId: "earth-rune", price: 3 },
+    { itemId: "fire-rune", price: 3 },
   ],
 };

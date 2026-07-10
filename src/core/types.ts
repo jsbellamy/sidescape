@@ -174,7 +174,32 @@ export interface PotionDef {
   value?: number;
 }
 
-export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef | PotionDef;
+/** Ammo (#119): the resource ranged/magic attacks consume — an arrow from the Quiver, or a rune
+ * from the Rune Pouch (see `Snapshot.player.quiver`/`runePouch`). Two independent stores, not a
+ * shared ammo slot (owner decision, grilled, verbatim: "The player has access to both all the
+ * time") — the Quiver holds ONE active arrow stack, the Rune Pouch holds all four Elements'
+ * runes simultaneously, so switching between a bow and a staff needs no reload step. */
+export interface AmmoDef {
+  kind: "ammo";
+  id: string;
+  name: string;
+  /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
+  icon: string;
+  ammoType: "arrow" | "rune";
+  /** Runes only: which Element's Spells this rune powers — a cast consumes its OWN Spell's
+   * Element from the pouch (`resolvedSpell().element`), never any other. Required for runes,
+   * forbidden on arrows (validateContent enforces both halves). */
+  element?: Element;
+  /** Arrows only: ranged-strength bonus folded into ranged max hit alongside gear's strBonus
+   * (`playerAccuracyAndMaxHit`'s ranged branch, engine.ts) — the bow decides accuracy, the arrow
+   * decides power. Required for arrows, forbidden on runes (magic max hit is spell-driven, not
+   * strength-shaped — runes add no strength). */
+  rangedStr?: number;
+  /** Gold per unit when sold from the Bank; omit to make it unsellable. */
+  value?: number;
+}
+
+export type ItemDef = EquipmentDef | FoodDef | CurrencyDef | MaterialDef | PotionDef | AmmoDef;
 
 export interface RecipeDef {
   id: string;
@@ -280,6 +305,15 @@ export interface DungeonDef {
   chest: DropTableEntry[];
 }
 
+/** A fixed-price vendor entry (#119) — distinct from a Dungeon Chest's rolled reward table: every
+ * entry sells for a flat `price` per unit, no roll involved. See `buy` (engine.ts), which mirrors
+ * `buyBankSlots`'s throw-on-insufficient-gold pattern. This wave's vendor sells only arrows and
+ * the four element runes; a future wave may widen the itemId set this points at. */
+export interface VendorEntry {
+  itemId: string;
+  price: number;
+}
+
 export interface Content {
   areas: AreaDef[];
   monsters: MonsterDef[];
@@ -288,6 +322,7 @@ export interface Content {
   dungeons: DungeonDef[];
   recipes: RecipeDef[];
   spells: SpellDef[];
+  vendor: VendorEntry[];
 }
 
 export type EngineEvent =
@@ -336,7 +371,15 @@ export type EngineEvent =
   /** Death mid-Dungeon-run (#60): the run is abandoned (mirrors the existing death/ejection
    * handling) AND the Loot Zone is emptied — the failed run's own drops are lost, not banked.
    * Open-world death is unchanged: no sweep, no loss, same fight resumes. */
-  | { type: "dungeon-failed"; dungeonId: string; lostItems: { itemId: string; qty: number }[] };
+  | { type: "dungeon-failed"; dungeonId: string; lostItems: { itemId: string; qty: number }[] }
+  /** A player command bought `qty` of `itemId` from the fixed-price vendor (#119) — see `buy`. */
+  | { type: "item-bought"; itemId: string; qty: number; gold: number }
+  /** A ranged/magic swing that could NOT resolve this Tick because its resource ran out — the
+   * Quiver (need: "arrow") or the cast Spell's Element rune in the Rune Pouch (need: "rune",
+   * `element` set) — see `playerAttack`'s ammo-gate (engine.ts, #119). Fires once per DEPLETION,
+   * not once per Tick the resource sits empty: the swing keeps skipping silently every Tick after
+   * the first until ammo is loaded again. Melee never emits this. */
+  | { type: "out-of-ammo"; need: "arrow" | "rune"; element?: Element };
 
 export interface SkillSnapshot {
   level: number;
@@ -366,6 +409,19 @@ export interface Snapshot {
      * Tolerant load: missing/pre-#118 -> null (a save-shape slice, like foodSlots/spell before
      * it). */
     potionSlot: PotionSlot;
+    /** The Quiver (#119): the single active arrow stack for ranged combat — ONE arrow type at a
+     * time, unlike the Rune Pouch below (mirrors a Food Slot's "the store is that ammo's home"
+     * shape, but singular, like PotionSlot). `null` = empty. Empty != unloaded: qty may sit at 0
+     * while `itemId` persists (a depleted stack stays "loaded" — see `loadQuiver`/`unloadQuiver`,
+     * engine.ts), same as a Food Slot's own qty-0-while-assigned rule. Tolerant load: missing/
+     * pre-#119 -> null. */
+    quiver: { itemId: string; qty: number } | null;
+    /** The Rune Pouch (#119): every rune type the player has loaded, held SIMULTANEOUSLY — at
+     * most one stack per Element (owner decision, verbatim: "a rune-pouch-style for runes/magic
+     * ... access to both all the time"), so loading fire-runes never displaces air-runes. A cast
+     * consumes the resolved Spell's own Element's stack only. Tolerant load: missing/pre-#119 ->
+     * []. */
+    runePouch: { itemId: string; qty: number }[];
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed

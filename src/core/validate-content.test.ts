@@ -406,6 +406,61 @@ describe("validateContent", () => {
     expect(validateContent(content)).toContain('spells contains 2 entries with id "test-spark"');
   });
 
+  describe("Ammo (#119)", () => {
+    it("reports a rune that declares no element", () => {
+      const content: Content = {
+        ...fixtureContent,
+        items: fixtureContent.items.map((i) => {
+          if (i.id !== "air-rune" || i.kind !== "ammo") return i;
+          const { element: _element, ...rest } = i;
+          return rest as typeof i;
+        }),
+      };
+      expect(validateContent(content)).toContain('rune "air-rune" declares no element');
+    });
+
+    it("reports an arrow that declares no rangedStr", () => {
+      const content: Content = {
+        ...fixtureContent,
+        items: fixtureContent.items.map((i) => {
+          if (i.id !== "arrow" || i.kind !== "ammo") return i;
+          const { rangedStr: _rangedStr, ...rest } = i;
+          return rest as typeof i;
+        }),
+      };
+      expect(validateContent(content)).toContain('arrow "arrow" declares no rangedStr');
+    });
+
+    it("reports an arrow that declares an element", () => {
+      const content: Content = {
+        ...fixtureContent,
+        items: fixtureContent.items.map((i) =>
+          i.id === "arrow" && i.kind === "ammo" ? { ...i, element: "air" as const } : i,
+        ),
+      };
+      expect(validateContent(content)).toContain('arrow "arrow" declares element');
+    });
+
+    it("a valid arrow/rune pair (rangedStr xor element) reports nothing", () => {
+      expect(validateContent(fixtureContent)).toEqual([]);
+    });
+  });
+
+  describe("Vendor (#119)", () => {
+    it("reports a vendor entry itemId that isn't a real Item", () => {
+      const content: Content = {
+        ...fixtureContent,
+        vendor: [...fixtureContent.vendor, { itemId: "unobtainium", price: 5 }],
+      };
+      expect(validateContent(content)).toContain('vendor itemId "unobtainium" not found');
+    });
+
+    it("an empty vendor list reports nothing", () => {
+      const content: Content = { ...fixtureContent, vendor: [] };
+      expect(validateContent(content)).toEqual([]);
+    });
+  });
+
   it("allows empty collections (spells excepted — it must keep a levelReq-1 entry)", () => {
     const content: Content = {
       areas: [],
@@ -415,6 +470,7 @@ describe("validateContent", () => {
       dungeons: [],
       recipes: [],
       spells: fixtureContent.spells,
+      vendor: [],
     };
     expect(validateContent(content)).toEqual([]);
   });

@@ -90,9 +90,18 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     const engine = createEngine(
       content,
       seededRng(7),
-      makeSnapshot({ bank: { items: [{ itemId: "shortbow", qty: 1 }] } }),
+      // Ranged now requires a loaded Quiver (#119) — bronze-arrow ships alongside shortbow.
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "shortbow", qty: 1 },
+            { itemId: "bronze-arrow", qty: 500 },
+          ],
+        },
+      }),
     );
     engine.equip("shortbow");
+    engine.loadQuiver("bronze-arrow");
     expect(engine.snapshot().player.equipment.weapon).toBe("shortbow");
 
     engine.selectMonster("chicken");
@@ -107,9 +116,19 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     const engine = createEngine(
       content,
       seededRng(7),
-      makeSnapshot({ bank: { items: [{ itemId: "apprentice-staff", qty: 1 }] } }),
+      // Magic now requires the cast Spell's Element rune loaded in the Rune Pouch (#119) — the
+      // default-resolved Spell (air-strike, levelReq 1) needs air-rune.
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "apprentice-staff", qty: 1 },
+            { itemId: "air-rune", qty: 500 },
+          ],
+        },
+      }),
     );
     engine.equip("apprentice-staff");
+    engine.loadRunePouch("air-rune");
     expect(engine.snapshot().player.equipment.weapon).toBe("apprentice-staff");
 
     engine.selectMonster("chicken");

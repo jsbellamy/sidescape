@@ -4037,7 +4037,14 @@ describe("Ranged and Magic Skills (#7)", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(42),
-        makeSnapshot({ player: { combatStyle: "aggressive", equipment: { weapon: "bow" } } }),
+        // Ranged now requires a loaded Quiver (#119) — a deep stack outlasts this test's Ticks.
+        makeSnapshot({
+          player: {
+            combatStyle: "aggressive",
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
       );
       engine.selectMonster("dummy");
       for (let i = 0; i < 400; i++) engine.tick();
@@ -4056,7 +4063,15 @@ describe("Ranged and Magic Skills (#7)", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(42),
-        makeSnapshot({ player: { combatStyle: "accurate", equipment: { weapon: "staff" } } }),
+        // Magic now requires the cast Spell's Element rune loaded (#119) — the default-resolved
+        // Spell (test-spark, air) needs air-rune.
+        makeSnapshot({
+          player: {
+            combatStyle: "accurate",
+            equipment: { weapon: "staff" },
+            runePouch: [{ itemId: "air-rune", qty: 100_000 }],
+          },
+        }),
       );
       engine.selectMonster("dummy");
       for (let i = 0; i < 400; i++) engine.tick();
@@ -4079,6 +4094,8 @@ describe("Ranged and Magic Skills (#7)", () => {
           player: {
             combatStyle: "defensive",
             equipment: { weapon: "bow" },
+            // Ranged now requires a loaded Quiver (#119).
+            quiver: { itemId: "arrow", qty: 100_000 },
           },
           bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
         }),
@@ -4256,7 +4273,10 @@ describe("Ranged and Magic Skills (#7)", () => {
       const original = createEngine(
         fixtureContent,
         seededRng(42),
-        makeSnapshot({ player: { equipment: { weapon: "bow" } } }),
+        // Ranged now requires a loaded Quiver (#119).
+        makeSnapshot({
+          player: { equipment: { weapon: "bow" }, quiver: { itemId: "arrow", qty: 100_000 } },
+        }),
         () => 0,
       );
       original.selectMonster("dummy");
@@ -4344,6 +4364,8 @@ describe("Attack Type axis (#99)", () => {
               hitpoints: { level: 20, xp: xpForLevel(20) },
             },
             equipment: { weapon: "bow" }, // ranged
+            // Ranged now requires a loaded Quiver (#119).
+            quiver: { itemId: "arrow", qty: 100_000 },
           },
         }),
       );
@@ -4572,6 +4594,13 @@ describe("Spells (#101)", () => {
                 hitpoints: { level: 20, xp: xpForLevel(20) },
               },
               equipment: { weapon: "staff" },
+              // Magic now requires the cast Spell's Element rune loaded (#119) — both
+              // test-spark (air) and test-blast (water), the two spellIds this helper is called
+              // with, need their own rune present.
+              runePouch: [
+                { itemId: "air-rune", qty: 100_000 },
+                { itemId: "water-rune", qty: 100_000 },
+              ],
             },
           }),
         );
@@ -4611,6 +4640,9 @@ describe("Spells (#101)", () => {
                 hitpoints: { level: 20, xp: xpForLevel(20) },
               },
               equipment: { weapon: "staff" },
+              // Magic now requires the cast Spell's Element rune loaded (#119) — the
+              // default-resolved Spell (test-spark, air) needs air-rune.
+              runePouch: [{ itemId: "air-rune", qty: 100_000 }],
             },
           }),
         );
@@ -4653,6 +4685,13 @@ describe("Spells (#101)", () => {
               hitpoints: { level: 20, xp: xpForLevel(20) },
             },
             equipment: { weapon: "staff" },
+            // Magic now requires the cast Spell's Element rune loaded (#119) — both
+            // test-spark (air) and test-blast (water), the two spellIds this helper is called
+            // with, need their own rune present.
+            runePouch: [
+              { itemId: "air-rune", qty: 100_000 },
+              { itemId: "water-rune", qty: 100_000 },
+            ],
           },
         }),
       );
@@ -5123,6 +5162,641 @@ describe("Herblore and Potion Slot (#118)", () => {
         expect.arrayContaining([{ itemId: "strength-potion", qty: 1 }]),
       );
       expect(snap.player.skills.herblore.xp).toBe(20);
+    });
+  });
+});
+
+describe("Ammo + Vendor (#119)", () => {
+  describe("loadQuiver", () => {
+    it("moves the whole Bank stack into the Quiver", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "arrow", qty: 30 }] } }),
+      );
+      engine.loadQuiver("arrow");
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 30 });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("throws on a non-arrow id", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "air-rune", qty: 5 }] } }),
+      );
+      expect(() => engine.loadQuiver("air-rune")).toThrow(/arrow/i);
+    });
+
+    it("throws when the player owns none", () => {
+      const engine = freshEngine();
+      expect(() => engine.loadQuiver("arrow")).toThrow(/own/i);
+    });
+
+    it("topping up: loading the same arrow tier again adds to the already-loaded stack", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "arrow", qty: 10 }] },
+          player: { quiver: { itemId: "arrow", qty: 5 } },
+        }),
+      );
+      engine.loadQuiver("arrow");
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 15 });
+    });
+
+    it("swapping arrow tiers returns the previous stack to the Bank first", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "iron-arrow", qty: 10 }] },
+          player: { quiver: { itemId: "arrow", qty: 7 } },
+        }),
+      );
+      engine.loadQuiver("iron-arrow");
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "iron-arrow", qty: 10 });
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 7 }]);
+    });
+
+    it('a bank-full tier swap throws "bank is full", mutating nothing', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bar", qty: 1 },
+              { itemId: "iron-arrow", qty: 10 },
+            ],
+            capacity: 1,
+          },
+          player: { quiver: { itemId: "arrow", qty: 7 } },
+        }),
+      );
+      expect(() => engine.loadQuiver("iron-arrow")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 7 });
+    });
+  });
+
+  describe("unloadQuiver", () => {
+    it("returns the stack to the Bank and clears the Quiver to null", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { quiver: { itemId: "arrow", qty: 12 } } }),
+      );
+      engine.unloadQuiver();
+      expect(engine.snapshot().player.quiver).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 12 }]);
+    });
+
+    it("is a harmless no-op when already empty", () => {
+      const engine = freshEngine();
+      expect(() => engine.unloadQuiver()).not.toThrow();
+      expect(engine.snapshot().player.quiver).toBeNull();
+    });
+
+    it('throws "bank is full" when returning the stock needs a new Bank Slot', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          player: { quiver: { itemId: "arrow", qty: 12 } },
+        }),
+      );
+      expect(() => engine.unloadQuiver()).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 12 });
+    });
+
+    it("a qty-0 loaded Quiver clears to null without needing a Bank Slot (empty != unloaded)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          player: { quiver: { itemId: "arrow", qty: 0 } },
+        }),
+      );
+      expect(() => engine.unloadQuiver()).not.toThrow();
+      expect(engine.snapshot().player.quiver).toBeNull();
+    });
+  });
+
+  describe("loadRunePouch", () => {
+    it("moves the whole Bank stack into the pouch, keyed by its own Element", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "air-rune", qty: 20 }] } }),
+      );
+      engine.loadRunePouch("air-rune");
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "air-rune", qty: 20 }]);
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("loading a second Element's rune never displaces the first — the pouch holds all four at once", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "fire-rune", qty: 15 }] },
+          player: { runePouch: [{ itemId: "air-rune", qty: 20 }] },
+        }),
+      );
+      engine.loadRunePouch("fire-rune");
+      const pouch = engine.snapshot().player.runePouch;
+      expect(pouch).toHaveLength(2);
+      expect(pouch).toEqual(
+        expect.arrayContaining([
+          { itemId: "air-rune", qty: 20 },
+          { itemId: "fire-rune", qty: 15 },
+        ]),
+      );
+    });
+
+    it("topping up: loading the same rune again adds to its already-loaded stack", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "air-rune", qty: 5 }] },
+          player: { runePouch: [{ itemId: "air-rune", qty: 10 }] },
+        }),
+      );
+      engine.loadRunePouch("air-rune");
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "air-rune", qty: 15 }]);
+    });
+
+    it("throws on a non-rune id", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "arrow", qty: 5 }] } }),
+      );
+      expect(() => engine.loadRunePouch("arrow")).toThrow(/rune/i);
+    });
+
+    it("throws when the player owns none", () => {
+      const engine = freshEngine();
+      expect(() => engine.loadRunePouch("air-rune")).toThrow(/own/i);
+    });
+  });
+
+  describe("unloadRunePouch", () => {
+    it("returns that Element's stack to the Bank and drops it from the pouch, leaving other Elements untouched", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            runePouch: [
+              { itemId: "air-rune", qty: 20 },
+              { itemId: "water-rune", qty: 8 },
+            ],
+          },
+        }),
+      );
+      engine.unloadRunePouch("air-rune");
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "water-rune", qty: 8 }]);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 20 }]);
+    });
+
+    it("is a harmless no-op when that Element isn't loaded", () => {
+      const engine = freshEngine();
+      expect(() => engine.unloadRunePouch("air-rune")).not.toThrow();
+      expect(engine.snapshot().player.runePouch).toEqual([]);
+    });
+
+    it('throws "bank is full" when returning the stock needs a new Bank Slot', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+          player: { runePouch: [{ itemId: "air-rune", qty: 20 }] },
+        }),
+      );
+      expect(() => engine.unloadRunePouch("air-rune")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "air-rune", qty: 20 }]);
+    });
+  });
+
+  describe("Ranged consumption: the Quiver's own arrow feeds both accuracy-independent decrement and max hit", () => {
+    it("consumes exactly 1 arrow per RESOLVED ranged swing (hit or miss alike)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(13),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 1000 },
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy"); // hp 999, maxHit 0 — never dies, never damages back
+      let swings = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") swings++;
+      });
+      for (let i = 0; i < 500; i++) engine.tick();
+      expect(swings).toBeGreaterThan(0);
+      expect(engine.snapshot().player.quiver?.qty).toBe(1000 - swings);
+    });
+
+    it("the loaded arrow's rangedStr raises ranged max hit — the bow decides accuracy, the arrow decides power", () => {
+      // A big rangedStr gap (5 vs 60) on the SAME arrow id/content otherwise, so the only variable
+      // is the one field under test. Pinned at Ranged 99 (MAX_LEVEL): awardCombatXp keeps granting
+      // Ranged XP every resolved hit across this run's 500-ish attacks, and any level BELOW max
+      // would climb mid-run, silently raising the max-hit ceiling for both arrow variants alike
+      // and masking rangedStr's own effect — level 99 can never level up further, so the ceiling
+      // stays pinned to rangedStr alone for the whole run.
+      function maxDamageWithArrowRangedStr(rangedStr: number): number {
+        const content = {
+          ...fixtureContent,
+          items: fixtureContent.items.map((i) => (i.id === "arrow" ? { ...i, rangedStr } : i)),
+        };
+        const engine = createEngine(
+          content,
+          seededRng(5),
+          makeSnapshot({
+            player: {
+              skills: {
+                ranged: { level: 99, xp: xpForLevel(99) },
+                hitpoints: { level: 40, xp: xpForLevel(40) },
+              },
+              equipment: { weapon: "bow" },
+              quiver: { itemId: "arrow", qty: 100_000 },
+            },
+          }),
+        );
+        engine.selectMonster("control-dummy");
+        let max = 0;
+        engine.on("attack", (e) => {
+          if (e.actor === "player") max = Math.max(max, e.damage);
+        });
+        for (let i = 0; i < 2000; i++) engine.tick();
+        return max;
+      }
+      const weakerArrow = maxDamageWithArrowRangedStr(5);
+      const strongerArrow = maxDamageWithArrowRangedStr(60);
+      expect(strongerArrow).toBeGreaterThan(weakerArrow);
+    });
+  });
+
+  describe("Magic consumption: only the CAST spell's own Element rune ever depletes", () => {
+    it("consumes exactly 1 rune of the cast Spell's Element per resolved swing; every other Element stays untouched", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(17),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "staff" },
+            runePouch: [
+              { itemId: "air-rune", qty: 1000 },
+              { itemId: "water-rune", qty: 1000 },
+            ],
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+          },
+        }),
+      );
+      engine.selectSpell("test-spark"); // element "air"
+      engine.selectMonster("control-dummy");
+      let swings = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") swings++;
+      });
+      for (let i = 0; i < 500; i++) engine.tick();
+      expect(swings).toBeGreaterThan(0);
+      const pouch = engine.snapshot().player.runePouch;
+      expect(pouch.find((s) => s.itemId === "air-rune")?.qty).toBe(1000 - swings);
+      expect(pouch.find((s) => s.itemId === "water-rune")?.qty).toBe(1000);
+    });
+  });
+
+  describe("Out-of-ammo: the swing doesn't resolve, the monster still attacks, and the warning fires once per depletion", () => {
+    it("ranged: an empty Quiver blocks every swing (no damage, no XP) while the monster keeps attacking; a single out-of-ammo event fires across many idle Ticks", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(9),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 0 }, // loaded but depleted
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      let outOfAmmoCount = 0;
+      let need: string | undefined;
+      engine.on("out-of-ammo", (e) => {
+        outOfAmmoCount++;
+        need = e.need;
+      });
+      let playerSwings = 0;
+      let monsterSwings = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") playerSwings++;
+        else monsterSwings++;
+      });
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(playerSwings).toBe(0); // never resolves
+      expect(monsterSwings).toBeGreaterThan(0); // the monster's own attack still proceeds
+      expect(outOfAmmoCount).toBe(1); // once per depletion, not every Tick
+      expect(need).toBe("arrow");
+      expect(engine.snapshot().player.skills.ranged.xp).toBe(0);
+    });
+
+    it("magic: requires the CAST spell's own Element specifically — a pouch stocked with the wrong Element still blocks every swing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(11),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "staff" },
+            runePouch: [{ itemId: "water-rune", qty: 50 }], // wrong Element for the default spell (air)
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+          },
+        }),
+      );
+      engine.selectMonster("dummy"); // default resolved spell: test-spark, element "air"
+      let warned: { need: string; element?: string } | undefined;
+      engine.on("out-of-ammo", (e) => {
+        warned = e;
+      });
+      let playerSwings = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") playerSwings++;
+      });
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(playerSwings).toBe(0);
+      expect(warned?.need).toBe("rune");
+      expect(warned?.element).toBe("air");
+      // The (wrong-Element) water-rune stack is never touched — only the cast spell's own Element
+      // is ever checked or consumed.
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "water-rune", qty: 50 }]);
+    });
+
+    it("a fresh depletion after reloading fires its own new out-of-ammo event", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(9),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 1 },
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+          },
+          bank: { items: [{ itemId: "arrow", qty: 5 }] },
+        }),
+      );
+      engine.selectMonster("dummy");
+      let warnings = 0;
+      engine.on("out-of-ammo", () => warnings++);
+
+      for (let i = 0; i < 100; i++) engine.tick();
+      expect(warnings).toBe(1);
+      expect(engine.snapshot().player.quiver?.qty).toBe(0);
+
+      // Reload — no special "clear the warning" step needed, it resets the moment ammo is present.
+      engine.loadQuiver("arrow");
+      for (let i = 0; i < 100; i++) engine.tick();
+      expect(warnings).toBe(2); // the SECOND depletion gets its own event
+      expect(engine.snapshot().player.quiver?.qty).toBe(0);
+    });
+
+    it("melee never emits out-of-ammo, with or without a Quiver/Rune Pouch loaded", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { equipment: { weapon: "bronze-sword" } } }),
+      );
+      engine.selectMonster("dummy");
+      let outOfAmmoCount = 0;
+      engine.on("out-of-ammo", () => outOfAmmoCount++);
+      let playerSwings = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") playerSwings++;
+      });
+      for (let i = 0; i < 200; i++) engine.tick();
+      expect(playerSwings).toBeGreaterThan(0); // melee resolves normally, no ammo gate
+      expect(outOfAmmoCount).toBe(0);
+    });
+  });
+
+  describe("Zero-reload dual-wielding (owner's whole point of the two-store design)", () => {
+    it("a player carrying both a loaded Quiver and Rune Pouch can freely alternate bow and staff — no load/unload step between swaps, and the correct store depletes each phase", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(3),
+        makeSnapshot({
+          player: {
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 50 },
+            runePouch: [{ itemId: "air-rune", qty: 50 }], // matches the default-resolved spell (air)
+            skills: { hitpoints: { level: 30, xp: xpForLevel(30) } },
+          },
+          // Owned so the mid-test engine.equip("staff")/engine.equip("bow") swaps (below) succeed —
+          // equip requires Bank ownership even though "bow" starts pre-worn via the override above.
+          bank: {
+            items: [
+              { itemId: "staff", qty: 1 },
+              { itemId: "bow", qty: 1 },
+            ],
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 120; i++) engine.tick();
+      const afterRanged = engine.snapshot().player;
+      expect(afterRanged.quiver?.qty).toBeLessThan(50); // Quiver depleted while wielding the bow
+      expect(afterRanged.runePouch.find((s) => s.itemId === "air-rune")?.qty).toBe(50); // untouched
+
+      // Swap weapons only — NO loadQuiver/loadRunePouch call, which is the entire point being
+      // tested: both stores are already live, so switching needs no reload step.
+      engine.equip("staff");
+      for (let i = 0; i < 120; i++) engine.tick();
+      const afterMagic = engine.snapshot().player;
+      expect(afterMagic.runePouch.find((s) => s.itemId === "air-rune")?.qty).toBeLessThan(50);
+      expect(afterMagic.quiver?.qty).toBe(afterRanged.quiver?.qty); // untouched while casting
+
+      // Swap back — again, no reload command.
+      engine.equip("bow");
+      const quiverBeforeSecondRangedPhase = afterMagic.quiver?.qty as number;
+      for (let i = 0; i < 120; i++) engine.tick();
+      const afterSecondRanged = engine.snapshot().player;
+      expect(afterSecondRanged.quiver?.qty).toBeLessThan(quiverBeforeSecondRangedPhase);
+      // The Rune Pouch sat untouched during this second ranged phase.
+      expect(afterSecondRanged.runePouch.find((s) => s.itemId === "air-rune")?.qty).toBe(
+        afterMagic.runePouch.find((s) => s.itemId === "air-rune")?.qty,
+      );
+    });
+  });
+
+  describe("buy (fixed-price vendor)", () => {
+    it("charges price * qty and adds the item to the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 100 } }),
+      );
+      engine.buy("arrow", 10); // fixture vendor price 2
+      expect(engine.snapshot().player.gold).toBe(80);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 10 }]);
+    });
+
+    it("defaults qty to 1", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 100 } }),
+      );
+      engine.buy("arrow");
+      expect(engine.snapshot().player.gold).toBe(98);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 1 }]);
+    });
+
+    it('throws "not enough gold" when short, spending nothing (mirrors buyBankSlots)', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 1 } }),
+      );
+      expect(() => engine.buy("arrow", 10)).toThrow(/not enough gold: need 20/i);
+      expect(engine.snapshot().player.gold).toBe(1);
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("throws on an item the vendor doesn't sell", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 1000 } }),
+      );
+      expect(() => engine.buy("meat", 1)).toThrow(/vendor/i);
+    });
+
+    it('throws "bank is full" when a brand-new stack is needed at capacity, spending nothing (never auto-sold)', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { gold: 1000 },
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+        }),
+      );
+      expect(() => engine.buy("arrow", 1)).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.gold).toBe(1000);
+    });
+
+    it("emits item-bought", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 100 } }),
+      );
+      let event: { type: string; itemId: string; qty: number; gold: number } | undefined;
+      engine.on("item-bought", (e) => {
+        event = e;
+      });
+      engine.buy("arrow", 4);
+      expect(event).toEqual({ type: "item-bought", itemId: "arrow", qty: 4, gold: 8 });
+    });
+
+    it("throws on an invalid qty, spending nothing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { gold: 100 } }),
+      );
+      expect(() => engine.buy("arrow", 0)).toThrow();
+      expect(() => engine.buy("arrow", -1)).toThrow();
+      expect(engine.snapshot().player.gold).toBe(100);
+    });
+  });
+
+  describe("save/load", () => {
+    it("a pre-#119 save (no quiver/runePouch keys) loads with Quiver null and Rune Pouch []", () => {
+      const legacySave = {
+        player: {
+          hp: 10,
+          maxHp: 10,
+          combatLevel: 3,
+          combatStyle: "aggressive",
+          autoEatThreshold: 0.5,
+          skills: {
+            attack: { level: 1, xp: 0 },
+            strength: { level: 1, xp: 0 },
+            defence: { level: 1, xp: 0 },
+            hitpoints: { level: 10, xp: xpForLevel(10) },
+          },
+          equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+          respawning: false,
+        },
+        monster: null,
+        areas: [],
+      };
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(legacySave)),
+      );
+      expect(restored.snapshot().player.quiver).toBeNull();
+      expect(restored.snapshot().player.runePouch).toEqual([]);
+    });
+
+    it("a valid Snapshot carrying a loaded Quiver and Rune Pouch round-trips unchanged", () => {
+      const original = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            quiver: { itemId: "arrow", qty: 12 },
+            runePouch: [
+              { itemId: "air-rune", qty: 5 },
+              { itemId: "fire-rune", qty: 3 },
+            ],
+          },
+        }),
+        () => 0,
+      );
+      const saved = original.snapshot();
+      const restored = createEngine(
+        fixtureContent,
+        seededRng(1),
+        JSON.parse(JSON.stringify(saved)),
+        () => 0,
+      );
+      expect(restored.snapshot()).toEqual(saved);
+    });
+
+    it("a Quiver itemId that no longer resolves to an Arrow (dropped/corrupted content) loads as null", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { quiver: { itemId: "unobtainium", qty: 5 } } }),
+      );
+      expect(engine.snapshot().player.quiver).toBeNull();
+    });
+
+    it("a Rune Pouch entry with an unknown itemId is dropped on load; known entries survive", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            runePouch: [
+              { itemId: "unobtainium", qty: 5 },
+              { itemId: "air-rune", qty: 3 },
+            ],
+          },
+        }),
+      );
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "air-rune", qty: 3 }]);
     });
   });
 });
