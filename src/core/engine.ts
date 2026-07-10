@@ -10,6 +10,7 @@ import type {
   CurrencyDef,
   DropBand,
   DungeonDef,
+  Element,
   EquipmentDef,
   FishingSpotDef,
   FoodDef,
@@ -90,6 +91,24 @@ interface State {
   /** The active-potion loadout slot (#118) — see PotionSlot's own doc (types.ts) for the
    * shape/qualifying-action rules. */
   potionSlot: PotionSlot;
+  /** The Quiver (#119) — see Snapshot.player.quiver's own doc (types.ts) for the shape/home
+   * rules. `null` = empty; a depleted stack stays loaded at qty 0 (empty != unloaded, mirrors a
+   * Food Slot). */
+  quiver: { itemId: string; qty: number } | null;
+  /** The Rune Pouch (#119), keyed by Element — structurally enforces "at most one stack per
+   * Element" (Snapshot.player.runePouch's own doc, types.ts) the same way `bank`/`lootZone`'s Map
+   * keying enforces "at most one stack per itemId". */
+  runePouch: Map<Element, { itemId: string; qty: number }>;
+  /** Whether an empty-Quiver out-of-ammo event has already fired for the CURRENT depletion
+   * (#119) — reset to false the moment the Quiver holds qty > 0 again, so the next depletion
+   * fires its own event instead of staying silently suppressed forever. Never persisted — a fresh
+   * load always starts un-warned, same as respawnTicksLeft/regenTicks below. */
+  quiverOutWarned: boolean;
+  /** The Element an out-of-ammo event has already fired for on the CURRENT Rune Pouch depletion
+   * (#119), or null if no depletion is currently unwarned. Mirrors quiverOutWarned's shape but
+   * keyed by Element (switching to a DIFFERENT depleted Element's Spell is its own new depletion).
+   * Never persisted. */
+  runeOutWarned: Element | null;
   activity: Activity;
   /** The player's currency balance (#59) — gold stopped being an item stack; the Bank below is
    * the sole store for every other Item. */
@@ -155,6 +174,31 @@ export interface Engine {
    * swap above) and `qty - 1` of it returns to the Bank (same bank-full throw as
    * `assignFoodSlot`'s unassign). No-op if the slot is already `null`. */
   unassignPotionSlot(): void;
+  /** Loads `arrowItemId` (must be an `ammoType: "arrow"` AmmoDef the player owns in the Bank)
+   * into the Quiver (#119): moves the whole Bank stack in. Swapping arrow tiers returns the
+   * previous Quiver stack to the Bank first (bank-full -> loud throw, mirrors `equip`). Throws on
+   * an unknown/non-arrow id or zero owned. */
+  loadQuiver(arrowItemId: string): void;
+  /** Returns the Quiver's stack to the Bank (bank-full -> loud throw); Quiver -> null. No-op if
+   * already empty. */
+  unloadQuiver(): void;
+  /** Loads `runeItemId` (must be an `ammoType: "rune"` AmmoDef the player owns in the Bank) into
+   * the Rune Pouch (#119) under its own Element: moves the whole Bank stack in. The pouch holds
+   * all four Elements at once — loading one Element's rune never displaces another; loading the
+   * SAME rune again tops up its stack in place. Throws on an unknown/non-rune id or zero owned;
+   * if a DIFFERENT item was already loaded under the same Element (bank-full on returning it ->
+   * loud throw, mirrors `assignFoodSlot`'s swap). */
+  loadRunePouch(runeItemId: string): void;
+  /** Returns `runeItemId`'s Element's Rune Pouch stack to the Bank (bank-full -> loud throw). A
+   * no-op if that Element isn't currently loaded with `runeItemId` specifically (unknown id,
+   * different Element loaded, or already empty). */
+  unloadRunePouch(runeItemId: string): void;
+  /** Buys `qty` (default 1) of `itemId` from `content.vendor`'s fixed price list (#119): cost is
+   * `price * qty`; throws `` `not enough gold: need ${cost}` `` if short (mirrors `buyBankSlots`)
+   * and "bank is full" if a brand-new Bank stack is needed at capacity (a player command, never
+   * auto-sold — same rule as `equip`). Emits item-bought. Throws on an itemId the vendor doesn't
+   * sell, or an invalid qty. */
+  buy(itemId: string, qty?: number): void;
   sell(itemId: string, qty?: number): void;
   buyBankSlots(): void;
   /** Sweeps the Loot Zone into the Bank on demand (#60) — the same sweep auto-loot runs on
@@ -287,6 +331,10 @@ function freshState(_content: Content): State {
     autoSellDuplicates: DEFAULT_AUTO_SELL_DUPLICATES,
     foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
     potionSlot: null,
+    quiver: null,
+    runePouch: new Map(),
+    quiverOutWarned: false,
+    runeOutWarned: null,
     activity: null,
     gold: 0,
     bank: new Map(),
@@ -398,6 +446,54 @@ function loadPotionSlot(saved: Snapshot, content: Content): PotionSlot {
  * helper below applies before trusting a saved stack's quantity. */
 function isPositiveIntQty(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/** True for a finite non-negative integer — the Quiver/Rune Pouch equivalent of isPositiveIntQty
+ * above: unlike a Bank/Loot-Zone stack (which never persists at qty 0 — see loadBank), the Quiver
+ * and each Rune Pouch stack legitimately sit at qty 0 while still loaded (empty != unloaded,
+ * mirrors loadFoodSlots' own qty>=0 tolerance). */
+function isNonNegativeIntQty(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+/** Tolerant load of `player.quiver` (#119): missing/pre-#119 -> null (a save-shape slice, same
+ * tolerance as `potionSlot`/`spell` before it). An itemId that doesn't resolve to an
+ * `ammoType: "arrow"` AmmoDef -> null (dropped/renamed content, or a corrupted save). qty is
+ * coerced to a finite non-negative integer, falling back to 0 (a depleted Quiver legitimately
+ * sits at qty 0 while still loaded — see isNonNegativeIntQty above). */
+function loadQuiver(saved: Snapshot, content: Content): { itemId: string; qty: number } | null {
+  const raw = saved.player?.quiver as { itemId?: unknown; qty?: unknown } | null | undefined;
+  if (!raw) return null;
+  const itemId: unknown = raw.itemId;
+  const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+  if (def?.kind !== "ammo" || def.ammoType !== "arrow") return null;
+  const qty = isNonNegativeIntQty(raw.qty) ? raw.qty : 0;
+  return { itemId: def.id, qty };
+}
+
+/** Tolerant load of `player.runePouch` (#119): missing/non-array/pre-#119 -> an empty Map (mirrors
+ * `runePouch: []` on a fresh save). Each entry's itemId must resolve to an `ammoType: "rune"`
+ * AmmoDef carrying a real `element`; anything else (unknown id, wrong ammoType, a rune with no
+ * element — shouldn't exist post-validateContent, but a saved file predates today's Content) is
+ * dropped, mirroring loadBank's drop-unresolvable-entries rule. Two saved entries resolving to the
+ * SAME Element (a corrupted save, since the live commands enforce at most one) sum their
+ * quantities under the LATER entry's itemId, mirroring loadBank's own duplicate-summing shape. */
+function loadRunePouch(
+  saved: Snapshot,
+  content: Content,
+): Map<Element, { itemId: string; qty: number }> {
+  const pouch = new Map<Element, { itemId: string; qty: number }>();
+  const raw: unknown = saved.player?.runePouch;
+  if (!Array.isArray(raw)) return pouch;
+  for (const entry of raw as { itemId?: unknown; qty?: unknown }[]) {
+    const itemId: unknown = entry?.itemId;
+    const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+    if (def?.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) continue;
+    const qty = isNonNegativeIntQty(entry?.qty) ? entry.qty : 0;
+    const existing = pouch.get(def.element);
+    pouch.set(def.element, { itemId: def.id, qty: (existing?.qty ?? 0) + qty });
+  }
+  return pouch;
 }
 
 /** Pre-#59 saves persisted a carried `player.inventory` stack array (including a currency
@@ -610,6 +706,10 @@ function loadState(saved: Snapshot, content: Content): State {
     autoSellDuplicates: loadAutoSellDuplicates(saved),
     foodSlots: loadFoodSlots(saved, content),
     potionSlot: loadPotionSlot(saved, content),
+    quiver: loadQuiver(saved, content),
+    runePouch: loadRunePouch(saved, content),
+    quiverOutWarned: false,
+    runeOutWarned: null,
     activity,
     gold,
     bank,
@@ -1113,9 +1213,17 @@ export function createEngine(
         effectiveLevel(level("ranged"), "ranged", state.combatStyle) *
           skillLevelMultiplier("ranged"),
       );
+      // Arrow strength (#119): the loaded Quiver arrow's rangedStr folds into max hit alongside
+      // gear's strBonus — the bow decides accuracy, the arrow decides power (owner decision).
+      // Caller (playerAttack) has already gated on quiver.qty > 0, so this only ever runs with a
+      // real loaded arrow; the `?? 0` guards a corrupted/missing content lookup defensively.
+      const arrowDef = state.quiver
+        ? content.items.find((i) => i.id === (state.quiver as { itemId: string }).itemId)
+        : undefined;
+      const rangedStr = arrowDef?.kind === "ammo" ? (arrowDef.rangedStr ?? 0) : 0;
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
-        max: maxHit(eff, gearBonus("strBonus")),
+        max: maxHit(eff, gearBonus("strBonus") + rangedStr),
       };
     }
     if (mode === "magic") {
@@ -1147,7 +1255,61 @@ export function createEngine(
     };
   }
 
+  /** Ammo gate (#119): checked BEFORE any accuracy/damage math. Ranged needs the Quiver at
+   * qty > 0; magic needs the CAST Spell's own Element present at qty > 0 in the Rune Pouch
+   * (`resolvedSpell().element` — never any other Element, even if the pouch holds others). Melee
+   * is untouched (mode "melee" never reaches either branch). Returns the resolved Element for a
+   * magic cast (undefined for ranged/melee) so the caller can pass it straight to the matching
+   * consume step without re-resolving the Spell a second time. Out-of-ammo warns ONCE per
+   * depletion (quiverOutWarned/runeOutWarned below) rather than every Tick the resource sits
+   * empty, and clears that warning the moment the resource is available again so the NEXT
+   * depletion gets its own event. */
+  function checkAmmo(mode: CombatMode): { ok: true; element?: Element } | { ok: false } {
+    if (mode === "ranged") {
+      if (state.quiver && state.quiver.qty > 0) {
+        state.quiverOutWarned = false;
+        return { ok: true };
+      }
+      if (!state.quiverOutWarned) {
+        emit({ type: "out-of-ammo", need: "arrow" });
+        state.quiverOutWarned = true;
+      }
+      return { ok: false };
+    }
+    if (mode === "magic") {
+      const element = resolvedSpell().element;
+      const stack = state.runePouch.get(element);
+      if (stack && stack.qty > 0) {
+        if (state.runeOutWarned === element) state.runeOutWarned = null;
+        return { ok: true, element };
+      }
+      if (state.runeOutWarned !== element) {
+        emit({ type: "out-of-ammo", need: "rune", element });
+        state.runeOutWarned = element;
+      }
+      return { ok: false };
+    }
+    return { ok: true }; // melee: never gated
+  }
+
+  /** Decrements 1 unit of the resource a just-RESOLVED ranged/magic swing consumed (#119) — called
+   * only after checkAmmo confirmed availability and the swing actually resolved (hit or miss both
+   * count, per the owner's "on a resolved attack" rule); melee is a no-op. Both stores stay
+   * "loaded" at qty 0 rather than clearing (mirrors a Food Slot's empty != unassigned rule) so the
+   * UI can still show "you're out of X" rather than the store vanishing. */
+  function consumeAmmo(mode: CombatMode, element: Element | undefined): void {
+    if (mode === "ranged" && state.quiver) {
+      state.quiver.qty -= 1;
+    } else if (mode === "magic" && element !== undefined) {
+      const stack = state.runePouch.get(element);
+      if (stack) stack.qty -= 1;
+    }
+  }
+
   function playerAttack(monster: MonsterDef, activity: CombatActivity | DungeonActivity): void {
+    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    const ammo = checkAmmo(mode);
+    if (!ammo.ok) return; // swing doesn't resolve this Tick: no damage, no XP, monster still acts
     const weaponType = weaponAttackTypeFor(state.equipment.weapon, content);
     const { atkRoll, max } = playerAccuracyAndMaxHit();
     // Routed lookup (#99): the monster's weak spot is simply the type it defends worst.
@@ -1165,6 +1327,10 @@ export function createEngine(
     activity.monsterHp -= damage;
     awardCombatXp(damage);
     emit({ type: "attack", actor: "player", damage, hit });
+    // Ammo consumption (#119): the swing above just RESOLVED (checkAmmo already confirmed
+    // availability), so 1 unit is spent regardless of hit/miss, mirroring the owner's "on a
+    // resolved attack" rule — melee is a no-op inside consumeAmmo.
+    consumeAmmo(mode, ammo.element);
     // Charge decrement (#118): a resolved player attack is the qualifying action for every
     // combat-Skill-targeted potion, regardless of which Skill this particular swing trained —
     // "fishing-speed"/"production-speed" targets never match here (see the two other call sites).
@@ -1240,6 +1406,8 @@ export function createEngine(
         autoSellDuplicates: state.autoSellDuplicates,
         foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
         potionSlot: state.potionSlot ? { ...state.potionSlot } : null,
+        quiver: state.quiver ? { ...state.quiver } : null,
+        runePouch: [...state.runePouch.values()].map((stack) => ({ ...stack })),
         skills,
         equipment: { ...state.equipment },
         bonuses: {
@@ -1695,6 +1863,98 @@ export function createEngine(
         state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + remaining);
       }
       state.potionSlot = null;
+    },
+    loadQuiver(arrowItemId) {
+      const def = content.items.find((i) => i.id === arrowItemId);
+      if (!def || def.kind !== "ammo" || def.ammoType !== "arrow") {
+        throw new Error(`${arrowItemId} is not an Arrow`);
+      }
+      const owned = state.bank.get(arrowItemId) ?? 0;
+      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+
+      const current = state.quiver;
+      let homeQty = owned;
+      if (current && current.itemId === arrowItemId) {
+        homeQty += current.qty; // topping up the Quiver's already-loaded arrow tier
+      } else if (current && current.qty > 0) {
+        // Swap: the previous arrow tier returns to the Bank first. arrowItemId's own Bank stack
+        // is about to fully clear (its ENTIRE stock moves into the Quiver below), which may itself
+        // free the Bank Slot the swap-back needs — mirrors assignFoodSlot's own pull-then-check
+        // ordering.
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      }
+
+      state.bank.delete(arrowItemId);
+      state.quiver = { itemId: arrowItemId, qty: homeQty };
+    },
+    unloadQuiver() {
+      const current = state.quiver;
+      if (!current) return; // already empty — harmless no-op
+      if (current.qty > 0) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      }
+      state.quiver = null;
+    },
+    loadRunePouch(runeItemId) {
+      const def = content.items.find((i) => i.id === runeItemId);
+      if (!def || def.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) {
+        throw new Error(`${runeItemId} is not a Rune`);
+      }
+      const element = def.element;
+      const owned = state.bank.get(runeItemId) ?? 0;
+      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+
+      const current = state.runePouch.get(element);
+      let homeQty = owned;
+      if (current && current.itemId === runeItemId) {
+        homeQty += current.qty; // topping up this Element's already-loaded rune
+      } else if (current && current.qty > 0) {
+        // Swap (only reachable if a future content set ever ships two rune items for the same
+        // Element): the previously loaded rune returns to the Bank first — same pull-then-check
+        // ordering as loadQuiver's own swap above.
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      }
+
+      state.bank.delete(runeItemId);
+      state.runePouch.set(element, { itemId: runeItemId, qty: homeQty });
+    },
+    unloadRunePouch(runeItemId) {
+      const def = content.items.find((i) => i.id === runeItemId);
+      if (!def || def.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) {
+        throw new Error(`${runeItemId} is not a Rune`);
+      }
+      const current = state.runePouch.get(def.element);
+      if (!current || current.itemId !== runeItemId) return; // that Element isn't loaded — no-op
+      if (current.qty > 0) {
+        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
+          throw new Error("bank is full");
+        }
+        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      }
+      state.runePouch.delete(def.element);
+    },
+    buy(itemId, qty = 1) {
+      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid buy quantity: ${qty}`);
+      const entry = content.vendor.find((v) => v.itemId === itemId);
+      if (!entry) throw new Error(`${itemId} is not sold by the vendor`);
+      const cost = entry.price * qty;
+      if (state.gold < cost) throw new Error(`not enough gold: need ${cost}`);
+      if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
+        throw new Error("bank is full");
+      }
+
+      state.gold -= cost;
+      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+      emit({ type: "item-bought", itemId, qty, gold: cost });
     },
     sell(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);

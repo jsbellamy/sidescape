@@ -572,13 +572,14 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Crafting, Herblore, Loot Feed — none active and the right panel closed by default", () => {
+  it("renders one tab per panel — Skills, Character, Bank, Vendor, Smithing, Cooking, Crafting, Herblore, Loot Feed — none active and the right panel closed by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
       "Skills",
       "Character",
       "Bank",
+      "Vendor",
       "Smithing",
       "Cooking",
       "Crafting",
@@ -2142,6 +2143,192 @@ describe("Potion Slot tile (#118)", () => {
   });
 });
 
+/** Shared by the Quiver/Rune Pouch/Vendor describe blocks below (#119): mounts on the Character
+ * (or, for the Vendor block, the Vendor) tab so the panel under test is actually visible — mirrors
+ * potionMount's own "open the panel a real user would" rationale above. */
+function ammoMount(
+  tab: "character" | "vendor",
+  overrides: Parameters<typeof makeSnapshot>[0] = {},
+) {
+  const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
+  const root = document.createElement("main");
+  const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+  root.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
+  return { engine, root, app };
+}
+
+describe("Quiver tile (#119)", () => {
+  it("an empty Quiver shows a [+] that opens a chooser listing only the Bank's arrow stacks", () => {
+    const { root } = ammoMount("character", {
+      bank: {
+        items: [
+          { itemId: "arrow", qty: 30 },
+          { itemId: "iron-arrow", qty: 5 },
+          { itemId: "air-rune", qty: 2 }, // a Rune — must never show up as an arrow choice
+          { itemId: "meat", qty: 1 }, // Food — must never show up as an arrow choice
+        ],
+      },
+    });
+    const quiverSlot = root.querySelector<HTMLElement>("#quiver-slot");
+    expect(quiverSlot?.querySelector("[data-quiver-add]")).not.toBeNull();
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull(); // closed by default
+
+    quiverSlot?.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
+
+    const chooser = root.querySelector(".potion-slot-chooser");
+    expect(chooser).not.toBeNull();
+    expect(chooser?.querySelector('[data-quiver-assign="arrow"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-quiver-assign="iron-arrow"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-quiver-assign="air-rune"]')).toBeNull();
+    expect(chooser?.querySelector('[data-quiver-assign="meat"]')).toBeNull();
+  });
+
+  it("an empty Quiver's chooser shows a hint when the Bank has no arrows at all", () => {
+    const { root } = ammoMount("character");
+    root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
+    expect(root.querySelector("#quiver-slot .hint")?.textContent).toMatch(/no arrows/i);
+  });
+
+  it("picking an arrow from the chooser loads it (moving the whole Bank stock) and closes the chooser", () => {
+    const { engine, root } = ammoMount("character", {
+      bank: { items: [{ itemId: "arrow", qty: 30 }] },
+    });
+    root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
+    root.querySelector<HTMLButtonElement>('[data-quiver-assign="arrow"]')?.click();
+
+    expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 30 });
+    expect(engine.snapshot().bank.items).toEqual([]);
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull();
+
+    const filledTile = root.querySelector<HTMLElement>('#quiver-slot .tile[data-item="arrow"]');
+    expect(filledTile?.querySelector("img")?.alt).toBe("Test Arrow");
+    expect(filledTile?.querySelector(".tile-qty")?.textContent).toBe("×30");
+  });
+
+  it("clicking ✕ unloads the Quiver, returning the whole stack to the Bank", () => {
+    const { engine, root } = ammoMount("character", {
+      player: { quiver: { itemId: "arrow", qty: 12 } },
+    });
+    root.querySelector<HTMLButtonElement>("[data-quiver-unassign]")?.click();
+
+    expect(engine.snapshot().player.quiver).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 12 }]);
+    expect(root.querySelector("[data-quiver-add]")).not.toBeNull(); // now renders as empty
+  });
+});
+
+describe("Rune Pouch panel (#119)", () => {
+  it("renders 4 slots, one per Element (air/water/earth/fire), independent of load order", () => {
+    const { root } = ammoMount("character", {
+      player: {
+        runePouch: [
+          { itemId: "fire-rune", qty: 5 },
+          { itemId: "air-rune", qty: 3 },
+        ],
+      },
+    });
+    const slots = [...root.querySelectorAll<HTMLElement>("#rune-pouch [data-element]")];
+    expect(slots.map((s) => s.dataset["element"])).toEqual(["air", "water", "earth", "fire"]);
+    expect(slots[0]?.classList.contains("filled")).toBe(true); // air, loaded
+    expect(slots[1]?.classList.contains("empty")).toBe(true); // water, not loaded
+    expect(slots[3]?.classList.contains("filled")).toBe(true); // fire, loaded
+  });
+
+  it("loading one Element's rune never displaces another — all four can be loaded simultaneously with zero reload", () => {
+    const { engine, root } = ammoMount("character", {
+      bank: {
+        items: [
+          { itemId: "air-rune", qty: 10 },
+          { itemId: "water-rune", qty: 8 },
+          { itemId: "earth-rune", qty: 6 },
+          { itemId: "fire-rune", qty: 4 },
+        ],
+      },
+    });
+    for (const itemId of ["air-rune", "water-rune", "earth-rune", "fire-rune"]) {
+      root.querySelector<HTMLButtonElement>(`[data-rune-add="${itemId.split("-")[0]}"]`)?.click();
+      root.querySelector<HTMLButtonElement>(`[data-rune-assign="${itemId}"]`)?.click();
+    }
+    const pouch = engine.snapshot().player.runePouch;
+    expect(pouch).toHaveLength(4);
+    expect(pouch).toEqual(
+      expect.arrayContaining([
+        { itemId: "air-rune", qty: 10 },
+        { itemId: "water-rune", qty: 8 },
+        { itemId: "earth-rune", qty: 6 },
+        { itemId: "fire-rune", qty: 4 },
+      ]),
+    );
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+
+  it("an empty Element slot's chooser lists only that Element's own rune stacks, never another Element's", () => {
+    const { root } = ammoMount("character", {
+      bank: {
+        items: [
+          { itemId: "air-rune", qty: 5 },
+          { itemId: "water-rune", qty: 5 },
+        ],
+      },
+    });
+    root
+      .querySelector<HTMLElement>('#rune-pouch [data-element="water"]')
+      ?.querySelector<HTMLButtonElement>("[data-rune-add]")
+      ?.click();
+    // Re-query after the click's render() replaced #rune-pouch's innerHTML — the pre-click
+    // `waterSlot` reference would otherwise point at a now-detached DOM node.
+    const chooser = root
+      .querySelector<HTMLElement>('#rune-pouch [data-element="water"]')
+      ?.querySelector(".food-slot-chooser");
+    expect(chooser).not.toBeNull();
+    expect(chooser?.querySelector('[data-rune-assign="water-rune"]')).not.toBeNull();
+    expect(chooser?.querySelector('[data-rune-assign="air-rune"]')).toBeNull();
+  });
+
+  it("clicking ✕ on a loaded Element returns that stack to the Bank, leaving other Elements untouched", () => {
+    const { engine, root } = ammoMount("character", {
+      player: {
+        runePouch: [
+          { itemId: "air-rune", qty: 20 },
+          { itemId: "water-rune", qty: 8 },
+        ],
+      },
+    });
+    root.querySelector<HTMLButtonElement>('[data-rune-unassign="air-rune"]')?.click();
+
+    expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "water-rune", qty: 8 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 20 }]);
+    const airSlot = root.querySelector<HTMLElement>('#rune-pouch [data-element="air"]');
+    expect(airSlot?.classList.contains("empty")).toBe(true);
+  });
+});
+
+describe("Vendor tab panel (#119)", () => {
+  it("lists every vendor entry with its price and how many the player already owns", () => {
+    const { root } = ammoMount("vendor", { bank: { items: [{ itemId: "arrow", qty: 7 }] } });
+    const arrowRow = root.querySelector<HTMLElement>('[data-vendor-row="arrow"]');
+    expect(arrowRow?.textContent).toMatch(/Test Arrow/);
+    expect(arrowRow?.textContent).toMatch(/2g/); // fixture vendor price
+    expect(arrowRow?.textContent).toMatch(/Owned: 7/);
+  });
+
+  it("the Buy button is disabled while gold is short of the price", () => {
+    const { root } = ammoMount("vendor", { player: { gold: 1 } });
+    const buyBtn = root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]');
+    expect(buyBtn?.disabled).toBe(true);
+  });
+
+  it("clicking Buy purchases 1 unit, charging gold and adding it to the Bank, logging a feed line", () => {
+    const { engine, root } = ammoMount("vendor", { player: { gold: 100 } });
+    root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]')?.click();
+
+    expect(engine.snapshot().player.gold).toBe(98); // fixture vendor price 2
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 1 }]);
+    const feedLine = root.querySelector("#feed li");
+    expect(feedLine?.textContent).toMatch(/bought/i);
+  });
+});
+
 describe("Combat feedback (#4)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -2239,6 +2426,29 @@ describe("Combat feedback (#4)", () => {
     const toast = root.querySelector("#toast-container .toast");
     expect(toast).not.toBeNull();
     expect(toast?.textContent).toMatch(/level/i);
+
+    vi.advanceTimersByTime(5000); // > the toast's auto-dismiss delay
+    expect(root.querySelector("#toast-container .toast")).toBeNull();
+  });
+
+  it("shows an out-of-ammo toast (#119) when a ranged swing can't resolve, that auto-dismisses on its own", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { equipment: { weapon: "bow" }, quiver: { itemId: "arrow", qty: 0 } },
+      }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    const toast = root.querySelector("#toast-container .toast");
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/out of arrows/i);
 
     vi.advanceTimersByTime(5000); // > the toast's auto-dismiss delay
     expect(root.querySelector("#toast-container .toast")).toBeNull();

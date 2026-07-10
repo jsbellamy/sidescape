@@ -154,6 +154,33 @@ export function validateContent(content: Content): string[] {
     }
   }
 
+  // Ammo (#119): a rune must declare its Element (a cast consumes the resolved Spell's own
+  // Element from the pouch — loadRunePouch/unloadRunePouch key off it), and an arrow must declare
+  // rangedStr (folded into ranged max hit) while NOT declaring an Element (arrows are elementless,
+  // like every other non-magic Attack Type — see ELEMENTS' own doc, types.ts).
+  for (const item of content.items) {
+    if (item.kind !== "ammo") continue;
+    if (item.ammoType === "rune" && item.element === undefined) {
+      violations.push(`rune "${item.id}" declares no element`);
+    }
+    if (item.ammoType === "arrow") {
+      if (item.rangedStr === undefined) {
+        violations.push(`arrow "${item.id}" declares no rangedStr`);
+      }
+      if (item.element !== undefined) {
+        violations.push(`arrow "${item.id}" declares element`);
+      }
+    }
+  }
+
+  // Vendor (#119): every entry's itemId must resolve to a real Item, mirroring the dropTable
+  // itemId -> items check above.
+  for (const entry of content.vendor) {
+    if (!itemIds.has(entry.itemId)) {
+      violations.push(`vendor itemId "${entry.itemId}" not found`);
+    }
+  }
+
   return violations;
 }
 

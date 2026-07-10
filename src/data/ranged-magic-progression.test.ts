@@ -114,6 +114,9 @@ function darkrootGraduateSaveRanged() {
         body: "iron-chainbody",
         head: "iron-full-helm",
       },
+      // Ranged now requires a loaded Quiver (#119); no tier gate on arrows, so any tier feeds an
+      // iron-geared graduate. A deep stack outlasts this test's own multi-thousand-Tick grind.
+      quiver: { itemId: "bronze-arrow", qty: 100_000 },
       autoEatThreshold: 0.5,
       completedDungeonIds: ["meadow-depths"],
     },
@@ -133,6 +136,10 @@ function darkrootGraduateSaveMagic() {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "iron-staff" },
       spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
+      // Magic now requires the cast Spell's Element rune loaded (#119) — Fire Strike needs
+      // fire-rune, not the ranged base fixture's own bronze-arrow (harmless leftover, unused by a
+      // staff-wielder).
+      runePouch: [{ itemId: "fire-rune", qty: 100_000 }],
     },
   };
 }
@@ -161,6 +168,8 @@ function sewersGraduateSaveRanged() {
         body: "steel-chainbody",
         head: "steel-full-helm",
       },
+      // Ranged now requires a loaded Quiver (#119) — see darkrootGraduateSaveRanged's own comment.
+      quiver: { itemId: "steel-arrow", qty: 100_000 },
       autoEatThreshold: 0.5,
       completedDungeonIds: ["darkroot-hollow"],
       // Assigned to Food Slot 0 (#61) — autoEat only ever drains Food Slots now, never the Bank
@@ -180,6 +189,9 @@ function sewersGraduateSaveMagic() {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "steel-staff" },
       spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
+      // Magic now requires the cast Spell's Element rune loaded (#119) — see
+      // darkrootGraduateSaveMagic's own comment above.
+      runePouch: [{ itemId: "fire-rune", qty: 100_000 }],
     },
   };
 }

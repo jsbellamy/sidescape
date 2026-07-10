@@ -1,12 +1,14 @@
 import { UNARMED_SPEED } from "../core/engine";
 import type { Engine } from "../core/engine";
-import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
+import { ATTACK_TYPES, ELEMENTS, SKILL_NAMES } from "../core/types";
 import type {
+  AmmoDef,
   AttackType,
   AutoEatThreshold,
   CombatStyle,
   Content,
   DropTableEntry,
+  Element,
   EquipmentDef,
   FoodSlot,
   GearSlot,
@@ -89,6 +91,17 @@ function potionDetailLines(def: PotionDef): string[] {
   return lines;
 }
 
+/** One stat line for an AmmoDef (#119): an arrow shows its rangedStr bonus (folded into ranged
+ * max hit alongside gear's strBonus — see engine.ts's playerAccuracyAndMaxHit), a rune shows its
+ * Element, plus its sell value if any. Shared by `itemDetailLines` below, mirrors
+ * `potionDetailLines`'s shape. */
+function ammoDetailLines(def: AmmoDef): string[] {
+  const lines =
+    def.ammoType === "arrow" ? [`+${def.rangedStr ?? 0} ranged str`] : [`Element: ${def.element}`];
+  if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
+  return lines;
+}
+
 /** A Monster's weak spot (Combat Depth #102): the lowest entry in its defence vector, ties broken
  * by ATTACK_TYPES order — UI-derived, not stored on MonsterDef (monster stats are static content,
  * matching the W2-4 pattern of never widening Snapshot for renderable-from-Content data). */
@@ -160,15 +173,16 @@ function skillProgress(skill: SkillSnapshot): number {
 /**
  * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
  * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
- * Skills #62, Cooking #115, Crafting #116, Herblore #118) means adding an entry here plus a
- * matching `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this file
- * needs to change. Order here is display order in the tab strip (Skills, Character, Bank,
- * Smithing, Cooking, Crafting, Herblore, Loot Feed).
+ * Skills #62, Cooking #115, Crafting #116, Herblore #118, Vendor #119) means adding an entry here
+ * plus a matching `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this
+ * file needs to change. Order here is display order in the tab strip (Skills, Character, Bank,
+ * Vendor, Smithing, Cooking, Crafting, Herblore, Loot Feed).
  */
 const TABS = [
   { id: "skills", label: "Skills" },
   { id: "character", label: "Character" },
   { id: "bank", label: "Bank" },
+  { id: "vendor", label: "Vendor" },
   { id: "smithing", label: "Smithing" },
   { id: "cooking", label: "Cooking" },
   { id: "crafting", label: "Crafting" },
@@ -259,6 +273,14 @@ export function mountApp(
   // shape as `openFoodChooserSlot`, but a plain boolean since there's only ever one Potion Slot.
   // Re-clicking [+], or picking a Potion from the chooser, closes it.
   let openPotionChooser = false;
+  // Whether the (singular) Quiver's Bank-Arrow chooser is open (#119) — same presentational shape
+  // as `openPotionChooser` (a single active arrow stack, mirroring the single active potion).
+  let openQuiverChooser = false;
+  // Which Rune Pouch Element slot (if any) currently has its Bank-Rune chooser open (#119) — same
+  // presentational shape as `openFoodChooserSlot`, but keyed by Element (air/water/earth/fire)
+  // instead of an array index, since the pouch holds one slot per Element rather than N generic
+  // slots.
+  let openRunePouchChooserElement: Element | null = null;
   // Which Bank tile (if any) is selected, driving the detail strip below the grid (#78) — purely
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
   // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
@@ -333,6 +355,8 @@ export function mountApp(
         return [];
       case "potion":
         return potionDetailLines(def);
+      case "ammo":
+        return ammoDetailLines(def);
     }
   }
 
@@ -405,10 +429,12 @@ export function mountApp(
     setTimeout(() => splat.remove(), SPLAT_FADE_MS);
   }
 
-  /** Appends a level-up toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each
-   * toast owns its own timer so multiple same-Tick level-ups (e.g. a kill's damage XP and its
-   * trickle of Hitpoints XP both crossing a level boundary) stack and dismiss independently. */
-  function showLevelUpToast(text: string): void {
+  /** Appends a toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each toast owns
+   * its own timer so multiple same-Tick toasts (e.g. a kill's damage XP and its trickle of
+   * Hitpoints XP both crossing a level boundary, or a level-up landing the same Tick an out-of-
+   * ammo warning fires, #119) stack and dismiss independently. Generic over the text — shared by
+   * the level-up toast and the out-of-ammo warning toast. */
+  function showToast(text: string): void {
     const toast = document.createElement("div");
     toast.className = "toast";
     toast.textContent = text;
@@ -546,6 +572,117 @@ export function mountApp(
               <button class="potion-slot-add" data-potion-add>+</button>
               ${chooser}
             </div>`;
+  }
+
+  /** Renders the Quiver tile on the Character tab panel (#119): the single active arrow stack,
+   * mirroring renderPotionSlot's filled/empty/chooser shape exactly (singular, like the Potion
+   * Slot — one arrow type at a time) minus the charges readout, which the Quiver has no equivalent
+   * of. A filled tile shows the icon + qty badge plus a ✕ (click = unloadQuiver); an empty tile
+   * shows a `[+]` that opens a chooser listing the Bank's arrow stacks (click one = loadQuiver). */
+  function renderQuiver(
+    quiver: Snapshot["player"]["quiver"],
+    bankItems: { itemId: string; qty: number }[],
+  ): void {
+    if (quiver) {
+      el("#quiver-slot").innerHTML = `<div class="potion-slot-tile filled">
+                <div class="tile" data-item="${quiver.itemId}">${tileMarkup(quiver.itemId, quiver.qty)}</div>
+                <button class="potion-slot-unassign" data-quiver-unassign title="Unload">✕</button>
+              </div>`;
+      return;
+    }
+    const arrowStacks = bankItems.filter((s) => {
+      const def = content.items.find((i) => i.id === s.itemId);
+      return def?.kind === "ammo" && def.ammoType === "arrow";
+    });
+    const chooser = openQuiverChooser
+      ? `<div class="potion-slot-chooser">
+          ${
+            arrowStacks.length > 0
+              ? arrowStacks
+                  .map(
+                    (s) =>
+                      `<button data-quiver-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                  )
+                  .join("")
+              : `<p class="hint">No Arrows in Bank</p>`
+          }
+        </div>`
+      : "";
+    el("#quiver-slot").innerHTML = `<div class="potion-slot-tile empty">
+              <button class="potion-slot-add" data-quiver-add>+</button>
+              ${chooser}
+            </div>`;
+  }
+
+  /** Renders the Rune Pouch panel on the Character tab panel (#119): one slot per Element, in
+   * `ELEMENTS` order (air/water/earth/fire) — never an inline literal, mirroring `renderXpRow`'s
+   * own "iterate the canonical order" discipline. Unlike the Quiver (singular) or Food Slots
+   * (N generic slots), each slot here is keyed by its own Element: a filled slot shows that
+   * Element's loaded rune (icon + qty badge, ✕ to unload); an empty slot shows a `[+]` that opens
+   * a chooser listing ONLY that Element's rune stacks in the Bank (there is normally one rune item
+   * per Element, but the chooser filters by Element rather than assuming it, staying correct if
+   * that ever changes). Reuses the Food Slot bar's own flex-row/tile/chooser CSS shape (#61) — a
+   * 4-wide row instead of 3, otherwise identical. */
+  function renderRunePouch(
+    runePouch: Snapshot["player"]["runePouch"],
+    bankItems: { itemId: string; qty: number }[],
+  ): void {
+    el("#rune-pouch").innerHTML = ELEMENTS.map((element) => {
+      const loaded = runePouch.find((s) => {
+        const def = content.items.find((i) => i.id === s.itemId);
+        return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
+      });
+      if (loaded) {
+        return `<div class="food-slot filled" data-element="${element}">
+                  <div class="tile" data-item="${loaded.itemId}">${tileMarkup(loaded.itemId, loaded.qty)}</div>
+                  <button class="food-slot-unassign" data-rune-unassign="${loaded.itemId}" title="Unload">✕</button>
+                </div>`;
+      }
+      const runeStacks = bankItems.filter((s) => {
+        const def = content.items.find((i) => i.id === s.itemId);
+        return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
+      });
+      const chooserOpen = openRunePouchChooserElement === element;
+      const chooser = chooserOpen
+        ? `<div class="food-slot-chooser">
+            ${
+              runeStacks.length > 0
+                ? runeStacks
+                    .map(
+                      (s) =>
+                        `<button data-rune-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                    )
+                    .join("")
+                : `<p class="hint">No ${element} Runes in Bank</p>`
+            }
+          </div>`
+        : "";
+      return `<div class="food-slot empty" data-element="${element}">
+                <button class="food-slot-add" data-rune-add="${element}">+</button>
+                ${chooser}
+              </div>`;
+    }).join("");
+  }
+
+  /** Renders the Vendor tab panel's fixed-price buy list (#119): mirrors renderSmithing's own
+   * name/level-row/action-button shape (reusing its `.recipe-name`/`.craft-btn` CSS classes rather
+   * than inventing a parallel set), substituting the gold price for a level requirement and a
+   * "Buy" command for "Craft". Each row also shows how many the player already owns in the Bank.
+   * The Buy button disables while short on gold; `buy` itself still throws on a full Bank (#119's
+   * "player commands throw" rule), surfaced via the item-bought/error path same as any other
+   * command. */
+  function renderVendor(bank: Snapshot["bank"], gold: number): void {
+    const owned = (itemId: string) => bank.items.find((s) => s.itemId === itemId)?.qty ?? 0;
+    el("#vendor-list").innerHTML = content.vendor
+      .map((entry) => {
+        const disabled = gold < entry.price;
+        return `<li data-vendor-row="${entry.itemId}">
+                  <p class="recipe-name">${itemName(entry.itemId)} <span class="recipe-level">${entry.price}g</span></p>
+                  <p class="recipe-inputs">Owned: ${owned(entry.itemId)}</p>
+                  <button class="craft-btn" data-vendor-buy="${entry.itemId}" ${disabled ? "disabled" : ""}>Buy</button>
+                </li>`;
+      })
+      .join("");
   }
 
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
@@ -890,10 +1027,13 @@ export function mountApp(
     renderScene(dungeon, player, monster, fishing, production);
     renderFoodSlots(player.foodSlots, bank.items);
     renderPotionSlot(player.potionSlot, bank.items);
+    renderQuiver(player.quiver, bank.items);
+    renderRunePouch(player.runePouch, bank.items);
     renderXpRow(player.skills);
     renderCharacter(player);
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
+    renderVendor(bank, player.gold);
     renderSmithing(bank.items, player.skills.smithing.level);
     renderCooking(bank.items, player.skills.cooking.level);
     renderCrafting(bank.items, player.skills.crafting.level);
@@ -998,6 +1138,10 @@ export function mountApp(
           <p id="character-totals" class="totals-row"></p>
           <p class="panel-subtitle">Potion</p>
           <div id="potion-slot" class="potion-slot"></div>
+          <p class="panel-subtitle">Quiver</p>
+          <div id="quiver-slot" class="potion-slot"></div>
+          <p class="panel-subtitle">Rune Pouch</p>
+          <div id="rune-pouch" class="food-slots"></div>
           <div id="style-row" class="style-row">
             ${Object.entries(STYLE_LABELS)
               .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
@@ -1027,6 +1171,10 @@ export function mountApp(
           </div>
           <div id="bank" class="tile-grid"></div>
           <div id="bank-detail" class="detail-strip" hidden></div>
+        </div>
+        <div data-tab-panel="vendor" class="tab-panel">
+          <p class="panel-title">Vendor</p>
+          <ul id="vendor-list"></ul>
         </div>
         <div data-tab-panel="smithing" class="tab-panel">
           <p class="panel-title">Smithing</p>
@@ -1065,7 +1213,7 @@ export function mountApp(
     if (e.band === "rare") triggerRareFlash();
   });
   engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
-  engine.on("levelup", (e) => showLevelUpToast(`⭐ ${e.skill} level ${e.level}!`));
+  engine.on("levelup", (e) => showToast(`⭐ ${e.skill} level ${e.level}!`));
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
   engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
   engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
@@ -1103,6 +1251,17 @@ export function mountApp(
   engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
   engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${itemName(e.itemId)}`, "craft"));
   engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
+  engine.on("item-bought", (e) =>
+    feedLine(`Bought ${e.qty} ${itemName(e.itemId)} (-${e.gold}g)`, "buy"),
+  );
+  // Out-of-ammo (#119): a toast (the acceptance criterion's own required surface) plus a feed
+  // line, mirroring the overflow-sold/overflow-lost/duplicate-sold warnings' "⚠" + "overflow"
+  // class treatment — this is the same "player needs to notice" severity.
+  engine.on("out-of-ammo", (e) => {
+    const text = e.need === "arrow" ? "🏹 Out of arrows!" : `🔮 Out of ${e.element} runes!`;
+    showToast(text);
+    feedLine(`⚠ ${text}`, "overflow");
+  });
   engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
   engine.on("dungeon-completed", (e) => {
     const def = content.dungeons.find((d) => d.id === e.dungeonId);
@@ -1316,6 +1475,68 @@ export function mountApp(
       openPotionChooser = !openPotionChooser; // re-click dismisses
       render();
     }
+  });
+
+  // Quiver tile (#119): dispatch order mirrors the Potion Slot above — unassign (✕) before a
+  // chooser pick, before the [+] toggle.
+  el("#quiver-slot").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.dataset["quiverUnassign"] !== undefined) {
+      engine.unloadQuiver(); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
+      render();
+      return;
+    }
+
+    const assignItemId = target.dataset["quiverAssign"];
+    if (assignItemId !== undefined) {
+      engine.loadQuiver(assignItemId);
+      openQuiverChooser = false;
+      render();
+      return;
+    }
+
+    if (target.dataset["quiverAdd"] !== undefined) {
+      openQuiverChooser = !openQuiverChooser; // re-click dismisses
+      render();
+    }
+  });
+
+  // Rune Pouch panel (#119): dispatch order mirrors the Food Slot bar — unassign (✕) before a
+  // chooser pick, before the [+] toggle; `data-rune-add` carries the Element rather than an index.
+  el("#rune-pouch").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    const unassignItemId = target.dataset["runeUnassign"];
+    if (unassignItemId !== undefined) {
+      engine.unloadRunePouch(unassignItemId); // logs nothing; no feed line for unload
+      render();
+      return;
+    }
+
+    const assignItemId = target.dataset["runeAssign"];
+    if (assignItemId !== undefined) {
+      engine.loadRunePouch(assignItemId);
+      openRunePouchChooserElement = null;
+      render();
+      return;
+    }
+
+    const addElement = target.dataset["runeAdd"] as Element | undefined;
+    if (addElement !== undefined) {
+      // re-click dismisses
+      openRunePouchChooserElement = openRunePouchChooserElement === addElement ? null : addElement;
+      render();
+    }
+  });
+
+  // Vendor tab panel (#119): a fixed-price Buy control per row, mirroring the Smithing/Cooking/
+  // Crafting/Herblore recipe lists' single Craft-button dispatch shape.
+  el("#vendor-list").addEventListener("click", (event) => {
+    const itemId = (event.target as HTMLElement).dataset["vendorBuy"];
+    if (!itemId) return;
+    engine.buy(itemId, 1); // logs its own feed line via the item-bought subscription below
+    render();
   });
 
   el("#loot-all-btn").addEventListener("click", () => {
