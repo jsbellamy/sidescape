@@ -48,7 +48,7 @@ export function resolveTheme(
     if (area) return { theme: area.theme, areaId: area.id };
   }
 
-  if (snap.smithing) {
+  if (snap.production) {
     return { theme: "town", areaId: null };
   }
 

@@ -851,6 +851,7 @@ export const content: Content = {
     {
       id: "bronze-dagger",
       name: "Bronze Dagger",
+      skill: "smithing",
       levelReq: 1,
       inputs: [{ itemId: "bronze-bar", qty: 1 }],
       outputItemId: "bronze-dagger",
@@ -860,6 +861,7 @@ export const content: Content = {
     {
       id: "bronze-shield",
       name: "Bronze Shield",
+      skill: "smithing",
       levelReq: 5,
       inputs: [{ itemId: "bronze-bar", qty: 2 }],
       outputItemId: "bronze-shield",
@@ -869,6 +871,7 @@ export const content: Content = {
     {
       id: "bronze-sword",
       name: "Bronze Sword",
+      skill: "smithing",
       levelReq: 8,
       inputs: [{ itemId: "bronze-bar", qty: 2 }],
       outputItemId: "bronze-sword",
@@ -880,6 +883,7 @@ export const content: Content = {
     {
       id: "bronze-mace",
       name: "Bronze Mace",
+      skill: "smithing",
       levelReq: 6,
       inputs: [{ itemId: "bronze-bar", qty: 2 }],
       outputItemId: "bronze-mace",
@@ -889,6 +893,7 @@ export const content: Content = {
     {
       id: "iron-dagger",
       name: "Iron Dagger",
+      skill: "smithing",
       levelReq: 15,
       inputs: [{ itemId: "iron-bar", qty: 2 }],
       outputItemId: "iron-dagger",
@@ -898,6 +903,7 @@ export const content: Content = {
     {
       id: "iron-chainbody",
       name: "Iron Chainbody",
+      skill: "smithing",
       levelReq: 20,
       inputs: [{ itemId: "iron-bar", qty: 3 }],
       outputItemId: "iron-chainbody",
@@ -909,6 +915,7 @@ export const content: Content = {
     {
       id: "iron-mace",
       name: "Iron Mace",
+      skill: "smithing",
       levelReq: 16,
       inputs: [{ itemId: "iron-bar", qty: 2 }],
       outputItemId: "iron-mace",
@@ -918,6 +925,7 @@ export const content: Content = {
     {
       id: "iron-sword",
       name: "Iron Sword",
+      skill: "smithing",
       levelReq: 18,
       inputs: [{ itemId: "iron-bar", qty: 2 }],
       outputItemId: "iron-sword",

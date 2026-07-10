@@ -55,8 +55,10 @@ interface FishingActivity {
   catchCooldown: number;
 }
 
-interface SmithingActivity {
-  kind: "smithing";
+/** A Recipe in progress (#113: generalised from the old Smithing-only SmithingActivity — the
+ * recipe itself carries `skill` now, so the activity needs no skill field of its own). */
+interface ProductionActivity {
+  kind: "production";
   recipeId: string;
   craftCooldown: number;
 }
@@ -66,7 +68,7 @@ interface SmithingActivity {
  * being one field rather than by hand in every select command. Every command that starts an
  * activity assigns this wholesale, which is what makes the exclusivity automatic — there is no
  * per-command "clear the other three" bookkeeping left to forget. */
-type Activity = CombatActivity | DungeonActivity | FishingActivity | SmithingActivity | null;
+type Activity = CombatActivity | DungeonActivity | FishingActivity | ProductionActivity | null;
 
 interface State {
   xp: Record<SkillName, number>;
@@ -255,6 +257,9 @@ function freshState(_content: Content): State {
       smithing: 0,
       ranged: 0,
       magic: 0,
+      cooking: 0,
+      crafting: 0,
+      herblore: 0,
     },
     hp: 10,
     combatStyle: "aggressive",
@@ -459,26 +464,35 @@ function canCraftFromBank(recipe: RecipeDef, bank: Map<string, number>): boolean
   return recipe.inputs.every((input) => (bank.get(input.itemId) ?? 0) >= input.qty);
 }
 
-/** Resolves a resumable Smithing activity: `blocked` is true when a Monster or Fishing Spot
- * already claimed the resume slot (mirrors the monster > fishing priority above; Smithing is
- * lowest priority since Content's construction order and Dungeon's all-or-nothing rule both
- * predate it). An unknown recipe id, an under-leveled recipe, or one short on inputs all resume
- * idle instead of throwing (tolerant load, same as an unknown monster/fishing spot id) — the
- * cooldown always re-arms to `craftTicks` on resume, per #28. */
-function loadSmithing(
+/** Resolves a resumable production activity (#113: generalised from the old Smithing-only
+ * loadSmithing): `blocked` is true when a Monster or Fishing Spot already claimed the resume
+ * slot (mirrors the monster > fishing priority above; production is lowest priority since
+ * Content's construction order and Dungeon's all-or-nothing rule both predate it). Reads
+ * `saved.production ?? saved.smithing` (tolerant back-compat: a pre-#113 save only ever wrote
+ * `smithing`) and gates on `level(recipe.skill)`, not a hardcoded Smithing. An unknown recipe id,
+ * an under-leveled recipe, or one short on inputs all resume idle instead of throwing (tolerant
+ * load, same as an unknown monster/fishing spot id) — the cooldown always re-arms to
+ * `craftTicks` on resume, per #28. */
+function loadProduction(
   saved: Snapshot,
   content: Content,
   bank: Map<string, number>,
-  smithingLevel: number,
+  xp: Record<SkillName, number>,
   blocked: boolean,
-): SmithingActivity | null {
-  const recipeId: unknown = blocked ? undefined : saved.smithing?.recipeId;
+): ProductionActivity | null {
+  // Pre-#113 saves only ever wrote `smithing` (no `production` key) — Snapshot's type no longer
+  // declares that field, so it's read through an explicit legacy-shape cast, same discipline as
+  // the rest of loadState's tolerant-of-anything save parsing.
+  const legacySmithing = (saved as { smithing?: { recipeId?: unknown } }).smithing;
+  const recipeId: unknown = blocked
+    ? undefined
+    : (saved.production?.recipeId ?? legacySmithing?.recipeId);
   const recipe =
     typeof recipeId === "string" ? content.recipes.find((r) => r.id === recipeId) : undefined;
   if (!recipe) return null;
-  if (smithingLevel < recipe.levelReq) return null;
+  if (levelForXp(xp[recipe.skill]) < recipe.levelReq) return null;
   if (!canCraftFromBank(recipe, bank)) return null;
-  return { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+  return { kind: "production", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
 }
 
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
@@ -507,18 +521,18 @@ function loadState(saved: Snapshot, content: Content): State {
   const spot =
     typeof spotId === "string" ? content.fishingSpots.find((s) => s.id === spotId) : undefined;
   const savedMonsterHp: unknown = saved.monster?.hp;
-  const smithing = loadSmithing(
+  const production = loadProduction(
     saved,
     content,
     bank,
-    levelForXp(xp.smithing),
+    xp,
     dungeonActive || monster !== undefined || spot !== undefined,
   );
 
   // Priority mirrors the resolution above: a resumed Monster wins over a resumed Fishing Spot,
-  // which wins over resumed Smithing; a Dungeon run never resumes (see the comment above). By
-  // construction at most one of monster/spot/smithing is set, so this is a plain cascade, not
-  // another hand-maintained mutual-exclusion check.
+  // which wins over a resumed production Recipe; a Dungeon run never resumes (see the comment
+  // above). By construction at most one of monster/spot/production is set, so this is a plain
+  // cascade, not another hand-maintained mutual-exclusion check.
   let activity: Activity = null;
   if (monster) {
     activity = {
@@ -533,8 +547,8 @@ function loadState(saved: Snapshot, content: Content): State {
     };
   } else if (spot) {
     activity = { kind: "fishing", spotId: spot.id, catchCooldown: spot.catchTicks };
-  } else if (smithing) {
-    activity = smithing;
+  } else if (production) {
+    activity = production;
   }
 
   return {
@@ -1043,7 +1057,7 @@ export function createEngine(
     for (const skill of SKILL_NAMES) {
       skills[skill] = { level: level(skill), xp: state.xp[skill] };
     }
-    // The Snapshot's monster/fishing/dungeon/smithing sibling fields (a save format that must
+    // The Snapshot's monster/fishing/dungeon/production sibling fields (a save format that must
     // stay byte-identical, #29) are all derived here from the one state.activity value — dungeon
     // stays populated with the current wave's Monster too, so the existing HP-bar rendering keeps
     // working untouched.
@@ -1053,13 +1067,15 @@ export function createEngine(
         : undefined;
     const dungeonRun = state.activity?.kind === "dungeon" ? state.activity : undefined;
     const fishingSpotActivity = state.activity?.kind === "fishing" ? state.activity : undefined;
-    const smithingActivity = state.activity?.kind === "smithing" ? state.activity : undefined;
+    const productionActivity = state.activity?.kind === "production" ? state.activity : undefined;
     const monsterDef = fight ? content.monsters.find((m) => m.id === fight.monsterId) : undefined;
     const spotDef = fishingSpotActivity
       ? content.fishingSpots.find((s) => s.id === fishingSpotActivity.spotId)
       : undefined;
     const dungeonRunDef = dungeonRun ? dungeonDef(dungeonRun.dungeonId) : undefined;
-    const smithingRecipeDef = smithingActivity ? recipeDef(smithingActivity.recipeId) : undefined;
+    const productionRecipeDef = productionActivity
+      ? recipeDef(productionActivity.recipeId)
+      : undefined;
     return {
       savedAt: now(),
       player: {
@@ -1104,9 +1120,13 @@ export function createEngine(
               totalWaves: dungeonRunDef.waves.length,
             }
           : null,
-      smithing:
-        smithingActivity && smithingRecipeDef
-          ? { recipeId: smithingRecipeDef.id, name: smithingRecipeDef.name }
+      production:
+        productionActivity && productionRecipeDef
+          ? {
+              recipeId: productionRecipeDef.id,
+              name: productionRecipeDef.name,
+              skill: productionRecipeDef.skill,
+            }
           : null,
       bank: {
         items: [...state.bank].map(([itemId, qty]) => ({ itemId, qty })),
@@ -1206,11 +1226,11 @@ export function createEngine(
   /** Decrements the craft cooldown; at completion consumes `recipe.inputs` from the Bank (never
    * lost to an earlier interruption — see selectRecipe/the other select* commands, which only
    * ever swap `state.activity` wholesale, never mid-craft), adds the output Item to the Bank
-   * (#59, subject to the same top-up/overflow rules as any other passive arrival), grants
-   * Smithing XP, and emits item-crafted. Auto-repeats (re-arms the cooldown) while inputs still
-   * cover another craft; otherwise clears Smithing back to idle with no extra event — the
-   * Snapshot shows it. */
-  function smithingTick(activity: SmithingActivity): void {
+   * (#59, subject to the same top-up/overflow rules as any other passive arrival), grants XP in
+   * the recipe's own skill (#113: was hardcoded Smithing), and emits item-crafted. Auto-repeats
+   * (re-arms the cooldown) while inputs still cover another craft; otherwise clears production
+   * back to idle with no extra event — the Snapshot shows it. */
+  function productionTick(activity: ProductionActivity): void {
     const recipe = recipeDef(activity.recipeId);
     activity.craftCooldown -= 1;
     if (activity.craftCooldown > 0) return;
@@ -1222,7 +1242,7 @@ export function createEngine(
       else state.bank.delete(input.itemId);
     }
     addToBank(recipe.outputItemId, 1);
-    grantXp("smithing", recipe.xp);
+    grantXp(recipe.skill, recipe.xp);
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
 
     if (canCraftRecipe(recipe)) {
@@ -1240,8 +1260,8 @@ export function createEngine(
       return;
     }
 
-    if (state.activity?.kind === "smithing") {
-      smithingTick(state.activity);
+    if (state.activity?.kind === "production") {
+      productionTick(state.activity);
       return;
     }
 
@@ -1343,8 +1363,8 @@ export function createEngine(
     },
     selectRecipe(recipeId) {
       const recipe = recipeDef(recipeId); // throws on unknown id
-      if (level("smithing") < recipe.levelReq) {
-        throw new Error(`${recipe.name} requires Smithing level ${recipe.levelReq}`);
+      if (level(recipe.skill) < recipe.levelReq) {
+        throw new Error(`${recipe.name} requires ${recipe.skill} level ${recipe.levelReq}`);
       }
       if (!canCraftRecipe(recipe)) {
         throw new Error(`insufficient materials for ${recipe.name}`);
@@ -1353,7 +1373,11 @@ export function createEngine(
       state.hp = Math.max(state.hp, 1);
       // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
       sweepLootZone();
-      state.activity = { kind: "smithing", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+      state.activity = {
+        kind: "production",
+        recipeId: recipe.id,
+        craftCooldown: recipe.craftTicks,
+      };
     },
     selectSpell(id) {
       const spell = spellDef(id); // throws on unknown id

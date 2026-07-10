@@ -1,3 +1,4 @@
+import { SKILL_NAMES } from "./types";
 import type { Content } from "./types";
 
 /**
@@ -130,6 +131,15 @@ export function validateContent(content: Content): string[] {
     }
     if (!itemIds.has(recipe.outputItemId)) {
       violations.push(`recipe "${recipe.id}" outputItemId "${recipe.outputItemId}" not found`);
+    }
+  }
+
+  // #113: every recipe.skill must be a real Skill (SKILL_NAMES), so the multi-skill production
+  // chassis (selectRecipe/productionTick gating and granting XP through recipe.skill) never
+  // silently no-ops against an unrecognized skill.
+  for (const recipe of content.recipes) {
+    if (!(SKILL_NAMES as readonly string[]).includes(recipe.skill)) {
+      violations.push(`recipe "${recipe.id}" skill "${recipe.skill}" is not a known Skill`);
     }
   }
 

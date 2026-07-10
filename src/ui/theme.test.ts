@@ -41,7 +41,9 @@ describe("resolveTheme (#80)", () => {
   });
 
   it("resolves the shared town theme while Smithing, with no Area id", () => {
-    const snap = makeSnapshot({ smithing: { recipeId: "bronze-dagger", name: "Bronze Dagger" } });
+    const snap = makeSnapshot({
+      production: { recipeId: "bronze-dagger", name: "Bronze Dagger", skill: "smithing" },
+    });
     expect(resolveTheme(snap, content, null)).toEqual({ theme: "town", areaId: null });
   });
 
@@ -62,7 +64,7 @@ describe("resolveTheme (#80)", () => {
   }
 
   it("falls back to the first unlocked Area's theme when idle with no last-used Area", () => {
-    const snap = realAreasSnapshot(); // monster/fishing/dungeon/smithing all null: idle
+    const snap = realAreasSnapshot(); // monster/fishing/dungeon/production all null: idle
     expect(resolveTheme(snap, content, null)).toEqual({
       theme: "meadow",
       areaId: "lumbry-meadows",

@@ -4,7 +4,9 @@ import { resolveProp } from "./props";
 
 describe("resolveProp (#80)", () => {
   it("shows the anvil while Smithing", () => {
-    const snap = makeSnapshot({ smithing: { recipeId: "bronze-dagger", name: "Bronze Dagger" } });
+    const snap = makeSnapshot({
+      production: { recipeId: "bronze-dagger", name: "Bronze Dagger", skill: "smithing" },
+    });
     expect(resolveProp(snap)).toBe("anvil");
   });
 

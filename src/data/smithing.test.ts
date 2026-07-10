@@ -119,9 +119,10 @@ describe("Smithing content", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bronze-bar", qty: 1 }] } }),
     );
     expect(() => engine.selectRecipe("bronze-dagger")).not.toThrow();
-    expect(engine.snapshot().smithing).toEqual({
+    expect(engine.snapshot().production).toEqual({
       recipeId: "bronze-dagger",
       name: "Bronze Dagger",
+      skill: "smithing",
     });
   });
 
@@ -152,6 +153,6 @@ describe("Smithing content", () => {
     expect(snap.bank.items.find((s) => s.itemId === "iron-bar")).toBeUndefined();
     expect(snap.bank.items.find((s) => s.itemId === "iron-chainbody")?.qty).toBe(1);
     expect(snap.player.skills.smithing.xp).toBeGreaterThan(xpForLevel(20));
-    expect(snap.smithing).toBeNull(); // no bars left for another craft
+    expect(snap.production).toBeNull(); // no bars left for another craft
   });
 });
