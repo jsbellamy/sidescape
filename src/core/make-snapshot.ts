@@ -64,6 +64,7 @@ function baseSnapshot(): Snapshot {
       autoEatThreshold: 0,
       autoSellDuplicates: true,
       foodSlots: [null, null, null],
+      potionSlot: null,
       skills,
       equipment: {
         weapon: null,

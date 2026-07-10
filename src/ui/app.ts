@@ -10,6 +10,8 @@ import type {
   EquipmentDef,
   FoodSlot,
   GearSlot,
+  PotionDef,
+  PotionSlot,
   SkillSnapshot,
   Snapshot,
   SpellDef,
@@ -56,6 +58,35 @@ const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
  * Shared by per-piece Gear Slot rows and the Character panel's totals row. */
 function defVectorLabel(def: Record<AttackType, number>): string {
   return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
+}
+
+/** Human-readable target label for a PotionDef (#118): "fishing-speed"/"production-speed" get a
+ * spaced-out label, a combat SkillName is title-cased as-is. Shared by `itemDetailLines` (the
+ * hover/detail-strip stat line) and the Potion Slot tile's charges readout. */
+function potionTargetLabel(target: PotionDef["target"]): string {
+  if (target === "fishing-speed") return "Fishing speed";
+  if (target === "production-speed") return "Production speed";
+  return target.charAt(0).toUpperCase() + target.slice(1);
+}
+
+/** "qualifying action" noun for a PotionDef's `charges` count (#118, mirrors PotionDef.charges's
+ * own doc): a combat-Skill target counts attacks, "fishing-speed" counts catches,
+ * "production-speed" counts crafts. */
+function potionActionNoun(target: PotionDef["target"]): string {
+  if (target === "fishing-speed") return "catches";
+  if (target === "production-speed") return "crafts";
+  return "attacks";
+}
+
+/** One stat line for a PotionDef: "+20% Strength for 50 attacks" (the owner's own worked example
+ * shape) plus its sell value if any. Shared by `itemDetailLines` below. */
+function potionDetailLines(def: PotionDef): string[] {
+  const pct = Math.round(def.boostPct * 100);
+  const lines = [
+    `+${pct}% ${potionTargetLabel(def.target)} for ${def.charges} ${potionActionNoun(def.target)}`,
+  ];
+  if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
+  return lines;
 }
 
 /** A Monster's weak spot (Combat Depth #102): the lowest entry in its defence vector, ties broken
@@ -129,10 +160,10 @@ function skillProgress(skill: SkillSnapshot): number {
 /**
  * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
  * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
- * Skills #62, Cooking #115, Crafting #116) means adding an entry here plus a matching
- * `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this file needs to
- * change. Order here is display order in the tab strip (Skills, Character, Bank, Smithing,
- * Cooking, Crafting, Loot Feed).
+ * Skills #62, Cooking #115, Crafting #116, Herblore #118) means adding an entry here plus a
+ * matching `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this file
+ * needs to change. Order here is display order in the tab strip (Skills, Character, Bank,
+ * Smithing, Cooking, Crafting, Herblore, Loot Feed).
  */
 const TABS = [
   { id: "skills", label: "Skills" },
@@ -141,6 +172,7 @@ const TABS = [
   { id: "smithing", label: "Smithing" },
   { id: "cooking", label: "Cooking" },
   { id: "crafting", label: "Crafting" },
+  { id: "herblore", label: "Herblore" },
   { id: "loot", label: "Loot Feed" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -223,6 +255,10 @@ export function mountApp(
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same slot's [+], or
   // picking a Food from the chooser, closes it (set back to null).
   let openFoodChooserSlot: number | null = null;
+  // Whether the (singular) Potion Slot's Bank-Potion chooser is open (#118) — same presentational
+  // shape as `openFoodChooserSlot`, but a plain boolean since there's only ever one Potion Slot.
+  // Re-clicking [+], or picking a Potion from the chooser, closes it.
+  let openPotionChooser = false;
   // Which Bank tile (if any) is selected, driving the detail strip below the grid (#78) — purely
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
   // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
@@ -295,6 +331,8 @@ export function mountApp(
         return def.value !== undefined ? [`Worth ${def.value}g`] : [];
       case "currency":
         return [];
+      case "potion":
+        return potionDetailLines(def);
     }
   }
 
@@ -466,6 +504,50 @@ export function mountApp(
       .join("");
   }
 
+  /** Renders the single Potion Slot tile on the Character tab panel (#118): mirrors
+   * renderFoodSlots' filled/empty/chooser shape, but singular — there is only ever one active
+   * potion (owner decision: "the player can only have 1 active potion at a time"). A filled slot
+   * shows the icon + qty badge plus a `charges/max` readout and a ✕ (click = unassignPotionSlot,
+   * consuming the open potion); an empty slot shows a `[+]` that opens a chooser listing the
+   * Bank's Potion stacks (click one = assignPotionSlot). There is no click-to-drink — a potion's
+   * buff applies passively while assigned, unlike Food's click-to-eat. */
+  function renderPotionSlot(
+    potionSlot: PotionSlot,
+    bankItems: { itemId: string; qty: number }[],
+  ): void {
+    if (potionSlot) {
+      const def = content.items.find((i) => i.id === potionSlot.itemId);
+      const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
+      el("#potion-slot").innerHTML = `<div class="potion-slot-tile filled">
+                <div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
+                <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>
+                <button class="potion-slot-unassign" data-potion-unassign title="Unassign">✕</button>
+              </div>`;
+      return;
+    }
+    const potionStacks = bankItems.filter(
+      (s) => content.items.find((i) => i.id === s.itemId)?.kind === "potion",
+    );
+    const chooser = openPotionChooser
+      ? `<div class="potion-slot-chooser">
+          ${
+            potionStacks.length > 0
+              ? potionStacks
+                  .map(
+                    (s) =>
+                      `<button data-potion-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                  )
+                  .join("")
+              : `<p class="hint">No Potions in Bank</p>`
+          }
+        </div>`
+      : "";
+    el("#potion-slot").innerHTML = `<div class="potion-slot-tile empty">
+              <button class="potion-slot-add" data-potion-add>+</button>
+              ${chooser}
+            </div>`;
+  }
+
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
    * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
    * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
@@ -512,9 +594,8 @@ export function mountApp(
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
     if (production) {
-      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115) and
-      // Crafting (#116) pick their own emoji here; Herblore picks its own in its own slice, not
-      // authored here.
+      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115), Crafting
+      // (#116), and Herblore (#118) each pick their own emoji here.
       const label =
         production.skill === "smithing"
           ? "🔨 Smithing"
@@ -522,7 +603,9 @@ export function mountApp(
             ? "🍳 Cooking"
             : production.skill === "crafting"
               ? "🧵 Crafting"
-              : production.skill;
+              : production.skill === "herblore"
+                ? "🧪 Herblore"
+                : production.skill;
       el("#monster-name").textContent = `${label}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
@@ -775,6 +858,28 @@ export function mountApp(
       .join("");
   }
 
+  /** Renders the Herblore tab panel's recipe list (#118): mirrors renderSmithing/renderCooking/
+   * renderCrafting exactly, filtered to `skill === "herblore"` instead. */
+  function renderHerblore(bankItems: Snapshot["bank"]["items"], herbloreLevel: number): void {
+    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
+    el("#herblore-recipes").innerHTML = content.recipes
+      .filter((recipe) => recipe.skill === "herblore")
+      .map((recipe) => {
+        const inputsLine = recipe.inputs
+          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
+          .join(", ");
+        const underLeveled = herbloreLevel < recipe.levelReq;
+        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
+        const disabled = underLeveled || shortOnInputs;
+        return `<li data-recipe-row="${recipe.id}">
+                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
+                  <p class="recipe-inputs">${inputsLine}</p>
+                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
+                </li>`;
+      })
+      .join("");
+  }
+
   /** Dispatcher (#39): reads the latest Snapshot, then calls each per-panel renderer in turn. No
    * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
   function render(): void {
@@ -784,6 +889,7 @@ export function mountApp(
     renderBackdrop(snap);
     renderScene(dungeon, player, monster, fishing, production);
     renderFoodSlots(player.foodSlots, bank.items);
+    renderPotionSlot(player.potionSlot, bank.items);
     renderXpRow(player.skills);
     renderCharacter(player);
     renderLootStrip(snap.lootZone);
@@ -791,6 +897,7 @@ export function mountApp(
     renderSmithing(bank.items, player.skills.smithing.level);
     renderCooking(bank.items, player.skills.cooking.level);
     renderCrafting(bank.items, player.skills.crafting.level);
+    renderHerblore(bank.items, player.skills.herblore.level);
   }
 
   function buildPicker(): void {
@@ -889,6 +996,8 @@ export function mountApp(
           <p class="panel-title">Character</p>
           <div id="character-slots" class="tile-grid"></div>
           <p id="character-totals" class="totals-row"></p>
+          <p class="panel-subtitle">Potion</p>
+          <div id="potion-slot" class="potion-slot"></div>
           <div id="style-row" class="style-row">
             ${Object.entries(STYLE_LABELS)
               .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
@@ -930,6 +1039,10 @@ export function mountApp(
         <div data-tab-panel="crafting" class="tab-panel">
           <p class="panel-title">Crafting</p>
           <ul id="crafting-recipes"></ul>
+        </div>
+        <div data-tab-panel="herblore" class="tab-panel">
+          <p class="panel-title">Herblore</p>
+          <ul id="herblore-recipes"></ul>
         </div>
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
@@ -1180,6 +1293,31 @@ export function mountApp(
     }
   });
 
+  // Potion Slot tile (#118): dispatch order mirrors the Food Slot bar above — unassign (✕) is
+  // checked before a chooser pick, which is checked before the [+] toggle.
+  el("#potion-slot").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.dataset["potionUnassign"] !== undefined) {
+      engine.unassignPotionSlot(); // logs nothing; no feed line for unassign (mirrors Food Slot)
+      render();
+      return;
+    }
+
+    const assignItemId = target.dataset["potionAssign"];
+    if (assignItemId !== undefined) {
+      engine.assignPotionSlot(assignItemId);
+      openPotionChooser = false;
+      render();
+      return;
+    }
+
+    if (target.dataset["potionAdd"] !== undefined) {
+      openPotionChooser = !openPotionChooser; // re-click dismisses
+      render();
+    }
+  });
+
   el("#loot-all-btn").addEventListener("click", () => {
     const before = engine.snapshot().lootZone.length;
     engine.lootAll(); // logs its own feed line via the looted subscription above, if anything moved
@@ -1213,6 +1351,13 @@ export function mountApp(
   });
 
   el("#crafting-recipes").addEventListener("click", (event) => {
+    const recipeId = (event.target as HTMLElement).dataset["recipe"];
+    if (!recipeId) return;
+    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
+    render();
+  });
+
+  el("#herblore-recipes").addEventListener("click", (event) => {
     const recipeId = (event.target as HTMLElement).dataset["recipe"];
     if (!recipeId) return;
     engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription

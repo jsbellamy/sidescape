@@ -68,6 +68,8 @@ export const content: Content = {
         // #116: hide drop (economy check comment sits on the Crafting recipes below, near cow's
         // own cowhide entry — the reference kill-rate the arithmetic is worked against).
         { itemId: "cowhide", qty: 1, chance: 0.4, band: "common" },
+        // #118: herb drop (economy check comment sits on the Herblore recipes below).
+        { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -92,6 +94,8 @@ export const content: Content = {
         { itemId: "apprentice-staff", qty: 1, chance: 1 / 28, band: "uncommon" },
         // #116: hide drop — see the economy-check comment above the Crafting recipes below.
         { itemId: "cowhide", qty: 1, chance: 0.5, band: "common" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -114,6 +118,8 @@ export const content: Content = {
         { itemId: "bronze-bar", qty: 1, chance: 0.25, band: "common" },
         // Ranged starter weapon (#7): demoable from Lumbry Meadows' own Monsters.
         { itemId: "shortbow", qty: 1, chance: 1 / 28, band: "uncommon" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -139,6 +145,8 @@ export const content: Content = {
         // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
         // jewelry Crafting recipes below.
         { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "marrentill-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -163,6 +171,8 @@ export const content: Content = {
         // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
         // jewelry Crafting recipes below.
         { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "marrentill-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -187,6 +197,8 @@ export const content: Content = {
         // #117: gem drop (Darkroot Forest -> Sapphire) — see the gem-economy comment above the
         // jewelry Crafting recipes below.
         { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "marrentill-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "meadow-depths".
@@ -243,6 +255,8 @@ export const content: Content = {
         // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
         // Crafting recipes below.
         { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "tarromin-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -268,6 +282,8 @@ export const content: Content = {
         // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
         // Crafting recipes below.
         { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "tarromin-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     {
@@ -292,6 +308,8 @@ export const content: Content = {
         // #117: gem drop (Old Sewers -> Emerald) — see the gem-economy comment above the jewelry
         // Crafting recipes below.
         { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "harralander-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
     // Dungeon-only: absent from every Area's monsterIds, fought only inside "darkroot-hollow".
@@ -362,6 +380,8 @@ export const content: Content = {
         // #117: gem drop (Bone Crypt -> Ruby) — see the gem-economy comment above the jewelry
         // Crafting recipes below.
         { itemId: "ruby", qty: 1, chance: 1 / 220, band: "rare" },
+        // #118: herb drop — see the economy-check comment above the Herblore recipes below.
+        { itemId: "harralander-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
   ],
@@ -968,6 +988,78 @@ export const content: Content = {
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 2 },
       value: 180,
     },
+    // Herblore wave (#118): herb Materials, dropped by the tiered Areas' own Monsters (see the
+    // "#118: herb drop" comments on chicken/cow/goblin, wolf/goblin-warrior/bandit,
+    // giant-rat/zombie/skeleton, and skeleton/crypt-shade's dropTables above) and consumed by the
+    // Herblore recipes below. Append-only — after ruby-ring, never earlier.
+    { kind: "material", id: "guam-herb", name: "Guam Herb", icon: "guam-herb", value: 4 },
+    {
+      kind: "material",
+      id: "marrentill-herb",
+      name: "Marrentill Herb",
+      icon: "marrentill-herb",
+      value: 6,
+    },
+    {
+      kind: "material",
+      id: "tarromin-herb",
+      name: "Tarromin Herb",
+      icon: "tarromin-herb",
+      value: 8,
+    },
+    {
+      kind: "material",
+      id: "harralander-herb",
+      name: "Harralander Herb",
+      icon: "harralander-herb",
+      value: 10,
+    },
+    // Herblore wave (#118): the charge potions brewed from the herbs above (see the Herblore
+    // recipes below). `strength-potion`'s boostPct 0.20 / charges 50 is the owner's own worked
+    // example ("+20% str for 50 attacks"); `fishing-potion`'s boostPct 0.15 / charges 40 is also
+    // the owner's own worked example. `attack-potion`/`production-potion` mirror those shapes for
+    // the combat-stat and skilling-speed target kinds the owner decision called for ("potions may
+    // target combat stats ... and skilling speed").
+    {
+      kind: "potion",
+      id: "strength-potion",
+      name: "Strength Potion",
+      icon: "strength-potion",
+      target: "strength",
+      boostPct: 0.2,
+      charges: 50,
+      value: 30,
+    },
+    {
+      kind: "potion",
+      id: "attack-potion",
+      name: "Attack Potion",
+      icon: "attack-potion",
+      target: "attack",
+      boostPct: 0.15,
+      charges: 50,
+      value: 30,
+    },
+    {
+      kind: "potion",
+      id: "fishing-potion",
+      name: "Fishing Potion",
+      icon: "fishing-potion",
+      target: "fishing-speed",
+      boostPct: 0.15,
+      charges: 40,
+      value: 25,
+    },
+    {
+      kind: "potion",
+      id: "production-potion",
+      name: "Production Potion",
+      icon: "production-potion",
+      target: "production-speed",
+      boostPct: 0.15,
+      charges: 40,
+      value: 25,
+    },
   ],
   fishingSpots: [
     // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
@@ -1342,6 +1434,67 @@ export const content: Content = {
       outputItemId: "ruby-amulet",
       xp: 130,
       craftTicks: 8,
+    },
+    // Herblore wave (#118): the #113 chassis's fourth non-Smithing content — brews herbs (see the
+    // "#118: herb drop" comments on the tiered Areas' Monsters' dropTables above) straight into
+    // charge potions (#118's PotionDef, consumed via the Potion Slot — see engine.ts's
+    // assignPotionSlot/decrementPotionCharge). levelReqs climb with the herb tier, mirroring the
+    // Cooking/Crafting ladders' own tier-interleaving shape.
+    //
+    // Economy check (owner-mandated arithmetic, verbatim from the issue's own worked example):
+    // Guam Herb's drop chance is 0.15/kill; at a ~600-kills/hr farmer (this repo's own assumed
+    // rate, same as the Crafting-wave comments above) that's ~90 herbs/hr -> ~90
+    // brew-strength-potion crafts/hr of *capacity* (Herblore's own craft speed, craftTicks 5,
+    // comfortably outpaces the drop-rate bottleneck, same "drop rate gates the pace" shape as
+    // Cooking/Crafting). At xp 50/brew -> ~90 * 50 = ~4,500 Herblore xp/hr, clearing L1->L20
+    // (~4,470 xp) in about an hour — the issue's own stated curve. A 50-charge Strength Potion
+    // (owner's "+20% str for 50 attacks") covers ~50 player attacks (~1.5 min of unarmed-speed
+    // combat, less with a faster weapon); sustaining the buff PERMANENTLY costs ~1 potion per
+    // ~50 attacks, and at ~600 kills/hr (several attacks per kill) that's well under 90 potions/hr
+    // — worked out by the issue as ~40 potions/hr, i.e. ~40 herbs/hr — comfortably under the ~90
+    // herbs/hr drop rate. A buff is affordable but not free, matching the issue's own framing.
+    // marrentill/tarromin/harralander-herb ride the same 0.15/kill chance from their own (slower-
+    // clearing) Areas, so their brews scale down proportionally — a bonus on top of each Area's own
+    // kill-XP/gold, not a dedicated grind target, same shape as the Crafting-wave gem ladder.
+    {
+      id: "brew-strength-potion",
+      name: "Strength Potion",
+      skill: "herblore",
+      levelReq: 3,
+      inputs: [{ itemId: "guam-herb", qty: 1 }],
+      outputItemId: "strength-potion",
+      xp: 50,
+      craftTicks: 5,
+    },
+    {
+      id: "brew-attack-potion",
+      name: "Attack Potion",
+      skill: "herblore",
+      levelReq: 12,
+      inputs: [{ itemId: "marrentill-herb", qty: 1 }],
+      outputItemId: "attack-potion",
+      xp: 65,
+      craftTicks: 5,
+    },
+    {
+      id: "brew-fishing-potion",
+      name: "Fishing Potion",
+      skill: "herblore",
+      levelReq: 22,
+      inputs: [{ itemId: "tarromin-herb", qty: 1 }],
+      outputItemId: "fishing-potion",
+      xp: 80,
+      craftTicks: 6,
+    },
+    {
+      id: "brew-production-potion",
+      name: "Production Potion",
+      skill: "herblore",
+      levelReq: 32,
+      inputs: [{ itemId: "harralander-herb", qty: 1 }],
+      outputItemId: "production-potion",
+      xp: 95,
+      craftTicks: 6,
     },
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.

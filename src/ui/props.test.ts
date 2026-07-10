@@ -24,6 +24,13 @@ describe("resolveProp (#80)", () => {
     expect(resolveProp(snap)).toBe("crafting");
   });
 
+  it("shows the cauldron prop while Herblore (#118)", () => {
+    const snap = makeSnapshot({
+      production: { recipeId: "brew-strength-potion", name: "Strength Potion", skill: "herblore" },
+    });
+    expect(resolveProp(snap)).toBe("cauldron");
+  });
+
   it("shows no prop while fighting (the Monster IS the foreground)", () => {
     const snap = makeSnapshot({
       monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },
