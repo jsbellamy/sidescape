@@ -9,26 +9,9 @@
   </head>
 
   <body>
-    <section id="compact-widget-shell">
-      <header id="titlebar" data-tauri-drag-region>
-        <span data-tauri-drag-region>SideScape</span>
-        <div id="titlebar-controls">
-          <button id="export-save" title="Export save to clipboard">📤</button>
-          <button id="import-save" title="Import save from clipboard">📥</button>
-          <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊</button>
-          <button id="close-btn" title="Quit">✕</button>
-        </div>
-      </header>
-      <div id="import-panel" hidden>
-        <p>Paste a save below, then Apply. This overwrites your current save.</p>
-        <textarea id="import-textarea" rows="4"></textarea>
-        <p id="import-error" hidden></p>
-        <div id="import-actions">
-          <button id="import-apply">Apply</button>
-          <button id="import-cancel">Cancel</button>
-        </div>
-      </div>
-      <main id="app"></main>
-    </section>
+    <!-- The entire composition (compact widget + floating management cards) is built inside #app,
+         which is the transparent union with no painted ancestor — each card paints its own opaque
+         glass. See src/ui/app.ts for the vertical composition and src/styles.css for the shell. -->
+    <main id="app"></main>
   </body>
 </html>

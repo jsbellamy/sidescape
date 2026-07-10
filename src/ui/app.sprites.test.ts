@@ -5,10 +5,13 @@ import { fixtureContent } from "../core/fixture-content";
 import { content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WindowChrome } from "./app";
+import type { WorkspaceChrome } from "./app";
 import { playerSprite } from "./sprites";
 
-const noopWindowChrome: WindowChrome = { setPanels: () => {} };
+const noopWindowChrome: WorkspaceChrome = {
+  getCapacity: () => Promise.resolve(3),
+  setCardCount: () => {},
+};
 
 describe("combat scene sprites", () => {
   it("shows a pixelated player sprite as soon as the app mounts", () => {
