@@ -1314,7 +1314,8 @@ describe("Fishing", () => {
 describe("Character panel (#26)", () => {
   it("shows an empty tile (no data-item) for every empty Gear Slot on a fresh engine", () => {
     const { root } = mount(1);
-    for (const slot of ["weapon", "shield", "head", "body", "legs"]) {
+    // amulet/ring (#117, Crafting's jewelry line) appended after legs.
+    for (const slot of ["weapon", "shield", "head", "body", "legs", "amulet", "ring"]) {
       const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
       expect(tile?.classList.contains("tile-empty")).toBe(true);
       expect(tile?.dataset["item"]).toBeUndefined();
@@ -1363,6 +1364,29 @@ describe("Character panel (#26)", () => {
     expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Lucky Charm");
     expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
       "st 1 · sl 1 · cr 1 · rn 1 · mg 1",
+    );
+  });
+
+  it("renders the amulet Gear Slot tile and shows jewelry's atk/str bonuses on hover (#117: jewelry is an offence slot, unlike armour)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "lucky-amulet", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    engine.equip("lucky-amulet");
+    app.render();
+
+    const amuletTile = root.querySelector<HTMLElement>('[data-slot="amulet"]');
+    expect(amuletTile?.dataset["item"]).toBe("lucky-amulet");
+    const tooltip = hoverTile(root, amuletTile as Element);
+    expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Lucky Amulet");
+    // Unlike armour (see the "armor piece" test above), jewelry's atk/str lines DO show — no
+    // attackType prefix (jewelry never attacks) or speed suffix (slot !== "weapon"), same
+    // `equipmentStatParts` codepath, no UI change needed beyond GEAR_SLOT_ORDER (#117).
+    expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
+      "+5 atk +8 str st 0 · sl 0 · cr 0 · rn 0 · mg 1",
     );
   });
 

@@ -21,6 +21,8 @@ describe("makeSnapshot", () => {
       head: null,
       body: null,
       legs: null,
+      amulet: null,
+      ring: null,
     });
     expect(snap.player.gold).toBe(0);
     expect(snap.bank.items).toEqual([]);

@@ -65,7 +65,15 @@ function baseSnapshot(): Snapshot {
       autoSellDuplicates: true,
       foodSlots: [null, null, null],
       skills,
-      equipment: { weapon: null, shield: null, head: null, body: null, legs: null },
+      equipment: {
+        weapon: null,
+        shield: null,
+        head: null,
+        body: null,
+        legs: null,
+        amulet: null,
+        ring: null,
+      },
       // Derived output, ignored on load (#26); the fixture default matches a fresh, unarmed
       // player — mirrors engine.ts's own unarmed attack-speed fallback of 4 Ticks and its unarmed
       // Attack Type of "crush" (#99, the OSRS punch type).

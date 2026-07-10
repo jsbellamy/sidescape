@@ -177,8 +177,13 @@ function sewersGraduateSave() {
       autoEatThreshold: 0.5,
       completedDungeonIds: ["darkroot-hollow"],
       // Assigned to Food Slot 0 (#61) — autoEat only ever drains Food Slots now, never the Bank
-      // directly.
-      foodSlots: [{ itemId: "cooked-pike", qty: 400 }, null, null],
+      // directly. 4,000 (not boneCryptFarmerSave's deliberate "millions") — enough that the one
+      // test using this save directly (the Crypt Shade farming smoke test below) isn't food-
+      // exhaustion-limited: a fixed pike stash makes that test's ">10 kills" bound sensitive to
+      // exactly where Content's Rng-draw sequence lands (every dropTable entry anywhere upstream
+      // consumes one Rng draw per kill, so adding one — #117's gem drops — shifts the whole
+      // sequence), which isn't the balance property this test is meant to check.
+      foodSlots: [{ itemId: "cooked-pike", qty: 4000 }, null, null],
     },
   });
 }

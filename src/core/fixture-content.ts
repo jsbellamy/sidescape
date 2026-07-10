@@ -167,6 +167,33 @@ export const fixtureContent: Content = {
       attackSpeed: 4,
       value: 20,
     },
+    // Jewelry fixture (#117): stand-in for sapphire-amulet/-ring — an offence slot (owner
+    // decision, grilled: "amulets/rings may carry atk/str bonuses, unlike armour"), so unlike
+    // "lucky-charm" (head, def-only) above, this carries atkBonus/strBonus like a weapon while
+    // staying attackType-less (jewelry never attacks). icon reuses the real "goblin-charm" key
+    // (same discipline as every other fixture item above).
+    {
+      kind: "equipment",
+      id: "lucky-amulet",
+      name: "Lucky Amulet",
+      icon: "goblin-charm",
+      slot: "amulet",
+      atkBonus: 5,
+      strBonus: 8,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
+      value: 50,
+    },
+    {
+      kind: "equipment",
+      id: "lucky-ring",
+      name: "Lucky Ring",
+      icon: "goblin-charm",
+      slot: "ring",
+      atkBonus: 3,
+      strBonus: 4,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      value: 40,
+    },
   ],
   fishingSpots: [
     // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting. itemId is a

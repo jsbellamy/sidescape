@@ -9,6 +9,9 @@ import cookedPikeUrl from "../assets/icons/cooked-pike.png";
 import cookedShrimpUrl from "../assets/icons/cooked-shrimp.png";
 import cookedTroutUrl from "../assets/icons/cooked-trout.png";
 import cowhideUrl from "../assets/icons/cowhide.png";
+import emeraldUrl from "../assets/icons/emerald.png";
+import emeraldAmuletUrl from "../assets/icons/emerald-amulet.png";
+import emeraldRingUrl from "../assets/icons/emerald-ring.png";
 import goblinCharmUrl from "../assets/icons/goblin-charm.png";
 import goldUrl from "../assets/icons/gold.png";
 import hardLeatherBodyUrl from "../assets/icons/hard-leather-body.png";
@@ -38,6 +41,12 @@ import rawBeefUrl from "../assets/icons/raw-beef.png";
 import rawPikeUrl from "../assets/icons/raw-pike.png";
 import rawShrimpUrl from "../assets/icons/raw-shrimp.png";
 import rawTroutUrl from "../assets/icons/raw-trout.png";
+import rubyUrl from "../assets/icons/ruby.png";
+import rubyAmuletUrl from "../assets/icons/ruby-amulet.png";
+import rubyRingUrl from "../assets/icons/ruby-ring.png";
+import sapphireUrl from "../assets/icons/sapphire.png";
+import sapphireAmuletUrl from "../assets/icons/sapphire-amulet.png";
+import sapphireRingUrl from "../assets/icons/sapphire-ring.png";
 import shadeBladeUrl from "../assets/icons/shade-blade.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
@@ -118,6 +127,18 @@ const icons: Record<string, string> = {
   "hard-leather-body": hardLeatherBodyUrl,
   "hard-leather-chaps": hardLeatherChapsUrl,
   "hard-leather-coif": hardLeatherCoifUrl,
+  // Crafting wave (#117) jewelry line: gems + amulet/ring Equipment, hand-drawn placeholder pixel
+  // art (same escape hatch as the gap-fill maces/swords, raw catches, and hides/leather above —
+  // see docs/assets.md).
+  sapphire: sapphireUrl,
+  emerald: emeraldUrl,
+  ruby: rubyUrl,
+  "sapphire-amulet": sapphireAmuletUrl,
+  "sapphire-ring": sapphireRingUrl,
+  "emerald-amulet": emeraldAmuletUrl,
+  "emerald-ring": emeraldRingUrl,
+  "ruby-amulet": rubyAmuletUrl,
+  "ruby-ring": rubyRingUrl,
 };
 
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than

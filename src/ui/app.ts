@@ -24,8 +24,10 @@ import { itemIcon } from "./icons";
 import { formatQty } from "./format";
 
 /** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
- * key order (a plain object, not guaranteed stable across engines/serialization). */
-const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs"];
+ * key order (a plain object, not guaranteed stable across engines/serialization). `amulet`/`ring`
+ * (#117, Crafting's jewelry line) are appended after `legs`, mirroring GearSlot's own append-only
+ * order in core/types.ts. */
+const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs", "amulet", "ring"];
 
 /** Sort control labels, in `SORT_KEYS` order — "Kind | Value | Name". */
 const SORT_LABELS: Record<SortKey, string> = { kind: "Kind", value: "Value", name: "Name" };
