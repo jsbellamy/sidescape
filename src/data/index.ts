@@ -62,7 +62,8 @@ export const content: Content = {
       def: { stab: 3, slash: 1, crush: 3, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 2, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-meat", qty: 1, chance: 0.3, band: "common" },
+        // #115: cooked-meat -> raw-beef (Cooking now sits between a beast drop and edible Food).
+        { itemId: "raw-beef", qty: 1, chance: 0.3, band: "common" },
         { itemId: "bronze-dagger", qty: 1, chance: 1 / 24, band: "uncommon" },
       ],
     },
@@ -79,7 +80,8 @@ export const content: Content = {
       def: { stab: 3, slash: 1, crush: 4, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 5, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-meat", qty: 1, chance: 0.5, band: "common" },
+        // #115: cooked-meat -> raw-beef.
+        { itemId: "raw-beef", qty: 1, chance: 0.5, band: "common" },
         { itemId: "leather-body", qty: 1, chance: 1 / 20, band: "uncommon" },
         { itemId: "bronze-sword", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "bronze-bar", qty: 1, chance: 0.2, band: "common" },
@@ -100,7 +102,8 @@ export const content: Content = {
       def: { stab: 1, slash: 3, crush: 3, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 8, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-meat", qty: 1, chance: 0.25, band: "common" },
+        // #115: cooked-meat -> raw-beef.
+        { itemId: "raw-beef", qty: 1, chance: 0.25, band: "common" },
         { itemId: "bronze-shield", qty: 1, chance: 1 / 24, band: "uncommon" },
         { itemId: "goblin-charm", qty: 1, chance: 1 / 128, band: "rare" },
         { itemId: "bronze-bar", qty: 1, chance: 0.25, band: "common" },
@@ -121,7 +124,8 @@ export const content: Content = {
       def: { stab: 4, slash: 1, crush: 4, ranged: 3, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 15, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-trout", qty: 1, chance: 0.35, band: "common" },
+        // #115: cooked-trout -> raw-trout.
+        { itemId: "raw-trout", qty: 1, chance: 0.35, band: "common" },
         { itemId: "iron-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
         // Ranged tier progression (#13): iron-tier bow, demoable from Darkroot Forest's own Monsters.
         { itemId: "iron-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
@@ -140,7 +144,8 @@ export const content: Content = {
       def: { stab: 3, slash: 8, crush: 6, ranged: 5, magic: 4 },
       dropTable: [
         { itemId: "gold", qty: 20, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-trout", qty: 1, chance: 0.3, band: "common" },
+        // #115: cooked-trout -> raw-trout.
+        { itemId: "raw-trout", qty: 1, chance: 0.3, band: "common" },
         { itemId: "iron-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "iron-bar", qty: 1, chance: 0.25, band: "common" },
         // Magic tier progression (#13): iron-tier staff, demoable from Darkroot Forest's own Monsters.
@@ -161,7 +166,8 @@ export const content: Content = {
       def: { stab: 4, slash: 9, crush: 8, ranged: 7, magic: 6 },
       dropTable: [
         { itemId: "gold", qty: 25, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-trout", qty: 1, chance: 0.28, band: "common" },
+        // #115: cooked-trout -> raw-trout.
+        { itemId: "raw-trout", qty: 1, chance: 0.28, band: "common" },
         { itemId: "iron-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "iron-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         { itemId: "iron-bar", qty: 1, chance: 0.3, band: "common" },
@@ -209,7 +215,8 @@ export const content: Content = {
       def: { stab: 8, slash: 3, crush: 7, ranged: 5, magic: 4 },
       dropTable: [
         { itemId: "gold", qty: 30, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-pike", qty: 1, chance: 0.35, band: "common" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.35, band: "common" },
         { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
         // Ranged tier progression (#13): steel-tier bow, demoable from Old Sewers' own Monsters.
         { itemId: "steel-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
@@ -232,7 +239,8 @@ export const content: Content = {
       weakElement: "fire",
       dropTable: [
         { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "steel-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         // Magic tier progression (#13): steel-tier staff, demoable from Old Sewers' own Monsters.
         { itemId: "steel-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
@@ -251,7 +259,8 @@ export const content: Content = {
       def: { stab: 14, slash: 20, crush: 8, ranged: 12, magic: 10 },
       dropTable: [
         { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-pike", qty: 1, chance: 0.28, band: "common" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.28, band: "common" },
         { itemId: "steel-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "steel-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         // Gap-fill slash weapon (#102): no steel-bar Material exists, so steel-sword is drop-only.
@@ -308,7 +317,8 @@ export const content: Content = {
       weakElement: "fire",
       dropTable: [
         { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },
-        { itemId: "cooked-pike", qty: 1, chance: 0.3, band: "common" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "mithril-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
         { itemId: "mithril-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 34, band: "uncommon" },
@@ -781,13 +791,23 @@ export const content: Content = {
       attackSpeed: 6,
       value: 150,
     },
+    // Cooking wave (#115): raw fish/beast Materials — fishing spots and monster drop tables that
+    // used to yield cooked Food (see the "#115: cooked-X -> raw-X" comments above) now yield
+    // these instead; Cooking recipes (below) convert them back to the same cooked Food. Append-
+    // only — after mithril-staff, never earlier.
+    { kind: "material", id: "raw-beef", name: "Raw Beef", icon: "raw-beef", value: 1 },
+    { kind: "material", id: "raw-shrimp", name: "Raw Shrimp", icon: "raw-shrimp", value: 1 },
+    { kind: "material", id: "raw-trout", name: "Raw Trout", icon: "raw-trout", value: 2 },
+    { kind: "material", id: "raw-pike", name: "Raw Pike", icon: "raw-pike", value: 3 },
   ],
   fishingSpots: [
+    // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
+    // below) is now the only source of edible fish Food.
     {
       id: "shrimp-pool",
       name: "Shrimp Pool",
       levelReq: 1,
-      itemId: "cooked-shrimp",
+      itemId: "raw-shrimp",
       xp: 10,
       catchTicks: 5,
       catchChance: 0.6,
@@ -796,7 +816,7 @@ export const content: Content = {
       id: "trout-run",
       name: "Trout Run",
       levelReq: 20,
-      itemId: "cooked-trout",
+      itemId: "raw-trout",
       xp: 50,
       catchTicks: 5,
       catchChance: 0.5,
@@ -931,6 +951,61 @@ export const content: Content = {
       outputItemId: "iron-sword",
       xp: 70,
       craftTicks: 14,
+    },
+    // Cooking wave (#115): the #113 Recipe chassis's first non-Smithing content — converts a raw
+    // catch (fishing spot / beast drop, see the items/dropTable comments above) into the matching
+    // cooked Food. Owner decision, grilled and verbatim: "Raw drops + keep boss cooked" — a
+    // level-1 recipe is mandatory so a fresh player is never foodless (cook-beef/cook-shrimp both
+    // sit at levelReq 1, sourced respectively from Lumbry Meadows' beasts and its Shrimp Pool).
+    //
+    // Economy check (owner-mandated arithmetic, not vibes — see the issue's own worked numbers):
+    // Shrimp Pool (catchChance 0.6, catchTicks 5) idles at 0.6/5 = ~144 raw-shrimp/hr (6000
+    // ticks/hr). cook-shrimp's craftTicks 3 gives ~2000 cooks/hr of *capacity* with a full raw
+    // stack, so fishing — not cooking speed — is always the bottleneck; the Fishing Spot domain
+    // rule ("progression comes from unlocking better spots, not from scaling odds") holds. At xp
+    // 30/cook, ~144/hr * 30 = ~4,300 Cooking xp/hr, enough to hit level 20 (4,470 xp) in about an
+    // hour — a plausible early curve. Trout Run (0.5/5 = ~120 raw-trout/hr) at xp 70/cook gives
+    // ~8,400 xp/hr for the mid-game jump to levelReq 15. cook-pike (levelReq 25) scales the same
+    // way off Old Sewers' better catch rate, not off a faster Cooking action.
+    {
+      id: "cook-beef",
+      name: "Cook Beef",
+      skill: "cooking",
+      levelReq: 1,
+      inputs: [{ itemId: "raw-beef", qty: 1 }],
+      outputItemId: "cooked-meat",
+      xp: 30,
+      craftTicks: 3,
+    },
+    {
+      id: "cook-shrimp",
+      name: "Cook Shrimp",
+      skill: "cooking",
+      levelReq: 1,
+      inputs: [{ itemId: "raw-shrimp", qty: 1 }],
+      outputItemId: "cooked-shrimp",
+      xp: 30,
+      craftTicks: 3,
+    },
+    {
+      id: "cook-trout",
+      name: "Cook Trout",
+      skill: "cooking",
+      levelReq: 15,
+      inputs: [{ itemId: "raw-trout", qty: 1 }],
+      outputItemId: "cooked-trout",
+      xp: 70,
+      craftTicks: 4,
+    },
+    {
+      id: "cook-pike",
+      name: "Cook Pike",
+      skill: "cooking",
+      levelReq: 25,
+      inputs: [{ itemId: "raw-pike", qty: 1 }],
+      outputItemId: "cooked-pike",
+      xp: 90,
+      craftTicks: 4,
     },
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.

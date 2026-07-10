@@ -572,7 +572,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Skills, Character, Bank, Smithing, Loot Feed — none active and the right panel closed by default", () => {
+  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Loot Feed — none active and the right panel closed by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
@@ -580,6 +580,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
       "Character",
       "Bank",
       "Smithing",
+      "Cooking",
       "Loot Feed",
     ]);
 
@@ -589,7 +590,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
 
   it("every tab panel's content is absent from view (right panel hidden) on a fresh mount", () => {
     const { root } = mount(1);
-    for (const tab of ["skills", "character", "bank", "smithing", "loot"]) {
+    for (const tab of ["skills", "character", "bank", "smithing", "cooking", "loot"]) {
       expect(root.querySelector<HTMLElement>(`[data-tab-panel="${tab}"]`)?.hidden).toBe(true);
     }
   });
@@ -974,7 +975,7 @@ describe("Bank", () => {
     const noValueContent = {
       ...fixtureContent,
       items: fixtureContent.items.map((i) => {
-        if (i.id !== "meat" || i.kind === "currency") return i;
+        if (i.id !== "raw-fish" || i.kind === "currency") return i;
         const { value: _value, ...rest } = i;
         return rest;
       }),
@@ -989,7 +990,7 @@ describe("Bank", () => {
     );
     const root = document.createElement("main");
     mountApp(engine, root, noValueContent, noopWindowChrome);
-    engine.selectFishingSpot("pond"); // catchChance 1, always catches "meat"
+    engine.selectFishingSpot("pond"); // catchChance 1, always catches "raw-fish"
 
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
 
@@ -1276,9 +1277,10 @@ describe("Fishing", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3
     app.render();
 
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/caught.*meat/i);
+    // #115: pond now catches "raw-fish", a Material — never "meat" (Food) directly.
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/caught.*raw fish/i);
     expect(engine.snapshot().player.skills.fishing.xp).toBeGreaterThan(0);
-    expect(engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty).toBe(1);
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "raw-fish")?.qty).toBe(1);
   });
 
   it("picker still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
@@ -1844,6 +1846,63 @@ describe("Smithing (#28)", () => {
     expect(root.querySelector('#bank-detail [data-equip="bar"]')).toBeNull();
     expect(engine.snapshot().player.hp).toBe(hpBefore);
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "bar")?.qty).toBe(2);
+  });
+});
+
+describe("Cooking (#115)", () => {
+  function mountWithRawFish(qty: number, seed = 1) {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(seed),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    return { engine, root, app };
+  }
+
+  it("renders a Cooking recipe row for the fixture's test-cook Recipe, with level req and owned counts", () => {
+    const { root } = mountWithRawFish(0);
+    root.querySelector<HTMLButtonElement>('[data-tab="cooking"]')?.click();
+
+    const row = root.querySelector('[data-recipe-row="test-cook"]');
+    expect(row?.textContent).toContain("Cook Fish");
+    expect(row?.textContent).toContain("Lvl 1");
+    expect(row?.textContent).toContain("1× Raw Fish (have 0)");
+  });
+
+  it("disables the Craft button when short on inputs, enables it once inputs are sufficient", () => {
+    const short = mountWithRawFish(0);
+    expect(short.root.querySelector<HTMLButtonElement>('[data-recipe="test-cook"]')?.disabled).toBe(
+      true,
+    );
+
+    const enough = mountWithRawFish(1);
+    expect(
+      enough.root.querySelector<HTMLButtonElement>('[data-recipe="test-cook"]')?.disabled,
+    ).toBe(false);
+  });
+
+  it("clicking Craft starts the Recipe, showing the Cooking scene (🍳) and hiding the Monster HP bar/sprite", () => {
+    const { root } = mountWithRawFish(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-cook"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("🍳 Cooking: Cook Fish");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector("#monster-sprite") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("logs a feed line and grants Cooking XP (never Smithing) when a craft completes", () => {
+    const { engine, root, app } = mountWithRawFish(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-cook"]')?.click();
+
+    for (let i = 0; i < 3; i++) engine.tick(); // test-cook.craftTicks === 3
+    app.render();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/crafted.*cooked meat/i);
+    expect(engine.snapshot().player.skills.cooking.xp).toBeGreaterThan(0);
+    expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty).toBe(1);
   });
 });
 

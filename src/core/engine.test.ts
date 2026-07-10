@@ -857,29 +857,17 @@ describe("Active Food Slots (#61)", () => {
   });
 
   describe("Slot-as-home routing: arrivals of an assigned Food land in the slot, not the Bank", () => {
-    it("a fishing Catch of a slot-assigned Food lands in the slot", () => {
+    it("a fishing Catch (a raw Material, #115) lands in the Bank, never a Food Slot", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 2 }, null, null] } }),
       );
-      engine.selectFishingSpot("pond"); // catchChance 1, always catches "meat"
+      engine.selectFishingSpot("pond"); // catchChance 1, always catches "raw-fish" (a Material)
       for (let i = 0; i < 3; i++) engine.tick(); // catchTicks 3: exactly one Catch
 
-      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 3 });
-      expect(engine.snapshot().bank.items).toEqual([]);
-    });
-
-    it("a qty-0 slot still refills automatically from a fishing Catch (empty != unassigned)", () => {
-      const engine = createEngine(
-        fixtureContent,
-        seededRng(1),
-        makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] } }),
-      );
-      engine.selectFishingSpot("pond");
-      for (let i = 0; i < 3; i++) engine.tick();
-
-      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 2 }); // untouched
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "raw-fish", qty: 1 }]);
     });
 
     it("a Loot Zone sweep of a slot-assigned Food lands in the slot, not the Bank", () => {
@@ -1530,7 +1518,7 @@ describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", 
     const noValueContent = {
       ...fixtureContent,
       items: fixtureContent.items.map((i) => {
-        if (i.id !== "meat" || i.kind === "currency") return i;
+        if (i.id !== "raw-fish" || i.kind === "currency") return i;
         const { value: _value, ...rest } = i;
         return rest;
       }),
@@ -1545,10 +1533,10 @@ describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", 
     engine.on("overflow-lost", (e) => lost.push({ itemId: e.itemId, qty: e.qty }));
     engine.on("overflow-sold", (e) => sold.push(e));
 
-    engine.selectFishingSpot("pond"); // pond always catches "meat" (catchChance 1), now unsellable
+    engine.selectFishingSpot("pond"); // pond always catches "raw-fish" (catchChance 1), now unsellable
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks 3: exactly one Catch
 
-    expect(lost).toEqual([{ itemId: "meat", qty: 1 }]);
+    expect(lost).toEqual([{ itemId: "raw-fish", qty: 1 }]);
     expect(sold).toEqual([]);
     expect(engine.snapshot().player.gold).toBe(0);
     expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
@@ -1560,7 +1548,7 @@ describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", 
       seededRng(1),
       makeSnapshot({
         player: { skills: { fishing: { level: 1, xp: 0 } } },
-        bank: { items: [{ itemId: "meat", qty: 1 }], capacity: 1 },
+        bank: { items: [{ itemId: "raw-fish", qty: 1 }], capacity: 1 },
       }),
     );
     let overflowed = false;
@@ -1575,7 +1563,7 @@ describe("Bank overflow: passive flows auto-sell, player commands throw (#59)", 
     for (let i = 0; i < 9; i++) engine.tick(); // 3 Catches at catchTicks 3, catchChance 1
 
     expect(overflowed).toBe(false);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 4 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "raw-fish", qty: 4 }]);
   });
 
   it("smithing output is subject to the same overflow rule as any other passive arrival", () => {
@@ -2043,7 +2031,7 @@ function veteranSnapshot(fishingLevel = 1, fishingXp = 0) {
 }
 
 describe("Fishing", () => {
-  it("selectFishingSpot yields Fishing XP and edible Food over Ticks, emitting fish-caught (catchChance 1)", () => {
+  it("selectFishingSpot yields Fishing XP and a raw Material (#115) over Ticks, emitting fish-caught (catchChance 1)", () => {
     const engine = freshEngine();
     const caught: { spotId: string; itemId: string; qty: number }[] = [];
     engine.on("fish-caught", (e) =>
@@ -2053,13 +2041,13 @@ describe("Fishing", () => {
     expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
 
     for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3
-    expect(caught).toEqual([{ spotId: "pond", itemId: "meat", qty: 1 }]);
+    expect(caught).toEqual([{ spotId: "pond", itemId: "raw-fish", qty: 1 }]);
 
     for (let i = 0; i < 3; i++) engine.tick();
     expect(caught).toHaveLength(2);
 
     const snap = engine.snapshot();
-    expect(snap.bank.items.find((s) => s.itemId === "meat")?.qty).toBe(2);
+    expect(snap.bank.items.find((s) => s.itemId === "raw-fish")?.qty).toBe(2);
     expect(snap.player.skills.fishing.xp).toBe(20); // 2 Catches * pond.xp (10)
   });
 
@@ -3378,11 +3366,11 @@ describe("Auto-sell duplicate Equipment (#63)", () => {
     );
   });
 
-  it("Fishing Catches are never dupe-sold, even though Catches are always Food (never Equipment)", () => {
+  it("Fishing Catches are never dupe-sold, even though Catches are always a Material (never Equipment, #115)", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
-      makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty: 5 }] } }),
     );
     const sold: unknown[] = [];
     engine.on("duplicate-sold", (e) => sold.push(e));
@@ -3394,7 +3382,7 @@ describe("Auto-sell duplicate Equipment (#63)", () => {
 
     expect(caught).toHaveLength(1);
     expect(sold).toEqual([]);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 6 }]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "raw-fish", qty: 6 }]);
   });
 
   describe("setAutoSellDuplicates command", () => {

@@ -127,15 +127,16 @@ function skillProgress(skill: SkillSnapshot): number {
 /**
  * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
  * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
- * Skills #62) means adding an entry here plus a matching `[data-tab-panel]` section in the
- * `#tab-panels` markup; no other code in this file needs to change. Order here is display order
- * in the tab strip (#62: Skills, Character, Bank, Smithing, Loot Feed).
+ * Skills #62, Cooking #115) means adding an entry here plus a matching `[data-tab-panel]` section
+ * in the `#tab-panels` markup; no other code in this file needs to change. Order here is display
+ * order in the tab strip (Skills, Character, Bank, Smithing, Cooking, Loot Feed).
  */
 const TABS = [
   { id: "skills", label: "Skills" },
   { id: "character", label: "Character" },
   { id: "bank", label: "Bank" },
   { id: "smithing", label: "Smithing" },
+  { id: "cooking", label: "Cooking" },
   { id: "loot", label: "Loot Feed" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -507,9 +508,14 @@ export function mountApp(
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
     if (production) {
-      // Smithing keeps its exact label this wave (byte-identical, #113); other Skills pick their
-      // own emoji in their own slices (Cooking/Crafting/Herblore), not authored here.
-      const label = production.skill === "smithing" ? "🔨 Smithing" : production.skill;
+      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115) picks its
+      // own emoji here; Crafting/Herblore pick theirs in their own slices, not authored here.
+      const label =
+        production.skill === "smithing"
+          ? "🔨 Smithing"
+          : production.skill === "cooking"
+            ? "🍳 Cooking"
+            : production.skill;
       el("#monster-name").textContent = `${label}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
@@ -716,6 +722,29 @@ export function mountApp(
       .join("");
   }
 
+  /** Renders the Cooking tab panel's recipe list (#115): mirrors renderSmithing exactly, filtered
+   * to `skill === "cooking"` instead — Crafting/Herblore add their own tabs the same way in their
+   * own slices. */
+  function renderCooking(bankItems: Snapshot["bank"]["items"], cookingLevel: number): void {
+    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
+    el("#cooking-recipes").innerHTML = content.recipes
+      .filter((recipe) => recipe.skill === "cooking")
+      .map((recipe) => {
+        const inputsLine = recipe.inputs
+          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
+          .join(", ");
+        const underLeveled = cookingLevel < recipe.levelReq;
+        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
+        const disabled = underLeveled || shortOnInputs;
+        return `<li data-recipe-row="${recipe.id}">
+                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
+                  <p class="recipe-inputs">${inputsLine}</p>
+                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
+                </li>`;
+      })
+      .join("");
+  }
+
   /** Dispatcher (#39): reads the latest Snapshot, then calls each per-panel renderer in turn. No
    * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
   function render(): void {
@@ -730,6 +759,7 @@ export function mountApp(
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
     renderSmithing(bank.items, player.skills.smithing.level);
+    renderCooking(bank.items, player.skills.cooking.level);
   }
 
   function buildPicker(): void {
@@ -861,6 +891,10 @@ export function mountApp(
         <div data-tab-panel="smithing" class="tab-panel">
           <p class="panel-title">Smithing</p>
           <ul id="smithing-recipes"></ul>
+        </div>
+        <div data-tab-panel="cooking" class="tab-panel">
+          <p class="panel-title">Cooking</p>
+          <ul id="cooking-recipes"></ul>
         </div>
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
@@ -1130,6 +1164,13 @@ export function mountApp(
   });
 
   el("#smithing-recipes").addEventListener("click", (event) => {
+    const recipeId = (event.target as HTMLElement).dataset["recipe"];
+    if (!recipeId) return;
+    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
+    render();
+  });
+
+  el("#cooking-recipes").addEventListener("click", (event) => {
     const recipeId = (event.target as HTMLElement).dataset["recipe"];
     if (!recipeId) return;
     engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription

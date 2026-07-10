@@ -169,14 +169,16 @@ describe("validateContent", () => {
     expect(violations.some((v) => v.includes("no-such-item") && v.includes("pond"))).toBe(true);
   });
 
-  it("reports a fishingSpot.itemId that resolves but is not a Food", () => {
+  it("reports a fishingSpot.itemId that resolves but is not a Material (#115)", () => {
     const content: Content = {
       ...fixtureContent,
       fishingSpots: fixtureContent.fishingSpots.map((s) =>
         s.id === "pond" ? { ...s, itemId: "gold" } : s,
       ),
     };
-    expect(validateContent(content)).toContain('fishingSpot "pond" itemId "gold" is not a Food');
+    expect(validateContent(content)).toContain(
+      'fishingSpot "pond" itemId "gold" is not a Material',
+    );
   });
 
   it("reports a dangling recipe inputs itemId reference", () => {
@@ -239,7 +241,7 @@ describe("validateContent", () => {
     expect(violations.some((v) => v.includes("no currency"))).toBe(true);
     expect(violations.some((v) => v.includes("gold-bar"))).toBe(true);
     // "gold" was stripped from items above, so the fishingSpot itemId is now dangling,
-    // not "not a Food" — both are violations, exercised as the third one here.
+    // not "not a Material" — both are violations, exercised as the third one here.
     expect(violations.some((v) => v.includes("gold") && v.includes("pond"))).toBe(true);
   });
 
@@ -267,7 +269,7 @@ describe("validateContent", () => {
           id: "orphan-spot",
           name: "Orphan Spot",
           levelReq: 1,
-          itemId: "meat",
+          itemId: "bar", // must be a Material (#115) — "bar" is fixtureContent's other one
           xp: 1,
           catchTicks: 1,
           catchChance: 1,

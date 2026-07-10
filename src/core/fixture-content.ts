@@ -130,6 +130,10 @@ export const fixtureContent: Content = {
       value: 100,
     },
     { kind: "material", id: "bar", name: "Test Bar", icon: "bronze-bar", value: 5 },
+    // Raw catch fixture (#115): fishingSpots below now yield a Material, not Food — this is the
+    // fixture's stand-in for raw-beef/raw-shrimp/etc. "test-cook" (recipes, below) converts it
+    // back to "meat" (Food), mirroring the real cook-beef/cook-shrimp/etc. Recipes.
+    { kind: "material", id: "raw-fish", name: "Raw Fish", icon: "iron-bar", value: 3 },
     // Ranged/Magic fixtures (#7): same atk/str/speed as bronze-sword above, so XP-routing tests
     // can swap weapons without also changing the damage math being exercised.
     {
@@ -160,12 +164,13 @@ export const fixtureContent: Content = {
     },
   ],
   fishingSpots: [
-    // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting.
+    // catchChance 1 keeps Fishing tests deterministic without Rng draw-counting. itemId is a
+    // Material (#115: fishing yields a raw catch, not Food directly) — see "raw-fish" above.
     {
       id: "pond",
       name: "Test Pond",
       levelReq: 1,
-      itemId: "meat",
+      itemId: "raw-fish",
       xp: 10,
       catchTicks: 3,
       catchChance: 1,
@@ -175,7 +180,7 @@ export const fixtureContent: Content = {
       id: "deep-pond",
       name: "Test Deep Pond",
       levelReq: 20,
-      itemId: "meat",
+      itemId: "raw-fish",
       xp: 50,
       catchTicks: 3,
       catchChance: 1,
@@ -217,6 +222,19 @@ export const fixtureContent: Content = {
       outputItemId: "lucky-charm",
       xp: 40,
       craftTicks: 5,
+    },
+    // Cooking fixture (#115): converts the fishing spots' raw catch ("raw-fish") into "meat"
+    // (Food), mirroring the real cook-beef/cook-shrimp Recipes — lets Cooking-tab/XP-routing
+    // tests run without touching the real v1 Content.
+    {
+      id: "test-cook",
+      name: "Cook Fish",
+      skill: "cooking",
+      levelReq: 1,
+      inputs: [{ itemId: "raw-fish", qty: 1 }],
+      outputItemId: "meat",
+      xp: 15,
+      craftTicks: 3,
     },
   ],
   // Spells (#101): one always-castable at levelReq 1 (validateContent's own requirement) plus one

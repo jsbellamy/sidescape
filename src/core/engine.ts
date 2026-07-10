@@ -1287,8 +1287,9 @@ export function createEngine(
     if (rng.next() < spot.catchChance) {
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
-      // a Catch is always Food (validateContent), never currency — routes to its Food Slot home
-      // if assigned (#61), otherwise the Bank as before.
+      // a Catch is always a raw Material (validateContent, #115), never Food or currency — no
+      // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so
+      // arriveAtHome always falls through to the ordinary Bank top-up/overflow rules.
       arriveAtHome(spot.itemId, 1);
     }
   }
