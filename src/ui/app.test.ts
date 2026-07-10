@@ -764,7 +764,7 @@ describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window
     expect(root.querySelector('[data-skill="attack"]')).not.toBeNull();
   });
 
-  it("panel state persists to localStorage under sidescape-ui-panels and restores on remount, never touching the Snapshot/save", () => {
+  it("legacy panel state never reopens cards on remount and never touches the Snapshot/save", () => {
     vi.stubGlobal("localStorage", stubLocalStorage());
     try {
       const { chrome: chrome1 } = spyWindowChrome();
@@ -781,10 +781,9 @@ describe("Side panels (#62: LEFT Areas arrow + RIGHT tab strip expand the window
       const root2 = document.createElement("main");
       mountApp(engine, root2, fixtureContent, chrome2);
 
-      expect(root2.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
-      expect(root2.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(false);
-      expect(root2.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(false);
-      expect(calls2).toEqual([[true, true]]);
+      expect(root2.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
+      expect(root2.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
+      expect(calls2).toEqual([[false, false]]);
     } finally {
       vi.unstubAllGlobals();
     }

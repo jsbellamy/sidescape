@@ -13,6 +13,12 @@ Read `CONTEXT.md` for the domain language (Area, Monster, Drop Table, Tick, …)
 
 ## Architecture
 
+The desktop UI is one transparent native Tauri window: the compact gameplay widget and floating
+management cards are opaque CSS cards on a glass shell, never secondary windows. The shell picks
+a stable top/bottom anchor when cards first open and remembers compact/card dimensions locally
+(not in a Snapshot/save). macOS transparency requires Tauri's `macOSPrivateApi`; that is suitable
+for personal distribution but makes this configuration unsuitable for Mac App Store submission.
+
 - `src/core/` — headless game engine: pure TS, **no DOM access**, unit-tested (combat ticks, XP curve, drop rolls, save serialization). Emits events (`kill`, `drop`, `levelup`, `hp-change`) on a tiny event bus.
 - `src/data/` — content as typed const arrays (`monsters.ts`, `items.ts`, `areas.ts`). Adding content must never require engine changes.
 - `src/ui/` — DOM renderers subscribed to core events. CSS animations for damage splats / toasts.

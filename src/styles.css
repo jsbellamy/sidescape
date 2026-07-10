@@ -9,7 +9,7 @@
   font-family: -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   color: var(--text);
-  background-color: var(--bg);
+  background-color: transparent;
 }
 
 * {
@@ -23,6 +23,49 @@ body {
   height: 100%;
   overflow: hidden;
   user-select: none;
+}
+
+html,
+:root,
+body {
+  background: transparent;
+}
+#compact-widget-shell,
+#compact-widget {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.management-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: stretch;
+}
+.management-card {
+  flex: 0 0 300px;
+  width: 300px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+}
+.management-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+}
+.card-close {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
 }
 
 #titlebar {

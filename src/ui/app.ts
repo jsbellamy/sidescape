@@ -197,6 +197,11 @@ type TabId = (typeof TABS)[number]["id"];
  * tests and the plain-browser `npm run dev` path use a noop, so the window itself is the only
  * seam — everything else in this file is plain in-page flex layout.
  */
+export interface WorkspaceChrome {
+  getCapacity(): Promise<1 | 2 | 3>;
+  setCardCount(cardCount: number): void;
+}
+/** @deprecated compatibility adapter for pre-workspace DOM tests. */
 export interface WindowChrome {
   /** `left`/`right` are the panel's new open/closed state, not a delta. */
   setPanels(left: boolean, right: boolean): void;
@@ -256,13 +261,15 @@ export function mountApp(
   engine: Engine,
   root: HTMLElement,
   content: Content,
-  windowChrome: WindowChrome,
+  windowChrome: WorkspaceChrome | WindowChrome,
 ): MountedApp {
   // Presentation-only side panel state (#62): LEFT (Areas) is independent of the RIGHT tab strip,
   // where `rightTab: null` means the right panel is closed. Restored from localStorage below.
+  // Cards deliberately never restore open after relaunch.  The old key is read only to preserve
+  // its internal tab selection for a future workspace navigator, never its open flags.
   const restoredPanels = loadPanelState();
-  let leftOpen = restoredPanels.left;
-  let rightTab: TabId | null = restoredPanels.tab;
+  let leftOpen = false;
+  let rightTab: TabId | null = null;
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
   // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
@@ -310,6 +317,7 @@ export function mountApp(
       panel.hidden = panel.dataset["tabPanel"] !== rightTab;
     });
     el<HTMLElement>("#right-panel").hidden = rightTab === null;
+    el<HTMLElement>("#management-row").dataset["anchor"] = "top";
   }
 
   /** Re-renders panel visibility, notifies `WindowChrome` of the new open/closed flags (the
@@ -318,8 +326,12 @@ export function mountApp(
    * including the initial restore-from-localStorage on mount. */
   function syncPanels(): void {
     renderTabs();
-    windowChrome.setPanels(leftOpen, rightTab !== null);
-    savePanelState({ left: leftOpen, tab: rightTab });
+    const count = Number(leftOpen) + Number(rightTab !== null);
+    if ("setCardCount" in windowChrome) windowChrome.setCardCount(count);
+    else windowChrome.setPanels(leftOpen, rightTab !== null);
+    // Retain only tab preference; legacy open flags must not survive a relaunch.
+    // Legacy key remains writable for a smooth upgrade, but its open flags are ignored at boot.
+    savePanelState({ left: leftOpen, tab: rightTab ?? restoredPanels.tab });
   }
 
   function itemName(itemId: string): string {
@@ -1101,10 +1113,19 @@ export function mountApp(
   root.innerHTML = `
     <div id="flash-overlay"></div>
     <div id="item-tooltip" class="item-tooltip" hidden></div>
-    <div id="left-panel" class="side-panel" hidden>
-      <p class="panel-title">Areas</p>
+    <div id="management-row" class="management-row">
+    <section id="left-panel" class="side-panel management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Areas</p><button class="card-close" data-close-left title="Close Areas">✕</button></header>
       <section id="picker"></section>
+    </section>
+    <section id="right-panel" class="side-panel management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Management</p><button class="card-close" data-close-right title="Close panel">✕</button></header>
+      <div id="tab-panels">
+    <div data-right-panels></div>
+      </div>
+    </section>
     </div>
+    <section id="compact-widget">
     <div id="main-column">
       <div id="chrome-row">
         <button id="left-arrow" data-toggle-left title="Areas">◂</button>
@@ -1145,8 +1166,8 @@ export function mountApp(
         ${TABS.map((tab) => `<button data-tab="${tab.id}">${tab.label}</button>`).join("")}
       </div>
     </div>
-    <div id="right-panel" class="side-panel" hidden>
-      <div id="tab-panels">
+    </section>
+    <template id="right-panel-template"><div id="tab-panels">
         <div data-tab-panel="skills" class="tab-panel">
           <p class="panel-title">Skills</p>
           <section id="xp-row"></section>
@@ -1215,9 +1236,13 @@ export function mountApp(
         </div>
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
-        </div>
-      </div>
+      </div></template>
     </div>`;
+  const rightTemplate = root.querySelector<HTMLTemplateElement>("#right-panel-template");
+  const rightCard = root.querySelector<HTMLElement>("#right-panel");
+  if (!rightTemplate || !rightCard) throw new Error("management card template missing");
+  rightCard.append(rightTemplate.content.cloneNode(true));
+  rightTemplate.remove();
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
   // the Monster's land on the player's; fires during engine.tick() itself, not the following
@@ -1367,6 +1392,25 @@ export function mountApp(
   el("#left-arrow").addEventListener("click", () => {
     leftOpen = !leftOpen;
     syncPanels();
+  });
+
+  el("#management-row").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-close-left]")) {
+      leftOpen = false;
+      syncPanels();
+    }
+    if (target.closest("[data-close-right]")) {
+      rightTab = null;
+      syncPanels();
+    }
+  });
+  document.body.addEventListener("click", (event) => {
+    if (event.target === document.body) {
+      leftOpen = false;
+      rightTab = null;
+      syncPanels();
+    }
   });
 
   el("#picker").addEventListener("click", (event) => {

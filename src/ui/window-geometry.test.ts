@@ -1,153 +1,84 @@
 import { describe, expect, it } from "vitest";
-import { BASE_H, BASE_W, PANEL_W, panelWindowRect } from "./window-geometry";
-import type { MonitorRect } from "./window-geometry";
+import {
+  CARD_GAP,
+  CARD_W,
+  DEFAULT_CARD_H,
+  DEFAULT_COMPACT_H,
+  DEFAULT_COMPACT_W,
+  workspaceCapacity,
+  workspaceRect,
+} from "./window-geometry";
 
-// BASE_W=320, PANEL_W=300 — sanity-check the constants worked examples below assume.
-describe("panelWindowRect constants", () => {
-  it("exposes the tuned window-sizing constants", () => {
-    expect(BASE_W).toBe(320);
-    expect(BASE_H).toBe(460);
-    expect(PANEL_W).toBe(300);
+const compact = { width: DEFAULT_COMPACT_W, height: DEFAULT_COMPACT_H };
+const monitor = { x: 0, y: 0, width: 1920, height: 1080 };
+const rect = (cardCount: number, overrides = {}) =>
+  workspaceRect({
+    current: { x: 500, y: 100, width: 320, height: 460 },
+    compact,
+    cardHeight: DEFAULT_CARD_H,
+    wasCardCount: 0,
+    cardCount,
+    anchor: null,
+    monitor,
+    ...overrides,
+  });
+
+describe("workspace capacity", () => {
+  it("supports narrow, medium, and wide work areas", () => {
+    expect(workspaceCapacity(307)).toBe(1);
+    expect(workspaceCapacity(616)).toBe(2);
+    expect(workspaceCapacity(924)).toBe(3);
   });
 });
-
-describe("panelWindowRect", () => {
-  it("opening the left panel widens by PANEL_W and shifts x left by PANEL_W", () => {
-    const result = panelWindowRect({
-      currentX: 100,
-      wasLeftOpen: false,
-      left: true,
-      right: false,
-      monitor: null,
-    });
-    expect(result).toEqual({ width: BASE_W + PANEL_W, x: 100 - PANEL_W });
+describe("workspaceRect", () => {
+  it("returns compact geometry for zero cards", () =>
+    expect(rect(0)).toMatchObject({ width: 320, height: 460, anchor: null }));
+  it("lays out one, two, and three cards", () => {
+    expect(rect(1).width).toBe(320);
+    expect(rect(2).width).toBe(CARD_W * 2 + CARD_GAP);
+    expect(rect(3).width).toBe(CARD_W * 3 + CARD_GAP * 2);
   });
-
-  it("closing the left panel narrows by PANEL_W and shifts x right by PANEL_W", () => {
-    const result = panelWindowRect({
-      currentX: 100 - PANEL_W,
-      wasLeftOpen: true,
-      left: false,
-      right: false,
-      monitor: null,
-    });
-    expect(result).toEqual({ width: BASE_W, x: 100 });
+  it("selects upper, lower, and deadband anchors", () => {
+    expect(rect(1).anchor).toBe("top");
+    expect(rect(1, { current: { x: 500, y: 700, width: 320, height: 460 } }).anchor).toBe("bottom");
+    expect(rect(1, { current: { x: 500, y: 310, width: 320, height: 460 } }).anchor).toBe("bottom");
   });
-
-  it("toggling the right panel widens the window but never moves x", () => {
-    const opened = panelWindowRect({
-      currentX: 50,
-      wasLeftOpen: false,
-      left: false,
-      right: true,
-      monitor: null,
-    });
-    expect(opened).toEqual({ width: BASE_W + PANEL_W, x: 50 });
-
-    const closed = panelWindowRect({
-      currentX: 50,
-      wasLeftOpen: false,
-      left: false,
-      right: false,
-      monitor: null,
-    });
-    expect(closed).toEqual({ width: BASE_W, x: 50 });
-  });
-
-  it("re-applying the same left-panel state leaves x unchanged", () => {
-    const stillOpen = panelWindowRect({
-      currentX: 42,
-      wasLeftOpen: true,
-      left: true,
-      right: false,
-      monitor: null,
-    });
-    expect(stillOpen).toEqual({ width: BASE_W + PANEL_W, x: 42 });
-
-    const stillClosed = panelWindowRect({
-      currentX: 42,
-      wasLeftOpen: false,
-      left: false,
-      right: false,
-      monitor: null,
-    });
-    expect(stillClosed).toEqual({ width: BASE_W, x: 42 });
-  });
-
-  it("clamps x at the left edge of the monitor", () => {
-    const monitor: MonitorRect = { x: 0, y: 0, width: 1920, height: 1080 };
-    // currentX=10, opening LEFT would shift to 10 - 300 = -290, below the monitor's x=0.
-    const result = panelWindowRect({
-      currentX: 10,
-      wasLeftOpen: false,
-      left: true,
-      right: false,
+  it("keeps an anchor while cards remain open and reverses bottom geometry", () => {
+    const opened = rect(1, { current: { x: 500, y: 700, width: 320, height: 460 } });
+    const changed = workspaceRect({
+      current: opened,
+      compact,
+      cardHeight: DEFAULT_CARD_H,
+      wasCardCount: 1,
+      cardCount: 2,
+      anchor: opened.anchor,
       monitor,
     });
-    expect(result.x).toBe(0);
-  });
-
-  it("clamps x at the right edge of the monitor", () => {
-    const monitor: MonitorRect = { x: 0, y: 0, width: 1000, height: 1080 };
-    const width = BASE_W + PANEL_W; // 620
-    // currentX=900 would put the window's right edge at 900+620=1520, past the monitor's
-    // right edge at 1000; expect it pinned so the window's right edge sits at the monitor edge.
-    const result = panelWindowRect({
-      currentX: 900,
-      wasLeftOpen: true,
-      left: true,
-      right: false,
+    const closed = workspaceRect({
+      current: changed,
+      compact,
+      cardHeight: DEFAULT_CARD_H,
+      wasCardCount: 2,
+      cardCount: 0,
+      anchor: changed.anchor,
       monitor,
     });
-    expect(result.x).toBe(monitor.x + monitor.width - width);
+    expect(changed.anchor).toBe("bottom");
+    expect(closed.anchor).toBeNull();
+    expect(closed.height).toBe(460);
   });
-
-  it("clamps correctly on a monitor with a negative origin (secondary display left of primary)", () => {
-    const monitor: MonitorRect = { x: -1920, y: 0, width: 1920, height: 1080 };
-    const width = BASE_W; // no panels open
-    // Below the left edge: should clamp up to monitor.x.
-    const belowEdge = panelWindowRect({
-      currentX: -2000,
-      wasLeftOpen: false,
-      left: false,
-      right: false,
-      monitor,
+  it("clamps card height and negative-origin monitor rectangles", () => {
+    const small = workspaceRect({
+      current: { x: -1900, y: 0, width: 320, height: 460 },
+      compact,
+      cardHeight: 600,
+      wasCardCount: 0,
+      cardCount: 3,
+      anchor: null,
+      monitor: { x: -1920, y: 0, width: 500, height: 700 },
     });
-    expect(belowEdge.x).toBe(-1920);
-
-    // Past the right edge: should clamp down to monitor.x + monitor.width - width.
-    const pastEdge = panelWindowRect({
-      currentX: 0,
-      wasLeftOpen: false,
-      left: false,
-      right: false,
-      monitor,
-    });
-    expect(pastEdge.x).toBe(-1920 + 1920 - width);
-  });
-
-  it("pins x to monitor.x when the window is wider than the monitor", () => {
-    const monitor: MonitorRect = { x: 100, y: 0, width: 500, height: 1080 };
-    const width = BASE_W + PANEL_W + PANEL_W; // 920, wider than the 500-wide monitor
-    const result = panelWindowRect({
-      currentX: 250,
-      wasLeftOpen: false,
-      left: true,
-      right: true,
-      monitor,
-    });
-    expect(result.width).toBe(width);
-    expect(result.x).toBe(monitor.x);
-  });
-
-  it("performs no clamping when monitor is null, even far off-screen", () => {
-    const result = panelWindowRect({
-      currentX: -5000,
-      wasLeftOpen: false,
-      left: false,
-      right: false,
-      monitor: null,
-    });
-    expect(result.x).toBe(-5000);
+    expect(small.capacity).toBe(1);
+    expect(small.x).toBeGreaterThanOrEqual(-1920);
+    expect(small.height).toBeLessThanOrEqual(700);
   });
 });
