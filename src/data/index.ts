@@ -65,6 +65,9 @@ export const content: Content = {
         // #115: cooked-meat -> raw-beef (Cooking now sits between a beast drop and edible Food).
         { itemId: "raw-beef", qty: 1, chance: 0.3, band: "common" },
         { itemId: "bronze-dagger", qty: 1, chance: 1 / 24, band: "uncommon" },
+        // #116: hide drop (economy check comment sits on the Crafting recipes below, near cow's
+        // own cowhide entry — the reference kill-rate the arithmetic is worked against).
+        { itemId: "cowhide", qty: 1, chance: 0.4, band: "common" },
       ],
     },
     {
@@ -87,6 +90,8 @@ export const content: Content = {
         { itemId: "bronze-bar", qty: 1, chance: 0.2, band: "common" },
         // Ranged and Magic starter weapons (#7): demoable from Lumbry Meadows' own Monsters.
         { itemId: "apprentice-staff", qty: 1, chance: 1 / 28, band: "uncommon" },
+        // #116: hide drop — see the economy-check comment above the Crafting recipes below.
+        { itemId: "cowhide", qty: 1, chance: 0.5, band: "common" },
       ],
     },
     {
@@ -129,6 +134,8 @@ export const content: Content = {
         { itemId: "iron-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
         // Ranged tier progression (#13): iron-tier bow, demoable from Darkroot Forest's own Monsters.
         { itemId: "iron-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
+        // #116: hide drop — see the economy-check comment above the Crafting recipes below.
+        { itemId: "wolf-hide", qty: 1, chance: 0.4, band: "common" },
       ],
     },
     {
@@ -222,6 +229,8 @@ export const content: Content = {
         { itemId: "steel-shortbow", qty: 1, chance: 1 / 30, band: "uncommon" },
         // Gap-fill crush weapon (#102): no steel-bar Material exists, so steel-mace is drop-only.
         { itemId: "steel-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
+        // #116: hide drop — see the economy-check comment above the Crafting recipes below.
+        { itemId: "thick-hide", qty: 1, chance: 0.35, band: "common" },
       ],
     },
     {
@@ -392,10 +401,12 @@ export const content: Content = {
       name: "Leather Body",
       icon: "leather-body",
       slot: "body",
-      // Armour re-stat (#102, tuning defaults): modest melee def, the anti-caster choice — its
-      // magic def beats every metal body's at its own tier.
-      def: { stab: 3, slash: 3, crush: 3, ranged: 3, magic: 7 },
-      value: 15,
+      // Re-stat (#116, Crafting's ranged-armour line): leather is now the LIGHT-armour shape —
+      // low stab/slash/crush, higher ranged/magic def — rather than #102's "modest melee, anti-
+      // caster" numbers. Still beats every metal body's magic def (armour-directional.test.ts),
+      // and is now craftable (see craft-leather-body below) in addition to its existing rare drop.
+      def: { stab: 2, slash: 2, crush: 3, ranged: 6, magic: 5 },
+      value: 20,
     },
     {
       kind: "equipment",
@@ -799,6 +810,64 @@ export const content: Content = {
     { kind: "material", id: "raw-shrimp", name: "Raw Shrimp", icon: "raw-shrimp", value: 1 },
     { kind: "material", id: "raw-trout", name: "Raw Trout", icon: "raw-trout", value: 2 },
     { kind: "material", id: "raw-pike", name: "Raw Pike", icon: "raw-pike", value: 3 },
+    // Crafting wave (#116): hide Materials, dropped by the four beasts (see the "#116: hide drop"
+    // comments on chicken/cow/wolf/giant-rat's dropTables above) and consumed by the Crafting
+    // recipes below. Append-only — after raw-pike, never earlier.
+    { kind: "material", id: "cowhide", name: "Cowhide", icon: "cowhide", value: 2 },
+    { kind: "material", id: "wolf-hide", name: "Wolf Hide", icon: "wolf-hide", value: 4 },
+    { kind: "material", id: "thick-hide", name: "Thick Hide", icon: "thick-hide", value: 8 },
+    // Crafting wave (#116): the base leather tier's other two pieces (leather-body itself already
+    // exists above, re-stat'd to this same light-armour shape — see its own comment). Light armour
+    // (#99's Combat Depth Defence Vector split): low stab/slash/crush, higher ranged/magic def, no
+    // atk/str (armour never carries those — see validateContent's weapon-only invariant).
+    {
+      kind: "equipment",
+      id: "leather-chaps",
+      name: "Leather Chaps",
+      icon: "leather-chaps",
+      slot: "legs",
+      def: { stab: 1, slash: 1, crush: 2, ranged: 4, magic: 3 },
+      value: 15,
+    },
+    {
+      kind: "equipment",
+      id: "leather-coif",
+      name: "Leather Coif",
+      icon: "leather-coif",
+      slot: "head",
+      def: { stab: 1, slash: 1, crush: 1, ranged: 3, magic: 2 },
+      value: 12,
+    },
+    // Crafting wave (#116): the hard-leather tier — wolf-hide/thick-hide inputs, levelReq 20+ (see
+    // the Crafting recipes below). Same light-armour shape as the base tier, scaled up: bigger
+    // ranged/magic def, melee def stays low relative to it.
+    {
+      kind: "equipment",
+      id: "hard-leather-coif",
+      name: "Hard Leather Coif",
+      icon: "hard-leather-coif",
+      slot: "head",
+      def: { stab: 1, slash: 1, crush: 2, ranged: 5, magic: 4 },
+      value: 35,
+    },
+    {
+      kind: "equipment",
+      id: "hard-leather-chaps",
+      name: "Hard Leather Chaps",
+      icon: "hard-leather-chaps",
+      slot: "legs",
+      def: { stab: 2, slash: 2, crush: 3, ranged: 7, magic: 5 },
+      value: 45,
+    },
+    {
+      kind: "equipment",
+      id: "hard-leather-body",
+      name: "Hard Leather Body",
+      icon: "hard-leather-body",
+      slot: "body",
+      def: { stab: 3, slash: 3, crush: 4, ranged: 10, magic: 8 },
+      value: 60,
+    },
   ],
   fishingSpots: [
     // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
@@ -1006,6 +1075,89 @@ export const content: Content = {
       outputItemId: "cooked-pike",
       xp: 90,
       craftTicks: 4,
+    },
+    // Crafting wave (#116): the #113 Recipe chassis's ranged-armour line — beasts drop hides (see
+    // the "#116: hide drop" comments on chicken/cow/wolf/giant-rat's dropTables above), Crafting
+    // converts them straight to leather/ranged armour (no cured intermediate — one-step, matching
+    // Smithing's bar->gear chain). Owner framing (#76, verbatim): "ranged and jewelry/trinkets for
+    // crafting" — this is the ranged-armour half; jewelry (#117) shares this Skill and tab.
+    //
+    // Economy check (owner-mandated arithmetic, not vibes — mirrors the issue's own worked
+    // numbers): a mid-game farmer idles at ~600 kills/hr. Cow's Cowhide chance is 0.5/kill ->
+    // ~300 hides/hr; craft-leather-body needs 1 Cowhide -> 300 crafts/hr of *capacity*, so the
+    // Cowhide drop (not craft speed) is always the bottleneck, same as Cooking's own Fishing-spot-
+    // bottlenecked design. At xp 25/craft -> ~7,500 Crafting xp/hr, hitting L30 (13,363 xp) in
+    // ~1.8 hr — a plausible early curve (byte-identical to the issue's own worked example).
+    // craft-leather-chaps/coif ride the same Cowhide bottleneck at slightly lower xp (22/20), so
+    // their rate is proportionally close.
+    //
+    // The hard-leather tier (levelReq 20+) rides Wolf Hide (chance 0.4/kill -> ~240/hr from Wolf)
+    // and Thick Hide (chance 0.35/kill -> ~210/hr from Giant Rat). craft-hard-leather-coif (1
+    // input, xp 40) -> ~9,600 xp/hr, clearing L20->L25 (4470->7842, ~3,372 xp) in ~0.35 hr.
+    // craft-hard-leather-chaps (2 inputs, halving the craft rate to ~120/hr, xp 55) -> ~6,600
+    // xp/hr, clearing L25->L30 (~5,521 xp) in ~0.84 hr. craft-hard-leather-body (2 Thick Hide, xp
+    // 70) -> ~105 crafts/hr * 70 = ~7,350 xp/hr, clearing L30->L40 (13,363->37,224, ~23,861 xp) in
+    // ~3.25 hr. Every segment, base and hard-leather tier alike, lands well inside single-digit
+    // hours from the same realistic 600-kills/hr assumption.
+    {
+      id: "craft-leather-body",
+      name: "Leather Body",
+      skill: "crafting",
+      levelReq: 1,
+      inputs: [{ itemId: "cowhide", qty: 1 }],
+      outputItemId: "leather-body",
+      xp: 25,
+      craftTicks: 5,
+    },
+    {
+      id: "craft-leather-chaps",
+      name: "Leather Chaps",
+      skill: "crafting",
+      levelReq: 5,
+      inputs: [{ itemId: "cowhide", qty: 1 }],
+      outputItemId: "leather-chaps",
+      xp: 22,
+      craftTicks: 5,
+    },
+    {
+      id: "craft-leather-coif",
+      name: "Leather Coif",
+      skill: "crafting",
+      levelReq: 8,
+      inputs: [{ itemId: "cowhide", qty: 1 }],
+      outputItemId: "leather-coif",
+      xp: 20,
+      craftTicks: 4,
+    },
+    {
+      id: "craft-hard-leather-coif",
+      name: "Hard Leather Coif",
+      skill: "crafting",
+      levelReq: 20,
+      inputs: [{ itemId: "wolf-hide", qty: 1 }],
+      outputItemId: "hard-leather-coif",
+      xp: 40,
+      craftTicks: 6,
+    },
+    {
+      id: "craft-hard-leather-chaps",
+      name: "Hard Leather Chaps",
+      skill: "crafting",
+      levelReq: 25,
+      inputs: [{ itemId: "wolf-hide", qty: 2 }],
+      outputItemId: "hard-leather-chaps",
+      xp: 55,
+      craftTicks: 7,
+    },
+    {
+      id: "craft-hard-leather-body",
+      name: "Hard Leather Body",
+      skill: "crafting",
+      levelReq: 30,
+      inputs: [{ itemId: "thick-hide", qty: 2 }],
+      outputItemId: "hard-leather-body",
+      xp: 70,
+      craftTicks: 8,
     },
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.

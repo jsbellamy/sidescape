@@ -17,6 +17,13 @@ describe("resolveProp (#80)", () => {
     expect(resolveProp(snap)).toBe("cooking");
   });
 
+  it("shows the crafting (workbench/tanning rack) prop while Crafting (#116)", () => {
+    const snap = makeSnapshot({
+      production: { recipeId: "craft-leather-body", name: "Leather Body", skill: "crafting" },
+    });
+    expect(resolveProp(snap)).toBe("crafting");
+  });
+
   it("shows no prop while fighting (the Monster IS the foreground)", () => {
     const snap = makeSnapshot({
       monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },

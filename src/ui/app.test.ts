@@ -572,7 +572,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
     return [...root.querySelectorAll<HTMLButtonElement>("#tab-row button")];
   }
 
-  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Loot Feed — none active and the right panel closed by default", () => {
+  it("renders one tab per panel — Skills, Character, Bank, Smithing, Cooking, Crafting, Loot Feed — none active and the right panel closed by default", () => {
     const { root } = mount(1);
     const buttons = tabButtons(root);
     expect(buttons.map((b) => b.textContent)).toEqual([
@@ -581,6 +581,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
       "Bank",
       "Smithing",
       "Cooking",
+      "Crafting",
       "Loot Feed",
     ]);
 
@@ -590,7 +591,7 @@ describe("Panel tabs (#62: moved into the RIGHT side panel, closed by default)",
 
   it("every tab panel's content is absent from view (right panel hidden) on a fresh mount", () => {
     const { root } = mount(1);
-    for (const tab of ["skills", "character", "bank", "smithing", "cooking", "loot"]) {
+    for (const tab of ["skills", "character", "bank", "smithing", "cooking", "crafting", "loot"]) {
       expect(root.querySelector<HTMLElement>(`[data-tab-panel="${tab}"]`)?.hidden).toBe(true);
     }
   });
@@ -1903,6 +1904,63 @@ describe("Cooking (#115)", () => {
     expect(engine.snapshot().player.skills.cooking.xp).toBeGreaterThan(0);
     expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "meat")?.qty).toBe(1);
+  });
+});
+
+describe("Crafting (#116)", () => {
+  function mountWithHide(qty: number, seed = 1) {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(seed),
+      makeSnapshot({ bank: { items: [{ itemId: "hide", qty }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    return { engine, root, app };
+  }
+
+  it("renders a Crafting recipe row for the fixture's test-craft Recipe, with level req and owned counts", () => {
+    const { root } = mountWithHide(0);
+    root.querySelector<HTMLButtonElement>('[data-tab="crafting"]')?.click();
+
+    const row = root.querySelector('[data-recipe-row="test-craft"]');
+    expect(row?.textContent).toContain("Craft Vest");
+    expect(row?.textContent).toContain("Lvl 1");
+    expect(row?.textContent).toContain("1× Test Hide (have 0)");
+  });
+
+  it("disables the Craft button when short on inputs, enables it once inputs are sufficient", () => {
+    const short = mountWithHide(0);
+    expect(
+      short.root.querySelector<HTMLButtonElement>('[data-recipe="test-craft"]')?.disabled,
+    ).toBe(true);
+
+    const enough = mountWithHide(1);
+    expect(
+      enough.root.querySelector<HTMLButtonElement>('[data-recipe="test-craft"]')?.disabled,
+    ).toBe(false);
+  });
+
+  it("clicking Craft starts the Recipe, showing the Crafting scene (🧵) and hiding the Monster HP bar/sprite", () => {
+    const { root } = mountWithHide(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-craft"]')?.click();
+
+    expect(root.querySelector("#monster-name")?.textContent).toBe("🧵 Crafting: Craft Vest");
+    expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector("#monster-sprite") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("logs a feed line and grants Crafting XP (never Smithing) when a craft completes", () => {
+    const { engine, root, app } = mountWithHide(1);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-craft"]')?.click();
+
+    for (let i = 0; i < 3; i++) engine.tick(); // test-craft.craftTicks === 3
+    app.render();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/crafted.*lucky charm/i);
+    expect(engine.snapshot().player.skills.crafting.xp).toBeGreaterThan(0);
+    expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "lucky-charm")?.qty).toBe(1);
   });
 });
 
