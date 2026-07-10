@@ -21,6 +21,15 @@ export type SkillName = (typeof SKILL_NAMES)[number];
 export const ATTACK_TYPES = ["stab", "slash", "crush", "ranged", "magic"] as const;
 export type AttackType = (typeof ATTACK_TYPES)[number];
 
+/** The four Elements (Combat Depth wave 3/4, #101) — magic-only: melee/ranged are elementless.
+ * A spell carries exactly one Element; a Monster may declare a `weakElement` (MonsterDef below)
+ * that a matching spell deals bonus damage against (see engine.ts's ELEMENT_WEAKNESS_MULT, the
+ * one damage-side modifier in the otherwise accuracy-only Hybrid combat model). Explicit
+ * per-Monster weakness, no elemental wheel (owner decision, #75/#101) — revisit if a wheel ever
+ * earns its keep. */
+export const ELEMENTS = ["air", "water", "earth", "fire"] as const;
+export type Element = (typeof ELEMENTS)[number];
+
 /** Scene-backdrop themes (#80): one per Area, plus the shared `town` theme for non-Area activities
  * (Smithing today; #76's other production Skills later). Theme resolution itself is a UI-only
  * concern (ADR-0001's #20 Engine/Snapshot boundary — see ui/theme.ts's `resolveTheme`); this type
@@ -158,7 +167,26 @@ export interface MonsterDef {
    * the level half. Every Monster ships a uniform vector this wave (today's hardcoded 0); wave 4/4
    * gives real weak spots. */
   def: Record<AttackType, number>;
+  /** The Element a matching spell deals ×ELEMENT_WEAKNESS_MULT damage against (engine.ts,
+   * Combat Depth wave 3/4, #101) — melee/ranged are elementless, so this only ever matters against
+   * a magic attacker. Optional: most Monsters ship with none set this wave; wave 4/4 (#102) authors
+   * the actual weaknesses. */
+  weakElement?: Element;
   dropTable: DropTableEntry[];
+}
+
+/** Magic's own content ladder (Combat Depth wave 3/4, #101) — a spell, not an element-on-staff:
+ * Magic level gates WHICH spell can be selected, the spell itself decides the damage (baseMaxHit),
+ * replacing wave 1/4's interim level-driven magic max hit. See `selectSpell` (engine.ts) and
+ * `Snapshot.player.spell` for the resolved-selection shape. */
+export interface SpellDef {
+  id: string;
+  name: string;
+  element: Element;
+  /** Magic level required to cast. */
+  levelReq: number;
+  /** Spell-driven max hit — Magic level gates WHICH spell, the spell decides the damage. */
+  baseMaxHit: number;
 }
 
 export interface FishingSpotDef {
@@ -207,6 +235,7 @@ export interface Content {
   fishingSpots: FishingSpotDef[];
   dungeons: DungeonDef[];
   recipes: RecipeDef[];
+  spells: SpellDef[];
 }
 
 export type EngineEvent =
@@ -295,6 +324,11 @@ export interface Snapshot {
       def: Record<AttackType, number>;
       attackSpeed: number;
     };
+    /** The player's currently RESOLVED spell (Combat Depth wave 3/4, #101) — never null when any
+     * spell is castable (validateContent guarantees a levelReq-1 spell always exists). Reflects the
+     * `spellId: null` fallback to the lowest-levelReq spell; see engine.ts's `resolvedSpell`. The
+     * save stores `spellId` only (a plain selection, like `combatStyle`), tolerant on load. */
+    spell: { id: string; name: string; element: Element } | null;
     /** The player's currency balance (#59) — a number on the player, not an Item stack; the Bank
      * is the sole store for every other Item. */
     gold: number;

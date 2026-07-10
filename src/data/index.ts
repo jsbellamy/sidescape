@@ -741,4 +741,13 @@ export const content: Content = {
       craftTicks: 15,
     },
   ],
+  // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.
+  // Tuning defaults, flagged as such — wave 4/4 (#102) is the real content pass (monster
+  // weaknesses); this wave only needs a levelReq-1 spell plus a plausible progression to exist.
+  spells: [
+    { id: "air-strike", name: "Air Strike", element: "air", levelReq: 1, baseMaxHit: 4 },
+    { id: "water-strike", name: "Water Strike", element: "water", levelReq: 5, baseMaxHit: 6 },
+    { id: "earth-strike", name: "Earth Strike", element: "earth", levelReq: 9, baseMaxHit: 8 },
+    { id: "fire-strike", name: "Fire Strike", element: "fire", levelReq: 13, baseMaxHit: 10 },
+  ],
 };

@@ -32,6 +32,18 @@ _Avoid_: attack style (reserved for Combat Style), damage type
 A piece of Equipment's or a Monster's defence bonus, broken out per **Attack Type** rather than a single scalar — five numbers (stab/slash/crush/ranged/magic) instead of one. An accuracy roll checks the Defence Vector entry matching the attacker's own Attack Type; the level half of the roll (Defence Skill for the player, `defenceLevel` for a Monster) stays a single number, untouched.
 _Avoid_: defence bonus (singular, pre-Combat-Depth terminology), resistance
 
+**Spell**:
+Magic's own content ladder — a Magic-level-gated selection (`levelReq`) that decides the player's magic max hit (`baseMaxHit`) directly, the way a weapon decides melee/Ranged's; Magic level gates WHICH Spell can be selected, the Spell itself decides the damage. Selecting a Spell is a loadout choice like Combat Style, legal any time and independent of the active Monster/Fishing Spot/Dungeon/Recipe. Every Spell carries one **Element**.
+_Avoid_: element-on-staff (rejected design — Spells are content, not a weapon property)
+
+**Element**:
+One of air, water, earth, or fire — a property of a **Spell** only; melee and Ranged are elementless. A Monster may declare a `weakElement`: a Spell whose Element matches deals bonus damage (see **Weakness**). Explicit per-Monster weakness, no elemental wheel.
+_Avoid_: damage type (reserved for **Attack Type**)
+
+**Weakness**:
+A Monster's optional `weakElement` and the ×1.5 damage bonus a matching **Spell** deals against it — the ONE damage-side modifier in the otherwise accuracy-only Hybrid combat model (every other Skill/Attack Type change is an accuracy or max-hit shift, never a multiplier). Keys off the `attack` event's `hit` flag: an accuracy miss never gets it, a zero-damage hit still does.
+_Avoid_: resistance (reserved for **Defence Vector**), elemental wheel (not implemented — explicit per-Monster weakness only)
+
 **Tick**:
 The 600ms unit of game time. All combat timing (attack speeds, regen) is expressed in Ticks.
 _Avoid_: frame, step, cycle

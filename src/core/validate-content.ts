@@ -69,6 +69,22 @@ export function validateContent(content: Content): string[] {
   violations.push(...duplicateIds(content.areas, "areas"));
   violations.push(...duplicateIds(content.fishingSpots, "fishingSpots"));
   violations.push(...duplicateIds(content.recipes, "recipes"));
+  violations.push(...duplicateIds(content.spells, "spells"));
+
+  // Spells (#101): non-empty, at least one at levelReq 1 (spellId: null resolves to it — see
+  // engine.ts's resolvedSpell — so a fresh save must always have one to fall back to), and every
+  // baseMaxHit is a real hit (>= 1).
+  if (content.spells.length === 0) {
+    violations.push("Content defines no spells");
+  }
+  if (content.spells.length > 0 && !content.spells.some((s) => s.levelReq === 1)) {
+    violations.push("Content defines no spell with levelReq 1");
+  }
+  for (const spell of content.spells) {
+    if (spell.baseMaxHit < 1) {
+      violations.push(`spell "${spell.id}" baseMaxHit must be >= 1`);
+    }
+  }
 
   // Invariant 2: dropTable itemId -> items.
   for (const monster of content.monsters) {

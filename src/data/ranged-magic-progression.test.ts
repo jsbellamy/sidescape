@@ -121,7 +121,10 @@ function darkrootGraduateSaveRanged() {
   });
 }
 
-/** Magic counterpart of darkrootGraduateSaveRanged: same stats, iron-staff equipped instead. */
+/** Magic counterpart of darkrootGraduateSaveRanged: same stats, iron-staff equipped instead, and
+ * Fire Strike selected (#101) — the top starter spell (levelReq 13), well within this graduate's
+ * Magic 28, so tier progression exercises spell-driven damage rather than the untrained
+ * levelReq-1 fallback (Air Strike) a fresh save would resolve to. */
 function darkrootGraduateSaveMagic() {
   const base = darkrootGraduateSaveRanged();
   return {
@@ -129,6 +132,7 @@ function darkrootGraduateSaveMagic() {
     player: {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "iron-staff" },
+      spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
     },
   };
 }
@@ -166,7 +170,8 @@ function sewersGraduateSaveRanged() {
   });
 }
 
-/** Magic counterpart of sewersGraduateSaveRanged: same stats, steel-staff equipped instead. */
+/** Magic counterpart of sewersGraduateSaveRanged: same stats, steel-staff equipped instead, and
+ * Fire Strike selected (#101) — see darkrootGraduateSaveMagic's doc above. */
 function sewersGraduateSaveMagic() {
   const base = sewersGraduateSaveRanged();
   return {
@@ -174,6 +179,7 @@ function sewersGraduateSaveMagic() {
     player: {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "steel-staff" },
+      spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
     },
   };
 }

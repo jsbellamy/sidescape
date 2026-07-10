@@ -1353,6 +1353,89 @@ describe("Character panel (#26)", () => {
   });
 });
 
+describe("Spell picker (#101)", () => {
+  function spellButtons(root: HTMLElement) {
+    return [...root.querySelectorAll<HTMLButtonElement>("#spell-row button")];
+  }
+
+  it("renders one row per Content spell (fixtureContent's test-spark and test-blast)", () => {
+    const { root } = mount(1);
+    const buttons = spellButtons(root);
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((b) => b.dataset["spell"]).sort()).toEqual(["test-blast", "test-spark"]);
+  });
+
+  it("a fresh engine highlights the resolved levelReq-1 spell (test-spark) and shows the level gate on the under-leveled one", () => {
+    const { root } = mount(1);
+    const buttons = spellButtons(root);
+    const spark = buttons.find((b) => b.dataset["spell"] === "test-spark");
+    const blast = buttons.find((b) => b.dataset["spell"] === "test-blast");
+
+    expect(spark?.classList.contains("active")).toBe(true);
+    expect(spark?.disabled).toBe(false);
+
+    expect(blast?.classList.contains("active")).toBe(false);
+    expect(blast?.disabled).toBe(true);
+    expect(blast?.querySelector(".spell-req")?.textContent).toBe("Lvl 20");
+  });
+
+  it("clicking a gated spell's disabled button does nothing (no selectSpell call, no engine error)", () => {
+    const { engine, root } = mount(1);
+    const blast = root.querySelector<HTMLButtonElement>('[data-spell="test-blast"]');
+    expect(() => blast?.click()).not.toThrow();
+    expect(engine.snapshot().player.spell?.id).toBe("test-spark");
+  });
+
+  it("clicking a legal spell (including a click on its inner element-tag span) selects it, calls selectSpell, and moves the highlight", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, fixtureContent, noopWindowChrome);
+
+    // The button's child <span> is the actual click target (closest("[data-spell]") walks up to
+    // the button) — proves the handler doesn't require clicking the bare button element.
+    const elementTag = root.querySelector<HTMLElement>('[data-spell="test-blast"] .spell-element');
+    elementTag?.click();
+
+    expect(engine.snapshot().player.spell).toEqual({
+      id: "test-blast",
+      name: "Test Blast",
+      element: "water",
+    });
+    const buttons = spellButtons(root);
+    expect(
+      buttons.find((b) => b.dataset["spell"] === "test-blast")?.classList.contains("active"),
+    ).toBe(true);
+    expect(
+      buttons.find((b) => b.dataset["spell"] === "test-spark")?.classList.contains("active"),
+    ).toBe(false);
+  });
+
+  it("survives a save/remount round-trip: the selected spell stays highlighted after reloading from a fresh Snapshot", () => {
+    const engine1 = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
+    );
+    const root1 = document.createElement("main");
+    mountApp(engine1, root1, fixtureContent, noopWindowChrome);
+    root1.querySelector<HTMLButtonElement>('[data-spell="test-blast"]')?.click();
+    expect(engine1.snapshot().player.spell?.id).toBe("test-blast");
+
+    const saved = JSON.parse(JSON.stringify(engine1.snapshot()));
+    const engine2 = createEngine(fixtureContent, seededRng(2), saved);
+    const root2 = document.createElement("main");
+    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
+
+    expect(engine2.snapshot().player.spell?.id).toBe("test-blast");
+    const blast = root2.querySelector<HTMLButtonElement>('[data-spell="test-blast"]');
+    expect(blast?.classList.contains("active")).toBe(true);
+  });
+});
+
 describe("Equip via Bank click emits the equipped event (#26, #59)", () => {
   it("clicking Equip on a Bank row equips it and logs its feed line via the equipped subscription", () => {
     const { engine, root, app } = mount(1);
