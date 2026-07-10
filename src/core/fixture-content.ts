@@ -32,6 +32,7 @@ export const fixtureContent: Content = {
       defenceLevel: 1,
       maxHit: 1,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [
         { itemId: "gold", qty: 5, chance: 1, band: "guaranteed" },
@@ -48,6 +49,7 @@ export const fixtureContent: Content = {
       defenceLevel: 40,
       maxHit: 8,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 200, chance: 1, band: "guaranteed" }],
     },
@@ -60,6 +62,7 @@ export const fixtureContent: Content = {
       defenceLevel: 1,
       maxHit: 1,
       attackSpeed: 4,
+      attackType: "crush",
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       dropTable: [{ itemId: "gold", qty: 10, chance: 1, band: "guaranteed" }],
     },

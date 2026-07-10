@@ -6,7 +6,7 @@ import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
-import type { AutoEatThreshold, CombatStyle } from "./types";
+import type { AttackType, AutoEatThreshold, CombatStyle } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -4144,7 +4144,7 @@ describe("Attack Type axis (#99)", () => {
     });
   });
 
-  describe("Monster-vs-player accuracy is unchanged at uniform defence vectors (interim gearDefAverage, #99)", () => {
+  describe("Monster-vs-player accuracy is unchanged at uniform defence vectors (regression pin, #100)", () => {
     it("matches the theoretical hitChance for the scalar a uniform vector averages to", () => {
       const engine = createEngine(
         fixtureContent,
@@ -4153,8 +4153,9 @@ describe("Attack Type axis (#99)", () => {
           player: {
             skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
             // lucky-charm's def vector is uniform 1 across every Attack Type (fixture-content.ts)
-            // — gearDefAverage() must equal 1, exactly what the old scalar defBonus would have
-            // been at uniform vectors.
+            // — gearDef(monster.attackType) must equal 1 regardless of which type the monster
+            // attacks with, exactly what the old scalar defBonus (and, before #100, the interim
+            // gearDefAverage) would have been at uniform vectors — bit-identical pre/post #100.
             equipment: { head: "lucky-charm" },
           },
         }),
@@ -4177,6 +4178,80 @@ describe("Attack Type axis (#99)", () => {
       const expectedHitChance = hitChance(expectedAtkRoll, expectedDefRoll);
 
       expect(hits / total).toBeCloseTo(expectedHitChance, 1);
+    });
+  });
+
+  describe("Monster accuracy routes vs gearDef(monster.attackType) (#100)", () => {
+    // Overrides "dummy"'s own attackType and "lucky-charm"'s (head slot) def vector — isolated per
+    // call so each test picks exactly the Attack Type / armour combo it needs.
+    function contentWith(monsterAttackType: AttackType, headDef: Record<AttackType, number>) {
+      return {
+        ...fixtureContent,
+        monsters: fixtureContent.monsters.map((m) =>
+          m.id === "dummy" ? { ...m, attackType: monsterAttackType } : m,
+        ),
+        items: fixtureContent.items.map((i) =>
+          i.id === "lucky-charm" ? { ...i, def: headDef } : i,
+        ),
+      };
+    }
+
+    function monsterHitRate(
+      monsterAttackType: AttackType,
+      headDef: Record<AttackType, number>,
+      ticks = 6000,
+    ): number {
+      const engine = createEngine(
+        contentWith(monsterAttackType, headDef),
+        seededRng(11),
+        makeSnapshot({
+          player: {
+            skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+            equipment: { head: "lucky-charm" },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      let hits = 0;
+      let total = 0;
+      engine.on("attack", (e) => {
+        if (e.actor !== "monster") return;
+        total++;
+        if (e.hit) hits++;
+      });
+      for (let i = 0; i < ticks; i++) engine.tick();
+      expect(total).toBeGreaterThan(200);
+      return hits / total;
+    }
+
+    it("hits the player measurably more often when their armour is weak (vs strong) in the monster's own Attack Type — both directions", () => {
+      const slashDef: Record<AttackType, number> = {
+        stab: 0,
+        slash: 300,
+        crush: 0,
+        ranged: 0,
+        magic: 0,
+      };
+      const crushDef: Record<AttackType, number> = {
+        stab: 0,
+        slash: 0,
+        crush: 300,
+        ranged: 0,
+        magic: 0,
+      };
+
+      // Direction 1: a slash-attacking monster hits far more often through crush-heavy armour
+      // (weak vs slash) than through slash-heavy armour (strong vs slash).
+      const slashMonsterVsCrushArmour = monsterHitRate("slash", crushDef);
+      const slashMonsterVsSlashArmour = monsterHitRate("slash", slashDef);
+      expect(slashMonsterVsCrushArmour).toBeGreaterThan(slashMonsterVsSlashArmour + 0.2);
+
+      // Direction 2: swap which type the monster itself attacks with, same two armour pieces —
+      // the result flips, proving the roll follows the monster's own attackType rather than a
+      // fixed type (or the old average-across-all-types behaviour).
+      const crushMonsterVsSlashArmour = monsterHitRate("crush", slashDef);
+      const crushMonsterVsCrushArmour = monsterHitRate("crush", crushDef);
+      expect(crushMonsterVsSlashArmour).toBeGreaterThan(crushMonsterVsCrushArmour + 0.2);
     });
   });
 });

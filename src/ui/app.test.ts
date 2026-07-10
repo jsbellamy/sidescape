@@ -221,13 +221,14 @@ describe("mountApp", () => {
 });
 
 describe("Monster stats line", () => {
-  it("shows attack level, defence level, max hit, and attack speed for the selected Monster", () => {
+  it("shows attack type, attack level, defence level, max hit, and attack speed for the selected Monster", () => {
     const { root } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     const stats = root.querySelector<HTMLElement>("#monster-stats");
     expect(stats?.hidden).toBe(false);
-    expect(stats?.textContent).toBe("Atk 1 · Def 1 · Max hit 1 · Speed 4t");
+    // "dummy"'s attackType is "crush" (fixture-content.ts).
+    expect(stats?.textContent).toBe("Crush · Atk 1 · Def 1 · Max hit 1 · Speed 4t");
   });
 
   it("updates the stats line when a different Monster is selected", () => {
@@ -243,8 +244,9 @@ describe("Monster stats line", () => {
     mountApp(engine, root, fixtureContent, noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
 
+    // "brute"'s attackType is "crush" too (fixture-content.ts).
     expect(root.querySelector("#monster-stats")?.textContent).toBe(
-      "Atk 40 · Def 40 · Max hit 8 · Speed 4t",
+      "Crush · Atk 40 · Def 40 · Max hit 8 · Speed 4t",
     );
   });
 

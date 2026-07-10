@@ -231,6 +231,7 @@ describe("validateContent", () => {
           defenceLevel: 1,
           maxHit: 1,
           attackSpeed: 4,
+          attackType: "crush",
           def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
           dropTable: [],
         },
