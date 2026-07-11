@@ -7,7 +7,7 @@ apply. Put changes to shared guidance here, not in a tool-specific file, so the
 guidance stays in one place for every agent.
 
 SideScape is a taskbar-sized RuneScape-like incremental idle game in a slim
-always-on-top window (320 × 640). It uses a Tauri v2 shell with a TypeScript
+always-on-top window (the compact default is 320 × 460). It uses a Tauri v2 shell with a TypeScript
 and Vite frontend. There is no game-engine dependency: rendering is plain
 DOM/CSS. The Rust code in `src-tauri/` is an untouched scaffold; all game logic
 lives in TypeScript.
@@ -81,11 +81,16 @@ behaviour with DOM integration tests.
   `source ~/.cargo/env` so `cargo` is available.
 - `npm test` — run Vitest once.
 - `npm run test:watch` — run Vitest in watch mode.
+- `npm run e2e` — run Playwright's browser-degraded smoke. It builds and
+  previews the app, then writes `e2e-screenshots/compact.png` and
+  `e2e-screenshots/panel-open.png`; run `npx playwright install chromium` once
+  first.
 - `npm run typecheck` — strict TypeScript check.
 - `npm run build` — typecheck and bundle the frontend.
 
 Node-only work does not require Rust. Before pushing, run `npm run typecheck`
-and `npm test`.
+and `npm test`; also run `npm run e2e` when the browser-degraded layout or its
+smoke is in scope.
 
 ## Git and issue workflow
 
@@ -99,13 +104,40 @@ and `npm test`.
   explicit evidence row. Put the complete checklist in the PR body: identify
   each criterion, state whether it is met, and cite a test, code location,
   command result, or manual verification. Never mark a criterion met from a
-  related test alone. A visual/native behavior needs an automated end-to-end
-  assertion or a named manual Tauri check with the observed result. If any row
-  lacks evidence, the issue is not ready to merge or close.
+  related test alone. Choose evidence at the seam the criterion names; the
+  evidence map below records the existing UI seams. A manual `npm run tauri
+dev` observation is required only for the residual native-rendering scope
+  stated there. If any row lacks evidence, the issue is not ready to merge or
+  close.
 - Never bypass the pre-commit hook with `--no-verify`.
 - Use `gh` from the repository; if it is not on `PATH`, use
   `/opt/homebrew/bin/gh`.
 - For issue commands and label conventions, follow the agent docs below.
+
+### UI evidence map
+
+Use the narrowest evidence that proves the stated behavior. The browser and
+the port-injected tests deliberately cover different surfaces; neither is a
+blanket substitute for the other.
+
+| Named check                       | Automated evidence                                                                                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| upper-half / lower-half anchoring | `manual-check: upper-half` and `manual-check: lower-half` describes in `src/ui/window-chrome.test.ts`, run by `npm test`                                          |
+| narrow-monitor capacity           | `manual-check: narrow-monitor` describe in `src/ui/window-chrome.test.ts`, including scale-factor ≠ 1 cases                                                       |
+| resize persistence                | `manual-check: resize` describe in `src/ui/window-chrome.test.ts`                                                                                                 |
+| close/reopen                      | `manual-check: close/reopen` describe in `src/ui/window-chrome.test.ts` plus the reload-persistence spec in `e2e/browser-degraded.spec.ts`                        |
+| relaunch                          | `manual-check: relaunch` describe in `src/ui/window-chrome.test.ts`; it asserts boot applies stored compact geometry instead of the plugin-restored expanded rect |
+| visual layout evidence            | `browser-degraded-screenshots` from the CI `e2e` job: attach the relevant `e2e-screenshots/compact.png` and `e2e-screenshots/panel-open.png` to the PR            |
+
+The `manual-check:` names are automated port-injected scenarios, not a demand
+to run Tauri manually. A named manual `npm run tauri dev` check, with the
+platform and observed result in the acceptance row, remains required only when
+the PR touches native window rendering: the `app.windows` block in
+`src-tauri/tauri.conf.json` (transparency, decorations, shadow,
+always-on-top, or sizing minima/maxima), Rust window/plugin code under
+`src-tauri/src/`, or macOS-specific visuals. There is no native E2E for those
+surfaces. If the implementing agent cannot run the check, it must say so in the
+PR and wait for a human to add that evidence row before merge.
 
 ## Agent docs
 

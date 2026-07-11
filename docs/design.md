@@ -4,7 +4,25 @@ A taskbar-sized RuneScape-like idle grinder. The window is the game: park it at 
 
 ## Window
 
-Frameless, always-on-top, draggable vertical strip, 320×640 (resizable 280–420 wide).
+One transparent, frameless, always-on-top Tauri window. Closed, it is the
+opaque **Compact Widget** card: its default geometry is 320×460. Tauri permits
+a live resize from 280×380 up to 920px wide; stored compact geometry is
+normalized on load to `MIN_COMPACT_W` (320) through 920px wide and at least
+320px high. The 280px Tauri minimum is the OS-level floor; 320px is the
+geometry module's compact floor. The window has `decorations: false`, is
+transparent and always-on-top, and has no shadow.
+
+Opening management surfaces expands the same window into a transparent
+**Workspace Rect**, not a second window: the Compact Widget and each opaque
+**Management Card** float as siblings with real glass between them. The card
+row has zero to three 300px cards with 8px gaps; `setCardCount` recomputes the
+union's size and position whenever that count changes. It is vertically
+adjacent to the Compact Widget and uses a 600px preferred card height, clamped
+to the monitor. **Workspace Chrome** selects a stable top/bottom **Vertical
+Anchor** when cards first open, so cards grow into the available half of the
+display; closing restores the compact rect. Compact dimensions and the
+preferred card height persist locally, but open cards do not—relaunch starts
+closed.
 
 ## Skills & XP
 
