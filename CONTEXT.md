@@ -144,6 +144,53 @@ _Avoid_: state (as an interface term), view model
 The brief post-death state during which the player cannot act; combat auto-resumes on the same **Monster** when it ends — except during a **Dungeon** run, which death abandons, so Respawn ends idle instead.
 _Avoid_: death screen, grave
 
+**Compact Widget**:
+The opaque gameplay card shown while no management surface is open. Its default
+geometry is 320×460; its locally stored dimensions are presentation state,
+never part of an Engine **Snapshot** or transferable save.
+
+**Cards-on-Glass**:
+The single transparent native window model: opaque DOM cards float inside one
+window with transparent glass around and between them. Cards-on-Glass never
+creates child windows; it contains the Compact Widget and the Management Row.
+
+**Management Row**:
+The horizontal row of zero to three opaque management cards. Each card is
+300px wide and cards are separated by an 8px gap; the row is vertically
+adjacent to the Compact Widget within Cards-on-Glass.
+
+**Workspace Rect** (`workspaceRect`):
+The pure, logical rectangle for the complete Compact Widget/Card Row union.
+`workspaceRect` resolves its size, position, Card Row capacity, monitor clamp,
+and **Vertical Anchor** without importing Tauri APIs.
+
+**Anchor** (`VerticalAnchor`):
+The `top` or `bottom` choice made when Management Cards first open. A top
+anchor keeps the Compact Widget above the Card Row and grows cards downward; a
+bottom anchor keeps it below and grows cards upward. It remains stable until
+all cards close. `workspaceRect` chooses it by monitor-midpoint comparison
+with the 50px `ANCHOR_DEADBAND`.
+
+**Capacity** (`workspaceCapacity`):
+The one-to-three-card Management Row limit derived from logical monitor width.
+`workspaceCapacity` computes it from 300px cards and the 8px `CARD_GAP`.
+
+**Workspace Chrome** (`WorkspaceChrome`):
+The UI boundary that receives an open-card count and applies the corresponding
+Workspace Rect. `createTauriWindowChrome` is its Tauri implementation; browser
+fallbacks may reject native calls while retaining the in-page layout.
+
+**Native Window Port** (`NativeWindowPort`):
+The narrow adapter over Tauri's native window API. It exposes physical native
+size/position and scale factor operations; Workspace Chrome converts them to
+logical geometry, which lets the same behavior be tested without a desktop
+runtime.
+
+**Geometry Persistence** (`StoredGeometry`):
+Presentation-only local preference under `sidescape-ui-geometry-v2`: compact
+width/height and preferred Management Card height. It never records the open
+Card Row, so a relaunch starts closed.
+
 ## Relationships
 
 - An **Area** holds many **Monsters**

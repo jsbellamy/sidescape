@@ -23,9 +23,15 @@ runtime supports worktrees.
    - Run the full `npm test` suite before publishing.
 5. Before publishing, make an **Acceptance criteria** matrix containing every
    checkbox from the live issue. For each row, state `met` plus specific
-   evidence: a test name, code location, command result, or manual native-app
-   observation. Do not infer a visual/integration criterion from a unit test;
-   run the named manual check or an end-to-end equivalent. If any row cannot
+   evidence at the seam the criterion names: a test name, code location,
+   command result, or manual native-app observation. Follow AGENTS.md's UI
+   evidence map: browser-degraded behavior uses the Playwright smoke, and
+   workspace-geometry behavior uses the named port-injected scenarios. Require
+   a manual `npm run tauri dev` observation only after a change to the
+   `app.windows` block in `src-tauri/tauri.conf.json`, Rust window/plugin code
+   in `src-tauri/src/`, or macOS-specific visuals. If it cannot be run, say so
+   in the PR and wait for a human evidence row before merge. Never infer a
+   visual/integration criterion from a merely related test. If any row cannot
    be supported, stop and report the issue as incomplete rather than opening a
    completion PR.
 6. Commit only the issue's changes. Let the pre-commit hook run; never use
