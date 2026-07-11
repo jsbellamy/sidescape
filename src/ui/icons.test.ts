@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { SKILL_NAMES } from "../core/types";
 import { content } from "../data";
-import { itemIcon, registeredIconKeys } from "./icons";
+import { itemIcon, registeredIconKeys, skillIcon, tabIcon } from "./icons";
 
 describe("icons registry (#78)", () => {
   it("resolves every icon key declared by the v1 Content's items to a real asset URL", () => {
@@ -49,5 +50,69 @@ describe("icons registry (#78)", () => {
     for (const pet of content.pets) {
       expect(registered.has(pet.icon)).toBe(true);
     }
+  });
+});
+
+// UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons, resolved
+// through their own registry functions (not `itemIcon` — a Skill/tab id is not an `ItemDef.icon`
+// key). Same discipline as `itemIcon`: a complete Record, loud throw on an unknown key, no
+// placeholder/fallback branch.
+describe("skillIcon registry (#131)", () => {
+  it("resolves every SKILL_NAMES entry to a real, non-empty asset URL", () => {
+    for (const skill of SKILL_NAMES) {
+      expect(() => skillIcon(skill)).not.toThrow();
+      expect(skillIcon(skill)).toEqual(expect.any(String));
+      expect(skillIcon(skill).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives every Skill a distinct icon URL", () => {
+    const urls = SKILL_NAMES.map((skill) => skillIcon(skill));
+    expect(new Set(urls).size).toBe(urls.length);
+  });
+
+  it("throws for an unknown Skill key", () => {
+    // @ts-expect-error — deliberately passing a key outside SkillName to exercise the runtime guard.
+    expect(() => skillIcon("not-a-real-skill")).toThrow(/no entry/);
+  });
+});
+
+describe("tabIcon registry (#131)", () => {
+  const existingTabIds = [
+    "skills",
+    "character",
+    "bank",
+    "vendor",
+    "smithing",
+    "cooking",
+    "crafting",
+    "herblore",
+    "loot",
+  ];
+
+  it("resolves 'world' plus all nine existing tab ids to a real, non-empty asset URL", () => {
+    for (const tabId of ["world", ...existingTabIds]) {
+      expect(() => tabIcon(tabId)).not.toThrow();
+      expect(tabIcon(tabId)).toEqual(expect.any(String));
+      expect(tabIcon(tabId).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("throws for an unknown tab id", () => {
+    expect(() => tabIcon("not-a-real-tab")).toThrow(/no entry/);
+  });
+
+  it("reuses the matching Skill icon for the four production views", () => {
+    expect(tabIcon("smithing")).toBe(skillIcon("smithing"));
+    expect(tabIcon("cooking")).toBe(skillIcon("cooking"));
+    expect(tabIcon("crafting")).toBe(skillIcon("crafting"));
+    expect(tabIcon("herblore")).toBe(skillIcon("herblore"));
+  });
+
+  it("resolves 'world' to a URL distinct from every reused Skill icon", () => {
+    expect(tabIcon("world")).not.toBe(skillIcon("smithing"));
+    expect(tabIcon("world")).not.toBe(skillIcon("cooking"));
+    expect(tabIcon("world")).not.toBe(skillIcon("crafting"));
+    expect(tabIcon("world")).not.toBe(skillIcon("herblore"));
   });
 });
