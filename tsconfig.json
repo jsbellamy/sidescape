@@ -5,6 +5,11 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    /* Lets src/ui/icon-canvas.test.ts (#166) import scripts/art/icon-canvas.mjs's thickLine
+     * directly, so the helper used by npm run art is the exact one under test — no parallel TS
+     * reimplementation to drift. checkJs stays off (default), so .mjs sources aren't typechecked,
+     * only resolved for their (inferred) export shapes. */
+    "allowJs": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
