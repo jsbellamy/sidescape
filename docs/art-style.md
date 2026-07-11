@@ -26,7 +26,8 @@ These drive backdrops, sprite accents, and scene props so each Theme is coherent
 
 Close-up icons may use the named steel, water/scale, and gold ramps in
 `scripts/art/palettes.mjs`. These ramps exist to reproduce the golden master's readable material
-planes; use contiguous steps within one material and spend the 8–12-color budget intentionally.
+planes; use their named `shadow`, `base`, `light`, and `glint` roles and spend the 8–12-color budget
+intentionally.
 
 ## Grids and pixel rules
 
@@ -105,10 +106,9 @@ contact sheet, `docs/icon-sheet-1x.png`, cited as PR evidence):
   [lint for code-generated icons: cluster-noise; sheet for cluster shape]
 - Separate adjacent parts by VALUE, not subtle hue — several zone-palette neighbors are near-
   isovalue (e.g. forest `#3f5f50` vs `#567b5b`); pick across the ramp, not adjacent steps. [sheet]
-- Prefer one connected silhouette. One detached, purposeful secondary accent is allowed when it
-  is no more than 20% of opaque area (for example the roast's flame); multiple floating sparks,
-  drips, coins, or decoration still fail. Code-generated icons additionally require shared-edge,
-  not diagonal-only, joins for structural parts. [lint: connected; generated structural-connected]
+- Use one connected silhouette; purposeful secondary details such as the roast's flame must touch
+  the body instead of floating. Code-generated icons additionally require shared-edge, not
+  diagonal-only, joins throughout the silhouette. [lint: connected; generated structural-connected]
 - Edge contrast against the panel: the silhouette's outer edge must read against `--bg-panel
 #262019` — pure ink/outline shapes sink into the panel. A dark outline is fine only around a
   mid-or-lighter fill. [sheet]

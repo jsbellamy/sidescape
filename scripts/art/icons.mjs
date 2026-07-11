@@ -35,22 +35,27 @@ export const icons = [
     name: "skill-attack",
     paint(c) {
       // Canonical native-grid sample: broad steel plane, gold guard, wrapped grip, irregular tip.
-      c.thickLine(10, 23, 27, 6, 9, P.ink);
-      c.thickLine(10, 23, 27, 6, 7, steel[0]);
-      c.thickLine(10, 22, 26, 6, 5, steel[2]);
-      c.thickLine(11, 20, 25, 6, 2, steel[3]);
-      c.line(13, 20, 27, 6, steel[1]);
-      c.plot(28, 4, P.ink);
-      c.plot(27, 4, steel[3]);
+      const sword = createMask();
+      sword.thickLine(10, 23, 27, 6, 7); // blade
+      sword.thickLine(6, 19, 14, 27, 3); // guard
+      sword.thickLine(8, 25, 5, 28, 3); // grip
+      sword.circle(4, 29, 2); // pommel
 
-      // Guard midpoint is exactly (10,23), where the blade axis continues into the grip.
-      c.thickLine(5, 18, 15, 28, 5, P.ink);
-      c.thickLine(6, 19, 14, 27, 3, gold[1]);
-      c.line(7, 19, 14, 26, gold[3]);
-      c.thickLine(9, 24, 4, 29, 5, P.ink);
-      c.thickLine(8, 25, 5, 28, 3, town[1]);
-      disc(c, 4, 29, 2, gold[1]);
-      c.plot(3, 28, gold[3]);
+      c.outlineMask(sword, P.ink);
+      c.paintMask(sword, steel.shadow);
+      c.paintInside(sword, (inside) => {
+        inside.thickLine(10, 23, 27, 6, 7, steel.base);
+        inside.thickLine(10, 22, 26, 6, 5, steel.light);
+        inside.thickLine(11, 20, 25, 6, 2, steel.glint);
+        inside.line(13, 20, 27, 6, steel.base);
+
+        // Guard midpoint is exactly (10,23), where the blade continues into the grip.
+        inside.thickLine(6, 19, 14, 27, 3, gold.base);
+        inside.line(7, 19, 14, 26, gold.glint);
+        inside.thickLine(8, 25, 5, 28, 3, town[1]);
+        inside.circle(4, 29, 2, gold.base);
+        inside.plot(3, 28, gold.glint);
+      });
     },
   },
   {
@@ -131,28 +136,30 @@ export const icons = [
     name: "skill-fishing",
     paint(c) {
       // Canonical native-grid sample: plump profile with stepped belly, highlights, fin, and tail.
-      c.circle(14, 17, 12, P.ink);
-      c.circle(14, 17, 10, water[1]);
-      c.rect(13, 8, 24, 25, water[1]);
-      c.rect(22, 12, 26, 22, P.ink);
-      c.rect(22, 13, 25, 21, water[1]);
+      const fish = createMask();
+      fish.circle(14, 17, 10);
+      fish.rect(13, 8, 25, 25);
       for (let x = 25; x <= 31; x++) {
         const half = 2 + Math.round((x - 25) * 0.9);
-        c.rect(x, 17 - half, x, 17 + half, P.ink);
+        fish.rect(x, 17 - half, x, 17 + half);
       }
-      for (let x = 25; x <= 30; x++) {
-        const half = 1 + Math.round((x - 25) * 0.8);
-        c.rect(x, 17 - half, x, 17 + half, water[1]);
-      }
-      c.rect(7, 21, 21, 24, water[0]);
-      c.rect(9, 24, 18, 26, water[2]);
-      c.rect(8, 8, 15, 10, water[2]);
-      c.rect(10, 7, 15, 8, water[3]);
-      c.rect(6, 13, 8, 15, P.ink);
-      c.rect(7, 13, 7, 13, P.glint);
-      c.rect(14, 25, 20, 27, meadow[3]);
-      c.rect(17, 27, 22, 29, meadow[2]);
-      c.rect(19, 29, 22, 30, meadow[1]);
+      fish.rect(14, 24, 20, 27);
+      fish.rect(17, 27, 22, 29);
+      fish.rect(19, 29, 22, 30);
+
+      c.outlineMask(fish, P.ink);
+      c.paintMask(fish, water.base);
+      c.paintInside(fish, (inside) => {
+        inside.rect(7, 21, 21, 24, water.shadow);
+        inside.rect(9, 24, 18, 26, water.light);
+        inside.rect(8, 8, 15, 10, water.light);
+        inside.rect(10, 7, 15, 8, water.glint);
+        inside.rect(6, 13, 8, 15, P.ink);
+        inside.plot(7, 13, P.glint);
+        inside.rect(14, 25, 20, 27, meadow[3]);
+        inside.rect(17, 27, 22, 29, meadow[2]);
+        inside.rect(19, 29, 22, 30, meadow[1]);
+      });
     },
   },
   {
@@ -181,8 +188,8 @@ export const icons = [
         c.plot(16 - bow, y, P.umber);
         c.plot(17 - bow, y, P.sand);
       }
-      c.line(16, 4, 8, 16, P.cream);
-      c.line(8, 16, 16, 29, P.cream);
+      c.thickLine(16, 4, 8, 16, 2, P.cream);
+      c.thickLine(8, 16, 16, 29, 2, P.cream);
       c.line(6, 16, 27, 16, P.sand);
       c.thickLine(21, 16, 27, 16, 2, P.umber);
     },
@@ -297,22 +304,22 @@ export const icons = [
       c.rect(3, 14, 30, 17, P.ink);
 
       // Thin metal bands and corner brackets; wood remains the dominant surface.
-      c.rect(4, 7, 5, 28, gold[0]);
-      c.rect(5, 8, 5, 27, gold[2]);
-      c.rect(28, 7, 29, 28, gold[0]);
-      c.rect(28, 8, 28, 27, gold[2]);
-      c.rect(5, 7, 28, 8, gold[0]);
-      c.rect(6, 8, 27, 8, gold[2]);
-      c.rect(4, 7, 5, 11, gold[3]);
-      c.rect(28, 7, 29, 11, gold[3]);
-      c.rect(4, 25, 6, 28, gold[1]);
-      c.rect(27, 25, 29, 28, gold[1]);
+      c.rect(4, 7, 5, 28, gold.shadow);
+      c.rect(5, 8, 5, 27, gold.light);
+      c.rect(28, 7, 29, 28, gold.shadow);
+      c.rect(28, 8, 28, 27, gold.light);
+      c.rect(5, 7, 28, 8, gold.shadow);
+      c.rect(6, 8, 27, 8, gold.light);
+      c.rect(4, 7, 5, 11, gold.glint);
+      c.rect(28, 7, 29, 11, gold.glint);
+      c.rect(4, 25, 6, 28, gold.base);
+      c.rect(27, 25, 29, 28, gold.base);
 
       c.rect(13, 13, 21, 25, P.ink);
-      c.rect(14, 14, 20, 23, gold[1]);
-      c.rect(15, 14, 19, 17, gold[3]);
+      c.rect(14, 14, 20, 23, gold.base);
+      c.rect(15, 14, 19, 17, gold.glint);
       c.rect(16, 17, 18, 22, P.ink);
-      c.rect(17, 17, 17, 19, gold[0]);
+      c.rect(17, 17, 17, 19, gold.shadow);
     },
   },
   {

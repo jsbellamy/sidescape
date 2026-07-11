@@ -198,39 +198,23 @@ describe("checkConnected", () => {
     expect(checkStructuralConnected(icon)).toBe(false);
   });
 
-  it("allows one small detached accent occupying no more than 20% of the art", () => {
+  it("fails even a one-pixel detached accent", () => {
     const icon = solidBox(10, 1, 1, 4, 4);
     const at = (x: number, y: number) => (y * icon.width + x) * 4;
     const i = at(7, 7);
     icon.data[i] = 1;
     icon.data[i + 3] = 255;
-    expect(checkConnected(icon)).toBe(true);
-  });
-
-  it("fails when the detached component competes with the main silhouette", () => {
-    const icon = solidBox(10, 1, 1, 3, 3);
-    const at = (x: number, y: number) => (y * icon.width + x) * 4;
-    for (let y = 6; y <= 7; y++)
-      for (let x = 6; x <= 7; x++) {
-        const i = at(x, y);
-        icon.data[i] = 1;
-        icon.data[i + 3] = 255;
-      }
     expect(checkConnected(icon)).toBe(false);
   });
 
-  it("fails decorative confetti with more than one detached accent", () => {
+  it("fails a one-pixel structural part touching the body only diagonally", () => {
     const icon = solidBox(10, 1, 1, 4, 4);
     const at = (x: number, y: number) => (y * icon.width + x) * 4;
-    for (const [x, y] of [
-      [7, 2],
-      [7, 7],
-    ] as const) {
-      const i = at(x, y);
-      icon.data[i] = 1;
-      icon.data[i + 3] = 255;
-    }
-    expect(checkConnected(icon)).toBe(false);
+    const i = at(5, 5);
+    icon.data[i] = 1;
+    icon.data[i + 3] = 255;
+    expect(checkConnected(icon)).toBe(true);
+    expect(checkStructuralConnected(icon)).toBe(false);
   });
 
   it("fails an entirely transparent icon (zero components, not one)", () => {

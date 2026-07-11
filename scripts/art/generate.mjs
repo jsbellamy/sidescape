@@ -6,7 +6,7 @@ import { hex, writePng } from "./write-png.mjs";
 const swatches = [
   ...masterPalette.map(([, color]) => color),
   ...Object.values(zonePalettes).flat(),
-  ...Object.values(materialPalettes).flat(),
+  ...Object.values(materialPalettes).flatMap((ramp) => Object.values(ramp)),
 ];
 const columns = 6,
   cell = 40,

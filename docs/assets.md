@@ -280,9 +280,11 @@ blocker for this wave's content pass — same note as every hand-drawn placehold
 
 ## Skill and workspace/navigation icons (UI & Assets wave 1/8, #131)
 
-`docs/icon-style-golden-master.png` is the user-supplied visual direction reference for original
-icon work. It is review guidance rather than a runtime game asset; future agents must compare new
-icons against it alongside the generated 1× contact sheet.
+`docs/icon-style-golden-master.png` is an original project reference supplied directly by the
+repository owner in the July 11, 2026 Codex design conversation (source: the owner's attached
+`codex-clipboard-574ec938-922b-4e19-9ca3-95f0af1a99e7.png`; no third-party pack or URL). It is
+project-owned review guidance, not a redistributable asset pack or runtime game asset. Future
+agents must compare new icons against it alongside the generated 1× contact sheet.
 
 `skill-attack`, `skill-strength`, `skill-defence`, `skill-hitpoints`, `skill-fishing`,
 `skill-smithing`, `skill-ranged`, `skill-magic`, `skill-cooking`, `skill-crafting`,

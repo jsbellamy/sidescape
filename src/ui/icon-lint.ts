@@ -212,25 +212,19 @@ export function countConnectedComponents(icon: DecodedIcon): number {
   return connectedComponentSizes(icon).length;
 }
 
-/** Rule 5 [lint: connected]: prefer one silhouette, but allow one purposeful secondary accent
- * (the reference roast's flame, mortar leaves, or similar) when it occupies at most 20% of the
- * icon's opaque pixels. This rejects confetti/sparkle noise and two competing subjects. */
-export function checkConnected(icon: DecodedIcon, maxAccentRatio = 0.2): boolean {
-  const sizes = connectedComponentSizes(icon);
-  if (sizes.length === 1) return true;
-  if (sizes.length !== 2) return false;
-  const total = sizes[0]! + sizes[1]!;
-  return sizes[1]! / total <= maxAccentRatio;
+function hasSingleConnectedBody(icon: DecodedIcon, connectivity: 4 | 8): boolean {
+  return connectedComponentSizes(icon, connectivity).length === 1;
 }
 
-/** Native-grid structural gate: identical accent policy to `checkConnected`, but shared-edge
- * connectivity is required so diagonal-only joins cannot hold an icon's main body together. */
-export function checkStructuralConnected(icon: DecodedIcon, maxAccentRatio = 0.2): boolean {
-  const sizes = connectedComponentSizes(icon, 4);
-  if (sizes.length === 1) return true;
-  if (sizes.length !== 2) return false;
-  const total = sizes[0]! + sizes[1]!;
-  return sizes[1]! / total <= maxAccentRatio;
+/** Rule 5 [lint: connected]: legacy compatibility requires exactly one 8-connected silhouette. */
+export function checkConnected(icon: DecodedIcon): boolean {
+  return hasSingleConnectedBody(icon, 8);
+}
+
+/** Native-grid structural gate: code-generated icons require exactly one shared-edge-connected
+ * body, so even a one-pixel diagonal-only limb or inferred "accent" fails. */
+export function checkStructuralConnected(icon: DecodedIcon): boolean {
+  return hasSingleConnectedBody(icon, 4);
 }
 
 export interface StaleExemption {
