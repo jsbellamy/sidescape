@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { writeIcons } from "./icons.mjs";
 import { masterPalette, zonePalettes } from "./palettes.mjs";
 import { hex, writePng } from "./write-png.mjs";
 const swatches = [
@@ -28,3 +29,6 @@ await writePng(
     return inCell ? hex(swatches[row * columns + col] ?? "#1a1410") : hex("#1a1410");
   },
 );
+
+// UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons.
+await writeIcons(resolve("src/assets/icons"));

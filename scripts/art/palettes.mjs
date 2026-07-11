@@ -22,3 +22,7 @@ export const zonePalettes = {
   crypt: ["#241a33", "#3a2f4a", "#5c4c74", "#806b9c", "#d9d3bc", "#150f1c"],
   town: ["#4a2e1a", "#70421f", "#9c6331", "#c5823b", "#e2ad57", "#2b1b12"],
 };
+
+/** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources
+ * that paint with the master ramp by name instead of re-spelling hex literals. */
+export const P = Object.fromEntries(masterPalette);

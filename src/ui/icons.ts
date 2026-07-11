@@ -79,6 +79,26 @@ import thickHideUrl from "../assets/icons/thick-hide.png";
 import waterRuneUrl from "../assets/icons/water-rune.png";
 import wolfHideUrl from "../assets/icons/wolf-hide.png";
 
+// UI & Assets wave 1/8 (#131): Skill icons (SKILL_NAMES order) + workspace/navigation icons.
+import skillAttackUrl from "../assets/icons/skill-attack.png";
+import skillStrengthUrl from "../assets/icons/skill-strength.png";
+import skillDefenceUrl from "../assets/icons/skill-defence.png";
+import skillHitpointsUrl from "../assets/icons/skill-hitpoints.png";
+import skillFishingUrl from "../assets/icons/skill-fishing.png";
+import skillSmithingUrl from "../assets/icons/skill-smithing.png";
+import skillRangedUrl from "../assets/icons/skill-ranged.png";
+import skillMagicUrl from "../assets/icons/skill-magic.png";
+import skillCookingUrl from "../assets/icons/skill-cooking.png";
+import skillCraftingUrl from "../assets/icons/skill-crafting.png";
+import skillHerbloreUrl from "../assets/icons/skill-herblore.png";
+import tabWorldUrl from "../assets/icons/tab-world.png";
+import tabSkillsUrl from "../assets/icons/tab-skills.png";
+import tabCharacterUrl from "../assets/icons/tab-character.png";
+import tabBankUrl from "../assets/icons/tab-bank.png";
+import tabVendorUrl from "../assets/icons/tab-vendor.png";
+import tabLootUrl from "../assets/icons/tab-loot.png";
+import type { SkillName } from "../core/types";
+
 /**
  * Item-icon registry (#78), keyed by `ItemDef.icon` (a key, not a URL — Core never touches the
  * asset itself; see the doc on `EquipmentDef.icon`). Mirrors `sprites.ts`'s `monsterSprites`
@@ -205,4 +225,54 @@ export function itemIcon(key: string): string {
  * resolves, and available to any other completeness check that wants the full key set. */
 export function registeredIconKeys(): string[] {
   return Object.keys(icons);
+}
+
+/** Skill-icon registry (#131), keyed by `SkillName` — separate from `icons` above because a
+ * Skill isn't an `ItemDef.icon` key. Complete over `SKILL_NAMES`; same "throw on unknown key, no
+ * placeholder/fallback branch" discipline as `itemIcon`. */
+const skillIcons: Record<SkillName, string> = {
+  attack: skillAttackUrl,
+  strength: skillStrengthUrl,
+  defence: skillDefenceUrl,
+  hitpoints: skillHitpointsUrl,
+  fishing: skillFishingUrl,
+  smithing: skillSmithingUrl,
+  ranged: skillRangedUrl,
+  magic: skillMagicUrl,
+  cooking: skillCookingUrl,
+  crafting: skillCraftingUrl,
+  herblore: skillHerbloreUrl,
+};
+
+/** Resolves a `SkillName` to its pixel-icon URL. Throws for an unknown key (same discipline as
+ * `itemIcon`). */
+export function skillIcon(skill: SkillName): string {
+  const url = skillIcons[skill];
+  if (!url) throw new Error(`icons.ts registry has no entry for skill icon "${skill}"`);
+  return url;
+}
+
+/** Workspace/navigation-tab icon registry (#131), keyed by tab id (`TabId` in `app.ts`, plus the
+ * `"world"` launcher which isn't a right-panel tab). The four production views (smithing, cooking,
+ * crafting, herblore) reuse the matching `skillIcon` rather than a duplicate `tab-*.png` — see the
+ * issue's own "do not draw tab-*.png duplicates for them". */
+const tabIcons: Record<string, string> = {
+  world: tabWorldUrl,
+  skills: tabSkillsUrl,
+  character: tabCharacterUrl,
+  bank: tabBankUrl,
+  vendor: tabVendorUrl,
+  smithing: skillIcon("smithing"),
+  cooking: skillIcon("cooking"),
+  crafting: skillIcon("crafting"),
+  herblore: skillIcon("herblore"),
+  loot: tabLootUrl,
+};
+
+/** Resolves a workspace/internal-tab id to its pixel-icon URL. Throws for an unknown key (same
+ * discipline as `itemIcon`/`skillIcon`). */
+export function tabIcon(tabId: string): string {
+  const url = tabIcons[tabId];
+  if (!url) throw new Error(`icons.ts registry has no entry for tab icon "${tabId}"`);
+  return url;
 }
