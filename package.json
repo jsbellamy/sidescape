@@ -9,6 +9,8 @@
     "build": "tsc && vite build",
     "e2e": "playwright test",
     "art": "node scripts/art/generate.mjs",
+    "art:trace": "node scripts/art/trace-reference.mjs",
+    "art:ingest": "node scripts/art/ingest-icon.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

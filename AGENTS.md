@@ -71,14 +71,22 @@ behaviour with DOM integration tests.
 - **Assets** are original art following `docs/art-style.md`, generated via
   `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with
   provenance recorded in `docs/assets.md`.
-- **New icons** are authored directly on the native 34×34 canvas; never generate large detailed
-  art and downscale it. For multi-part subjects, union primitives with `createMask()`, derive one
-  exterior outline, and clip shading with `paintInside()`; `skill-strength` is the canonical source
-  example. Use `skill-attack`, `skill-fishing`, and `tab-bank` for irregular contours, selective
-  outline weight, clustered 8–12-color material ramps, and volume-defining highlights. Always
-  judge `docs/icon-silhouette-sheet-1x.png` first, then `docs/icon-sheet-1x.png` beside
-  `docs/icon-style-golden-master.png`, before treating an icon as complete. Image generation is
-  concept reference only; shipped icons remain deterministic `npm run art` output.
+- **New icons.** The fastest path is the **source-driven** pipeline (`docs/icon-gen.md`): generate a
+  chunky-pixel image from the committed prompt kit, `npm run art:ingest -- --name <icon>` to reconstruct
+  its native grid into a committed compact source under `scripts/art/icon-sources/`, and add a
+  `{ name, source }` entry to `scripts/art/icons.mjs` — the build conforms it to the named ramps and
+  derives one warm-ink ring, no per-pixel hand-work. Otherwise author directly on the native 34×34
+  canvas: for multi-part subjects union primitives with `createMask()`, derive one exterior outline,
+  and clip shading with `paintInside()`. Never downscale a smooth or detailed illustration into an
+  icon; the only sanctioned image-derived origins are the source-driven pipeline and grid-faithful
+  reconstruction of a committed pixel-art reference sheet via `scripts/art/trace-reference.mjs` (its
+  output is a draft that still needs the native-grid cleanup and lints; see `docs/art-style.md`).
+  Canonical examples: `skill-attack` and `skill-strength` (source-driven), `skill-fishing`
+  (mask-first). Use `skill-fishing` and `tab-bank` for irregular contours, selective outline weight,
+  clustered 8–12-color material ramps, and volume-defining highlights. Always judge
+  `docs/icon-silhouette-sheet-1x.png` first, then `docs/icon-sheet-1x.png` beside
+  `docs/icon-style-golden-master.png`, before treating an icon as complete. Shipped icons remain
+  deterministic `npm run art` output.
 
 ## Commands
 

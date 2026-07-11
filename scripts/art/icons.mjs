@@ -1,5 +1,13 @@
-import { createMask, writeIcon } from "./icon-canvas.mjs";
+import { fileURLToPath } from "node:url";
+import { createCanvas, createMask, writeIcon } from "./icon-canvas.mjs";
+import { loadSourceGrid, paintSourceIcon } from "./icon-source.mjs";
 import { materialPalettes, P, zonePalettes } from "./palettes.mjs";
+import { writePng } from "./write-png.mjs";
+
+/** Directory holding committed compact icon sources (`<name>.png`) for source-driven icons —
+ * produced by `npm run art:ingest` from prompt-kit generations (docs/icon-gen.md) and conformed to
+ * house style at build by `paintSourceIcon`. */
+const ICON_SOURCES_DIR = fileURLToPath(new URL("./icon-sources", import.meta.url));
 
 /** Legacy convenience for simple rectangular parts. New multi-part subjects should use a unioned
  * `createMask()` silhouette so constituent primitives do not leave internal outline seams. */
@@ -19,7 +27,6 @@ const meadow = zonePalettes.meadow; // [sky, spring-green, mid-green, deep-green
 const crypt = zonePalettes.crypt; // [violet-lt, violet, violet-mid, violet-dk, bone, ink-violet]
 const town = zonePalettes.town; // [dk-brown, brown, tan-brown, orange, lt-orange, blackish-brown]
 const sewer = zonePalettes.sewer;
-const steel = materialPalettes.steel;
 const water = materialPalettes.water;
 const gold = materialPalettes.gold;
 
@@ -32,71 +39,18 @@ const gold = materialPalettes.gold;
 export const icons = [
   // --- Skill icons (SKILL_NAMES order) ---
   {
+    // Canonical SOURCE-DRIVEN icon (docs/icon-gen.md): its committed compact source
+    // scripts/art/icon-sources/skill-attack.png (ingested from a prompt-kit generation) is quantized
+    // to the named ramps and given one derived warm-ink ring by `paintSourceIcon` at build.
     name: "skill-attack",
-    paint(c) {
-      // Canonical native-grid sample: broad steel plane, gold guard, wrapped grip, irregular tip.
-      const sword = createMask();
-      sword.thickLine(10, 23, 27, 6, 7); // blade
-      sword.thickLine(6, 19, 14, 27, 3); // guard
-      sword.thickLine(8, 25, 5, 28, 3); // grip
-      sword.circle(4, 29, 2); // pommel
-
-      c.outlineMask(sword, P.ink);
-      c.paintMask(sword, steel.shadow);
-      c.paintInside(sword, (inside) => {
-        inside.thickLine(10, 23, 27, 6, 7, steel.base);
-        inside.thickLine(10, 22, 26, 6, 5, steel.light);
-        inside.thickLine(11, 20, 25, 6, 2, steel.glint);
-        inside.line(13, 20, 27, 6, steel.base);
-
-        // Guard midpoint is exactly (10,23), where the blade continues into the grip.
-        inside.thickLine(6, 19, 14, 27, 3, gold.base);
-        inside.line(7, 19, 14, 26, gold.glint);
-        inside.thickLine(8, 25, 5, 28, 3, town[1]);
-        inside.circle(4, 29, 2, gold.base);
-        inside.plot(3, 28, gold.glint);
-      });
-    },
+    source: "skill-attack.png",
   },
   {
+    // Source-driven (docs/icon-gen.md): committed compact source scripts/art/icon-sources/
+    // skill-strength.png (ingested from a prompt-kit generation of a clenched fist) is quantized to
+    // the named ramps and given one derived warm-ink ring by `paintSourceIcon` at build.
     name: "skill-strength",
-    paint(c) {
-      // Mask-first clenched fist: knuckles, curled fingers, palm, and wrist form one silhouette.
-      // The outline is derived after the union, so the overlaps cannot create melted dark seams.
-      const fist = createMask();
-      fist.rect(12, 5, 17, 14); // raised middle knuckle
-      fist.rect(7, 7, 12, 16); // index finger
-      fist.rect(17, 6, 22, 15); // ring finger
-      fist.rect(22, 9, 26, 17); // pinky
-      fist.rect(8, 12, 23, 22); // palm
-      fist.rect(5, 15, 11, 21); // curled thumb side
-      fist.rect(8, 20, 18, 24); // lower palm
-      fist.rect(11, 23, 21, 30); // wrist
-
-      c.outlineMask(fist, P.ink);
-      c.paintMask(fist, town[2]);
-      c.paintInside(fist, (inside) => {
-        // Lower-right shadow masses establish volume without tracing every constituent part.
-        inside.rect(21, 10, 26, 17, town[1]);
-        inside.rect(18, 17, 23, 22, town[1]);
-        inside.rect(11, 23, 14, 30, town[1]);
-        inside.rect(15, 27, 21, 30, town[0]);
-
-        // Broad upper-left highlight clusters, one per material plane.
-        inside.rect(8, 8, 11, 11, town[4]);
-        inside.rect(13, 6, 16, 9, town[4]);
-        inside.rect(18, 7, 21, 10, town[3]);
-        inside.rect(7, 15, 10, 17, town[3]);
-        inside.rect(9, 13, 19, 15, town[3]);
-
-        // Palm/finger separations use value steps, not near-black internal outlines.
-        inside.rect(12, 10, 13, 13, P.umber);
-        inside.rect(17, 11, 18, 14, P.umber);
-        inside.rect(11, 17, 20, 19, town[1]);
-        inside.rect(8, 18, 12, 20, town[4]);
-        inside.rect(15, 24, 21, 25, P.umber);
-      });
-    },
+    source: "skill-strength.png",
   },
   {
     name: "skill-defence",
@@ -350,9 +304,19 @@ export const icons = [
 ];
 
 /** Writes every icon in `icons` to `src/assets/icons/<name>.png` on the shared 34×34 canvas.
- * Called by `scripts/art/generate.mjs` as part of `npm run art`. */
+ * Called by `scripts/art/generate.mjs` as part of `npm run art`. An entry is either hand-authored
+ * (`paint(canvas)`) or **source-driven** (`source: "<name>.png"` + optional `opts`), in which case
+ * its committed compact source under `scripts/art/icon-sources/` is loaded and conformed to house
+ * style by `paintSourceIcon`. Both paths render deterministically, so regeneration stays byte-stable. */
 export async function writeIcons(destDir) {
-  for (const { name, paint } of icons) {
-    await writeIcon(`${destDir}/${name}.png`, paint);
+  for (const icon of icons) {
+    if (icon.source) {
+      const grid = loadSourceGrid(`${ICON_SOURCES_DIR}/${icon.source}`);
+      const canvas = createCanvas();
+      paintSourceIcon(canvas, grid, icon.opts);
+      await writePng(`${destDir}/${icon.name}.png`, 34, 34, canvas.toPixelFn());
+    } else {
+      await writeIcon(`${destDir}/${icon.name}.png`, icon.paint);
+    }
   }
 }

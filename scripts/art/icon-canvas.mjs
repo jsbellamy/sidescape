@@ -180,6 +180,47 @@ export function createMask() {
   };
 }
 
+/** Paints a legend-keyed pixel grid — the runtime half of the trace-reference draft format
+ * (`scripts/art/trace-reference.mjs`). `rows` is an array of equal-length strings; each character
+ * indexes `legend` (a char -> hex color map) except `"."`, which stays transparent (unplotted).
+ * With no `x0`/`y0` the grid is centered on the 34×34 canvas. When `outline` is supplied, every
+ * non-"." cell is unioned into a mask and `outlineMask()` derives one exterior 1px ring first, so
+ * hand-editing the rows can never desync the contour from its outline — the same discipline the
+ * mask-first workflow mandates. Interior cells may still legally use the outline color (e.g. a
+ * `P.ink` seam), because the ring is derived from adjacency, not from the fill color. */
+export function paintGrid(canvas, legend, rows, { x0, y0, outline } = {}) {
+  if (rows.length === 0) return;
+  const width = rows[0].length;
+  for (const row of rows) {
+    if (row.length !== width) {
+      throw new Error(`paintGrid: ragged rows — expected length ${width}, got ${row.length}`);
+    }
+  }
+  const height = rows.length;
+  const ox = x0 ?? Math.floor((SIZE - width) / 2);
+  const oy = y0 ?? Math.floor((SIZE - height) / 2);
+
+  if (outline) {
+    const mask = createMask();
+    rows.forEach((row, y) => {
+      for (let x = 0; x < width; x++) if (row[x] !== ".") mask.plot(ox + x, oy + y);
+    });
+    canvas.outlineMask(mask, outline);
+  }
+
+  rows.forEach((row, y) => {
+    for (let x = 0; x < width; x++) {
+      const key = row[x];
+      if (key === ".") continue;
+      const color = legend[key];
+      if (color === undefined) {
+        throw new Error(`paintGrid: no legend entry for "${key}"`);
+      }
+      canvas.plot(ox + x, oy + y, color);
+    }
+  });
+}
+
 /** Renders one icon source (a `paint(canvas)` function) to `path` on the shared 34×34 canvas. */
 export async function writeIcon(path, paint) {
   const canvas = createCanvas();

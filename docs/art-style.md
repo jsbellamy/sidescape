@@ -45,17 +45,38 @@ Combat sprites are **facing inward**: player right, Monsters left, including Bos
 
 ## Icon legibility (34×34)
 
-Design icons directly at their final 34×34 resolution. Never ask an image model for a detailed
-large illustration and then downscale it; translate a concept into deliberate native-pixel
-clusters while preserving the useful interior planes visible in the golden master.
+Design icons directly at their final 34×34 resolution. Never downscale a smooth or detailed
+illustration into `src/assets/icons` — naive downscaling of continuous-tone art is still banned,
+because it produces the muddy anti-aliased edges these rules exist to prevent. Two image-derived
+origins are sanctioned, because both reconstruct a real pixel grid rather than smearing a smooth
+illustration:
+
+1. The **source-driven pipeline** (`docs/icon-gen.md`): a chunky pixel-art image generated from the
+   committed prompt kit is ingested (`npm run art:ingest`) into a committed _compact source_ under
+   `scripts/art/icon-sources/`, then conformed to house style at every build — quantized to the
+   named ramps, palette-reduced and despeckled to the color/cluster budgets, and given one derived
+   warm-ink ring. This needs no per-pixel hand-work; the golden master stays the style authority via
+   the build-time quantization, not by replacing it with the generation's look.
+2. **Grid-faithful reconstruction** of a committed, approved pixel-art reference sheet with a
+   regular pseudo-pixel grid (currently `icon-style-golden-master.png` and `icon-reference.png`) via
+   `scripts/art/trace-reference.mjs`, which detects the sheet's cell pitch, majority-votes each art
+   cell, and quantizes to the named ramps. Its output is a _draft_ for hand-cleanup, not a source.
+
+Both are transcription of existing pixels, not downscaling of an illustration. For hand-authored
+icons, translate the concept into deliberate native-pixel clusters while preserving the useful
+interior planes visible in the golden master.
 
 The approved visual reference is the committed
 [icon-style golden master](icon-style-golden-master.png), supplied during the July 2026 icon-style
 pass. Its defining traits are a near-black warm outline, compact exaggerated forms, multi-step
 clustered shading, material-specific highlights, irregular contours, and large readable
-silhouettes. The committed `skill-attack`, `skill-fishing`, and `tab-bank` sources are canonical
-material and contour examples; `skill-strength` is the canonical mask-first multi-part example.
-Review new work side-by-side with that image; prose and lint do not override a visible mismatch.
+silhouettes. The committed `skill-fishing` and `tab-bank` sources are canonical material and contour
+examples; `skill-fishing` is the canonical mask-first multi-part example, and `skill-attack` and
+`skill-strength` are the canonical source-driven examples (prompt-kit generations ingested to compact
+sources and conformed at build; see `docs/icon-gen.md`). The `scripts/art/trace-reference.mjs`
+grid-tracing tool remains available for reconstructing a committed reference sheet into a draft, but
+no shipped icon currently uses it. Review new work side-by-side with that image; prose and lint do
+not override a visible mismatch.
 
 ### Native-grid authoring workflow
 
@@ -79,9 +100,31 @@ Work in this order:
    at most three isolated one-pixel color clusters. This preserves intentional eyes/glints while
    rejecting diagonal-only anatomy and sparkle noise.
 
-Image generation may be used for concept exploration (subject, pose, palette, material planes),
-but generated large rasters are not production icon sources and must not be downscaled into
-`src/assets/icons`. Translate an approved concept into the native-grid mask workflow above.
+### Source-driven authoring workflow
+
+For subjects better realized by an image model than by hand, use the source-driven pipeline
+documented in [icon-gen.md](icon-gen.md): generate a chunky pixel-art image from the committed
+prompt kit, run `npm run art:ingest -- --name <icon>` to reconstruct its native pseudo-pixel grid into
+a committed compact source under `scripts/art/icon-sources/`, review the git-ignored preview, and
+add a `{ name, source: "<icon>.png" }` entry to `scripts/art/icons.mjs`. The build
+(`paintSourceIcon`) conforms the source to house style deterministically: quantize to the named
+ramps, reduce the palette and despeckle to the color-budget and cluster-noise lints, and derive one
+warm-ink ring. Unlike the tracer draft, this requires no per-pixel hand-cleanup — but the generation
+must still clear the same sheet rubric and lint suite, and ingest rejects a source whose grid is the
+wrong size or over budget. Nothing under the git-ignored `scripts/art/icon-gen-inbox/` (raw
+generations and previews) is ever committed; only the compact source and the `icons.mjs` entry are.
+
+A generated large raster is otherwise not a production icon source and must not be downscaled into
+`src/assets/icons`. Image generation may also be used purely for concept exploration (subject, pose,
+palette, material planes), translating an approved concept into the native-grid mask workflow above.
+
+`scripts/art/trace-reference.mjs` produces a **draft, never an icon**. Its emitted `paintGrid`
+definition must be pasted into `scripts/art/icons.mjs`, rescaled and hand-cleaned through
+native-grid workflow steps 1–4 above (the tool's non-integer fit scaling leaves uneven cells and
+one-pixel noise on purpose, for the author to resolve), and pass the full sheet rubric and lint
+suite before commit. Nothing under the tool's git-ignored `scripts/art/trace-out/` — the raw
+reconstruction and draft previews — is ever committed as an icon source; shipped icons remain
+deterministic `npm run art` output.
 
 Agent brief: design exactly one dominant object; settle a recognizable 32×32 silhouette first;
 derive one exterior warm-dark outline around the union; light from upper-left; use 8–12 named-ramp

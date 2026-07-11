@@ -15,6 +15,13 @@ playwright-report/
 test-results/
 *.local
 
+# Icon reference tracer drafts/previews — never committed as icon sources (docs/art-style.md).
+scripts/art/trace-out/
+
+# Source-driven icon generation inbox: raw image-model generations + Stage-2 previews. Only the
+# ingested compact source (scripts/art/icon-sources/) is committed (docs/icon-gen.md).
+scripts/art/icon-gen-inbox/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
