@@ -97,6 +97,48 @@ export function createCanvas() {
         }
       }
     },
+    /** Whether a coordinate currently contains a painted pixel. Used by mask composition and
+     * exposed for tests/debug tooling; callers should still render through `toPixelFn()`. */
+    has(x, y) {
+      return x >= 0 && y >= 0 && x < SIZE && y < SIZE && cells[y * SIZE + x] !== null;
+    },
+    /** Paints a previously composed silhouette mask with one flat color. */
+    paintMask(mask, color) {
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) if (mask.has(x, y)) this.plot(x, y, color);
+    },
+    /** Derives one exterior 4-neighbor outline around the unioned silhouette. Because the outline
+     * is computed after parts are unioned, overlapping primitives cannot leave internal seams. */
+    outlineMask(mask, color) {
+      const neighbors = [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ];
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) {
+          if (!mask.has(x, y)) continue;
+          for (const [dx, dy] of neighbors) {
+            const nx = x + dx,
+              ny = y + dy;
+            if (!mask.has(nx, ny)) this.plot(nx, ny, color);
+          }
+        }
+    },
+    /** Runs normal drawing primitives through a silhouette clip. This keeps material planes and
+     * highlight/shadow clusters inside the approved contour even when their source primitives
+     * extend beyond it. */
+    paintInside(mask, paint) {
+      const target = this;
+      const clipped = {
+        ...this,
+        plot(x, y, color) {
+          if (mask.has(x, y)) target.plot(x, y, color);
+        },
+      };
+      paint(clipped);
+    },
     toPixelFn() {
       return (x, y) => {
         const color = cells[y * SIZE + x];
@@ -104,6 +146,79 @@ export function createCanvas() {
       };
     },
   };
+}
+
+/** Creates a colorless silhouette canvas. Compose as many primitives as needed here, then apply
+ * one outline/fill pair to the union with `canvas.outlineMask()` and `canvas.paintMask()`.
+ * Mask methods intentionally omit color arguments so agents cannot shade before the contour is
+ * settled. */
+export function createMask() {
+  const source = createCanvas();
+  const mark = "#ffffff";
+  return {
+    plot(x, y) {
+      source.plot(x, y, mark);
+    },
+    rect(x0, y0, x1, y1) {
+      source.rect(x0, y0, x1, y1, mark);
+    },
+    rectOutline(x0, y0, x1, y1) {
+      source.rectOutline(x0, y0, x1, y1, mark);
+    },
+    circle(cx, cy, r) {
+      source.circle(cx, cy, r, mark);
+    },
+    line(x0, y0, x1, y1) {
+      source.line(x0, y0, x1, y1, mark);
+    },
+    thickLine(x0, y0, x1, y1, width) {
+      source.thickLine(x0, y0, x1, y1, width, mark);
+    },
+    has(x, y) {
+      return source.has(x, y);
+    },
+  };
+}
+
+/** Paints a legend-keyed pixel grid — the runtime half of the trace-reference draft format
+ * (`scripts/art/trace-reference.mjs`). `rows` is an array of equal-length strings; each character
+ * indexes `legend` (a char -> hex color map) except `"."`, which stays transparent (unplotted).
+ * With no `x0`/`y0` the grid is centered on the 34×34 canvas. When `outline` is supplied, every
+ * non-"." cell is unioned into a mask and `outlineMask()` derives one exterior 1px ring first, so
+ * hand-editing the rows can never desync the contour from its outline — the same discipline the
+ * mask-first workflow mandates. Interior cells may still legally use the outline color (e.g. a
+ * `P.ink` seam), because the ring is derived from adjacency, not from the fill color. */
+export function paintGrid(canvas, legend, rows, { x0, y0, outline } = {}) {
+  if (rows.length === 0) return;
+  const width = rows[0].length;
+  for (const row of rows) {
+    if (row.length !== width) {
+      throw new Error(`paintGrid: ragged rows — expected length ${width}, got ${row.length}`);
+    }
+  }
+  const height = rows.length;
+  const ox = x0 ?? Math.floor((SIZE - width) / 2);
+  const oy = y0 ?? Math.floor((SIZE - height) / 2);
+
+  if (outline) {
+    const mask = createMask();
+    rows.forEach((row, y) => {
+      for (let x = 0; x < width; x++) if (row[x] !== ".") mask.plot(ox + x, oy + y);
+    });
+    canvas.outlineMask(mask, outline);
+  }
+
+  rows.forEach((row, y) => {
+    for (let x = 0; x < width; x++) {
+      const key = row[x];
+      if (key === ".") continue;
+      const color = legend[key];
+      if (color === undefined) {
+        throw new Error(`paintGrid: no legend entry for "${key}"`);
+      }
+      canvas.plot(ox + x, oy + y, color);
+    }
+  });
 }
 
 /** Renders one icon source (a `paint(canvas)` function) to `path` on the shared 34×34 canvas. */

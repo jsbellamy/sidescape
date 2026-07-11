@@ -1,9 +1,16 @@
-import { writeIcon } from "./icon-canvas.mjs";
-import { P, zonePalettes } from "./palettes.mjs";
+import { fileURLToPath } from "node:url";
+import { createCanvas, createMask, writeIcon } from "./icon-canvas.mjs";
+import { loadSourceGrid, paintSourceIcon } from "./icon-source.mjs";
+import { materialPalettes, P, zonePalettes } from "./palettes.mjs";
+import { writePng } from "./write-png.mjs";
 
-/** Draws a filled block with a 1px master-ramp outline in one call — the icon set's shared
- * "outline, base, one shadow, one highlight" pixel rule (docs/art-style.md) reduced to its most
- * common shape. Callers add extra shading strokes on top where a flat block would read too plain. */
+/** Directory holding committed compact icon sources (`<name>.png`) for source-driven icons —
+ * produced by `npm run art:ingest` from prompt-kit generations (docs/icon-gen.md) and conformed to
+ * house style at build by `paintSourceIcon`. */
+const ICON_SOURCES_DIR = fileURLToPath(new URL("./icon-sources", import.meta.url));
+
+/** Legacy convenience for simple rectangular parts. New multi-part subjects should use a unioned
+ * `createMask()` silhouette so constituent primitives do not leave internal outline seams. */
 function block(canvas, x0, y0, x1, y1, fill, outline = P.ink) {
   canvas.rect(x0 - 1, y0 - 1, x1 + 1, y1 + 1, outline);
   canvas.rect(x0, y0, x1, y1, fill);
@@ -20,35 +27,30 @@ const meadow = zonePalettes.meadow; // [sky, spring-green, mid-green, deep-green
 const crypt = zonePalettes.crypt; // [violet-lt, violet, violet-mid, violet-dk, bone, ink-violet]
 const town = zonePalettes.town; // [dk-brown, brown, tan-brown, orange, lt-orange, blackish-brown]
 const sewer = zonePalettes.sewer;
+const water = materialPalettes.water;
+const gold = materialPalettes.gold;
 
 /**
  * The eleven Skill icons (one per `SKILL_NAMES` entry, #131) plus the six workspace/navigation
  * icons. Each entry's `paint` draws on the shared 34×34 icon canvas (`icon-canvas.mjs`) using only
- * colors already pinned by `docs/art-style.md` (master ramp + the five zone sub-palettes) — no new
- * hex values are introduced here, matching the master-palette discipline the style guide pins.
+ * colors already pinned by `docs/art-style.md` (master, zone, and material ramps) — no ad-hoc hex
+ * values are introduced here, matching the palette discipline the style guide pins.
  */
 export const icons = [
   // --- Skill icons (SKILL_NAMES order) ---
   {
+    // Canonical SOURCE-DRIVEN icon (docs/icon-gen.md): its committed compact source
+    // scripts/art/icon-sources/skill-attack.png (ingested from a prompt-kit generation) is quantized
+    // to the named ramps and given one derived warm-ink ring by `paintSourceIcon` at build.
     name: "skill-attack",
-    paint(c) {
-      // Sword: blade + crossguard + grip + pommel.
-      block(c, 15, 4, 18, 21, P.cream);
-      c.line(16, 5, 16, 20, P.sand);
-      block(c, 10, 22, 23, 24, P.umber);
-      block(c, 15, 25, 18, 29, P.outline);
-      disc(c, 16.5, 30, 2, P.umber);
-    },
+    source: "skill-attack.png",
   },
   {
+    // Source-driven (docs/icon-gen.md): committed compact source scripts/art/icon-sources/
+    // skill-strength.png (ingested from a prompt-kit generation of a clenched fist) is quantized to
+    // the named ramps and given one derived warm-ink ring by `paintSourceIcon` at build.
     name: "skill-strength",
-    paint(c) {
-      // Flexed-arm silhouette: forearm rising into a fist/bicep bump.
-      block(c, 9, 19, 15, 30, town[2]);
-      block(c, 13, 9, 24, 21, town[3]);
-      disc(c, 19.5, 12, 6, town[3]);
-      c.thickLine(16, 16, 23, 8, 2, town[4]);
-    },
+    source: "skill-strength.png",
   },
   {
     name: "skill-defence",
@@ -87,22 +89,31 @@ export const icons = [
   {
     name: "skill-fishing",
     paint(c) {
-      // Fish: oval body + tail fin (kept — the dominant fish already read well). The hook is
-      // redrawn as one attached >=2px stroke instead of the prior 1px diagonal that read as
-      // corner noise (#164).
-      c.circle(16, 18, 9, P.ink);
-      c.circle(16, 18, 8, meadow[0]);
-      for (let x = 23; x <= 31; x++) {
-        const half = Math.round(9 * (1 - (x - 23) / 8));
-        c.rect(x, 18 - half, x, 18 + half, P.ink);
+      // Canonical native-grid sample: plump profile with stepped belly, highlights, fin, and tail.
+      const fish = createMask();
+      fish.circle(14, 17, 10);
+      fish.rect(13, 8, 25, 25);
+      for (let x = 25; x <= 31; x++) {
+        const half = 2 + Math.round((x - 25) * 0.9);
+        fish.rect(x, 17 - half, x, 17 + half);
       }
-      for (let x = 23; x <= 30; x++) {
-        const half = Math.max(0, Math.round(9 * (1 - (x - 23) / 8)) - 1);
-        c.rect(x, 18 - half, x, 18 + half, meadow[0]);
-      }
-      disc(c, 12, 16, 1, P.ink);
-      c.thickLine(6, 9, 6, 17, 2, meadow[1]);
-      c.thickLine(6, 17, 9, 20, 2, meadow[1]);
+      fish.rect(14, 24, 20, 27);
+      fish.rect(17, 27, 22, 29);
+      fish.rect(19, 29, 22, 30);
+
+      c.outlineMask(fish, P.ink);
+      c.paintMask(fish, water.base);
+      c.paintInside(fish, (inside) => {
+        inside.rect(7, 21, 21, 24, water.shadow);
+        inside.rect(9, 24, 18, 26, water.light);
+        inside.rect(8, 8, 15, 10, water.light);
+        inside.rect(10, 7, 15, 8, water.glint);
+        inside.rect(6, 13, 8, 15, P.ink);
+        inside.plot(7, 13, P.glint);
+        inside.rect(14, 25, 20, 27, meadow[3]);
+        inside.rect(17, 27, 22, 29, meadow[2]);
+        inside.rect(19, 29, 22, 30, meadow[1]);
+      });
     },
   },
   {
@@ -131,8 +142,8 @@ export const icons = [
         c.plot(16 - bow, y, P.umber);
         c.plot(17 - bow, y, P.sand);
       }
-      c.line(16, 4, 8, 16, P.cream);
-      c.line(8, 16, 16, 29, P.cream);
+      c.thickLine(16, 4, 8, 16, 2, P.cream);
+      c.thickLine(8, 16, 16, 29, 2, P.cream);
       c.line(6, 16, 27, 16, P.sand);
       c.thickLine(21, 16, 27, 16, 2, P.umber);
     },
@@ -237,11 +248,32 @@ export const icons = [
   {
     name: "tab-bank",
     paint(c) {
-      // Coin stack: three overlapping discs.
-      disc(c, 16.5, 24, 8, town[3]);
-      disc(c, 16.5, 17, 8, town[4]);
-      disc(c, 16.5, 10, 8, town[3]);
-      c.circle(16.5, 10, 4, town[5]);
+      // Canonical native-grid sample: closed chest with wood planes, gold frame, and large lock.
+      c.rect(2, 5, 31, 30, P.ink);
+      c.rect(4, 7, 29, 28, town[0]);
+      c.rect(5, 8, 28, 14, town[2]);
+      c.rect(6, 9, 27, 11, town[3]);
+      c.rect(5, 17, 28, 27, town[1]);
+      c.rect(6, 18, 27, 23, town[2]);
+      c.rect(3, 14, 30, 17, P.ink);
+
+      // Thin metal bands and corner brackets; wood remains the dominant surface.
+      c.rect(4, 7, 5, 28, gold.shadow);
+      c.rect(5, 8, 5, 27, gold.light);
+      c.rect(28, 7, 29, 28, gold.shadow);
+      c.rect(28, 8, 28, 27, gold.light);
+      c.rect(5, 7, 28, 8, gold.shadow);
+      c.rect(6, 8, 27, 8, gold.light);
+      c.rect(4, 7, 5, 11, gold.glint);
+      c.rect(28, 7, 29, 11, gold.glint);
+      c.rect(4, 25, 6, 28, gold.base);
+      c.rect(27, 25, 29, 28, gold.base);
+
+      c.rect(13, 13, 21, 25, P.ink);
+      c.rect(14, 14, 20, 23, gold.base);
+      c.rect(15, 14, 19, 17, gold.glint);
+      c.rect(16, 17, 18, 22, P.ink);
+      c.rect(17, 17, 17, 19, gold.shadow);
     },
   },
   {
@@ -272,9 +304,19 @@ export const icons = [
 ];
 
 /** Writes every icon in `icons` to `src/assets/icons/<name>.png` on the shared 34×34 canvas.
- * Called by `scripts/art/generate.mjs` as part of `npm run art`. */
+ * Called by `scripts/art/generate.mjs` as part of `npm run art`. An entry is either hand-authored
+ * (`paint(canvas)`) or **source-driven** (`source: "<name>.png"` + optional `opts`), in which case
+ * its committed compact source under `scripts/art/icon-sources/` is loaded and conformed to house
+ * style by `paintSourceIcon`. Both paths render deterministically, so regeneration stays byte-stable. */
 export async function writeIcons(destDir) {
-  for (const { name, paint } of icons) {
-    await writeIcon(`${destDir}/${name}.png`, paint);
+  for (const icon of icons) {
+    if (icon.source) {
+      const grid = loadSourceGrid(`${ICON_SOURCES_DIR}/${icon.source}`);
+      const canvas = createCanvas();
+      paintSourceIcon(canvas, grid, icon.opts);
+      await writePng(`${destDir}/${icon.name}.png`, 34, 34, canvas.toPixelFn());
+    } else {
+      await writeIcon(`${destDir}/${icon.name}.png`, icon.paint);
+    }
   }
 }
