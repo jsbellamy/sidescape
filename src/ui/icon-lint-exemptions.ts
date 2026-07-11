@@ -10,9 +10,9 @@ import type { RuleId } from "./icon-lint";
  *   from ("stale exemption — delete this entry"), so fixing an icon forces removing its entry
  *   and the list can never silently regrow.
  *
- * The companion 17-icon redraw issue (this wave) empties the `skill-*`/`tab-*` entries; #143/#144
- * must empty the rest (their bodies say so). No entries should ever be added by hand — only
- * removed as icons are redrawn clean. */
+ * Issue #164 emptied the `skill-*`/`tab-*` entries (all 17 icons redrawn to pass every rule);
+ * #143/#144 must empty the rest (their bodies say so). No entries should ever be added by hand —
+ * only removed as icons are redrawn clean. */
 export const ICON_LINT_EXEMPTIONS: Record<string, RuleId[]> = {
   "attack-potion": ["binary-alpha"],
   "bronze-arrow": ["margin"],
@@ -59,13 +59,6 @@ export const ICON_LINT_EXEMPTIONS: Record<string, RuleId[]> = {
   "shade-blade": ["color-budget", "connected"],
   "shade-wisp": ["color-budget", "binary-alpha", "fill"],
   shortbow: ["color-budget"],
-  "skill-cooking": ["fill"],
-  "skill-crafting": ["fill"],
-  "skill-defence": ["fill"],
-  "skill-fishing": ["fill", "connected"],
-  "skill-hitpoints": ["fill"],
-  "skill-smithing": ["color-budget", "fill", "connected"],
-  "skill-strength": ["fill"],
   "steel-arrow": ["margin"],
   "steel-chainbody": ["color-budget"],
   "steel-dagger": ["color-budget", "fill"],
@@ -75,10 +68,5 @@ export const ICON_LINT_EXEMPTIONS: Record<string, RuleId[]> = {
   "steel-staff": ["color-budget", "margin"],
   "steel-sword": ["margin"],
   "strength-potion": ["binary-alpha"],
-  "tab-character": ["fill"],
-  "tab-loot": ["fill"],
-  "tab-skills": ["fill"],
-  "tab-vendor": ["fill"],
-  "tab-world": ["fill"],
   "tarromin-herb": ["fill"],
 };
