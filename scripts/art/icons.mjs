@@ -1,9 +1,8 @@
-import { writeIcon } from "./icon-canvas.mjs";
-import { P, zonePalettes } from "./palettes.mjs";
+import { createMask, writeIcon } from "./icon-canvas.mjs";
+import { materialPalettes, P, zonePalettes } from "./palettes.mjs";
 
-/** Draws a filled block with a 1px master-ramp outline in one call — the icon set's shared
- * "outline, base, one shadow, one highlight" pixel rule (docs/art-style.md) reduced to its most
- * common shape. Callers add extra shading strokes on top where a flat block would read too plain. */
+/** Legacy convenience for simple rectangular parts. New multi-part subjects should use a unioned
+ * `createMask()` silhouette so constituent primitives do not leave internal outline seams. */
 function block(canvas, x0, y0, x1, y1, fill, outline = P.ink) {
   canvas.rect(x0 - 1, y0 - 1, x1 + 1, y1 + 1, outline);
   canvas.rect(x0, y0, x1, y1, fill);
@@ -20,34 +19,78 @@ const meadow = zonePalettes.meadow; // [sky, spring-green, mid-green, deep-green
 const crypt = zonePalettes.crypt; // [violet-lt, violet, violet-mid, violet-dk, bone, ink-violet]
 const town = zonePalettes.town; // [dk-brown, brown, tan-brown, orange, lt-orange, blackish-brown]
 const sewer = zonePalettes.sewer;
+const steel = materialPalettes.steel;
+const water = materialPalettes.water;
+const gold = materialPalettes.gold;
 
 /**
  * The eleven Skill icons (one per `SKILL_NAMES` entry, #131) plus the six workspace/navigation
  * icons. Each entry's `paint` draws on the shared 34×34 icon canvas (`icon-canvas.mjs`) using only
- * colors already pinned by `docs/art-style.md` (master ramp + the five zone sub-palettes) — no new
- * hex values are introduced here, matching the master-palette discipline the style guide pins.
+ * colors already pinned by `docs/art-style.md` (master, zone, and material ramps) — no ad-hoc hex
+ * values are introduced here, matching the palette discipline the style guide pins.
  */
 export const icons = [
   // --- Skill icons (SKILL_NAMES order) ---
   {
     name: "skill-attack",
     paint(c) {
-      // Sword: blade + crossguard + grip + pommel.
-      block(c, 15, 4, 18, 21, P.cream);
-      c.line(16, 5, 16, 20, P.sand);
-      block(c, 10, 22, 23, 24, P.umber);
-      block(c, 15, 25, 18, 29, P.outline);
-      disc(c, 16.5, 30, 2, P.umber);
+      // Canonical native-grid sample: broad steel plane, gold guard, wrapped grip, irregular tip.
+      c.thickLine(10, 23, 27, 6, 9, P.ink);
+      c.thickLine(10, 23, 27, 6, 7, steel[0]);
+      c.thickLine(10, 22, 26, 6, 5, steel[2]);
+      c.thickLine(11, 20, 25, 6, 2, steel[3]);
+      c.line(13, 20, 27, 6, steel[1]);
+      c.plot(28, 4, P.ink);
+      c.plot(27, 4, steel[3]);
+
+      // Guard midpoint is exactly (10,23), where the blade axis continues into the grip.
+      c.thickLine(5, 18, 15, 28, 5, P.ink);
+      c.thickLine(6, 19, 14, 27, 3, gold[1]);
+      c.line(7, 19, 14, 26, gold[3]);
+      c.thickLine(9, 24, 4, 29, 5, P.ink);
+      c.thickLine(8, 25, 5, 28, 3, town[1]);
+      disc(c, 4, 29, 2, gold[1]);
+      c.plot(3, 28, gold[3]);
     },
   },
   {
     name: "skill-strength",
     paint(c) {
-      // Flexed-arm silhouette: forearm rising into a fist/bicep bump.
-      block(c, 9, 19, 15, 30, town[2]);
-      block(c, 13, 9, 24, 21, town[3]);
-      disc(c, 19.5, 12, 6, town[3]);
-      c.thickLine(16, 16, 23, 8, 2, town[4]);
+      // Mask-first clenched fist: knuckles, curled fingers, palm, and wrist form one silhouette.
+      // The outline is derived after the union, so the overlaps cannot create melted dark seams.
+      const fist = createMask();
+      fist.rect(12, 5, 17, 14); // raised middle knuckle
+      fist.rect(7, 7, 12, 16); // index finger
+      fist.rect(17, 6, 22, 15); // ring finger
+      fist.rect(22, 9, 26, 17); // pinky
+      fist.rect(8, 12, 23, 22); // palm
+      fist.rect(5, 15, 11, 21); // curled thumb side
+      fist.rect(8, 20, 18, 24); // lower palm
+      fist.rect(11, 23, 21, 30); // wrist
+
+      c.outlineMask(fist, P.ink);
+      c.paintMask(fist, town[2]);
+      c.paintInside(fist, (inside) => {
+        // Lower-right shadow masses establish volume without tracing every constituent part.
+        inside.rect(21, 10, 26, 17, town[1]);
+        inside.rect(18, 17, 23, 22, town[1]);
+        inside.rect(11, 23, 14, 30, town[1]);
+        inside.rect(15, 27, 21, 30, town[0]);
+
+        // Broad upper-left highlight clusters, one per material plane.
+        inside.rect(8, 8, 11, 11, town[4]);
+        inside.rect(13, 6, 16, 9, town[4]);
+        inside.rect(18, 7, 21, 10, town[3]);
+        inside.rect(7, 15, 10, 17, town[3]);
+        inside.rect(9, 13, 19, 15, town[3]);
+
+        // Palm/finger separations use value steps, not near-black internal outlines.
+        inside.rect(12, 10, 13, 13, P.umber);
+        inside.rect(17, 11, 18, 14, P.umber);
+        inside.rect(11, 17, 20, 19, town[1]);
+        inside.rect(8, 18, 12, 20, town[4]);
+        inside.rect(15, 24, 21, 25, P.umber);
+      });
     },
   },
   {
@@ -87,22 +130,29 @@ export const icons = [
   {
     name: "skill-fishing",
     paint(c) {
-      // Fish: oval body + tail fin (kept — the dominant fish already read well). The hook is
-      // redrawn as one attached >=2px stroke instead of the prior 1px diagonal that read as
-      // corner noise (#164).
-      c.circle(16, 18, 9, P.ink);
-      c.circle(16, 18, 8, meadow[0]);
-      for (let x = 23; x <= 31; x++) {
-        const half = Math.round(9 * (1 - (x - 23) / 8));
-        c.rect(x, 18 - half, x, 18 + half, P.ink);
+      // Canonical native-grid sample: plump profile with stepped belly, highlights, fin, and tail.
+      c.circle(14, 17, 12, P.ink);
+      c.circle(14, 17, 10, water[1]);
+      c.rect(13, 8, 24, 25, water[1]);
+      c.rect(22, 12, 26, 22, P.ink);
+      c.rect(22, 13, 25, 21, water[1]);
+      for (let x = 25; x <= 31; x++) {
+        const half = 2 + Math.round((x - 25) * 0.9);
+        c.rect(x, 17 - half, x, 17 + half, P.ink);
       }
-      for (let x = 23; x <= 30; x++) {
-        const half = Math.max(0, Math.round(9 * (1 - (x - 23) / 8)) - 1);
-        c.rect(x, 18 - half, x, 18 + half, meadow[0]);
+      for (let x = 25; x <= 30; x++) {
+        const half = 1 + Math.round((x - 25) * 0.8);
+        c.rect(x, 17 - half, x, 17 + half, water[1]);
       }
-      disc(c, 12, 16, 1, P.ink);
-      c.thickLine(6, 9, 6, 17, 2, meadow[1]);
-      c.thickLine(6, 17, 9, 20, 2, meadow[1]);
+      c.rect(7, 21, 21, 24, water[0]);
+      c.rect(9, 24, 18, 26, water[2]);
+      c.rect(8, 8, 15, 10, water[2]);
+      c.rect(10, 7, 15, 8, water[3]);
+      c.rect(6, 13, 8, 15, P.ink);
+      c.rect(7, 13, 7, 13, P.glint);
+      c.rect(14, 25, 20, 27, meadow[3]);
+      c.rect(17, 27, 22, 29, meadow[2]);
+      c.rect(19, 29, 22, 30, meadow[1]);
     },
   },
   {
@@ -237,11 +287,32 @@ export const icons = [
   {
     name: "tab-bank",
     paint(c) {
-      // Coin stack: three overlapping discs.
-      disc(c, 16.5, 24, 8, town[3]);
-      disc(c, 16.5, 17, 8, town[4]);
-      disc(c, 16.5, 10, 8, town[3]);
-      c.circle(16.5, 10, 4, town[5]);
+      // Canonical native-grid sample: closed chest with wood planes, gold frame, and large lock.
+      c.rect(2, 5, 31, 30, P.ink);
+      c.rect(4, 7, 29, 28, town[0]);
+      c.rect(5, 8, 28, 14, town[2]);
+      c.rect(6, 9, 27, 11, town[3]);
+      c.rect(5, 17, 28, 27, town[1]);
+      c.rect(6, 18, 27, 23, town[2]);
+      c.rect(3, 14, 30, 17, P.ink);
+
+      // Thin metal bands and corner brackets; wood remains the dominant surface.
+      c.rect(4, 7, 5, 28, gold[0]);
+      c.rect(5, 8, 5, 27, gold[2]);
+      c.rect(28, 7, 29, 28, gold[0]);
+      c.rect(28, 8, 28, 27, gold[2]);
+      c.rect(5, 7, 28, 8, gold[0]);
+      c.rect(6, 8, 27, 8, gold[2]);
+      c.rect(4, 7, 5, 11, gold[3]);
+      c.rect(28, 7, 29, 11, gold[3]);
+      c.rect(4, 25, 6, 28, gold[1]);
+      c.rect(27, 25, 29, 28, gold[1]);
+
+      c.rect(13, 13, 21, 25, P.ink);
+      c.rect(14, 14, 20, 23, gold[1]);
+      c.rect(15, 14, 19, 17, gold[3]);
+      c.rect(16, 17, 18, 22, P.ink);
+      c.rect(17, 17, 17, 19, gold[0]);
     },
   },
   {

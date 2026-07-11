@@ -3,12 +3,16 @@ import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { buildContactSheets } from "../../scripts/art/contact-sheet.mjs";
+import { icons as generatedIcons } from "../../scripts/art/icons.mjs";
 import {
   checkBinaryAlpha,
+  checkClusterNoise,
   checkColorBudget,
   checkConnected,
   checkFill,
   checkMargin,
+  checkStructuralConnected,
+  countSingletonColorClusters,
   type DecodedIcon,
   findStaleExemptions,
   RULE_IDS,
@@ -42,8 +46,21 @@ const RULE_CHECKS: Record<RuleId, (icon: DecodedIcon, iconName: string) => boole
 
 // One decode per file, reused across every rule's it() and by the staleness check below.
 const decoded = new Map(iconFiles.map((f) => [f.replace(/\.png$/, ""), decode(f)]));
+const generatedIconNames = generatedIcons.map((icon) => icon.name);
 
 describe("icon PNG lint (#166)", () => {
+  it.each(generatedIconNames)("%s uses four-connected structural joins", (iconName) => {
+    expect(checkStructuralConnected(decoded.get(iconName)!)).toBe(true);
+  });
+
+  it.each(generatedIconNames)("%s limits isolated one-pixel color clusters", (iconName) => {
+    const icon = decoded.get(iconName)!;
+    expect(
+      checkClusterNoise(icon),
+      `${iconName} has ${countSingletonColorClusters(icon)} isolated one-pixel color clusters`,
+    ).toBe(true);
+  });
+
   describe.each(iconFiles.map((f) => f.replace(/\.png$/, "")))("%s", (iconName) => {
     it.each(RULE_IDS)("passes %s unless exempted", (rule) => {
       const icon = decoded.get(iconName)!;
@@ -78,15 +95,16 @@ describe("icon PNG lint (#166)", () => {
     }
   });
 
-  // The committed contact sheets (docs/icon-sheet-1x.png, -4x.png) are `npm run art` output, not
-  // hand-edited — this fails the suite if an icon changed without regenerating them via `npm run
-  // art`, so a stale sheet never ships silently.
+  // The committed color and silhouette sheets are `npm run art` output, not hand-edited — this
+  // fails if an icon changed without regenerating them, so visual review never uses stale inputs.
   it("committed contact sheets are in sync with src/assets/icons (regenerate with `npm run art`)", () => {
     const docsDir = fileURLToPath(new URL("../../docs", import.meta.url));
     const committed1x = readFileSync(`${docsDir}/icon-sheet-1x.png`);
     const committed4x = readFileSync(`${docsDir}/icon-sheet-4x.png`);
+    const committedSilhouette1x = readFileSync(`${docsDir}/icon-silhouette-sheet-1x.png`);
     const built = buildContactSheets(ICONS_DIR);
     expect(Buffer.compare(built.onePx, committed1x)).toBe(0);
     expect(Buffer.compare(built.fourX, committed4x)).toBe(0);
+    expect(Buffer.compare(built.silhouetteOnePx, committedSilhouette1x)).toBe(0);
   });
 });

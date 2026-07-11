@@ -71,6 +71,14 @@ behaviour with DOM integration tests.
 - **Assets** are original art following `docs/art-style.md`, generated via
   `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with
   provenance recorded in `docs/assets.md`.
+- **New icons** are authored directly on the native 34×34 canvas; never generate large detailed
+  art and downscale it. For multi-part subjects, union primitives with `createMask()`, derive one
+  exterior outline, and clip shading with `paintInside()`; `skill-strength` is the canonical source
+  example. Use `skill-attack`, `skill-fishing`, and `tab-bank` for irregular contours, selective
+  outline weight, clustered 8–12-color material ramps, and volume-defining highlights. Always
+  judge `docs/icon-silhouette-sheet-1x.png` first, then `docs/icon-sheet-1x.png` beside
+  `docs/icon-style-golden-master.png`, before treating an icon as complete. Image generation is
+  concept reference only; shipped icons remain deterministic `npm run art` output.
 
 ## Commands
 

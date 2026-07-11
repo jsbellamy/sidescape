@@ -23,6 +23,14 @@ export const zonePalettes = {
   town: ["#4a2e1a", "#70421f", "#9c6331", "#c5823b", "#e2ad57", "#2b1b12"],
 };
 
+/** Material ramps used by close-up UI icons. Zone palettes establish atmosphere; these ramps
+ * establish readable steel, water/scale, and gold volume at 34x34 without gradients. */
+export const materialPalettes = {
+  steel: ["#59636d", "#8d99a3", "#c4ccd1", "#eef2f2"],
+  water: ["#4f7f9f", "#72a7cc", "#9bc9e3", "#c6e4f2"],
+  gold: ["#8f5b00", "#d49b00", "#f0bd36", "#ffe18a"],
+};
+
 /** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources
  * that paint with the master ramp by name instead of re-spelling hex literals. */
 export const P = Object.fromEntries(masterPalette);

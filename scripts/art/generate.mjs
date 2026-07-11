@@ -1,11 +1,12 @@
 import { resolve } from "node:path";
 import { writeContactSheets } from "./contact-sheet.mjs";
 import { writeIcons } from "./icons.mjs";
-import { masterPalette, zonePalettes } from "./palettes.mjs";
+import { masterPalette, materialPalettes, zonePalettes } from "./palettes.mjs";
 import { hex, writePng } from "./write-png.mjs";
 const swatches = [
   ...masterPalette.map(([, color]) => color),
   ...Object.values(zonePalettes).flat(),
+  ...Object.values(materialPalettes).flat(),
 ];
 const columns = 6,
   cell = 40,

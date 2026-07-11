@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   checkBinaryAlpha,
   checkColorBudget,
+  checkClusterNoise,
   checkConnected,
   checkFill,
   checkMargin,
+  checkStructuralConnected,
   countOpaqueColors,
   type DecodedIcon,
   findStaleExemptions,
@@ -63,27 +65,59 @@ describe("countOpaqueColors", () => {
 });
 
 describe("checkColorBudget", () => {
-  it("passes an icon with exactly 5 distinct opaque colors (the maintainer-decided budget)", () => {
-    const icon = fixture(["ABCDE"], {
-      A: [1, 0, 0, 255],
-      B: [2, 0, 0, 255],
-      C: [3, 0, 0, 255],
-      D: [4, 0, 0, 255],
-      E: [5, 0, 0, 255],
-    });
-    expect(checkColorBudget(icon)).toBe(true);
-  });
-
-  it("fails an icon with 6 distinct opaque colors", () => {
-    const icon = fixture(["ABCDEF"], {
+  it("passes an icon with exactly 12 distinct opaque colors (the approved material-ramp budget)", () => {
+    const icon = fixture(["ABCDEFGHIJKL"], {
       A: [1, 0, 0, 255],
       B: [2, 0, 0, 255],
       C: [3, 0, 0, 255],
       D: [4, 0, 0, 255],
       E: [5, 0, 0, 255],
       F: [6, 0, 0, 255],
+      G: [7, 0, 0, 255],
+      H: [8, 0, 0, 255],
+      I: [9, 0, 0, 255],
+      J: [10, 0, 0, 255],
+      K: [11, 0, 0, 255],
+      L: [12, 0, 0, 255],
+    });
+    expect(checkColorBudget(icon)).toBe(true);
+  });
+
+  it("fails an icon with 13 distinct opaque colors", () => {
+    const icon = fixture(["ABCDEFGHIJKLM"], {
+      A: [1, 0, 0, 255],
+      B: [2, 0, 0, 255],
+      C: [3, 0, 0, 255],
+      D: [4, 0, 0, 255],
+      E: [5, 0, 0, 255],
+      F: [6, 0, 0, 255],
+      G: [7, 0, 0, 255],
+      H: [8, 0, 0, 255],
+      I: [9, 0, 0, 255],
+      J: [10, 0, 0, 255],
+      K: [11, 0, 0, 255],
+      L: [12, 0, 0, 255],
+      M: [13, 0, 0, 255],
     });
     expect(checkColorBudget(icon)).toBe(false);
+  });
+});
+
+describe("checkClusterNoise", () => {
+  it("allows a small number of intentional one-pixel details", () => {
+    const icon = fixture(["AAAAAAA", "AAAAAAA", "AABABAA", "AAAAAAA", "AAAAAAA"], {
+      A: [1, 0, 0, 255],
+      B: [2, 0, 0, 255],
+    });
+    expect(checkClusterNoise(icon)).toBe(true);
+  });
+
+  it("rejects scattered same-color sparkle noise", () => {
+    const icon = fixture(["AAAAAAAAA", "ABABABABA", "AAAAAAAAA", "ABAAAAAAA", "AAAAAAAAA"], {
+      A: [1, 0, 0, 255],
+      B: [2, 0, 0, 255],
+    });
+    expect(checkClusterNoise(icon)).toBe(false);
   });
 });
 
@@ -145,27 +179,57 @@ describe("checkFill", () => {
 });
 
 describe("checkConnected", () => {
-  it("passes a single blob (one 8-connected component)", () => {
+  it("passes a single blob", () => {
     const icon = solidBox(6, 1, 1, 3, 3);
     expect(checkConnected(icon)).toBe(true);
   });
 
-  it("passes two blobs touching only at a shared corner (8-connectivity joins them)", () => {
-    // (2,2) and (3,3) share a corner but no edge — still one component under 8-connectivity.
-    const icon = solidBox(6, 1, 1, 2, 2);
+  it("fails competing structural parts that touch only at a shared corner", () => {
+    // A 3x3 body and 2x2 part share a corner but no edge. Eight-connectivity incorrectly merges
+    // them; four-connectivity exposes the visually fragile diagonal-only join.
+    const icon = solidBox(8, 1, 1, 3, 3);
     const at = (x: number, y: number) => (y * icon.width + x) * 4;
-    const i = at(3, 3);
+    for (let y = 4; y <= 5; y++)
+      for (let x = 4; x <= 5; x++) {
+        const i = at(x, y);
+        icon.data[i] = 1;
+        icon.data[i + 3] = 255;
+      }
+    expect(checkStructuralConnected(icon)).toBe(false);
+  });
+
+  it("allows one small detached accent occupying no more than 20% of the art", () => {
+    const icon = solidBox(10, 1, 1, 4, 4);
+    const at = (x: number, y: number) => (y * icon.width + x) * 4;
+    const i = at(7, 7);
     icon.data[i] = 1;
     icon.data[i + 3] = 255;
     expect(checkConnected(icon)).toBe(true);
   });
 
-  it("fails two blobs with a gap between them (floating garnish, e.g. a detached spark)", () => {
-    const icon = solidBox(10, 1, 1, 2, 2);
+  it("fails when the detached component competes with the main silhouette", () => {
+    const icon = solidBox(10, 1, 1, 3, 3);
     const at = (x: number, y: number) => (y * icon.width + x) * 4;
-    const i = at(7, 7);
-    icon.data[i] = 1;
-    icon.data[i + 3] = 255;
+    for (let y = 6; y <= 7; y++)
+      for (let x = 6; x <= 7; x++) {
+        const i = at(x, y);
+        icon.data[i] = 1;
+        icon.data[i + 3] = 255;
+      }
+    expect(checkConnected(icon)).toBe(false);
+  });
+
+  it("fails decorative confetti with more than one detached accent", () => {
+    const icon = solidBox(10, 1, 1, 4, 4);
+    const at = (x: number, y: number) => (y * icon.width + x) * 4;
+    for (const [x, y] of [
+      [7, 2],
+      [7, 7],
+    ] as const) {
+      const i = at(x, y);
+      icon.data[i] = 1;
+      icon.data[i + 3] = 255;
+    }
     expect(checkConnected(icon)).toBe(false);
   });
 

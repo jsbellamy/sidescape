@@ -31,9 +31,69 @@ export function countOpaqueColors(icon: DecodedIcon): number {
   return colors.size;
 }
 
-/** Rule 1 [lint: color-budget]: outline, shadow, base, highlight + one accent — no more. */
-export function checkColorBudget(icon: DecodedIcon, limit = 5): boolean {
+/** Rule 1 [lint: color-budget]: the approved clustered-shading reference uses up to twelve colors
+ * across outline, shadow, base, highlight, material, and accent roles. */
+export function checkColorBudget(icon: DecodedIcon, limit = 12): boolean {
   return countOpaqueColors(icon) <= limit;
+}
+
+/** Counts one-pixel 8-connected components within each individual opaque color. Diagonal pixels
+ * of one deliberate line/plane remain a cluster, while isolated eyes, glints, and sparkle noise
+ * remain singletons. */
+export function countSingletonColorClusters(icon: DecodedIcon): number {
+  const { width: w, height: h } = icon;
+  const colorAt = (x: number, y: number): string | null => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return null;
+    const [r, g, b, a] = pixelAt(icon, x, y);
+    return a === 0 ? null : `${r},${g},${b},${a}`;
+  };
+  const visited = new Uint8Array(w * h);
+  let singletons = 0;
+
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const color = colorAt(x, y);
+      if (color === null || visited[y * w + x]) continue;
+      let size = 0;
+      const stack: [number, number][] = [[x, y]];
+      visited[y * w + x] = 1;
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop()!;
+        size++;
+        for (const [dx, dy] of [
+          [-1, -1],
+          [0, -1],
+          [1, -1],
+          [-1, 0],
+          [1, 0],
+          [-1, 1],
+          [0, 1],
+          [1, 1],
+        ] as const) {
+          const nx = cx + dx,
+            ny = cy + dy;
+          if (
+            nx >= 0 &&
+            ny >= 0 &&
+            nx < w &&
+            ny < h &&
+            !visited[ny * w + nx] &&
+            colorAt(nx, ny) === color
+          ) {
+            visited[ny * w + nx] = 1;
+            stack.push([nx, ny]);
+          }
+        }
+      }
+      if (size === 1) singletons++;
+    }
+
+  return singletons;
+}
+
+/** Native-grid shading gate: preserve a few intentional one-pixel details, reject confetti. */
+export function checkClusterNoise(icon: DecodedIcon, maxSingletons = 3): boolean {
+  return countSingletonColorClusters(icon) <= maxSingletons;
 }
 
 /** Distinct alpha VALUES strictly between 0 and 255 (fully transparent / fully opaque are
@@ -98,41 +158,79 @@ export function checkFill(icon: DecodedIcon, minLongAxis = 26): boolean {
   return Math.max(box.width, box.height) >= minLongAxis;
 }
 
-/** The number of 8-connected components (king-move adjacency, including diagonals) among the
- * icon's opaque pixels. Zero for an entirely transparent icon. */
-export function countConnectedComponents(icon: DecodedIcon): number {
+/** Sizes of connected components among the icon's opaque pixels. Compatibility lint defaults to
+ * eight-neighbor adjacency because imported legacy PNGs historically used diagonal joins; new
+ * native-grid art opts into four-neighbor structural connectivity below. */
+export function connectedComponentSizes(icon: DecodedIcon, connectivity: 4 | 8 = 8): number[] {
   const { width: w, height: h } = icon;
   const opaque = (x: number, y: number) =>
     x >= 0 && y >= 0 && x < w && y < h && pixelAt(icon, x, y)[3] !== 0;
   const visited = new Uint8Array(w * h);
-  let count = 0;
+  const sizes: number[] = [];
+  const offsets =
+    connectivity === 4
+      ? ([
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ] as const)
+      : ([
+          [-1, -1],
+          [0, -1],
+          [1, -1],
+          [-1, 0],
+          [1, 0],
+          [-1, 1],
+          [0, 1],
+          [1, 1],
+        ] as const);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       if (!opaque(x, y) || visited[y * w + x]) continue;
-      count++;
+      let size = 0;
       const stack: [number, number][] = [[x, y]];
       visited[y * w + x] = 1;
       while (stack.length > 0) {
         const [cx, cy] = stack.pop()!;
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = cx + dx,
-              ny = cy + dy;
-            if (opaque(nx, ny) && !visited[ny * w + nx]) {
-              visited[ny * w + nx] = 1;
-              stack.push([nx, ny]);
-            }
+        size++;
+        for (const [dx, dy] of offsets) {
+          const nx = cx + dx,
+            ny = cy + dy;
+          if (opaque(nx, ny) && !visited[ny * w + nx]) {
+            visited[ny * w + nx] = 1;
+            stack.push([nx, ny]);
           }
+        }
       }
+      sizes.push(size);
     }
-  return count;
+  return sizes.sort((a, b) => b - a);
 }
 
-/** Rule 5 [lint: connected]: all opaque pixels form exactly ONE 8-connected component — kills
- * floating smoke/sparkle/chain garnish detached from the main silhouette. */
-export function checkConnected(icon: DecodedIcon): boolean {
-  return countConnectedComponents(icon) === 1;
+export function countConnectedComponents(icon: DecodedIcon): number {
+  return connectedComponentSizes(icon).length;
+}
+
+/** Rule 5 [lint: connected]: prefer one silhouette, but allow one purposeful secondary accent
+ * (the reference roast's flame, mortar leaves, or similar) when it occupies at most 20% of the
+ * icon's opaque pixels. This rejects confetti/sparkle noise and two competing subjects. */
+export function checkConnected(icon: DecodedIcon, maxAccentRatio = 0.2): boolean {
+  const sizes = connectedComponentSizes(icon);
+  if (sizes.length === 1) return true;
+  if (sizes.length !== 2) return false;
+  const total = sizes[0]! + sizes[1]!;
+  return sizes[1]! / total <= maxAccentRatio;
+}
+
+/** Native-grid structural gate: identical accent policy to `checkConnected`, but shared-edge
+ * connectivity is required so diagonal-only joins cannot hold an icon's main body together. */
+export function checkStructuralConnected(icon: DecodedIcon, maxAccentRatio = 0.2): boolean {
+  const sizes = connectedComponentSizes(icon, 4);
+  if (sizes.length === 1) return true;
+  if (sizes.length !== 2) return false;
+  const total = sizes[0]! + sizes[1]!;
+  return sizes[1]! / total <= maxAccentRatio;
 }
 
 export interface StaleExemption {

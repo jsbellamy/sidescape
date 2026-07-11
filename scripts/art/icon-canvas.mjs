@@ -97,11 +97,85 @@ export function createCanvas() {
         }
       }
     },
+    /** Whether a coordinate currently contains a painted pixel. Used by mask composition and
+     * exposed for tests/debug tooling; callers should still render through `toPixelFn()`. */
+    has(x, y) {
+      return x >= 0 && y >= 0 && x < SIZE && y < SIZE && cells[y * SIZE + x] !== null;
+    },
+    /** Paints a previously composed silhouette mask with one flat color. */
+    paintMask(mask, color) {
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) if (mask.has(x, y)) this.plot(x, y, color);
+    },
+    /** Derives one exterior 4-neighbor outline around the unioned silhouette. Because the outline
+     * is computed after parts are unioned, overlapping primitives cannot leave internal seams. */
+    outlineMask(mask, color) {
+      const neighbors = [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ];
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) {
+          if (!mask.has(x, y)) continue;
+          for (const [dx, dy] of neighbors) {
+            const nx = x + dx,
+              ny = y + dy;
+            if (!mask.has(nx, ny)) this.plot(nx, ny, color);
+          }
+        }
+    },
+    /** Runs normal drawing primitives through a silhouette clip. This keeps material planes and
+     * highlight/shadow clusters inside the approved contour even when their source primitives
+     * extend beyond it. */
+    paintInside(mask, paint) {
+      const target = this;
+      const clipped = {
+        ...this,
+        plot(x, y, color) {
+          if (mask.has(x, y)) target.plot(x, y, color);
+        },
+      };
+      paint(clipped);
+    },
     toPixelFn() {
       return (x, y) => {
         const color = cells[y * SIZE + x];
         return color ? hex(color) : [0, 0, 0, 0];
       };
+    },
+  };
+}
+
+/** Creates a colorless silhouette canvas. Compose as many primitives as needed here, then apply
+ * one outline/fill pair to the union with `canvas.outlineMask()` and `canvas.paintMask()`.
+ * Mask methods intentionally omit color arguments so agents cannot shade before the contour is
+ * settled. */
+export function createMask() {
+  const source = createCanvas();
+  const mark = "#ffffff";
+  return {
+    plot(x, y) {
+      source.plot(x, y, mark);
+    },
+    rect(x0, y0, x1, y1) {
+      source.rect(x0, y0, x1, y1, mark);
+    },
+    rectOutline(x0, y0, x1, y1) {
+      source.rectOutline(x0, y0, x1, y1, mark);
+    },
+    circle(cx, cy, r) {
+      source.circle(cx, cy, r, mark);
+    },
+    line(x0, y0, x1, y1) {
+      source.line(x0, y0, x1, y1, mark);
+    },
+    thickLine(x0, y0, x1, y1, width) {
+      source.thickLine(x0, y0, x1, y1, width, mark);
+    },
+    has(x, y) {
+      return source.has(x, y);
     },
   };
 }
