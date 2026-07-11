@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { writeContactSheets } from "./contact-sheet.mjs";
 import { writeIcons } from "./icons.mjs";
 import { masterPalette, zonePalettes } from "./palettes.mjs";
 import { hex, writePng } from "./write-png.mjs";
@@ -32,3 +33,7 @@ await writePng(
 
 // UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons.
 await writeIcons(resolve("src/assets/icons"));
+
+// Icon legibility rails (#166): regenerate the committed contact sheets so every icon PR shows
+// them in the diff. Must run after writeIcons above so the sheets reflect the current icon set.
+await writeContactSheets(resolve("src/assets/icons"), resolve("docs"));

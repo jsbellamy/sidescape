@@ -28,9 +28,44 @@ These drive backdrops, sprite accents, and scene props so each Theme is coherent
 - Combat sprites: shared 32×32 grid; Boss-class sprites may be 48×48.
 - Backdrops: horizontally tileable 160×120 strips.
 - Scene props: approximately 24×20.
-- Use a 1px master-ramp dark outline, base, one shadow, and one highlight.
+- Use a 1px master-ramp dark outline, base, highlight, and one accent — the same ≤5-color budget
+  as the Icon legibility rules below (this doc used to say "one shadow, one highlight", which
+  under-counted and let 12-color icons ship; ≤5 total is the one number that matters).
 - No anti-aliasing or partial alpha; designated ghost/wisp art may use one translucency step.
 - Draw silhouette first: assets must read in the 320px-wide window. The UI applies
   `image-rendering: pixelated`, and source art assumes it.
 
 Combat sprites are **facing inward**: player right, Monsters left, including Boss-class sprites.
+
+## Icon legibility (34×34)
+
+Design icons at native size — 34×34, never draw large and downscale. A downscaled icon reads as
+streak noise at in-game scale even when it looks fine zoomed in.
+
+Every icon PR must satisfy the rules below. Each is labeled **[lint]** (mechanically enforced by
+`src/ui/icon-assets.test.ts`, run by `npm test`) or **[sheet]** (judged by eye on the 1×
+contact sheet, `docs/icon-sheet-1x.png`, cited as PR evidence):
+
+- One dominant object per icon, filling 26–32px on the long axis. [lint: fill]
+- Prefer a side/profile silhouette over multiple overlapping objects. [sheet]
+- Structural features ≥2px wide — use `thickLine` (`scripts/art/icon-canvas.mjs`) for them;
+  single-pixel strokes are for highlights/glints only, never structural edges. [sheet]
+- ≤5 colors: outline, shadow, base, highlight, one accent. [lint: color-budget]
+- Separate adjacent parts by VALUE, not subtle hue — several zone-palette neighbors are near-
+  isovalue (e.g. forest `#3f5f50` vs `#567b5b`); pick across the ramp, not adjacent steps. [sheet]
+- One connected silhouette — no floating smoke, sparks, drips, or chains; if a detail can't be
+  ≥2px and attached to the main shape, cut it. [lint: connected]
+- Edge contrast against the panel: the silhouette's outer edge must read against `--bg-panel
+#262019` — pure ink/outline shapes sink into the panel. A dark outline is fine only around a
+  mid-or-lighter fill. [sheet]
+- 1px transparent margin: rows/columns 0 and 33 stay fully transparent, drawable art confined to
+  1..32. [lint: margin]
+- Binary alpha: every pixel is fully transparent or fully opaque, no anti-aliasing — except icons
+  named in `TRANSLUCENT_ALLOWED` (`src/ui/icon-assets.test.ts`), which may use exactly one
+  intermediate alpha value (the existing ghost/wisp exception, e.g. `shade-wisp`). [lint:
+  binary-alpha]
+- Silhouette-first, as above.
+
+New icons must be born clean under these rules — the exemption baseline
+(`src/ui/icon-lint-exemptions.ts`) only shrinks as existing icons are redrawn to comply; it never
+grows to cover a new violator.
