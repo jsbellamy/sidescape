@@ -1,13 +1,20 @@
 // @vitest-environment happy-dom
+import { LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
+import type { Monitor } from "@tauri-apps/api/window";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createTauriWindowChrome,
   DEFAULT_GEOMETRY,
   GEOMETRY_KEY,
   loadGeometry,
+  type NativeWindowPort,
   saveGeometry,
   TAURI_MAX_W,
 } from "./window-chrome";
 import { MIN_COMPACT_H, MIN_COMPACT_W } from "./window-geometry";
+import { boot } from "./boot";
+import { fixtureContent } from "../core/fixture-content";
+import { seededRng } from "../core/rng";
 
 // happy-dom's localStorage getter doesn't resolve reliably under Vitest's global-population
 // timing (same workaround as app.test.ts) — stub a plain in-memory Storage instead.
@@ -28,6 +35,75 @@ function stubLocalStorage(): Storage {
     },
   } as Storage;
 }
+
+interface FakePortInit {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactor?: number;
+  monitor: { x: number; y: number; width: number; height: number; scaleFactor?: number } | null;
+}
+
+type FakePort = NativeWindowPort & {
+  calls: { setSize: LogicalSize[]; setPosition: LogicalPosition[] };
+  setRect(rect: { x?: number; y?: number; width?: number; height?: number }): void;
+};
+
+/** A stateful native-window port: applying a logical size/position updates the physical rectangle
+ * which the next WorkspaceChrome operation reads, just like a Tauri window does. */
+function fakePort(init: FakePortInit): FakePort {
+  const scaleFactor = init.scaleFactor ?? 1;
+  let rect = { x: init.x, y: init.y, width: init.width, height: init.height };
+  const monitor: Monitor | null = init.monitor
+    ? {
+        name: null,
+        position: new PhysicalPosition(init.monitor.x, init.monitor.y),
+        size: new PhysicalSize(init.monitor.width, init.monitor.height),
+        workArea: {
+          position: new PhysicalPosition(init.monitor.x, init.monitor.y),
+          size: new PhysicalSize(init.monitor.width, init.monitor.height),
+        },
+        scaleFactor: init.monitor.scaleFactor ?? scaleFactor,
+      }
+    : null;
+  const calls = { setSize: [] as LogicalSize[], setPosition: [] as LogicalPosition[] };
+
+  return {
+    calls,
+    scaleFactor: async () => scaleFactor,
+    outerPosition: async () => new PhysicalPosition(rect.x, rect.y),
+    outerSize: async () => new PhysicalSize(rect.width, rect.height),
+    currentMonitor: async () => monitor,
+    setSize: async (size) => {
+      calls.setSize.push(size);
+      rect = { ...rect, width: size.width * scaleFactor, height: size.height * scaleFactor };
+    },
+    setPosition: async (position) => {
+      calls.setPosition.push(position);
+      rect = { ...rect, x: position.x * scaleFactor, y: position.y * scaleFactor };
+    },
+    setRect(next) {
+      rect = { ...rect, ...next };
+    },
+  };
+}
+
+function last<T>(values: T[]): T {
+  const value = values[values.length - 1];
+  if (!value) throw new Error("expected at least one native-window call");
+  return value;
+}
+
+function root(): HTMLElement {
+  return document.createElement("main");
+}
+
+beforeEach(() => {
+  vi.stubGlobal("localStorage", stubLocalStorage());
+  localStorage.clear();
+  document.body.replaceChildren();
+});
 
 describe("window-chrome module import", () => {
   it("performs no Tauri/DOM work at module scope (import alone must not throw)", async () => {
@@ -119,5 +195,220 @@ describe("loadGeometry", () => {
     const geometry = { compact: { width: 400, height: 500 }, cardHeight: 700 };
     saveGeometry(geometry);
     expect(loadGeometry()).toEqual(geometry);
+  });
+});
+
+describe("manual-check: upper-half", () => {
+  it.each([
+    { scaleFactor: 1, multiplier: 1 },
+    { scaleFactor: 2, multiplier: 2 },
+  ])(
+    "keeps the compact top edge and uses logical dimensions at $scaleFactor×",
+    async ({ scaleFactor, multiplier }) => {
+      localStorage.setItem(
+        GEOMETRY_KEY,
+        JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+      );
+      const port = fakePort({
+        x: 200 * multiplier,
+        y: 100 * multiplier,
+        width: 320 * multiplier,
+        height: 460 * multiplier,
+        scaleFactor,
+        monitor: { x: 0, y: 0, width: 1920 * multiplier, height: 1200 * multiplier, scaleFactor },
+      });
+      const appRoot = root();
+      const chrome = createTauriWindowChrome(appRoot, port);
+
+      chrome.setCardCount(1);
+      await chrome.settled();
+
+      expect(appRoot.dataset["anchor"]).toBe("top");
+      expect(appRoot.style.getPropertyValue("--card-h")).toBe("400px");
+      expect(last(port.calls.setSize)).toMatchObject({ width: 320, height: 868 });
+      expect(last(port.calls.setPosition)).toMatchObject({ x: 200, y: 100 });
+    },
+  );
+});
+
+describe("manual-check: lower-half", () => {
+  it("grows upward and preserves the compact widget's bottom edge", async () => {
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+    );
+    const port = fakePort({
+      x: 200,
+      y: 700,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const appRoot = root();
+    const chrome = createTauriWindowChrome(appRoot, port);
+
+    chrome.setCardCount(1);
+    await chrome.settled();
+
+    expect(appRoot.dataset["anchor"]).toBe("bottom");
+    expect(last(port.calls.setSize)).toMatchObject({ width: 320, height: 868 });
+    expect(last(port.calls.setPosition)).toMatchObject({ x: 200, y: 292 });
+    expect(last(port.calls.setPosition).y + last(port.calls.setSize).height).toBe(1160);
+  });
+});
+
+describe("manual-check: narrow-monitor", () => {
+  it("converts monitor widths to logical capacity and clamps an over-ask to one card", async () => {
+    const single = createTauriWindowChrome(
+      root(),
+      fakePort({
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 460,
+        monitor: { x: 0, y: 0, width: 600, height: 1200 },
+      }),
+    );
+    const doubled = createTauriWindowChrome(
+      root(),
+      fakePort({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 920,
+        scaleFactor: 2,
+        monitor: { x: 0, y: 0, width: 1280, height: 2400, scaleFactor: 2 },
+      }),
+    );
+    const noMonitor = createTauriWindowChrome(
+      root(),
+      fakePort({ x: 0, y: 0, width: 320, height: 460, monitor: null }),
+    );
+
+    await expect(single.getCapacity()).resolves.toBe(1);
+    await expect(doubled.getCapacity()).resolves.toBe(2);
+    await expect(noMonitor.getCapacity()).resolves.toBe(3);
+
+    const port = fakePort({
+      x: 0,
+      y: 0,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 600, height: 1200 },
+    });
+    const chrome = createTauriWindowChrome(root(), port);
+    chrome.setCardCount(3);
+    await chrome.settled();
+    expect(last(port.calls.setSize)).toMatchObject({ width: 320 });
+  });
+});
+
+describe("manual-check: resize", () => {
+  it("persists a closed resize and re-derives card height from an open resize", async () => {
+    const closedPort = fakePort({
+      x: 200,
+      y: 100,
+      width: 400,
+      height: 500,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const closedChrome = createTauriWindowChrome(root(), closedPort);
+    closedChrome.setCardCount(1);
+    await closedChrome.settled();
+    expect(loadGeometry().compact).toEqual({ width: 400, height: 500 });
+
+    localStorage.clear();
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+    );
+    const openPort = fakePort({
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const openChrome = createTauriWindowChrome(root(), openPort);
+    openChrome.setCardCount(1);
+    await openChrome.settled();
+    openPort.setRect({ height: 1000 });
+    openChrome.setCardCount(2);
+    await openChrome.settled();
+    expect(loadGeometry().cardHeight).toBe(532);
+  });
+});
+
+describe("manual-check: close/reopen", () => {
+  it.each([
+    { name: "top", y: 100 },
+    { name: "bottom", y: 700 },
+  ])(
+    "restores compact geometry and recomputes the $name anchor from the live position",
+    async ({ y, name }) => {
+      localStorage.setItem(
+        GEOMETRY_KEY,
+        JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+      );
+      const port = fakePort({
+        x: 200,
+        y,
+        width: 320,
+        height: 460,
+        monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+      });
+      const appRoot = root();
+      const chrome = createTauriWindowChrome(appRoot, port);
+
+      chrome.setCardCount(1);
+      await chrome.settled();
+      expect(appRoot.dataset["anchor"]).toBe(name);
+
+      chrome.setCardCount(0);
+      await chrome.settled();
+      expect(last(port.calls.setSize)).toMatchObject({ width: 320, height: 460 });
+      expect(appRoot.dataset["anchor"]).toBeUndefined();
+
+      chrome.setCardCount(1);
+      await chrome.settled();
+      expect(appRoot.dataset["anchor"]).toBe(name);
+    },
+  );
+});
+
+describe("manual-check: relaunch", () => {
+  it("starts closed at stored compact geometry despite an expanded plugin-restored rect", async () => {
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 340, height: 480 }, cardHeight: 520 }),
+    );
+    const port = fakePort({
+      x: 200,
+      y: 100,
+      width: 920,
+      height: 1100,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const appRoot = root();
+    let chrome: ReturnType<typeof createTauriWindowChrome> | undefined;
+    const running = boot(appRoot, {
+      content: fixtureContent,
+      rng: seededRng(1),
+      now: () => 0,
+      createChrome: (mountedRoot) => {
+        chrome = createTauriWindowChrome(mountedRoot, port);
+        return chrome;
+      },
+      closeWindow: async () => {},
+      reload: () => {},
+      confirm: () => true,
+    });
+
+    await chrome?.settled();
+
+    expect(last(port.calls.setSize)).toMatchObject({ width: 340, height: 480 });
+    expect(appRoot.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
+    expect(appRoot.dataset["anchor"]).toBeUndefined();
+    running.dispose();
   });
 });
