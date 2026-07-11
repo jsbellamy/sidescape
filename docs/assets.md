@@ -120,6 +120,12 @@ in `src/styles.css`), no structural change.
 
 ## Item icons (#78)
 
+> **Superseded in part by #143**: every weapon/armour icon this section's pack-sourced crops
+> covered (daggers, swords, bows, staves, chain/leather bodies, helms, the goblin charm) is now
+> original art painted by `scripts/art/equipment-icons.mjs` — see "Equipment icon redraw (#143)"
+> below. This section's mapping table stays as history for the superseded bytes; food/bar/coin
+> icons are untouched by #143 and still map as below.
+
 Every `ItemDef` (`src/data/index.ts`) has a required `icon` key resolved through
 `src/ui/icons.ts` (mirrors `sprites.ts`'s pattern), rendered at `image-rendering: pixelated`
 like the combat sprites. Two CC0 packs cover the full 33-item set (weapons, armour, food,
@@ -177,6 +183,11 @@ materials, currency, the goblin charm accessory):
 
 ## Gap-fill mace/sword icons (Combat Depth #102)
 
+> **Superseded by #143**: all seven files below are now original art painted by
+> `scripts/art/equipment-icons.mjs`, sharing one flanged-mace / crossguard-blade silhouette per
+> class across the metal-tier ladder — see "Equipment icon redraw (#143)" below. Kept here as
+> history for the superseded bytes.
+
 `bronze-mace`, `iron-mace`, `steel-mace`, `mithril-mace`, `iron-sword`, `steel-sword`, and
 `mithril-sword` (`src/assets/icons/*.png`) are **hand-drawn placeholder pixel art**, generated for
 this wave (a simple flanged-mace-head / crossguard-blade silhouette, 34×34, tier-tinted to match
@@ -201,6 +212,13 @@ the mace/sword icons above.
 
 ## Gem and jewelry icons (Crafting wave, #117)
 
+> **Equipment half superseded by #143**: `sapphire-amulet`, `sapphire-ring`, `emerald-amulet`,
+> `emerald-ring`, `ruby-amulet`, and `ruby-ring` are now original art painted by
+> `scripts/art/equipment-icons.mjs`, reusing the exact gem colors sampled from the `sapphire`/
+> `emerald`/`ruby` Material icons below so jewelry still reads as the same gem — see "Equipment
+> icon redraw (#143)". The `sapphire`/`emerald`/`ruby` Material icons themselves are untouched by
+> #143 (companion issue #144's scope) and still map as below.
+
 `sapphire`, `emerald`, `ruby`, `sapphire-amulet`, `sapphire-ring`, `emerald-amulet`,
 `emerald-ring`, `ruby-amulet`, and `ruby-ring` (`src/assets/icons/*.png`) are **hand-drawn
 placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art
@@ -214,6 +232,12 @@ the same gem at a glance. Swapping these for sourced CC0 crops is a follow-up, n
 this wave's content pass — same note as the mace/sword, raw-catch, and hide/leather icons above.
 
 ## Hide and leather/ranged-armour icons (Crafting wave, #116)
+
+> **Equipment half superseded by #143**: `leather-chaps`, `leather-coif`, `hard-leather-body`,
+> `hard-leather-chaps`, and `hard-leather-coif` (plus `leather-body`, mapped under "Item icons
+> (#78)" above) are now original art painted by `scripts/art/equipment-icons.mjs` — see "Equipment
+> icon redraw (#143)". `cowhide`/`wolf-hide`/`thick-hide` (Materials) are untouched by #143
+> (companion issue #144's scope) and still map as below.
 
 `cowhide`, `wolf-hide`, `thick-hide`, `leather-chaps`, `leather-coif`, `hard-leather-body`,
 `hard-leather-chaps`, and `hard-leather-coif` (`src/assets/icons/*.png`) are **hand-drawn
@@ -302,3 +326,66 @@ workspace-tab icon is the matching `skill-*.png`, resolved through `tabIcon` in 
 reusing `skillIcon`'s own URL for those four keys — see that file's `tabIcons` registry. This wave
 is assets + registries only; rendering the Skills panel and three-card workspace navigation with
 these icons is `#135`/`#136`.
+
+## Equipment icon redraw (#143)
+
+All 47 weapon/armour/jewelry-and-accessory `ItemDef.icon` files are original art painted through
+the `#139` pipeline, replacing their previous pack-sourced or hand-drawn-placeholder bytes byte-
+for-byte at the same filenames — `src/ui/icons.ts` and every `ItemDef` needed zero code changes.
+Sources live in `scripts/art/equipment-icons.mjs` (paint functions on the shared
+`scripts/art/icon-canvas.mjs` 34×34 canvas) and regenerate byte-stably via `npm run art`, which now
+calls `writeEquipmentIcons` alongside the pre-existing `writeIcons` (skill/tab, #131) and contact-
+sheet steps.
+
+**Weapons (24):** `bronze-dagger`/`iron-dagger`/`steel-dagger`/`mithril-dagger`,
+`bronze-sword`/`iron-sword`/`steel-sword`/`mithril-sword`,
+`bronze-mace`/`iron-mace`/`steel-mace`/`mithril-mace`,
+`shortbow`/`iron-shortbow`/`steel-shortbow`/`mithril-shortbow`,
+`apprentice-staff`/`iron-staff`/`steel-staff`/`mithril-staff`, `shade-blade`, and
+`bronze-arrow`/`steel-arrow`/`mithril-arrow`.
+
+**Armour (16):** `iron-chainbody`/`steel-chainbody`/`mithril-chainbody`,
+`iron-full-helm`/`steel-full-helm`/`mithril-full-helm`,
+`bronze-shield`/`iron-kiteshield`/`steel-kiteshield`/`mithril-kiteshield`,
+`leather-body`/`leather-chaps`/`leather-coif`, and
+`hard-leather-body`/`hard-leather-chaps`/`hard-leather-coif`.
+
+**Jewelry + accessory (7):** `sapphire-amulet`/`emerald-amulet`/`ruby-amulet`,
+`sapphire-ring`/`emerald-ring`/`ruby-ring`, and `goblin-charm`.
+
+- **One metal-tier palette.** `scripts/art/palettes.mjs` adds `metalTiers` — a single
+  shadow/base/highlight triple per bronze/iron/steel/mithril tier — used identically by every
+  paint function across daggers, swords, maces, bow tips, staff fittings, arrowheads,
+  chainbodies, helms, and kiteshields, so the tier ladder reads as the same progression
+  everywhere (see the 1× contact-sheet crop below). Neither the master ramp nor the zone
+  sub-palettes carry a metal identity, so this is a small, fixed, code-level addition — always
+  referenced from `palettes.mjs`, never re-spelled per icon.
+- **Shared silhouette per class.** Each class has one paint function parameterized by `tier`
+  (`paintDagger`, `paintSword`, `paintMace`, `paintBow`, `paintStaff`, `paintArrow`,
+  `paintChainbody`, `paintFullHelm`, `paintKiteshield`) — geometry never changes between tiers,
+  only the tier ramp does, so e.g. every dagger tier is visibly the same dagger.
+- **`shade-blade`** uses the crypt zone sub-palette (`zonePalettes.crypt`) instead of the metal
+  ramp — the Bone Crypt boss's own drop theme, per the issue.
+- **`hard-leather-*` reads tougher than `leather-*`.** Both share one silhouette per slot
+  (`paintLeatherBody`/`paintLeatherLegs`/`paintLeatherHood`), but `hard-leather-*` uses a darker
+  ramp (`hardLeatherRamp` vs. `leatherRamp` in `scripts/art/equipment-icons.mjs`) plus a small
+  stud accent overlay — the existing placeholder intent, kept.
+- **Jewelry keeps one-gem-shape-per-tier.** `scripts/art/palettes.mjs` adds `gemTiers`, sampled
+  directly from the existing `sapphire`/`emerald`/`ruby` Material icons' own pixel colors (not
+  new hex values), so the amulet/ring pair for each gem reads as the same gem the companion #144
+  issue's Material icons use.
+- **`goblin-charm`** is an original fang-and-cord design built entirely from already-pinned
+  master-ramp and `town` zone-palette colors — no new hex value introduced.
+
+**Icon QA rails (#166).** Every file above passes the mechanical lint (`src/ui/icon-assets.test.ts`)
+clean — `≤5` opaque colors, one connected silhouette, the 1px transparent margin, an opaque
+bounding box ≥26px on the long axis, and binary alpha — with **zero exemption entries** remaining
+in `src/ui/icon-lint-exemptions.ts` for any of the 47 filenames (the file previously carried
+exemptions for `bronze-arrow`, `bronze-dagger`, `bronze-shield`, `bronze-sword`, `emerald-amulet`,
+`emerald-ring`, `goblin-charm`, `iron-chainbody`, `iron-dagger`, `iron-kiteshield`,
+`iron-shortbow`, `iron-staff`, `iron-sword`, `mithril-arrow`, `mithril-chainbody`,
+`mithril-dagger`, `mithril-full-helm`, `mithril-kiteshield`, `mithril-shortbow`, `mithril-staff`,
+`mithril-sword`, `ruby-amulet`, `ruby-ring`, `sapphire-amulet`, `sapphire-ring`, `shade-blade`,
+`shortbow`, `steel-arrow`, `steel-chainbody`, `steel-dagger`, `steel-full-helm`,
+`steel-kiteshield`, `steel-shortbow`, `steel-staff`, `steel-sword` — all deleted by this issue).
+`docs/icon-sheet-1x.png`/`-4x.png` are regenerated by the same `npm run art` run.
