@@ -82,11 +82,43 @@ body {
 .management-card {
   flex: 0 0 300px; /* CARD_W */
   width: 300px;
-  background: var(--bg);
+  /* #133: scroll shadows are extra background layers merged onto #138's opaque fill (first
+     background-size/background-attachment entry), not a replacement for it. The two `local`
+     linear-gradient layers scroll with the content and mask the shadow when there's nothing to
+     reveal at that edge; the two `scroll` radial-gradient layers stay fixed to the viewport and
+     paint the actual shadow, so together they only show a shadow where content is hidden by
+     overflow. */
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--bg) 30%, transparent), linear-gradient(transparent, var(--bg) 70%),
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 55%), transparent),
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 55%), transparent);
+  background-position:
+    center top,
+    center bottom,
+    center top,
+    center bottom;
+  background-repeat: no-repeat;
+  background-size:
+    100% 24px,
+    100% 24px,
+    100% 20px,
+    100% 20px;
+  background-attachment: local, local, scroll, scroll;
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   overflow-y: auto;
+}
+.management-card::-webkit-scrollbar {
+  width: 6px;
+}
+.management-card::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.management-card::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 .management-card-header {
   display: flex;
