@@ -30,5 +30,8 @@ export default defineConfig(async () => ({
     // Default environment for core suites (pure TS, no DOM). UI tests opt into
     // happy-dom per-file via a `// @vitest-environment happy-dom` docblock.
     environment: "node",
+    // Playwright owns the browser-degraded smoke specs in e2e/; keep Vitest's
+    // existing colocated suites from ever collecting that directory.
+    include: ["src/**/*.test.ts"],
   },
 }));
