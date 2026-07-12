@@ -4,6 +4,7 @@ import { currentMonitor, getCurrentWindow, type Monitor } from "@tauri-apps/api/
 import type { WorkspaceChrome } from "./workspace-chrome";
 import {
   CARD_GAP,
+  CARD_W,
   DEFAULT_CARD_H,
   DEFAULT_COMPACT_H,
   DEFAULT_COMPACT_W,
@@ -136,6 +137,12 @@ export function createTauriWindowChrome(
   let anchor: "top" | "bottom" | null = null;
   const stored = loadGeometry();
   let queue: Promise<void> = Promise.resolve();
+  // False only until the very first `applyCards` call completes. Guards the closed → closed
+  // capture case below: on a fresh boot, `currentSize` is whatever `tauri-plugin-window-state`
+  // restored — which can be an arbitrary (possibly card-expanded) rect with no relationship to the
+  // user's compact-width/height preference — not a rect our own code produced. Every later call,
+  // by contrast, reflects our own prior `setSize` plus, at most, a real user drag on top of it.
+  let appliedOnce = false;
 
   async function applyCards(nextCardCount: number): Promise<void> {
     const scaleFactor = await port.scaleFactor();
@@ -155,24 +162,54 @@ export function createTauriWindowChrome(
     const wasOpen = cardCount > 0;
     const willOpen = nextCardCount > 0;
 
-    if (!wasOpen && willOpen) {
-      // closed → open: the native window currently *is* the compact rect — persist its real size so
-      // a user's widen/heighten while closed survives relaunch.
-      stored.compact = {
-        width: clamp(currentSize.width, MIN_COMPACT_W, TAURI_MAX_W),
-        height: Math.max(MIN_COMPACT_H, currentSize.height),
-      };
-      saveGeometry(stored);
-    } else if (wasOpen && willOpen) {
-      // open → open: the user's current expanded height, minus the compact floor + gap, is their new
-      // card-height preference.
+    // Capture geometry from the window's *actual current* rect — set by whatever the last
+    // `setSize` call was, but possibly since widened/heightened by the user dragging a native
+    // resize handle — before we (re)compute and re-apply a rect from `stored`. Previously this
+    // only ran on the very first closed → open transition, so any live resize made while a card
+    // stayed open (open → open) or made just before closing (open → closed) was silently dropped:
+    // the next `workspaceRect` call re-applied the stale stored size, snapping the window back.
+    //
+    // Width: `workspaceRect` sets `width = Math.max(compact.width, rowWidth)` (`#compact-widget`
+    // never stretches to a wider card row — see its own CSS comment). Reversing that formula, the
+    // *previous* card row's own width (`wasRowWidth`, 0 while closed) is the only part of the
+    // current width the row could explain by itself; whenever the live width exceeds it, the
+    // excess is unambiguously the compact widget's own width, safe to persist regardless of
+    // whether cards are open, opening, or closing this call.
+    const capacity = monitorRect ? workspaceCapacity(monitorRect.width) : 3;
+    const wasEffective = Math.min(Math.max(0, cardCount), capacity);
+    const wasRowWidth =
+      wasEffective > 0 ? wasEffective * CARD_W + Math.max(0, wasEffective - 1) * CARD_GAP : 0;
+    // Trust `currentSize` as a real geometry signal once a card was already open (`wasOpen`) or
+    // we're opening one now (`willOpen`) — both already-established-safe cases (the latter is
+    // #138's original closed → open capture) — or once our own code has run before at least once
+    // (`appliedOnce`). The one untrusted case is the very first call ever while staying closed:
+    // see `appliedOnce`'s own comment above.
+    const trustCurrentSize = wasOpen || willOpen || appliedOnce;
+    let changed = false;
+    if (trustCurrentSize && currentSize.width > wasRowWidth) {
+      stored.compact.width = clamp(currentSize.width, MIN_COMPACT_W, TAURI_MAX_W);
+      changed = true;
+    }
+
+    // Height: while no card was showing, the live height *is* the compact height directly. While a
+    // card was showing, #138 clamps the compact widget's own height to its stored floor — height
+    // changes are the user's card-row preference (`cardHeight`) instead. This applies whether we're
+    // about to open further, stay open, or close, so a drag-then-close no longer loses cardHeight.
+    if (!wasOpen) {
+      if (trustCurrentSize) {
+        stored.compact.height = Math.max(MIN_COMPACT_H, currentSize.height);
+        changed = true;
+      }
+    } else {
       const compactVisibleH = Math.max(MIN_COMPACT_H, stored.compact.height);
       const derivedCardH = currentSize.height - compactVisibleH - CARD_GAP;
       if (Number.isFinite(derivedCardH) && derivedCardH > 0) {
         stored.cardHeight = derivedCardH;
-        saveGeometry(stored);
+        changed = true;
       }
     }
+    if (changed) saveGeometry(stored);
+    appliedOnce = true;
 
     const result = workspaceRect({
       current: {
@@ -195,10 +232,15 @@ export function createTauriWindowChrome(
     anchor = result.anchor;
 
     // Drive the DOM composition from the resolved geometry: the anchor orders the management row
-    // relative to the compact widget, and the live (clamped) card height sizes the row so the CSS
-    // union matches the native window exactly.
+    // relative to the compact widget, the live (clamped) card height sizes the row so the CSS union
+    // matches the native window exactly, and `--compact-w` sizes `#compact-widget` itself — every
+    // call, open or closed, since (unlike the card row) the compact widget's width never depends on
+    // card state. Previously nothing set this at all: `#compact-widget` was a hardcoded 320px in
+    // styles.css, so a user's widened window never visibly widened the card, regardless of what
+    // `stored.compact.width` held.
     if (result.anchor) root.dataset["anchor"] = result.anchor;
     else delete root.dataset["anchor"];
+    root.style.setProperty("--compact-w", `${stored.compact.width}px`);
     if (willOpen) {
       const compactVisibleH = Math.max(MIN_COMPACT_H, stored.compact.height);
       root.style.setProperty("--card-h", `${result.height - compactVisibleH - CARD_GAP}px`);

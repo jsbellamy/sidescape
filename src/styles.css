@@ -49,6 +49,7 @@ body {
   overflow: hidden;
   background: transparent;
   --card-h: 600px; /* DEFAULT_CARD_H; overridden per-open by main.ts */
+  --compact-w: 320px; /* MIN_COMPACT_W / DEFAULT_COMPACT_W; overridden by window-chrome.ts's applyCards */
 }
 #app[data-anchor="top"] #management-row {
   order: 1;
@@ -67,7 +68,13 @@ body {
 }
 
 #compact-widget {
-  width: 320px; /* MIN_COMPACT_W / DEFAULT_COMPACT_W; does not stretch to the wider card row (#138 §4) */
+  /* #137 follow-up: tracks the live/stored compact width via `--compact-w` (set by
+     window-chrome.ts's applyCards on every call, mirroring how `--card-h` already sizes the
+     management row) — the fallback is MIN_COMPACT_W / DEFAULT_COMPACT_W for contexts that never
+     set it (browser-degraded WorkspaceChrome, DOM-only tests). Still does not stretch to a wider
+     card row (#138 §4): its width is independent of `#management-row`'s own, per `workspaceRect`'s
+     `width = Math.max(compact.width, rowWidth)`. */
+  width: var(--compact-w, 320px);
   flex: 1 1 auto;
   min-height: 0;
   background: var(--bg);
