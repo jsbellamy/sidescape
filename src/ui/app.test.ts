@@ -1517,6 +1517,139 @@ describe("Character panel (#26)", () => {
   });
 });
 
+describe("Character panel collapsible sections (#134)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function sectionHeader(root: HTMLElement, id: string) {
+    return root.querySelector<HTMLButtonElement>(`button[data-section="${id}"]`);
+  }
+
+  function sectionBody(root: HTMLElement, id: string) {
+    return root.querySelector<HTMLElement>(`[data-section-body="${id}"]`);
+  }
+
+  it("all six sections start open (aria-expanded true, body not hidden) on a fresh mount", () => {
+    const { root } = mount(1);
+    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
+      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
+      expect(sectionBody(root, id)?.hidden).toBe(false);
+    }
+  });
+
+  it("clicking a section header collapses its body and sets aria-expanded to false", () => {
+    const { root } = mount(1);
+    sectionHeader(root, "gear")?.click();
+
+    expect(sectionHeader(root, "gear")?.getAttribute("aria-expanded")).toBe("false");
+    expect(sectionBody(root, "gear")?.hidden).toBe(true);
+    // Other sections are unaffected.
+    expect(sectionHeader(root, "potion")?.getAttribute("aria-expanded")).toBe("true");
+    expect(sectionBody(root, "potion")?.hidden).toBe(false);
+  });
+
+  it("clicking a collapsed section's header re-expands it", () => {
+    const { root } = mount(1);
+    sectionHeader(root, "spells")?.click();
+    sectionHeader(root, "spells")?.click();
+
+    expect(sectionHeader(root, "spells")?.getAttribute("aria-expanded")).toBe("true");
+    expect(sectionBody(root, "spells")?.hidden).toBe(false);
+  });
+
+  it("#style-row, #autoeat-row, and the auto-sell checkbox stay visible regardless of section state", () => {
+    const { root } = mount(1);
+    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
+      sectionHeader(root, id)?.click();
+    }
+
+    expect(root.querySelector<HTMLElement>("#style-row")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#autoeat-row")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#autosell-duplicates-row")?.hidden).toBe(false);
+  });
+
+  it("collapsed state survives a remount via localStorage (sidescape-ui-panels)", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
+    sectionHeader(root, "quiver")?.click();
+
+    const root2 = document.createElement("main");
+    mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
+    root2.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
+
+    expect(sectionHeader(root2, "quiver")?.getAttribute("aria-expanded")).toBe("false");
+    expect(sectionBody(root2, "quiver")?.hidden).toBe(true);
+    // Untouched sections still default open on the remount.
+    expect(sectionHeader(root2, "gear")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("a stored panel value with no charSections key loads with every section open (legacy tolerance)", () => {
+    localStorage.setItem("sidescape-ui-panels", JSON.stringify({ left: false, tab: "character" }));
+    const { root } = mount(1);
+
+    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
+      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
+    }
+  });
+
+  it("a malformed charSections value loads with every section open and never throws", () => {
+    localStorage.setItem(
+      "sidescape-ui-panels",
+      JSON.stringify({ left: false, tab: "character", charSections: "not-an-object" }),
+    );
+
+    expect(() => mount(1)).not.toThrow();
+    const { root } = mount(1);
+    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
+      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
+    }
+  });
+
+  it("toggling a section persists the full panel state, including the current tab, to localStorage", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
+    sectionHeader(root, "pets")?.click();
+
+    const raw = localStorage.getItem("sidescape-ui-panels");
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw as string);
+    expect(parsed.tab).toBe("character");
+    expect(parsed.charSections).toMatchObject({ pets: false });
+  });
+
+  it("toggling a section changes nothing in the Engine Snapshot (presentation-only)", () => {
+    const { engine, root } = mount(1);
+    const before = engine.snapshot();
+
+    sectionHeader(root, "gear")?.click();
+
+    expect(engine.snapshot()).toEqual(before);
+  });
+
+  it("ticks while a section is collapsed keep its content current — expanding after a level-up/equip shows fresh data", () => {
+    const { engine, root, app } = mount(1);
+    sectionHeader(root, "gear")?.click(); // collapse Gear while hidden
+    expect(sectionBody(root, "gear")?.hidden).toBe(true);
+
+    engine.selectMonster("dummy");
+    grindFor(engine, "bronze-sword");
+    engine.equip("bronze-sword");
+    app.render();
+
+    sectionHeader(root, "gear")?.click(); // re-expand
+    expect(root.querySelector('[data-slot="weapon"]')?.getAttribute("data-item")).toBe(
+      "bronze-sword",
+    );
+  });
+});
+
 describe("Spell picker (#101)", () => {
   function spellButtons(root: HTMLElement) {
     return [...root.querySelectorAll<HTMLButtonElement>("#spell-row button")];

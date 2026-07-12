@@ -198,13 +198,38 @@ type TabId = (typeof TABS)[number]["id"];
 interface PanelState {
   left: boolean;
   tab: TabId | null;
+  /** Character-section open flags (#134); a missing/malformed value means all open. */
+  charSections?: Record<string, boolean>;
 }
 
 const PANEL_STORAGE_KEY = "sidescape-ui-panels";
 const CLOSED_PANELS: PanelState = { left: false, tab: null };
 
+/** The six collapsible Character tab-panel sections (#134), in on-screen order — the combat-style
+ * row, auto-eat row, and auto-sell checkbox are compact one-line settings and stay always visible,
+ * so they never get a section id. */
+const CHAR_SECTION_IDS = ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"] as const;
+type CharSectionId = (typeof CHAR_SECTION_IDS)[number];
+
 function isTabId(value: unknown): value is TabId {
   return TABS.some((t) => t.id === value);
+}
+
+function isCharSectionId(value: unknown): value is CharSectionId {
+  return CHAR_SECTION_IDS.some((id) => id === value);
+}
+
+/** Sanitizes a possibly-malformed `charSections` value from localStorage down to known section ids
+ * with boolean values only — never throws, and anything that isn't a plain object (or holds no
+ * recognizable entries) degrades to `{}`, which reads as "all open" everywhere a missing key is
+ * checked (see `PanelState.charSections`'s own doc comment). */
+function sanitizeCharSections(value: unknown): Record<string, boolean> {
+  if (typeof value !== "object" || value === null) return {};
+  const result: Record<string, boolean> = {};
+  for (const [key, open] of Object.entries(value as Record<string, unknown>)) {
+    if (isCharSectionId(key) && typeof open === "boolean") result[key] = open;
+  }
+  return result;
 }
 
 /** The persisted panel state, or both panels closed if unset/malformed or localStorage is
@@ -217,7 +242,8 @@ function loadPanelState(): PanelState {
     if (typeof parsed !== "object" || parsed === null) return CLOSED_PANELS;
     const left = (parsed as { left?: unknown }).left === true;
     const tabRaw = (parsed as { tab?: unknown }).tab;
-    return { left, tab: isTabId(tabRaw) ? tabRaw : null };
+    const charSections = sanitizeCharSections((parsed as { charSections?: unknown }).charSections);
+    return { left, tab: isTabId(tabRaw) ? tabRaw : null, charSections };
   } catch {
     return CLOSED_PANELS;
   }
@@ -277,6 +303,11 @@ export function mountApp(
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
   // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
   let selectedBankItem: string | null = null;
+  // Character tab-panel section open/closed flags (#134) — purely presentational, persisted
+  // alongside left/tab in the same `sidescape-ui-panels` value. A missing key means that section is
+  // open (the interface's own documented default), so this only ever needs to record explicit
+  // closes/reopens, not a full map of every section id.
+  let charSectionsState: Record<string, boolean> = restoredPanels.charSections ?? {};
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -319,7 +350,46 @@ export function mountApp(
     windowChrome.setCardCount(count);
     // Retain only tab preference; legacy open flags must not survive a relaunch.
     // Legacy key remains writable for a smooth upgrade, but its open flags are ignored at boot.
-    savePanelState({ left: leftOpen, tab: rightTab ?? restoredPanels.tab });
+    savePanelState(buildPanelState());
+  }
+
+  /** A missing key means open — the interface's own documented default (#134). */
+  function isCharSectionOpen(id: string): boolean {
+    return charSectionsState[id] !== false;
+  }
+
+  /** `charSectionsState` for persistence: `undefined` (dropped by `JSON.stringify`) while no
+   * section has ever been toggled, so a save untouched by #134 round-trips through the exact same
+   * `{ left, tab }` shape it always has — only writes the extra key once there's something to say. */
+  function persistedCharSections(): Record<string, boolean> | undefined {
+    return Object.keys(charSectionsState).length > 0 ? charSectionsState : undefined;
+  }
+
+  /** Builds the full `PanelState` to persist — `exactOptionalPropertyTypes` means `charSections`
+   * must be omitted outright rather than set to `undefined` when there's nothing to say (see
+   * `persistedCharSections`'s own doc comment). */
+  function buildPanelState(): PanelState {
+    const charSections = persistedCharSections();
+    const base = { left: leftOpen, tab: rightTab ?? restoredPanels.tab };
+    return charSections ? { ...base, charSections } : base;
+  }
+
+  /** Mirrors one Character section's open/closed flag onto its header/body DOM — `aria-expanded` on
+   * the header, `hidden` on the body — without touching any renderer (#134: renderers keep painting
+   * into hidden section bodies unconditionally, same as they already do into hidden tab-panels). */
+  function applyCharSectionDom(id: string): void {
+    const open = isCharSectionOpen(id);
+    const header = root.querySelector<HTMLButtonElement>(`button[data-section="${id}"]`);
+    const body = root.querySelector<HTMLElement>(`[data-section-body="${id}"]`);
+    if (header) header.setAttribute("aria-expanded", String(open));
+    if (body) body.hidden = !open;
+  }
+
+  /** Applies every Character section's persisted open/closed flag to the DOM — called once on
+   * mount, after the restored `charSectionsState` is known, so a reload shows collapsed sections
+   * collapsed immediately rather than flashing open first. */
+  function applyCharSections(): void {
+    for (const id of CHAR_SECTION_IDS) applyCharSectionDom(id);
   }
 
   function itemName(itemId: string): string {
@@ -1084,23 +1154,38 @@ export function mountApp(
         </div>
         <div data-tab-panel="character" class="tab-panel">
           <p class="panel-title">Character</p>
-          <div id="character-slots" class="tile-grid"></div>
-          <p id="character-totals" class="totals-row"></p>
-          <p class="panel-subtitle">Potion</p>
-          <div id="potion-slot" class="potion-slot"></div>
-          <p class="panel-subtitle">Quiver</p>
-          <div id="quiver-slot" class="potion-slot"></div>
-          <p class="panel-subtitle">Rune Pouch</p>
-          <div id="rune-pouch" class="food-slots"></div>
-          <p class="panel-subtitle">Pets</p>
-          <div id="pets-grid" class="tile-grid"></div>
+          <button class="section-header" data-section="gear" aria-expanded="true">Gear</button>
+          <div class="section-body" data-section-body="gear">
+            <div id="character-slots" class="tile-grid"></div>
+            <p id="character-totals" class="totals-row"></p>
+          </div>
+          <button class="section-header" data-section="potion" aria-expanded="true">Potion</button>
+          <div class="section-body" data-section-body="potion">
+            <div id="potion-slot" class="potion-slot"></div>
+          </div>
+          <button class="section-header" data-section="quiver" aria-expanded="true">Quiver</button>
+          <div class="section-body" data-section-body="quiver">
+            <div id="quiver-slot" class="potion-slot"></div>
+          </div>
+          <button class="section-header" data-section="rune-pouch" aria-expanded="true">
+            Rune Pouch
+          </button>
+          <div class="section-body" data-section-body="rune-pouch">
+            <div id="rune-pouch" class="food-slots"></div>
+          </div>
+          <button class="section-header" data-section="pets" aria-expanded="true">Pets</button>
+          <div class="section-body" data-section-body="pets">
+            <div id="pets-grid" class="tile-grid"></div>
+          </div>
           <div id="style-row" class="style-row">
             ${Object.entries(STYLE_LABELS)
               .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
               .join("")}
           </div>
-          <p class="panel-subtitle">Spells</p>
-          <div id="spell-row" class="spell-row"></div>
+          <button class="section-header" data-section="spells" aria-expanded="true">Spells</button>
+          <div class="section-body" data-section-body="spells">
+            <div id="spell-row" class="spell-row"></div>
+          </div>
           <div id="autoeat-row" class="style-row">
             ${Object.entries(AUTO_EAT_LABELS)
               .map(
@@ -1241,6 +1326,18 @@ export function mountApp(
   });
   engine.on("levelup", () => buildPicker()); // Fishing-Spot levelReq gates are level-driven
   engine.on("dungeon-completed", () => buildPicker()); // Area gates flip on Dungeon completion
+
+  // Character section headers (#134): one delegated listener on the whole tab-panel rather than one
+  // per header, mirroring #management-row's own closest()-based delegation below. A click anywhere
+  // that isn't a `button[data-section]` (e.g. inside a section body) is a no-op.
+  el('[data-tab-panel="character"]').addEventListener("click", (event) => {
+    const id = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-section]")
+      ?.dataset["section"];
+    if (!id) return;
+    charSectionsState = { ...charSectionsState, [id]: !isCharSectionOpen(id) };
+    applyCharSectionDom(id);
+    savePanelState(buildPanelState());
+  });
 
   el("#style-row").addEventListener("click", (event) => {
     const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
@@ -1548,6 +1645,9 @@ export function mountApp(
   // fresh install) and notifies WorkspaceChrome once up front, so the real Tauri adapter (main.ts)
   // sizes/positions the OS window to match on every mount, not just on the next toggle.
   syncPanels();
+  // Applies the restored Character-section open/closed flags (#134) once up front, same reasoning
+  // as syncPanels() above.
+  applyCharSections();
 
   return { render };
 }
