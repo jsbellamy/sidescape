@@ -1,4 +1,4 @@
-import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
+import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit, weakSpot } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
 import { validateContent } from "./validate-content";
 import { ATTACK_TYPES, AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
@@ -1578,9 +1578,25 @@ export function createEngine(
         completedDungeonIds: [...state.completedDungeonIds],
         ownedPets: [...state.ownedPets],
       },
+      // The six combat fields below are ALWAYS derived fresh from monsterDef here — never copied
+      // from a saved Snapshot (#184) — so a tampered/stale saved monster can never leak through.
       monster:
         monsterDef && fight
-          ? { id: monsterDef.id, name: monsterDef.name, hp: fight.monsterHp, maxHp: monsterDef.hp }
+          ? {
+              id: monsterDef.id,
+              name: monsterDef.name,
+              hp: fight.monsterHp,
+              maxHp: monsterDef.hp,
+              attackType: monsterDef.attackType,
+              weakSpot: weakSpot(monsterDef.def),
+              attackLevel: monsterDef.attackLevel,
+              defenceLevel: monsterDef.defenceLevel,
+              maxHit: monsterDef.maxHit,
+              attackSpeed: monsterDef.attackSpeed,
+              ...(monsterDef.weakElement !== undefined
+                ? { weakElement: monsterDef.weakElement }
+                : {}),
+            }
           : null,
       fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
       dungeon:
