@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import { writeContactSheets } from "./contact-sheet.mjs";
 import { writeIcons } from "./icons.mjs";
 import { masterPalette, materialPalettes, zonePalettes } from "./palettes.mjs";
+import { writeSpriteContactSheets } from "./sprite-contact-sheet.mjs";
+import { sprites, writeSprites } from "./sprites.mjs";
 import { hex, writePng } from "./write-png.mjs";
 const swatches = [
   ...masterPalette.map(([, color]) => color),
@@ -34,6 +36,13 @@ await writePng(
 
 // Complete deterministic production icon registry: Skills, navigation, items, and pets.
 await writeIcons(resolve("src/assets/icons"));
+
+// Complete deterministic production combat-sprite registry. Sources own their native placement;
+// the writer validates and conforms them without changing their silhouettes.
+await writeSprites(resolve("src/assets/sprites"));
+
+// Native-scale and 4x review artifacts for cast coherence and pixel diagnosis.
+await writeSpriteContactSheets(resolve("src/assets/sprites"), resolve("docs"), sprites);
 
 // Icon legibility rails (#166): regenerate the committed contact sheets so every icon PR shows
 // them in the diff. Must run after writeIcons above so the sheets reflect the current icon set.

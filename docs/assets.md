@@ -273,3 +273,21 @@ workspace-tab icon is the matching `skill-*.png`, resolved through `tabIcon` in 
 reusing `skillIcon`'s own URL for those four keys — see that file's `tabIcons` registry. This wave
 is assets + registries only; rendering the Skills panel and three-card workspace navigation with
 these icons is `#135`/`#136`.
+
+## Source-driven combat sprite pipeline (#188)
+
+The 11 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`.
+Its registry keeps the runtime ids and filenames in `src/ui/sprites.ts` unchanged while declaring
+each source's canvas and alpha policy explicitly: ten sprites use 32×32 binary-alpha canvases;
+`crypt-shade` uses the sanctioned 48×48 Boss canvas and may contain at most one intermediate alpha
+value. The writer rejects invalid sources, projects colors onto the named house ramps, reduces each
+sprite to at most 12 RGB colors, and despeckles color clusters without changing its alpha mask or
+source-authored outline geometry.
+
+The committed files under `scripts/art/sprite-sources/` are interim derivatives of the CC0 sprites
+documented in the Sprite packs sections above. They nearest-neighbor normalize the old mixed canvas
+sizes into the new native source contract while preserving the existing subject, pose, facing,
+padding, and approximate 64×64 in-app read. They are pipeline-proof assets rather than a redraw;
+#142 replaces them with the new original-art, inward-facing cast. Generated outputs live under
+`src/assets/sprites/`, and the deterministic native-scale and 4× review artifacts are
+`docs/sprite-sheet-1x.png` and `docs/sprite-sheet-4x.png`.
