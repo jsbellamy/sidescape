@@ -13,6 +13,7 @@ import type {
   GearSlot,
   PotionDef,
   PotionSlot,
+  SkillName,
   SkillSnapshot,
   Snapshot,
   SpellDef,
@@ -31,7 +32,7 @@ import {
 import { createLoadoutSlotDispatcher, loadoutSlotMarkup } from "./loadout-slot";
 import type { LoadoutSlotChooserItem } from "./loadout-slot";
 import { resolveTheme } from "./theme";
-import { itemIcon } from "./icons";
+import { itemIcon, skillIcon } from "./icons";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -871,18 +872,37 @@ export function mountApp(
     el("#gold").textContent = `🪙 ${player.gold}`;
   }
 
-  /** Renders the Skills tab panel's xp-row: one entry per Skill, in `SKILL_NAMES` order (#36) —
-   * never an inline literal, so a future Skill addition needs no change here. */
+  /** Tooltip text for one Skill cell in the icon grid (#135): capitalized name, level, floored xp,
+   * and percent-to-next-level — MAX once a Skill hits `MAX_LEVEL`, since there is no next
+   * threshold (mirrors `skillProgress`'s own MAX_LEVEL special case). */
+  function skillTooltip(skill: SkillName, s: SkillSnapshot): string {
+    const label = skill[0]?.toUpperCase() + skill.slice(1);
+    const xp = Math.floor(s.xp);
+    if (s.level >= MAX_LEVEL) return `${label}: level ${s.level} · ${xp} xp · MAX`;
+    const pct = Math.floor(skillProgress(s) * 100);
+    return `${label}: level ${s.level} · ${xp} xp · ${pct}% to ${s.level + 1}`;
+  }
+
+  /** Renders the Skills tab panel's xp-row as a RuneScape-style icon stat grid (#135, replacing
+   * the old 3-letter abbreviation chips): one cell per Skill, in `SKILL_NAMES` order (#36) — never
+   * an inline literal, so a future Skill addition needs no change here — plus a trailing Total
+   * cell (sum of all Skill levels), 12 cells total. */
   function renderXpRow(skills: Snapshot["player"]["skills"]): void {
-    el("#xp-row").innerHTML = SKILL_NAMES.map((skill) => {
+    const cells = SKILL_NAMES.map((skill) => {
       const s = skills[skill];
       const pct = Math.floor(skillProgress(s) * 100);
-      return `<div class="skill" data-skill="${skill}" title="${skill}: ${Math.floor(s.xp)} xp">
-             <span class="skill-abbr">${skill.slice(0, 3).toUpperCase()}</span>
+      return `<div class="skill" data-skill="${skill}" title="${skillTooltip(skill, s)}">
+             <img class="skill-icon pixel" src="${skillIcon(skill)}" alt="" />
              <span class="skill-level">${s.level}</span>
              <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
            </div>`;
-    }).join("");
+    });
+    const total = SKILL_NAMES.reduce((sum, skill) => sum + skills[skill].level, 0);
+    cells.push(`<div class="skill skill-total" title="Total level">
+             <span class="skill-total-label">Total</span>
+             <span class="skill-level">${total}</span>
+           </div>`);
+    el("#xp-row").innerHTML = cells.join("");
   }
 
   /** Renders the Character tab panel: worn Gear Slots as icon tiles, derived stat totals, the
