@@ -10,14 +10,24 @@ import { PNG } from "pngjs";
  *
  * #206 moved the scroll surface (and its scroll-shadow background) off `.management-card` itself
  * — which no longer scrolls as a whole ("Character never page-scrolls") — onto its `.card-scroll`
- * inner wrapper; this spec samples/scrolls `.card-scroll` accordingly, while the opaque
+ * inner wrapper; this spec samples/scrolls that wrapper accordingly, while the opaque
  * fill/border/radius/shadow checks stay on `.management-card` (unchanged by #206).
+ *
+ * #207 gave the expanded Bank/Vendor destination its own fixed shell (`.bank-page-body`) with two
+ * *more* `.card-scroll` surfaces nested inside `#card-management` (the Bank tile grid and the
+ * Vendor list) — `.card-scroll` is a shared scroll-shadow utility class, reused deliberately for
+ * all three, not a bug. This spec is specifically about the *outer* World/Workshop/Activity
+ * wrapper (the one whose scrolling is exercised by navigating to "world" below), so it targets
+ * that wrapper's own `#management-scroll` id rather than the now-ambiguous `.card-scroll` class —
+ * `:visible` filtering wouldn't be enough here since a real per-page manual check could
+ * legitimately want to assert on the Bank grid's own (also real, also `.card-scroll`) shadow
+ * surface in a future spec.
  */
 
 async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<boolean> {
-  const scroll = page.locator("#card-management .card-scroll");
+  const scroll = page.locator("#management-scroll");
   const box = await scroll.boundingBox();
-  if (!box) throw new Error("#card-management .card-scroll has no box");
+  if (!box) throw new Error("#management-scroll has no box");
 
   // Sample a 1px-tall strip a few px in from the sampled edge, centered horizontally. The
   // `farthest-side` radial gradient is a wide, flat ellipse (card-width by shadow-height), so it
@@ -56,7 +66,7 @@ async function openManagementCardWithOverflow(page: Page): Promise<void> {
   // Force deterministic overflow inside the real `.card-scroll` surface regardless of current
   // save/bank contents, so the test doesn't depend on gameplay state.
   await page.evaluate(() => {
-    const scroll = document.querySelector("#card-management .card-scroll") as HTMLElement;
+    const scroll = document.querySelector("#management-scroll") as HTMLElement;
     const filler = document.createElement("div");
     filler.id = "e2e-overflow-filler";
     filler.style.height = "2000px";
@@ -68,7 +78,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#card-management .card-scroll").evaluate((el) => (el.scrollTop = 0));
+  await page.locator("#management-scroll").evaluate((el) => (el.scrollTop = 0));
 
   expect(await edgePixelIsDark(page, "top")).toBe(false);
   expect(await edgePixelIsDark(page, "bottom")).toBe(true);
@@ -76,7 +86,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
 
 test("overflowing management card shows both shadows mid-scroll", async ({ page }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#card-management .card-scroll").evaluate((el) => {
+  await page.locator("#management-scroll").evaluate((el) => {
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
   });
 
@@ -88,9 +98,7 @@ test("overflowing management card shows only the top shadow when scrolled to bot
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page
-    .locator("#card-management .card-scroll")
-    .evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await page.locator("#management-scroll").evaluate((el) => (el.scrollTop = el.scrollHeight));
 
   expect(await edgePixelIsDark(page, "top")).toBe(true);
   expect(await edgePixelIsDark(page, "bottom")).toBe(false);
@@ -100,7 +108,7 @@ test("non-overflowing management card shows neither shadow", async ({ page }) =>
   await page.goto("/");
   await page.locator("#menu-toggle").click();
   await page.locator('[data-destination="world"]').click();
-  const scroll = page.locator("#card-management .card-scroll");
+  const scroll = page.locator("#management-scroll");
   await expect(page.locator("#card-management")).toBeVisible();
 
   const overflowing = await scroll.evaluate((el) => el.scrollHeight > el.clientHeight);
@@ -134,7 +142,7 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   await expect(header).toBeVisible();
   await expect(header).toHaveAttribute("data-tauri-drag-region", "");
 
-  const scroll = page.locator("#card-management .card-scroll");
+  const scroll = page.locator("#management-scroll");
   const barWidth = await scroll.evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width);
   expect(barWidth).toBe("6px");
 
