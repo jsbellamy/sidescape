@@ -1,5 +1,6 @@
 import { THEMES } from "../core/types";
-import type { Content, Snapshot, Theme } from "../core/types";
+import type { Snapshot, Theme } from "../core/types";
+import type { ResolvedContent } from "../core/validate-content";
 
 /** `resolveTheme`'s return: the Theme to paint, plus (when it came from an actual Area) that
  * Area's id — callers use the id to remember "last-used" across idle stretches; Smithing's `town`
@@ -26,13 +27,13 @@ export interface ResolvedTheme {
  */
 export function resolveTheme(
   snap: Snapshot,
-  content: Content,
+  content: ResolvedContent,
   lastAreaId: string | null,
 ): ResolvedTheme {
   const dungeon = snap.dungeon;
   if (dungeon) {
-    const dungeonDef = content.dungeons.find((d) => d.id === dungeon.id);
-    const area = dungeonDef && content.areas.find((a) => a.id === dungeonDef.areaId);
+    const dungeonDef = content.dungeonsById.get(dungeon.id);
+    const area = dungeonDef && content.areasById.get(dungeonDef.areaId);
     if (area) return { theme: area.theme, areaId: area.id };
   }
 
@@ -55,13 +56,11 @@ export function resolveTheme(
   // Idle: prefer the last-used Area (tracked by the caller across renders); an unrecognized id
   // (stale content, or never set) falls through to the first Area the Snapshot reports unlocked;
   // an empty/mismatched Content falls through once more to THEMES[0] so this never throws.
-  const lastArea = lastAreaId ? content.areas.find((a) => a.id === lastAreaId) : undefined;
+  const lastArea = lastAreaId ? content.areasById.get(lastAreaId) : undefined;
   if (lastArea) return { theme: lastArea.theme, areaId: lastArea.id };
 
   const firstUnlockedId = snap.areas.find((a) => a.unlocked)?.id;
-  const firstUnlockedArea = firstUnlockedId
-    ? content.areas.find((a) => a.id === firstUnlockedId)
-    : undefined;
+  const firstUnlockedArea = firstUnlockedId ? content.areasById.get(firstUnlockedId) : undefined;
   if (firstUnlockedArea) return { theme: firstUnlockedArea.theme, areaId: firstUnlockedArea.id };
 
   const fallback = content.areas[0];

@@ -6,7 +6,6 @@ import type {
   AttackType,
   AutoEatThreshold,
   CombatStyle,
-  Content,
   DropTableEntry,
   Element,
   EquipmentDef,
@@ -18,6 +17,7 @@ import type {
   Snapshot,
   SpellDef,
 } from "../core/types";
+import type { ResolvedContent } from "../core/validate-content";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
 import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
@@ -245,7 +245,7 @@ export interface MountedApp {
 export function mountApp(
   engine: Engine,
   root: HTMLElement,
-  content: Content,
+  content: ResolvedContent,
   windowChrome: WorkspaceChrome,
 ): MountedApp {
   // Presentation-only side panel state (#62): LEFT (Areas) is independent of the RIGHT tab strip,
@@ -323,12 +323,12 @@ export function mountApp(
   }
 
   function itemName(itemId: string): string {
-    return content.items.find((i) => i.id === itemId)?.name ?? itemId;
+    return content.itemsById.get(itemId)?.name ?? itemId;
   }
 
   /** Gold per unit if `itemId` can be sold from the Bank; undefined otherwise. */
   function sellPrice(itemId: string): number | undefined {
-    const def = content.items.find((i) => i.id === itemId);
+    const def = content.itemsById.get(itemId);
     return def && def.kind !== "currency" ? def.value : undefined;
   }
 
@@ -339,7 +339,7 @@ export function mountApp(
    * nothing extra for currency (its name alone is enough). Shared by the Bank detail strip and
    * the `#item-tooltip` hover panel so the two never drift apart. */
   function itemDetailLines(itemId: string): string[] {
-    const def = content.items.find((i) => i.id === itemId);
+    const def = content.itemsById.get(itemId);
     if (!def) return [];
     switch (def.kind) {
       case "equipment":
@@ -364,7 +364,7 @@ export function mountApp(
    * discipline as `itemName`/`sellPrice` above: every Content item has a real icon key, so there's
    * no placeholder branch here. */
   function iconMarkup(itemId: string): string {
-    const def = content.items.find((i) => i.id === itemId);
+    const def = content.itemsById.get(itemId);
     const src = def ? itemIcon(def.icon) : "";
     return `<img class="icon pixel" src="${src}" alt="${itemName(itemId)}" />`;
   }
@@ -385,7 +385,7 @@ export function mountApp(
 
   /** `title` tooltip text previewing a Monster's full Drop Table. */
   function dropTableTooltip(monsterId: string): string {
-    const def = content.monsters.find((m) => m.id === monsterId);
+    const def = content.monstersById.get(monsterId);
     return def ? def.dropTable.map(dropEntryLine).join("\n") : "";
   }
 
@@ -494,9 +494,7 @@ export function mountApp(
     foodSlots: FoodSlot[],
     bankItems: { itemId: string; qty: number }[],
   ): void {
-    const foodStacks = bankItems.filter(
-      (s) => content.items.find((i) => i.id === s.itemId)?.kind === "food",
-    );
+    const foodStacks = bankItems.filter((s) => content.itemsById.get(s.itemId)?.kind === "food");
     const chooserItems: LoadoutSlotChooserItem[] = foodStacks.map((s) => ({
       itemId: s.itemId,
       label: `${itemName(s.itemId)} ×${s.qty}`,
@@ -542,7 +540,7 @@ export function mountApp(
     bankItems: { itemId: string; qty: number }[],
   ): void {
     const potionStacks = bankItems.filter(
-      (s) => content.items.find((i) => i.id === s.itemId)?.kind === "potion",
+      (s) => content.itemsById.get(s.itemId)?.kind === "potion",
     );
     const chooserItems: LoadoutSlotChooserItem[] = potionStacks.map((s) => ({
       itemId: s.itemId,
@@ -550,7 +548,7 @@ export function mountApp(
     }));
     const filledInner = potionSlot
       ? (() => {
-          const def = content.items.find((i) => i.id === potionSlot.itemId);
+          const def = content.itemsById.get(potionSlot.itemId);
           const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
           return `<div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
                   <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>`;
@@ -587,7 +585,7 @@ export function mountApp(
     bankItems: { itemId: string; qty: number }[],
   ): void {
     const arrowStacks = bankItems.filter((s) => {
-      const def = content.items.find((i) => i.id === s.itemId);
+      const def = content.itemsById.get(s.itemId);
       return def?.kind === "ammo" && def.ammoType === "arrow";
     });
     const chooserItems: LoadoutSlotChooserItem[] = arrowStacks.map((s) => ({
@@ -633,11 +631,11 @@ export function mountApp(
   ): void {
     el("#rune-pouch").innerHTML = ELEMENTS.map((element) => {
       const loaded = runePouch.find((s) => {
-        const def = content.items.find((i) => i.id === s.itemId);
+        const def = content.itemsById.get(s.itemId);
         return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
       });
       const runeStacks = bankItems.filter((s) => {
-        const def = content.items.find((i) => i.id === s.itemId);
+        const def = content.itemsById.get(s.itemId);
         return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
       });
       const chooserItems: LoadoutSlotChooserItem[] = runeStacks.map((s) => ({
@@ -917,7 +915,7 @@ export function mountApp(
       return;
     }
 
-    const def = content.items.find((i) => i.id === stack.itemId);
+    const def = content.itemsById.get(stack.itemId);
     const price = sellPrice(stack.itemId);
     const sellBtn =
       price !== undefined
@@ -971,13 +969,13 @@ export function mountApp(
       .map((area) => {
         const monsterButtons = area.monsterIds
           .map((id) => {
-            const def = content.monsters.find((m) => m.id === id);
+            const def = content.monstersById.get(id);
             return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"} title="${dropTableTooltip(id)}">${def?.name ?? id}</button>`;
           })
           .join("");
         const spotButtons = area.fishingSpots
           .map(({ id, unlocked }) => {
-            const def = content.fishingSpots.find((s) => s.id === id);
+            const def = content.fishingSpotsById.get(id);
             return `<button data-spot="${id}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
           })
           .join("");
@@ -1163,9 +1161,7 @@ export function mountApp(
   engine.on("attack", (e) => {
     showSplat(el(e.actor === "player" ? "#monster-splats" : "#player-splats"), e.damage);
   });
-  engine.on("kill", (e) =>
-    feedLine(`Killed ${content.monsters.find((m) => m.id === e.monsterId)?.name}`),
-  );
+  engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));
   engine.on("drop", (e) => {
     if (e.band === "rare") triggerRareFlash();
@@ -1224,7 +1220,7 @@ export function mountApp(
   // screen-flash + toast + feed-line treatment (the issue's own "reuse the rare-drop band/flash
   // presentation" instruction), rather than inventing a parallel severity.
   engine.on("pet-dropped", (e) => {
-    const name = content.pets.find((p) => p.id === e.petId)?.name ?? e.petId;
+    const name = content.petsById.get(e.petId)?.name ?? e.petId;
     const text = `🐾 New pet: ${name}!`;
     feedLine(text, "pet-dropped");
     showToast(text);
@@ -1232,7 +1228,7 @@ export function mountApp(
   });
   engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
   engine.on("dungeon-completed", (e) => {
-    const def = content.dungeons.find((d) => d.id === e.dungeonId);
+    const def = content.dungeonsById.get(e.dungeonId);
     feedLine(`🏰 ${def?.name ?? e.dungeonId} cleared!`, "dungeon-completed");
   });
   engine.on("chest-opened", (e) => {

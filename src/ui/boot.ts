@@ -1,4 +1,5 @@
 import { createEngine } from "../core/engine";
+import { resolveContent } from "../core/validate-content";
 import type { Content, Snapshot } from "../core/types";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
@@ -85,7 +86,10 @@ export function boot(
   dispose(): void;
 } {
   const savedSnapshot = loadSave();
-  const engine = createEngine(deps.content, deps.rng, savedSnapshot);
+  // Resolved exactly once (#185): the by-id maps feed both createEngine (fine — ResolvedContent
+  // extends Content) and mountApp, so neither re-validates or re-scans Content by id.
+  const resolved = resolveContent(deps.content);
+  const engine = createEngine(resolved, deps.rng, savedSnapshot);
 
   // Offline progress (#69): simulate away-time BEFORE mounting the UI, so the pump's Ticks never
   // reach mountApp's/mountSfx's per-event handlers (they haven't subscribed yet) and never appear
@@ -104,7 +108,7 @@ export function boot(
   // Mount first: the whole composition — including the compact widget's titlebar and its
   // export/import/mute/close controls — is built inside `#app` by `mountApp` (#138 §4 moved the
   // titlebar into the opaque compact card), so the button wiring below must run after this.
-  const app = mountApp(engine, root, deps.content, deps.createChrome(root));
+  const app = mountApp(engine, root, resolved, deps.createChrome(root));
 
   const muteToggle = requireElement<HTMLButtonElement>(root, "#mute-toggle");
   mountSfx(engine, muteToggle);

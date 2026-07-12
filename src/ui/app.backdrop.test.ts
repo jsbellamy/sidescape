@@ -5,8 +5,12 @@ import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
+
+const resolvedMeadowsContent = resolveContent(meadowsContent);
+const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(3),
@@ -17,7 +21,7 @@ describe("scene backdrop (#80)", () => {
   it("prepends #backdrop, with its three parallax layers, as the first child of #scene — ahead of #sprite-row/bars/toasts in DOM order (the z-order pin, alongside styles.css's negative z-index)", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent, noopWindowChrome);
+    mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     const scene = root.querySelector<HTMLElement>("#scene");
     expect(scene).not.toBeNull();
@@ -35,7 +39,7 @@ describe("scene backdrop (#80)", () => {
   it("does not disturb #98's splat layers or sprite-wrap structure", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent, noopWindowChrome);
+    mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     expect(root.querySelector("#monster-splats")).not.toBeNull();
     expect(root.querySelector("#player-splats")).not.toBeNull();
@@ -46,7 +50,7 @@ describe("scene backdrop (#80)", () => {
   it("shows a sensible theme immediately on mount, idle, before anything is selected (no blank/flash)", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent, noopWindowChrome);
+    mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
   });
@@ -54,7 +58,7 @@ describe("scene backdrop (#80)", () => {
   it("shows the current Area's theme while fighting one of its Monsters", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, meadowsContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     engine.selectMonster("chicken"); // lumbry-meadows
     app.render();
@@ -64,7 +68,7 @@ describe("scene backdrop (#80)", () => {
   it("shows the current Area's theme while fishing one of its Fishing Spots", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, meadowsContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     engine.selectFishingSpot("shrimp-pool"); // lumbry-meadows
     app.render();
@@ -78,7 +82,7 @@ describe("scene backdrop (#80)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 5 }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
 
     // Idle, before Smithing: fixtureContent's first (and only unlocked) Area's own theme.
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
@@ -101,7 +105,7 @@ describe("scene backdrop (#80)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty: 5 }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
 
     engine.selectRecipe("test-cook");
     app.render();
@@ -116,7 +120,7 @@ describe("scene backdrop (#80)", () => {
   it("shows the host Area's theme for the whole Dungeon run, including on its dungeon-only Boss wave", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, meadowsContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     engine.enterDungeon("meadow-depths"); // hosted in lumbry-meadows, waves end on goblin-chief
     app.render();
@@ -126,7 +130,7 @@ describe("scene backdrop (#80)", () => {
   it("does not change #scene's own children count/structure beyond the new #backdrop node (320px layout budget: no new scene-height-affecting siblings)", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, meadowsContent, noopWindowChrome);
+    mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     const scene = root.querySelector<HTMLElement>("#scene");
     const ids = Array.from(scene!.children).map((c) => c.id);
