@@ -1626,11 +1626,16 @@ describe("Character panel collapsible sections (#134)", () => {
 
   it("toggling a section changes nothing in the Engine Snapshot (presentation-only)", () => {
     const { engine, root } = mount(1);
-    const before = engine.snapshot();
+    // `savedAt` is re-stamped on every snapshot() call, so drop it before comparing state.
+    const stateOf = () => {
+      const { savedAt: _savedAt, ...rest } = engine.snapshot();
+      return rest;
+    };
+    const before = stateOf();
 
     sectionHeader(root, "gear")?.click();
 
-    expect(engine.snapshot()).toEqual(before);
+    expect(stateOf()).toEqual(before);
   });
 
   it("ticks while a section is collapsed keep its content current — expanding after a level-up/equip shows fresh data", () => {
