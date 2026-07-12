@@ -10,9 +10,9 @@ import { PNG } from "pngjs";
  */
 
 async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<boolean> {
-  const card = page.locator("#right-panel");
+  const card = page.locator("#card-resources");
   const box = await card.boundingBox();
-  if (!box) throw new Error("#right-panel has no box");
+  if (!box) throw new Error("#card-resources has no box");
 
   // Sample a 1px-tall strip a few px in from the sampled edge, centered horizontally. The
   // `farthest-side` radial gradient is a wide, flat ellipse (card-width by shadow-height), so it
@@ -44,13 +44,13 @@ async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<bool
 
 async function openManagementCardWithOverflow(page: Page): Promise<void> {
   await page.goto("/");
-  await page.locator('#tab-row [data-tab="bank"]').click();
-  await expect(page.locator("#right-panel")).toBeVisible();
+  await page.locator('[data-card-launcher="resources"]').click();
+  await expect(page.locator("#card-resources")).toBeVisible();
 
   // Force deterministic overflow inside the real `.management-card` scroll surface regardless of
   // current save/bank contents, so the test doesn't depend on gameplay state.
   await page.evaluate(() => {
-    const card = document.querySelector("#right-panel") as HTMLElement;
+    const card = document.querySelector("#card-resources") as HTMLElement;
     const filler = document.createElement("div");
     filler.id = "e2e-overflow-filler";
     filler.style.height = "2000px";
@@ -62,7 +62,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#right-panel").evaluate((el) => (el.scrollTop = 0));
+  await page.locator("#card-resources").evaluate((el) => (el.scrollTop = 0));
 
   expect(await edgePixelIsDark(page, "top")).toBe(false);
   expect(await edgePixelIsDark(page, "bottom")).toBe(true);
@@ -70,7 +70,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
 
 test("overflowing management card shows both shadows mid-scroll", async ({ page }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#right-panel").evaluate((el) => {
+  await page.locator("#card-resources").evaluate((el) => {
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
   });
 
@@ -82,7 +82,7 @@ test("overflowing management card shows only the top shadow when scrolled to bot
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#right-panel").evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await page.locator("#card-resources").evaluate((el) => (el.scrollTop = el.scrollHeight));
 
   expect(await edgePixelIsDark(page, "top")).toBe(true);
   expect(await edgePixelIsDark(page, "bottom")).toBe(false);
@@ -90,8 +90,8 @@ test("overflowing management card shows only the top shadow when scrolled to bot
 
 test("non-overflowing management card shows neither shadow", async ({ page }) => {
   await page.goto("/");
-  await page.locator('#tab-row [data-tab="bank"]').click();
-  const card = page.locator("#right-panel");
+  await page.locator('[data-card-launcher="resources"]').click();
+  const card = page.locator("#card-resources");
   await expect(card).toBeVisible();
 
   const overflowing = await card.evaluate((el) => el.scrollHeight > el.clientHeight);
@@ -106,7 +106,7 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
 }) => {
   await openManagementCardWithOverflow(page);
 
-  const card = page.locator("#right-panel");
+  const card = page.locator("#card-resources");
   const style = await card.evaluate((el) => {
     const computed = getComputedStyle(el);
     return {
@@ -121,7 +121,7 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   expect(style.borderWidth).toBe("1px");
   expect(style.boxShadow).not.toBe("none");
 
-  const header = page.locator("#right-panel .management-card-header");
+  const header = page.locator("#card-resources .management-card-header");
   await expect(header).toBeVisible();
   await expect(header).toHaveAttribute("data-tauri-drag-region", "");
 

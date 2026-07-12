@@ -17,24 +17,26 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   }
   await page.screenshot({ path: `${screenshots}/compact.png`, fullPage: true });
 
-  // #136 will replace the navigation DOM. Update this open-a-card step with that change.
-  await page.locator('#tab-row [data-tab="bank"]').click();
+  // #136: the three-card launcher row replaces the old LEFT arrow + nine-tab RIGHT strip. The
+  // Resources launcher opens with its default internal tab (Bank) already selected.
+  await page.locator('[data-card-launcher="resources"]').click();
 
   // Smoke 2: Tauri calls reject in a browser, but the UI stays usable. The expected
   // console.error from that rejected native call is deliberately allowed; page crashes are not.
   await expect(page.locator("#management-row")).toBeVisible();
-  await expect(page.locator("#right-panel")).toBeVisible();
+  await expect(page.locator("#card-resources")).toBeVisible();
   await expect(page.locator("#app")).not.toHaveAttribute("data-anchor");
   expect(pageErrors).toEqual([]);
   await page.screenshot({ path: `${screenshots}/panel-open.png`, fullPage: true });
 
-  // #154 deliberately closes cards on a fresh boot while retaining the saved tab preference under
-  // `sidescape-ui-panels`. The maintainer authorized this as the #155 reload-open-card exception.
+  // #136 deliberately closes cards on a fresh boot while retaining the selected internal tab
+  // under `sidescape-ui-workspace-v2` (never an open-card list — see WorkspaceState's own doc
+  // comment in app.ts).
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("sidescape-ui-panels")))
-    .toBe(JSON.stringify({ left: false, tab: "bank" }));
+    .poll(() => page.evaluate(() => localStorage.getItem("sidescape-ui-workspace-v2")))
+    .toBe(JSON.stringify({ version: 2, characterTab: "character", resourceTab: "bank" }));
   await page.reload();
   await expect(page.locator("#app")).toBeVisible();
   await expect(page.locator("#management-row")).toBeHidden();
-  await expect(page.locator("#right-panel")).toBeHidden();
+  await expect(page.locator("#card-resources")).toBeHidden();
 });

@@ -32,7 +32,7 @@ import {
 import { createLoadoutSlotDispatcher, loadoutSlotMarkup } from "./loadout-slot";
 import type { LoadoutSlotChooserItem } from "./loadout-slot";
 import { resolveTheme } from "./theme";
-import { itemIcon, skillIcon } from "./icons";
+import { itemIcon, skillIcon, tabIcon } from "./icons";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -172,33 +172,127 @@ function skillProgress(skill: SkillSnapshot): number {
   return (skill.xp - floor) / (ceil - floor);
 }
 
-/**
- * One entry per RIGHT-panel tab. The tab strip, click handling, and show/hide logic below are
- * generic over this list — extending the tab mechanism (Bank #25, Character #26, Smithing #28,
- * Skills #62, Cooking #115, Crafting #116, Herblore #118, Vendor #119) means adding an entry here
- * plus a matching `[data-tab-panel]` section in the `#tab-panels` markup; no other code in this
- * file needs to change. Order here is display order in the tab strip (Skills, Character, Bank,
- * Vendor, Smithing, Cooking, Crafting, Herblore, Loot Feed).
- */
-const TABS = [
-  { id: "skills", label: "Skills" },
-  { id: "character", label: "Character" },
-  { id: "bank", label: "Bank" },
-  { id: "vendor", label: "Vendor" },
-  { id: "smithing", label: "Smithing" },
-  { id: "cooking", label: "Cooking" },
-  { id: "crafting", label: "Crafting" },
-  { id: "herblore", label: "Herblore" },
-  { id: "loot", label: "Loot Feed" },
-] as const;
-type TabId = (typeof TABS)[number]["id"];
+/** The three Management Row cards (#136), in canonical DOM/display order — World, Character,
+ * Resources. Rendering always shows open cards in this order, independent of the order they were
+ * opened/activated in (see `WorkspaceState.recency`'s own doc comment below). */
+export const CARD_IDS = ["world", "character", "resources"] as const;
+export type CardId = (typeof CARD_IDS)[number];
 
-/** Presentation-only panel/tab state (#62) — localStorage only, never the Snapshot/save (same
- * boundary as the sort choice, #26, and the SFX mute preference, #20). `tab: null` means the
- * RIGHT panel is closed; the LEFT (Areas) panel is independent of it. */
+/** The Character card's two internal tabs (#136), replacing the Character/Skills entries the old
+ * nine-tab RIGHT panel used to carry as separate top-level tabs. */
+export const CHARACTER_TABS = ["character", "skills"] as const;
+export type CharacterTabId = (typeof CHARACTER_TABS)[number];
+
+/** The Resources card's seven internal tabs (#136), replacing the remaining old nine-tab RIGHT
+ * panel entries. */
+export const RESOURCE_TABS = [
+  "bank",
+  "vendor",
+  "smithing",
+  "cooking",
+  "crafting",
+  "herblore",
+  "loot",
+] as const;
+export type ResourceTabId = (typeof RESOURCE_TABS)[number];
+
+/** Display labels for the three launcher buttons, `CARD_IDS` order. */
+const CARD_LABELS: Record<CardId, string> = {
+  world: "World",
+  character: "Character",
+  resources: "Resources",
+};
+/** Display labels for the Character card's internal tab strip, `CHARACTER_TABS` order. */
+const CHARACTER_TAB_LABELS: Record<CharacterTabId, string> = {
+  character: "Character",
+  skills: "Skills",
+};
+/** Display labels for the Resources card's internal tab strip, `RESOURCE_TABS` order. */
+const RESOURCE_TAB_LABELS: Record<ResourceTabId, string> = {
+  bank: "Bank",
+  vendor: "Vendor",
+  smithing: "Smithing",
+  cooking: "Cooking",
+  crafting: "Crafting",
+  herblore: "Herblore",
+  loot: "Loot Feed",
+};
+
+function isCharacterTabId(value: unknown): value is CharacterTabId {
+  return (CHARACTER_TABS as readonly unknown[]).includes(value);
+}
+
+function isResourceTabId(value: unknown): value is ResourceTabId {
+  return (RESOURCE_TABS as readonly unknown[]).includes(value);
+}
+
+/** Presentation-only, session-only open-card state (#136) — never persisted (a relaunch always
+ * starts with every card closed, see `StoredWorkspaceStateV2`'s own doc comment). `recency` is
+ * both the open-card *set* and its LRU order, oldest -> most-recently opened/activated; rendering
+ * never reads this order — visible DOM order always follows `CARD_IDS` (World -> Character ->
+ * Resources), independent of open order. */
+interface WorkspaceState {
+  recency: CardId[];
+  characterTab: CharacterTabId;
+  resourceTab: ResourceTabId;
+}
+
+/** The shape persisted under `sidescape-ui-workspace-v2` (#136) — internal tab selections only,
+ * never the open-card set (`WorkspaceState.recency`), so a relaunch always starts compact/closed
+ * while remembering which Character/Resources tab was last selected. Presentation-only
+ * localStorage, never the Engine Snapshot/save. */
+interface StoredWorkspaceStateV2 {
+  version: 2;
+  characterTab: CharacterTabId;
+  resourceTab: ResourceTabId;
+}
+
+const WORKSPACE_STORAGE_KEY = "sidescape-ui-workspace-v2";
+const DEFAULT_STORED_WORKSPACE: StoredWorkspaceStateV2 = {
+  version: 2,
+  characterTab: "character",
+  resourceTab: "bank",
+};
+
+/** One button per `ids` entry: an icon (via `tabIcon`) plus a label, carrying `data-tab="<id>"` —
+ * shared shape for both the Character (2-button) and Resources (7-button) internal tab strips
+ * (#136 §3). Delegated click handlers resolve the id via `closest("button[data-tab]")`, so clicks
+ * on the nested `<img>`/`<span>` work same as a direct button click. */
+function tabStripMarkup<T extends string>(ids: readonly T[], labels: Record<T, string>): string {
+  return ids
+    .map(
+      (id) => `<button data-tab="${id}" title="${labels[id]}">
+      <img class="tab-icon pixel" src="${tabIcon(id)}" alt="" />
+      <span>${labels[id]}</span>
+    </button>`,
+    )
+    .join("");
+}
+
+/** The three always-available launcher buttons (#136 §2), replacing the old LEFT arrow + nine-tab
+ * RIGHT strip. Resources has no dedicated launcher icon of its own — it reuses `tabIcon("bank")`,
+ * mirroring the icon registry's own documented choice (icons.ts). Delegated click handlers resolve
+ * the id via `closest("button[data-card-launcher]")`, so clicks on the nested `<img>`/`<span>`
+ * work same as a direct button click. */
+function cardLauncherMarkup(): string {
+  return CARD_IDS.map((card) => {
+    const icon = card === "resources" ? tabIcon("bank") : tabIcon(card);
+    return `<button data-card-launcher="${card}" title="${CARD_LABELS[card]}">
+      <img class="tab-icon pixel" src="${icon}" alt="" />
+      <span>${CARD_LABELS[card]}</span>
+    </button>`;
+  }).join("");
+}
+
+/** Presentation-only panel state (#62) — localStorage only, never the Snapshot/save (same
+ * boundary as the sort choice, #26, and the SFX mute preference, #20). `left`/`tab` are legacy
+ * fields (pre-#136): they are still read tolerantly (see `loadStoredWorkspace`'s own doc comment,
+ * which recovers an initial Character/Resources tab selection from `tab` on a fresh v2 key) but
+ * are always written back as closed/null going forward — only `charSections` is still live state
+ * carried by this key today. */
 interface PanelState {
   left: boolean;
-  tab: TabId | null;
+  tab: CharacterTabId | ResourceTabId | null;
   /** Character-section open flags (#134); a missing/malformed value means all open. */
   charSections?: Record<string, boolean>;
 }
@@ -211,10 +305,6 @@ const CLOSED_PANELS: PanelState = { left: false, tab: null };
  * so they never get a section id. */
 const CHAR_SECTION_IDS = ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"] as const;
 type CharSectionId = (typeof CHAR_SECTION_IDS)[number];
-
-function isTabId(value: unknown): value is TabId {
-  return TABS.some((t) => t.id === value);
-}
 
 function isCharSectionId(value: unknown): value is CharSectionId {
   return CHAR_SECTION_IDS.some((id) => id === value);
@@ -243,8 +333,9 @@ function loadPanelState(): PanelState {
     if (typeof parsed !== "object" || parsed === null) return CLOSED_PANELS;
     const left = (parsed as { left?: unknown }).left === true;
     const tabRaw = (parsed as { tab?: unknown }).tab;
+    const tab = isCharacterTabId(tabRaw) || isResourceTabId(tabRaw) ? tabRaw : null;
     const charSections = sanitizeCharSections((parsed as { charSections?: unknown }).charSections);
-    return { left, tab: isTabId(tabRaw) ? tabRaw : null, charSections };
+    return { left, tab, charSections };
   } catch {
     return CLOSED_PANELS;
   }
@@ -253,6 +344,62 @@ function loadPanelState(): PanelState {
 function savePanelState(state: PanelState): void {
   try {
     localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // localStorage may be unavailable; the choice just won't persist.
+  }
+}
+
+/** Recovers an initial Character/Resources tab selection from the legacy `sidescape-ui-panels`
+ * key's single `tab` field (pre-#136's one-active-RIGHT-tab model) — used only as
+ * `loadStoredWorkspace`'s own fallback when the new v2 key itself is missing, never to reopen a
+ * card (a relaunch always starts every card closed, migration or not). */
+function legacyStoredWorkspace(): StoredWorkspaceStateV2 {
+  const legacyTab = loadPanelState().tab;
+  return {
+    version: 2,
+    characterTab: isCharacterTabId(legacyTab) ? legacyTab : DEFAULT_STORED_WORKSPACE.characterTab,
+    resourceTab: isResourceTabId(legacyTab) ? legacyTab : DEFAULT_STORED_WORKSPACE.resourceTab,
+  };
+}
+
+/** Tolerant load for `sidescape-ui-workspace-v2` (#136 §1): a missing key falls back to recovering
+ * an initial tab selection from the legacy `sidescape-ui-panels` key (see `legacyStoredWorkspace`),
+ * or the hardcoded default if that has nothing to recover either. A malformed top-level value
+ * (unparseable JSON, not an object, wrong `version`) gets the same legacy-or-default fallback.
+ * Once the v2 shape itself is recognized, `characterTab`/`resourceTab` are validated
+ * independently — a malformed individual tab defaults to its own hardcoded default without
+ * affecting the other, sibling field. */
+function loadStoredWorkspace(): StoredWorkspaceStateV2 {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    if (!raw) return legacyStoredWorkspace();
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      (parsed as { version?: unknown }).version !== 2
+    ) {
+      return legacyStoredWorkspace();
+    }
+    const characterTabRaw = (parsed as { characterTab?: unknown }).characterTab;
+    const resourceTabRaw = (parsed as { resourceTab?: unknown }).resourceTab;
+    return {
+      version: 2,
+      characterTab: isCharacterTabId(characterTabRaw)
+        ? characterTabRaw
+        : DEFAULT_STORED_WORKSPACE.characterTab,
+      resourceTab: isResourceTabId(resourceTabRaw)
+        ? resourceTabRaw
+        : DEFAULT_STORED_WORKSPACE.resourceTab,
+    };
+  } catch {
+    return legacyStoredWorkspace();
+  }
+}
+
+function saveWorkspaceState(stored: StoredWorkspaceStateV2): void {
+  try {
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(stored));
   } catch {
     // localStorage may be unavailable; the choice just won't persist.
   }
@@ -275,13 +422,18 @@ export function mountApp(
   content: ResolvedContent,
   windowChrome: WorkspaceChrome,
 ): MountedApp {
-  // Presentation-only side panel state (#62): LEFT (Areas) is independent of the RIGHT tab strip,
-  // where `rightTab: null` means the right panel is closed. Restored from localStorage below.
-  // Cards deliberately never restore open after relaunch.  The old key is read only to preserve
-  // its internal tab selection for a future workspace navigator, never its open flags.
-  const restoredPanels = loadPanelState();
-  let leftOpen = false;
-  let rightTab: TabId | null = null;
+  // Presentation-only workspace state (#136): up to three Management Row cards — World, Character,
+  // Resources — open via `workspace.recency` (the open-card set and its LRU order; see
+  // WorkspaceState's own doc comment above). Cards deliberately never restore open after relaunch;
+  // only the Character/Resources internal tab selections survive a reload (loadStoredWorkspace,
+  // which also recovers an initial selection from the pre-#136 `sidescape-ui-panels` key the first
+  // time the new v2 key hasn't been written yet — see legacyStoredWorkspace).
+  const storedWorkspace = loadStoredWorkspace();
+  const workspace: WorkspaceState = {
+    recency: [],
+    characterTab: storedWorkspace.characterTab,
+    resourceTab: storedWorkspace.resourceTab,
+  };
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
   // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
@@ -308,7 +460,7 @@ export function mountApp(
   // alongside left/tab in the same `sidescape-ui-panels` value. A missing key means that section is
   // open (the interface's own documented default), so this only ever needs to record explicit
   // closes/reopens, not a full map of every section id.
-  let charSectionsState: Record<string, boolean> = restoredPanels.charSections ?? {};
+  let charSectionsState: Record<string, boolean> = loadPanelState().charSections ?? {};
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -320,38 +472,83 @@ export function mountApp(
   // Presentation-only, in-memory (never the Snapshot/save), same boundary as sortKey/panelState.
   let lastAreaId: string | null = null;
 
-  /** Shows the LEFT (Areas) panel and the RIGHT panel's active tab (if any), hiding the rest;
-   * highlights the matching tab button and the left arrow. Does not itself notify WorkspaceChrome or
-   * persist — callers that change `leftOpen`/`rightTab` do that via `syncPanels` below. */
-  function renderTabs(): void {
-    el<HTMLElement>("#left-panel").hidden = !leftOpen;
-    el<HTMLButtonElement>("#left-arrow").classList.toggle("active", leftOpen);
-
-    root.querySelectorAll<HTMLButtonElement>("#tab-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["tab"] === rightTab);
-    });
+  /** Shows the open Management Row cards (World/Character/Resources) and their internal
+   * Character/Resources tab selections, hiding the rest; highlights the matching launcher and
+   * internal-tab buttons. Visible DOM order always follows `CARD_IDS` — World -> Character ->
+   * Resources — independent of `workspace.recency`'s open/activation order (#136 §1/§3). Does not
+   * itself notify WorkspaceChrome or persist — callers that change `workspace` do that via
+   * `syncWorkspace` below. */
+  function renderWorkspace(): void {
+    const open = new Set(workspace.recency);
+    for (const card of CARD_IDS) {
+      el<HTMLElement>(`#card-${card}`).hidden = !open.has(card);
+    }
+    root
+      .querySelectorAll<HTMLButtonElement>("#card-launchers button[data-card-launcher]")
+      .forEach((btn) => {
+        btn.classList.toggle("active", open.has(btn.dataset["cardLauncher"] as CardId));
+      });
+    root
+      .querySelectorAll<HTMLButtonElement>("#character-tab-strip button[data-tab]")
+      .forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset["tab"] === workspace.characterTab);
+      });
+    root
+      .querySelectorAll<HTMLButtonElement>("#resource-tab-strip button[data-tab]")
+      .forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset["tab"] === workspace.resourceTab);
+      });
     root.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      panel.hidden = panel.dataset["tabPanel"] !== rightTab;
+      const id = panel.dataset["tabPanel"];
+      if (isCharacterTabId(id)) panel.hidden = id !== workspace.characterTab;
+      else if (isResourceTabId(id)) panel.hidden = id !== workspace.resourceTab;
     });
-    el<HTMLElement>("#right-panel").hidden = rightTab === null;
     // Collapse the whole row when no card is open, so the transparent union has no phantom CARD_GAP
     // above/below the compact widget — the window is exactly compact-sized while closed.
-    el<HTMLElement>("#management-row").hidden = !leftOpen && rightTab === null;
+    el<HTMLElement>("#management-row").hidden = workspace.recency.length === 0;
   }
 
-  /** Re-renders panel visibility, notifies `WorkspaceChrome` of the new open-card *count* (the
-   * seam main.ts's real Tauri adapter resizes/anchors the transparent window from, and that #136
-   * extends from two cards to three), and persists the choice to localStorage (#62) — never the
-   * Snapshot/save. Called after every LEFT/RIGHT panel change, including the initial
-   * restore-from-localStorage on mount, so the window matches on every mount, not just the next
-   * toggle. */
-  function syncPanels(): void {
-    renderTabs();
-    const count = Number(leftOpen) + Number(rightTab !== null);
-    windowChrome.setCardCount(count);
-    // Retain only tab preference; legacy open flags must not survive a relaunch.
-    // Legacy key remains writable for a smooth upgrade, but its open flags are ignored at boot.
-    savePanelState(buildPanelState());
+  /** The single synchronization path (#136 §4): re-renders card/tab visibility, notifies
+   * `WorkspaceChrome` of the new open-card *count* exactly once (the seam main.ts's real Tauri
+   * adapter resizes/anchors the transparent window from), and persists the Character/Resources tab
+   * selections to `sidescape-ui-workspace-v2` — never the open-card set, and never the Engine
+   * Snapshot/save. Every workspace change goes through this one function: launchers, internal tabs,
+   * card close, LRU eviction, transparent-glass close, Escape, and the initial boot sync (called
+   * once up front with zero cards open). */
+  function syncWorkspace(): void {
+    renderWorkspace();
+    windowChrome.setCardCount(workspace.recency.length);
+    saveWorkspaceState({
+      version: 2,
+      characterTab: workspace.characterTab,
+      resourceTab: workspace.resourceTab,
+    });
+  }
+
+  /** Opens `card` if closed — evicting the LRU-oldest open card first while at
+   * `WorkspaceChrome.getCapacity()` for the current monitor — or closes it if already open (#136
+   * §2). Closing runs fully synchronously through `syncWorkspace()` despite the `async` signature:
+   * a JS async function's body runs synchronously up to its first `await`, and the closing branch
+   * returns before ever reaching one. */
+  async function toggleCard(card: CardId): Promise<void> {
+    if (workspace.recency.includes(card)) {
+      workspace.recency = workspace.recency.filter((c) => c !== card);
+      syncWorkspace();
+      return;
+    }
+    const capacity = await windowChrome.getCapacity();
+    while (workspace.recency.length >= capacity) workspace.recency = workspace.recency.slice(1);
+    workspace.recency = [...workspace.recency, card];
+    syncWorkspace();
+  }
+
+  /** Moves an already-open card to the recency tail (most-recently-activated) without opening,
+   * closing, or reordering anything visually — internal-tab clicks call this so a later LRU
+   * eviction reflects real recent activity, not just launcher clicks (#136 §2's "activating an
+   * already-open card... moves it to the recency tail" rule). A no-op if `card` isn't open. */
+  function activateCard(card: CardId): void {
+    if (!workspace.recency.includes(card)) return;
+    workspace.recency = [...workspace.recency.filter((c) => c !== card), card];
   }
 
   /** A missing key means open — the interface's own documented default (#134). */
@@ -368,10 +565,12 @@ export function mountApp(
 
   /** Builds the full `PanelState` to persist — `exactOptionalPropertyTypes` means `charSections`
    * must be omitted outright rather than set to `undefined` when there's nothing to say (see
-   * `persistedCharSections`'s own doc comment). */
+   * `persistedCharSections`'s own doc comment). `left`/`tab` are always written closed/null now
+   * (#136 retired the open-card meaning they used to carry); `sidescape-ui-workspace-v2` is the
+   * live workspace-state key going forward — see `loadStoredWorkspace`. */
   function buildPanelState(): PanelState {
     const charSections = persistedCharSections();
-    const base = { left: leftOpen, tab: rightTab ?? restoredPanels.tab };
+    const base: PanelState = { left: false, tab: null };
     return charSections ? { ...base, charSections } : base;
   }
 
@@ -1096,84 +1295,16 @@ export function mountApp(
     <div id="flash-overlay"></div>
     <div id="item-tooltip" class="item-tooltip" hidden></div>
     <div id="management-row" class="management-row">
-    <section id="left-panel" class="side-panel management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Areas</p><button class="card-close" data-close-left title="Close Areas">✕</button></header>
+    <section id="card-world" class="side-panel management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>World</p><button class="card-close" data-card-close="world" title="Close World">✕</button></header>
       <section id="picker"></section>
     </section>
-    <section id="right-panel" class="side-panel management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Management</p><button class="card-close" data-close-right title="Close panel">✕</button></header>
-      <div id="tab-panels">
-    <div data-right-panels></div>
+    <section id="card-character" class="side-panel management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Character</p><button class="card-close" data-card-close="character" title="Close Character">✕</button></header>
+      <div id="character-tab-strip" class="card-tab-strip">
+        ${tabStripMarkup(CHARACTER_TABS, CHARACTER_TAB_LABELS)}
       </div>
-    </section>
-    </div>
-    <section id="compact-widget">
-    <header id="titlebar" data-tauri-drag-region>
-      <span data-tauri-drag-region>SideScape</span>
-      <div id="titlebar-controls">
-        <button id="export-save" title="Export save to clipboard">📤</button>
-        <button id="import-save" title="Import save from clipboard">📥</button>
-        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊</button>
-        <button id="close-btn" title="Quit">✕</button>
-      </div>
-    </header>
-    <div id="import-panel" hidden>
-      <p>Paste a save below, then Apply. This overwrites your current save.</p>
-      <textarea id="import-textarea" rows="4"></textarea>
-      <p id="import-error" hidden></p>
-      <div id="import-actions">
-        <button id="import-apply">Apply</button>
-        <button id="import-cancel">Cancel</button>
-      </div>
-    </div>
-    <div id="main-column">
-      <div id="chrome-row">
-        <button id="left-arrow" data-toggle-left title="Areas">◂</button>
-        <span id="gold"></span>
-      </div>
-      <section id="scene">
-        <div id="backdrop" aria-hidden="true">
-          <div class="layer-sky"></div>
-          <div class="layer-mid"></div>
-          <div class="layer-near"></div>
-          <div class="backdrop-overlay"></div>
-          <div id="activity-prop" hidden></div>
-        </div>
-        <div id="toast-container"></div>
-        <div id="sprite-row">
-          <div id="monster-sprite-wrap" class="sprite-wrap">
-            <img id="monster-sprite" class="sprite pixel" alt="" hidden />
-            <div id="monster-splats" class="splat-layer"></div>
-          </div>
-          <div id="player-sprite-wrap" class="sprite-wrap">
-            <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
-            <div id="player-splats" class="splat-layer"></div>
-          </div>
-        </div>
-        <p id="dungeon-header" hidden></p>
-        <p id="monster-name"></p>
-        <p id="monster-stats" hidden></p>
-        <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
-        <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
-        <div id="food-slots" class="food-slots"></div>
-      </section>
-      <p id="ticker"></p>
-      <section id="loot-strip" hidden>
-        <ul id="loot-strip-items"></ul>
-        <button id="loot-all-btn" data-loot-all>Loot all</button>
-      </section>
-      <div id="tab-row" class="tab-row">
-        ${TABS.map((tab) => `<button data-tab="${tab.id}">${tab.label}</button>`).join("")}
-      </div>
-    </div>
-    </section>
-    <template id="right-panel-template"><div id="tab-panels">
-        <div data-tab-panel="skills" class="tab-panel">
-          <p class="panel-title">Skills</p>
-          <section id="xp-row"></section>
-        </div>
         <div data-tab-panel="character" class="tab-panel">
-          <p class="panel-title">Character</p>
           <button class="section-header" data-section="gear" aria-expanded="true">Gear</button>
           <div class="section-body" data-section-body="gear">
             <div id="character-slots" class="tile-grid"></div>
@@ -1218,6 +1349,15 @@ export function mountApp(
             Auto-sell duplicate gear
           </label>
         </div>
+        <div data-tab-panel="skills" class="tab-panel">
+          <section id="xp-row"></section>
+        </div>
+    </section>
+    <section id="card-resources" class="side-panel management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Resources</p><button class="card-close" data-card-close="resources" title="Close Resources">✕</button></header>
+      <div id="resource-tab-strip" class="card-tab-strip">
+        ${tabStripMarkup(RESOURCE_TABS, RESOURCE_TAB_LABELS)}
+      </div>
         <div data-tab-panel="bank" class="tab-panel">
           <p class="panel-title">
             <span id="bank-header"></span>
@@ -1251,13 +1391,68 @@ export function mountApp(
         </div>
         <div data-tab-panel="loot" class="tab-panel">
           <ul id="feed"></ul>
-      </div></template>
-    </div>`;
-  const rightTemplate = root.querySelector<HTMLTemplateElement>("#right-panel-template");
-  const rightCard = root.querySelector<HTMLElement>("#right-panel");
-  if (!rightTemplate || !rightCard) throw new Error("management card template missing");
-  rightCard.append(rightTemplate.content.cloneNode(true));
-  rightTemplate.remove();
+        </div>
+    </section>
+    </div>
+    <section id="compact-widget">
+    <header id="titlebar" data-tauri-drag-region>
+      <span data-tauri-drag-region>SideScape</span>
+      <div id="titlebar-controls">
+        <button id="export-save" title="Export save to clipboard">📤</button>
+        <button id="import-save" title="Import save from clipboard">📥</button>
+        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊</button>
+        <button id="close-btn" title="Quit">✕</button>
+      </div>
+    </header>
+    <div id="import-panel" hidden>
+      <p>Paste a save below, then Apply. This overwrites your current save.</p>
+      <textarea id="import-textarea" rows="4"></textarea>
+      <p id="import-error" hidden></p>
+      <div id="import-actions">
+        <button id="import-apply">Apply</button>
+        <button id="import-cancel">Cancel</button>
+      </div>
+    </div>
+    <div id="main-column">
+      <div id="chrome-row">
+        <span id="gold"></span>
+      </div>
+      <section id="scene">
+        <div id="backdrop" aria-hidden="true">
+          <div class="layer-sky"></div>
+          <div class="layer-mid"></div>
+          <div class="layer-near"></div>
+          <div class="backdrop-overlay"></div>
+          <div id="activity-prop" hidden></div>
+        </div>
+        <div id="toast-container"></div>
+        <div id="sprite-row">
+          <div id="monster-sprite-wrap" class="sprite-wrap">
+            <img id="monster-sprite" class="sprite pixel" alt="" hidden />
+            <div id="monster-splats" class="splat-layer"></div>
+          </div>
+          <div id="player-sprite-wrap" class="sprite-wrap">
+            <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+            <div id="player-splats" class="splat-layer"></div>
+          </div>
+        </div>
+        <p id="dungeon-header" hidden></p>
+        <p id="monster-name"></p>
+        <p id="monster-stats" hidden></p>
+        <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
+        <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
+        <div id="food-slots" class="food-slots"></div>
+      </section>
+      <p id="ticker"></p>
+      <section id="loot-strip" hidden>
+        <ul id="loot-strip-items"></ul>
+        <button id="loot-all-btn" data-loot-all>Loot all</button>
+      </section>
+      <div id="card-launchers" class="launcher-row">
+        ${cardLauncherMarkup()}
+      </div>
+    </div>
+    </section>`;
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
   // the Monster's land on the player's; fires during engine.tick() itself, not the following
@@ -1401,41 +1596,67 @@ export function mountApp(
     }
   });
 
-  // Right tab strip (#62): clicking an inactive tab opens the RIGHT panel showing it (switching
-  // away from whichever other tab was open, if any); clicking the already-active tab closes the
-  // panel. At most one RIGHT tab is ever open, mirroring the pre-#62 "one active tab" behavior.
-  el("#tab-row").addEventListener("click", (event) => {
-    const tab = (event.target as HTMLElement).dataset["tab"] as TabId | undefined;
-    if (tab) {
-      rightTab = rightTab === tab ? null : tab;
-      syncPanels();
-    }
+  // Three-card launcher row (#136 §2): clicking a closed card's launcher opens it (evicting the
+  // LRU-oldest open card first if already at WorkspaceChrome.getCapacity()); clicking an open
+  // card's launcher closes it. `closest` resolves the click through nested `<img>`/`<span>` clicks,
+  // not just a direct button hit.
+  el("#card-launchers").addEventListener("click", (event) => {
+    const card = (event.target as HTMLElement).closest<HTMLButtonElement>(
+      "button[data-card-launcher]",
+    )?.dataset["cardLauncher"] as CardId | undefined;
+    if (card) void toggleCard(card);
   });
 
-  // Left arrow (#62): toggles the Areas panel independently of the RIGHT tab strip — both sides
-  // may be open at once.
-  el("#left-arrow").addEventListener("click", () => {
-    leftOpen = !leftOpen;
-    syncPanels();
+  // Character card's internal tab strip (#136 §3): switches which of Character/Skills is shown
+  // inside the Character card without changing card count, position, or geometry — and moves the
+  // Character card to the recency tail if it's already open (#136 §2's "activating an already-open
+  // card" rule).
+  el("#character-tab-strip").addEventListener("click", (event) => {
+    const tab = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-tab]")
+      ?.dataset["tab"] as CharacterTabId | undefined;
+    if (!tab) return;
+    workspace.characterTab = tab;
+    activateCard("character");
+    syncWorkspace();
   });
 
+  // Resources card's internal tab strip (#136 §3): mirrors the Character tab strip above, over
+  // the seven Resources tabs.
+  el("#resource-tab-strip").addEventListener("click", (event) => {
+    const tab = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-tab]")
+      ?.dataset["tab"] as ResourceTabId | undefined;
+    if (!tab) return;
+    workspace.resourceTab = tab;
+    activateCard("resources");
+    syncWorkspace();
+  });
+
+  // Per-card close button (#136 §3): closes only that card, leaving the other open ones alone.
   el("#management-row").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.closest("[data-close-left]")) {
-      leftOpen = false;
-      syncPanels();
-    }
-    if (target.closest("[data-close-right]")) {
-      rightTab = null;
-      syncPanels();
-    }
+    const card = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-card-close]")
+      ?.dataset["cardClose"] as CardId | undefined;
+    if (!card) return;
+    workspace.recency = workspace.recency.filter((c) => c !== card);
+    syncWorkspace();
   });
+
+  // Transparent-glass click (#136 §4): clicking the bare union background (document.body itself,
+  // not any card inside it) closes every open card at once.
   document.body.addEventListener("click", (event) => {
     if (event.target === document.body) {
-      leftOpen = false;
-      rightTab = null;
-      syncPanels();
+      workspace.recency = [];
+      syncWorkspace();
     }
+  });
+
+  // Escape (#136 §4): closes the most-recently-opened/activated card only, standard card-stack
+  // behavior; a no-op while no card is open, and never touches internal tab selection.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const top = workspace.recency[workspace.recency.length - 1];
+    if (!top) return;
+    workspace.recency = workspace.recency.filter((c) => c !== top);
+    syncWorkspace();
   });
 
   el("#picker").addEventListener("click", (event) => {
@@ -1661,12 +1882,13 @@ export function mountApp(
 
   buildPicker();
   render();
-  // Applies the panel state restored from localStorage above (or the closed-both default on a
-  // fresh install) and notifies WorkspaceChrome once up front, so the real Tauri adapter (main.ts)
-  // sizes/positions the OS window to match on every mount, not just on the next toggle.
-  syncPanels();
+  // Applies the workspace state restored from localStorage above (all cards start closed; only
+  // the Character/Resources tab selections carry over) and notifies WorkspaceChrome of zero open
+  // cards once up front, so the real Tauri adapter (main.ts) sizes/positions the OS window to
+  // match on every mount, not just on the next toggle.
+  syncWorkspace();
   // Applies the restored Character-section open/closed flags (#134) once up front, same reasoning
-  // as syncPanels() above.
+  // as syncWorkspace() above.
   applyCharSections();
 
   return { render };
