@@ -177,9 +177,12 @@ body {
   padding: 8px;
 }
 
-/* A card's own scrolling body (#206): the Management card's four destination pages, and the
-   Character hub's embedded Equipment-only Bank tray — its only scrollport. Carries the scroll-
-   shadow treatment #133 used to put directly on `.management-card` (see that rule's own history):
+/* A card's own scrolling body (#206): the Management card's World/Workshop/Activity destination
+   pages (wrapped together as `#management-scroll`; the "bank" destination grew its own fixed shell
+   in #207 — see `.bank-page-body` below, which reuses this same class for its inner grid/vendor-
+   list scrollports instead of wrapping the whole page), and the Character hub's embedded
+   Equipment-only Bank tray — its only scrollport. Carries the scroll-shadow treatment #133 used to
+   put directly on `.management-card` (see that rule's own history):
    the two `local` linear-gradient layers scroll with the content and mask the shadow when there's
    nothing to reveal at that edge; the two `scroll` radial-gradient layers stay fixed to the
    viewport and paint the actual shadow. */
@@ -1332,8 +1335,104 @@ body {
   font-size: 11px;
 }
 
-#sort-row {
-  margin-bottom: 4px;
+/* The expanded Bank/Vendor destination's own fixed shell (#207): unlike the other three
+   destination pages (World/Workshop/Activity, still one shared `.card-scroll`, see
+   `#management-scroll` below), the Management card's "bank" page never scrolls as a whole — only
+   its own `.card-fixed`/`.card-scroll` children do, so search/filters/sort/detail/buy-slots stay
+   put while the tile grid scrolls. Sits alongside `#management-scroll` as a direct flex child of
+   `.management-card`, toggled by the same `[data-management-page]` sync as every other
+   destination. */
+.bank-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Same cascade-order gotcha as `.management-card[hidden]`/the Settings/Pets popovers above: an
+   author `display` rule otherwise beats the UA `[hidden]` default. */
+.bank-page-body[hidden] {
+  display: none;
+}
+
+.bank-search-row {
+  margin-top: 4px;
+}
+.bank-search-row input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* Six always-visible filter buttons (#207: All | Gear | Food | Materials | Potions | Ammo) laid
+   out 3-per-row so all six fit the 300px card with no horizontal scrolling, unlike `.style-row`'s
+   single-row flex (built for three or four short labels, not six). */
+.bank-filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+.bank-filter-row button {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 10px;
+  padding: 3px 2px;
+  cursor: pointer;
+}
+.bank-filter-row button:hover {
+  border-color: var(--accent);
+}
+.bank-filter-row button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.bank-sort-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.bank-sort-row select {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 4px;
+}
+
+/* Buy +10 Bank Slots (#207): pinned below the sticky detail strip in the Bank page's own fixed
+   footer, mirroring `.expand-bank-btn`'s look (a fixed footer control below a scrolling grid). */
+.buy-slots-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.buy-slots-btn:hover {
+  border-color: var(--accent);
+}
+.buy-slots-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Icon-tile grid (#78): shared by the Bank, Character Gear Slots, and (via #loot-strip-items'

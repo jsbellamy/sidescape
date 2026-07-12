@@ -1133,7 +1133,7 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(fullBank?.querySelector('[data-item="meat"]')).not.toBeNull(); // full Bank keeps Food
   });
 
-  it("selecting a tile in the embedded tray shows the same Equip/Sell detail strip as the full Bank, independent of the full Bank's own selection", () => {
+  it("selecting a tile in the embedded tray shows the same Equip/Sell detail strip as the full Bank, sharing the same selection (#207)", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -1148,8 +1148,10 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     const trayDetail = root.querySelector<HTMLElement>("#character-bank-detail");
     expect(trayDetail?.hidden).toBe(false);
     expect(trayDetail?.querySelector('[data-equip="bronze-sword"]')).not.toBeNull();
-    // The full Bank page's own detail strip is untouched by the tray's selection.
-    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
+    // #207: the full Bank page's own detail strip shares the selection — it's one Bank, not two.
+    const bankDetail = root.querySelector<HTMLElement>("#bank-detail");
+    expect(bankDetail?.hidden).toBe(false);
+    expect(bankDetail?.querySelector('[data-equip="bronze-sword"]')).not.toBeNull();
   });
 
   it("clicking Equip in the embedded tray equips the item via the same Engine command as the full Bank", () => {
@@ -1460,6 +1462,300 @@ describe("Bank", () => {
     expect(root.querySelector("#feed li")?.textContent).toMatch(
       /auto-sold duplicate bronze sword \(\+20g\)/i,
     );
+  });
+});
+
+describe("Expanded Bank filters, search, and Vendor mode (#207)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mixedBank() {
+    return makeSnapshot({
+      player: { gold: 500 },
+      bank: {
+        items: [
+          { itemId: "bronze-sword", qty: 1 }, // equipment
+          { itemId: "meat", qty: 3 }, // food
+          { itemId: "bar", qty: 2 }, // material
+          { itemId: "strength-potion", qty: 1 }, // potion
+          { itemId: "arrow", qty: 10 }, // ammo
+        ],
+      },
+    });
+  }
+
+  function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
+    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    return { engine, root, app };
+  }
+
+  function bankIds(root: HTMLElement) {
+    return [...root.querySelectorAll<HTMLElement>("#bank .tile")].map(
+      (tile) => tile.dataset["item"],
+    );
+  }
+
+  function clickFilter(root: HTMLElement, filter: string) {
+    root.querySelector<HTMLButtonElement>(`[data-bank-filter="${filter}"]`)?.click();
+  }
+
+  function typeSearch(root: HTMLElement, text: string) {
+    const input = root.querySelector<HTMLInputElement>("#bank-search");
+    if (!input) throw new Error("#bank-search not found");
+    input.value = text;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function setSort(root: HTMLElement, key: "kind" | "value" | "name") {
+    const select = root.querySelector<HTMLSelectElement>("#bank-sort-select");
+    if (!select) throw new Error("#bank-sort-select not found");
+    select.value = key;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("renders exactly the six always-visible filter buttons: All, Gear, Food, Materials, Potions, Ammo", () => {
+    const { root } = bankMount();
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("#bank-filter-row button")];
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "All",
+      "Gear",
+      "Food",
+      "Materials",
+      "Potions",
+      "Ammo",
+    ]);
+  });
+
+  it("the six filter buttons, the search input, the sort select, and the sticky detail/buy-slots footer all sit outside the grid's own scrolling container", () => {
+    const { root } = bankMount(mixedBank());
+    const grid = root.querySelector("#bank");
+    const gridScroll = grid?.closest(".card-scroll");
+    expect(gridScroll).not.toBeNull();
+
+    for (const outside of [
+      root.querySelector("#bank-filter-row"),
+      root.querySelector("#bank-search"),
+      root.querySelector("#bank-sort-select"),
+      root.querySelector("#bank-detail"),
+      root.querySelector("#buy-slots-btn"),
+    ]) {
+      expect(outside).not.toBeNull();
+      // None of these fixed-shell controls sit inside the same scrolling grid container.
+      expect(outside?.closest(".card-scroll")).not.toBe(gridScroll);
+    }
+  });
+
+  it("filtering to Gear/Food/Materials/Potions/Ammo shows only that kind's stacks", () => {
+    const { root } = bankMount(mixedBank());
+
+    clickFilter(root, "equipment");
+    expect(bankIds(root)).toEqual(["bronze-sword"]);
+
+    clickFilter(root, "food");
+    expect(bankIds(root)).toEqual(["meat"]);
+
+    clickFilter(root, "material");
+    expect(bankIds(root)).toEqual(["bar"]);
+
+    clickFilter(root, "potion");
+    expect(bankIds(root)).toEqual(["strength-potion"]);
+
+    clickFilter(root, "ammo");
+    expect(bankIds(root)).toEqual(["arrow"]);
+
+    clickFilter(root, "all");
+    expect(bankIds(root)).toHaveLength(5);
+  });
+
+  it("marks the active filter button, moving `active`/aria-pressed as the filter changes", () => {
+    const { root } = bankMount(mixedBank());
+    clickFilter(root, "food");
+    const foodBtn = root.querySelector<HTMLButtonElement>('[data-bank-filter="food"]');
+    const allBtn = root.querySelector<HTMLButtonElement>('[data-bank-filter="all"]');
+    expect(foodBtn?.classList.contains("active")).toBe(true);
+    expect(foodBtn?.getAttribute("aria-pressed")).toBe("true");
+    expect(allBtn?.classList.contains("active")).toBe(false);
+    expect(allBtn?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("search matches case-insensitively and trims surrounding whitespace", () => {
+    const { root } = bankMount(mixedBank());
+
+    typeSearch(root, "SWORD");
+    expect(bankIds(root)).toEqual(["bronze-sword"]);
+
+    typeSearch(root, "  meat  ");
+    expect(bankIds(root)).toEqual(["meat"]);
+
+    typeSearch(root, "");
+    expect(bankIds(root)).toHaveLength(5);
+  });
+
+  it("composes filter and search — search narrows within the active filter, kind first", () => {
+    const { root } = bankMount(mixedBank());
+    clickFilter(root, "food");
+    typeSearch(root, "sword"); // matches an Equipment item's name, but filter is Food
+
+    expect(bankIds(root)).toEqual([]);
+  });
+
+  it("selecting a tile then filtering it out of view hides the detail strip", () => {
+    const { root } = bankMount(mixedBank());
+    selectBankTile(root, "bronze-sword");
+    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(false);
+
+    clickFilter(root, "food"); // hides the Equipment tile currently selected
+    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
+  });
+
+  it("filtering the full Bank grid to hide an Equipment selection does not blank the Character tray's own detail for the same shared selection", () => {
+    const { root } = bankMount(mixedBank());
+    // Select via the full Bank grid, then filter the Bank page to Food only.
+    selectBankTile(root, "bronze-sword");
+    clickFilter(root, "food");
+    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
+
+    // The Character tray is always Equipment-only regardless of the Bank page's own filter, so its
+    // detail strip for the same shared selection must still show (#207).
+    const trayDetail = root.querySelector<HTMLElement>("#character-bank-detail");
+    expect(trayDetail?.hidden).toBe(false);
+    expect(trayDetail?.querySelector('[data-item], [data-equip="bronze-sword"]')).not.toBeNull();
+  });
+
+  it("selecting a tile in the full Bank grid also selects it in the Character tray (shared selection, #207)", () => {
+    const { root } = bankMount(mixedBank());
+    selectBankTile(root, "bronze-sword");
+
+    const trayTile = root.querySelector<HTMLButtonElement>(
+      '#character-bank-tray [data-item="bronze-sword"]',
+    );
+    expect(trayTile?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("filter and sort persist across a remount; search and selection do not (#207)", () => {
+    const engine = createEngine(fixtureContent, seededRng(1), mixedBank());
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    clickFilter(root, "food");
+    typeSearch(root, "meat");
+    selectBankTile(root, "meat");
+
+    const stored = JSON.parse(localStorage.getItem("sidescape-ui-bank-view-v1") ?? "{}");
+    expect(stored).toEqual({ version: 1, filter: "food", sort: "name" });
+
+    const root2 = document.createElement("main");
+    mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
+
+    // Filter persisted...
+    expect(
+      root2
+        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
+        ?.classList.contains("active"),
+    ).toBe(true);
+    // ...but search and selection are session-only, so a fresh mount starts blank/deselected.
+    expect(root2.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("");
+    expect(root2.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
+  });
+
+  it("falls back to the default filter/sort when localStorage holds malformed bank-view JSON", () => {
+    localStorage.setItem("sidescape-ui-bank-view-v1", "{not json");
+    const { root } = bankMount(mixedBank());
+    expect(
+      root
+        .querySelector<HTMLButtonElement>('[data-bank-filter="all"]')
+        ?.classList.contains("active"),
+    ).toBe(true);
+    expect(root.querySelector<HTMLSelectElement>("#bank-sort-select")?.value).toBe("name");
+    expect(bankIds(root)).toHaveLength(5); // mounts cleanly rather than throwing
+  });
+
+  it("search clears once the Bank Management destination closes, but the filter choice does not", async () => {
+    const engine = createEngine(fixtureContent, seededRng(1), mixedBank());
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
+    );
+
+    clickFilter(root, "food");
+    typeSearch(root, "meat");
+    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("meat");
+
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("");
+
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
+    );
+    // The filter choice is locally persisted, not session-only, so it survives the round trip.
+    expect(
+      root
+        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
+        ?.classList.contains("active"),
+    ).toBe(true);
+    expect(bankIds(root)).toEqual(["meat"]);
+  });
+
+  it("shows Gold alongside the existing used/capacity header text, updating after a slot purchase", () => {
+    const { root, engine } = bankMount({
+      player: { gold: 1500 },
+      bank: { items: [], capacity: 100 },
+    });
+    expect(root.querySelector("#bank-gold")?.textContent).toBe("🪙 1500");
+    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/100");
+
+    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click(); // price 1000 at capacity 100
+    expect(engine.snapshot().bank.capacity).toBe(110);
+    expect(engine.snapshot().player.gold).toBe(500);
+    expect(root.querySelector("#bank-gold")?.textContent).toBe("🪙 500");
+    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/110");
+  });
+
+  it("the Bank/Vendor toggle leaves the active filter, search, selection, and game state untouched", () => {
+    const { root, engine } = bankMount(mixedBank());
+    clickFilter(root, "food");
+    typeSearch(root, "meat");
+    selectBankTile(root, "meat");
+    const goldBefore = engine.snapshot().player.gold;
+    const bankBefore = engine.snapshot().bank.items;
+
+    root.querySelector<HTMLButtonElement>('[data-bankpage="vendor"]')?.click();
+    expect(root.querySelector<HTMLElement>('[data-bank-page="vendor"]')?.hidden).toBe(false);
+    root.querySelector<HTMLButtonElement>('[data-bankpage="bank"]')?.click();
+
+    expect(
+      root
+        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
+        ?.classList.contains("active"),
+    ).toBe(true);
+    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("meat");
+    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(false);
+    expect(engine.snapshot().player.gold).toBe(goldBefore);
+    expect(engine.snapshot().bank.items).toEqual(bankBefore);
+  });
+
+  it("never mutates the Engine Snapshot's own bank.items array while filtering/searching/sorting", () => {
+    const { root, engine } = bankMount(mixedBank());
+    const before = engine.snapshot().bank.items;
+    const beforeCopy = JSON.parse(JSON.stringify(before));
+
+    clickFilter(root, "equipment");
+    typeSearch(root, "sword");
+    setSort(root, "value");
+
+    expect(engine.snapshot().bank.items).toEqual(beforeCopy);
   });
 });
 
@@ -2020,13 +2316,22 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     );
   }
 
-  it("renders a Kind | Value | Name control row above the Bank list", () => {
+  /** Chooses `key` on the expanded Bank's sort `<select>` (#207: replaced the old Kind|Value|Name
+   * `#sort-row` button row) by dispatching the same `change` event a real user pick fires. */
+  function setSort(root: HTMLElement, key: "kind" | "value" | "name") {
+    const select = root.querySelector<HTMLSelectElement>("#bank-sort-select");
+    if (!select) throw new Error("#bank-sort-select not found");
+    select.value = key;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("renders a Name | Kind | Value sort select above the Bank list", () => {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    const buttons = [...root.querySelectorAll<HTMLButtonElement>("#sort-row button")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["Kind", "Value", "Name"]);
+    const options = [...root.querySelectorAll<HTMLOptionElement>("#bank-sort-select option")];
+    expect(options.map((o) => o.textContent)).toEqual(["Name", "Kind", "Value"]);
   });
 
   it("sorting by Value orders the Bank by def.value descending, ties broken by name", () => {
@@ -2034,7 +2339,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+    setSort(root, "value");
 
     // lucky-charm 100g, bronze-sword 20g, meat 3g (gold is never a Bank stack, #59).
     expect(bankIds(root)).toEqual(["lucky-charm", "bronze-sword", "meat"]);
@@ -2045,7 +2350,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>('[data-sort="kind"]')?.click();
+    setSort(root, "kind");
 
     // equipment (Bronze Sword, Lucky Charm — alphabetical) before food (Cooked Meat).
     expect(bankIds(root)).toEqual(["bronze-sword", "lucky-charm", "meat"]);
@@ -2056,19 +2361,23 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>('[data-sort="name"]')?.click();
+    setSort(root, "name");
 
     // Bronze Sword, Cooked Meat, Lucky Charm — alphabetical.
     expect(bankIds(root)).toEqual(["bronze-sword", "meat", "lucky-charm"]);
   });
 
-  it("the sort choice survives a remount via localStorage and is never written into the save", () => {
+  it("the sort choice survives a remount via localStorage (bundled with filter, #207) and is never written into the save", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
-    expect(localStorage.getItem("sidescape-ui-sort")).toBe("value");
+    setSort(root, "value");
+    expect(JSON.parse(localStorage.getItem("sidescape-ui-bank-view-v1") ?? "{}")).toEqual({
+      version: 1,
+      filter: "all",
+      sort: "value",
+    });
 
     // Simulate an app restart: a fresh mount against the same Engine reads the persisted choice.
     const root2 = document.createElement("main");
@@ -2084,7 +2393,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
+    setSort(root, "value");
     // sorted order is now: lucky-charm, bronze-sword, meat — bronze-sword sits in the middle row.
 
     selectBankTile(root, "bronze-sword");

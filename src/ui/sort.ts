@@ -18,10 +18,17 @@ export interface Stack {
 
 const SORT_STORAGE_KEY = "sidescape-ui-sort";
 
-/** equipment -> food -> material -> currency; "material" has no Content today but is named in
- * the ordering on purpose so a future Item kind slots in without touching this comparator.
- * Any kind not listed sorts last. */
-const KIND_ORDER: Record<string, number> = { equipment: 0, food: 1, material: 2, currency: 3 };
+/** equipment -> food -> potion -> ammo -> material -> currency, covering every current
+ * `ItemDef.kind` (#207 — the expanded Bank's filter set mirrors this same list minus currency,
+ * which never occupies a Bank Slot). Any kind not listed sorts last. */
+const KIND_ORDER: Record<string, number> = {
+  equipment: 0,
+  food: 1,
+  potion: 2,
+  ammo: 3,
+  material: 4,
+  currency: 5,
+};
 
 function itemDef(itemId: string, content: ResolvedContent): ItemDef | undefined {
   return content.itemsById.get(itemId);
