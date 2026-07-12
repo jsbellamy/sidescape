@@ -26,6 +26,7 @@ import { resolveProp } from "./props";
 import { resolveTheme } from "./theme";
 import { itemIcon } from "./icons";
 import { formatQty } from "./format";
+import type { WorkspaceChrome } from "./workspace-chrome";
 
 /** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
  * key order (a plain object, not guaranteed stable across engines/serialization). `amulet`/`ring`
@@ -190,17 +191,6 @@ const TABS = [
   { id: "loot", label: "Loot Feed" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
-
-/**
- * Adapter `mountApp` calls whenever a side panel opens/closes (#62). The real implementation
- * (main.ts) resizes/repositions the always-on-top Tauri window around the fixed activity core;
- * tests and the plain-browser `npm run dev` path use a noop, so the window itself is the only
- * seam — everything else in this file is plain in-page flex layout.
- */
-export interface WorkspaceChrome {
-  getCapacity(): Promise<1 | 2 | 3>;
-  setCardCount(cardCount: number): void;
-}
 
 /** Presentation-only panel/tab state (#62) — localStorage only, never the Snapshot/save (same
  * boundary as the sort choice, #26, and the SFX mute preference, #20). `tab: null` means the

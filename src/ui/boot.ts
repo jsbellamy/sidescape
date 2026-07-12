@@ -1,7 +1,7 @@
 import { createEngine } from "../core/engine";
 import type { Content, Snapshot } from "../core/types";
 import { mountApp } from "./app";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 import { mountSfx } from "./sfx";
 import {
   buildAwayCard,

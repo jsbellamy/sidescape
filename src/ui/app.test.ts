@@ -6,7 +6,7 @@ import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 
 /** A do-nothing WorkspaceChrome for tests that don't care about window resize/position (the vast
  * majority) — mirrors main.ts's real Tauri adapter's `.catch(console.error)`-guarded contract

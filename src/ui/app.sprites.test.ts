@@ -5,7 +5,7 @@ import { fixtureContent } from "../core/fixture-content";
 import { content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 import { playerSprite } from "./sprites";
 
 const noopWindowChrome: WorkspaceChrome = {
