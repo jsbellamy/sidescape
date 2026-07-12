@@ -15,7 +15,7 @@ import {
 } from "./offline-progress";
 
 const noopWindowChrome: WorkspaceChrome = {
-  getCapacity: () => Promise.resolve(3),
+  getCapacity: () => Promise.resolve(2),
   setCardCount: () => {},
 };
 

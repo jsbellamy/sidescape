@@ -11,7 +11,7 @@ import type { WorkspaceChrome } from "./workspace-chrome";
 const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
-  getCapacity: () => Promise.resolve(3),
+  getCapacity: () => Promise.resolve(2),
   setCardCount: () => {},
 };
 
@@ -32,8 +32,6 @@ function hover(el: Element): void {
 describe("Bank icon grid (#78)", () => {
   it("renders #bank as a tile-grid of icon+qty buttons, not a text list", () => {
     const { root } = mountWith({ bank: { items: [{ itemId: "meat", qty: 3 }] } });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     const bank = root.querySelector<HTMLElement>("#bank");
     expect(bank?.classList.contains("tile-grid")).toBe(true);
 
@@ -47,8 +45,6 @@ describe("Bank icon grid (#78)", () => {
 
   it("the detail strip is hidden until a tile is selected, then shows name + Sell", () => {
     const { root } = mountWith({ bank: { items: [{ itemId: "meat", qty: 3 }] } });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
 
     root.querySelector<HTMLButtonElement>('#bank .tile[data-item="meat"]')?.click();
@@ -82,8 +78,6 @@ describe("Bank icon grid (#78)", () => {
         ],
       },
     });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     root.querySelector<HTMLButtonElement>('#bank .tile[data-item="meat"]')?.click();
     expect(root.querySelector("#bank-detail .detail-name")?.textContent).toBe("Cooked Meat ×1");
 
@@ -95,8 +89,6 @@ describe("Bank icon grid (#78)", () => {
 describe("Shared #item-tooltip hover panel (#78)", () => {
   it("is hidden by default and not the native title attribute anywhere on a tile", () => {
     const { root } = mountWith({ bank: { items: [{ itemId: "meat", qty: 1 }] } });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     expect(root.querySelector<HTMLElement>("#item-tooltip")?.hidden).toBe(true);
     const tile = root.querySelector<HTMLElement>('#bank .tile[data-item="meat"]');
     expect(tile?.title).toBe("");
@@ -104,8 +96,6 @@ describe("Shared #item-tooltip hover panel (#78)", () => {
 
   it("fills and shows on a Bank tile's mouseover, hides on mouseout", () => {
     const { root } = mountWith({ bank: { items: [{ itemId: "meat", qty: 5 }] } });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     const tile = root.querySelector<HTMLElement>('#bank .tile[data-item="meat"]');
     hover(tile as Element);
 
@@ -144,8 +134,6 @@ describe("Shared #item-tooltip hover panel (#78)", () => {
 
   it("clamps its position inside the viewport rather than letting it spill off-screen", () => {
     const { root } = mountWith({ bank: { items: [{ itemId: "meat", qty: 1 }] } });
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
-
     const originalW = window.innerWidth;
     const originalH = window.innerHeight;
     Object.defineProperty(window, "innerWidth", { value: 320, configurable: true });

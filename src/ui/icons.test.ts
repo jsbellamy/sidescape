@@ -77,9 +77,8 @@ describe("skillIcon registry (#131)", () => {
   });
 });
 
-describe("tabIcon registry (#131)", () => {
+describe("tabIcon registry (#131, widened by #206's two-card redesign)", () => {
   const existingTabIds = [
-    "skills",
     "character",
     "bank",
     "vendor",
@@ -88,9 +87,11 @@ describe("tabIcon registry (#131)", () => {
     "crafting",
     "herblore",
     "loot",
+    "workshop",
+    "activity",
   ];
 
-  it("resolves 'world' plus all nine existing tab ids to a real, non-empty asset URL", () => {
+  it("resolves 'world' plus every other existing tab/destination id to a real, non-empty asset URL", () => {
     for (const tabId of ["world", ...existingTabIds]) {
       expect(() => tabIcon(tabId)).not.toThrow();
       expect(tabIcon(tabId)).toEqual(expect.any(String));

@@ -24,10 +24,10 @@ const rect = (cardCount: number, overrides = {}) =>
   });
 
 describe("workspace capacity", () => {
-  it("supports narrow, medium, and wide work areas", () => {
+  it("supports narrow and medium work areas, capping at two cards (#206: three cards no longer exist)", () => {
     expect(workspaceCapacity(307)).toBe(1);
     expect(workspaceCapacity(616)).toBe(2);
-    expect(workspaceCapacity(924)).toBe(3);
+    expect(workspaceCapacity(924)).toBe(2);
   });
 });
 
@@ -54,10 +54,10 @@ describe("workspaceRect", () => {
       width: 320,
       height: 460,
       anchor: null,
-      capacity: 3,
+      capacity: 2,
     }));
 
-  it("lays out one, two, and three cards with the compact widget centered over the card row", () => {
+  it("lays out one and two cards with the compact widget centered over the card row (#206: three cards no longer exist)", () => {
     // compactVisibleH(460) + CARD_GAP(8) + cardHeight(600) = 1068; top anchor keeps y at 200.
     expect(worked(1)).toEqual({
       x: 500,
@@ -65,7 +65,7 @@ describe("workspaceRect", () => {
       width: 320,
       height: 1068,
       anchor: "top",
-      capacity: 3,
+      capacity: 2,
     });
     // width = 2*300 + 8 = 608; x centers the 320 compact over the 608 row: 500 - (608-320)/2 = 356.
     expect(worked(2)).toEqual({
@@ -74,19 +74,9 @@ describe("workspaceRect", () => {
       width: 608,
       height: 1068,
       anchor: "top",
-      capacity: 3,
-    });
-    // width = 3*300 + 2*8 = 916; x = 500 - (916-320)/2 = 202.
-    expect(worked(3)).toEqual({
-      x: 202,
-      y: 200,
-      width: 916,
-      height: 1068,
-      anchor: "top",
-      capacity: 3,
+      capacity: 2,
     });
     expect(worked(2).width).toBe(CARD_W * 2 + CARD_GAP);
-    expect(worked(3).width).toBe(CARD_W * 3 + CARD_GAP * 2);
   });
 
   it("selects upper, lower, and deadband anchors", () => {
@@ -114,7 +104,7 @@ describe("workspaceRect", () => {
       width: 320,
       height: 1068,
       anchor: "bottom",
-      capacity: 3,
+      capacity: 2,
     });
     expect(opened.y + opened.height).toBe(1860); // bottom point unmoved
 
@@ -139,7 +129,7 @@ describe("workspaceRect", () => {
       monitor: tall,
     });
     // Closing restores the original compact rect exactly and clears the anchor.
-    expect(closed).toEqual({ x: 500, y: 1400, width: 320, height: 460, anchor: null, capacity: 3 });
+    expect(closed).toEqual({ x: 500, y: 1400, width: 320, height: 460, anchor: null, capacity: 2 });
   });
 
   it("restores a user-widened / -heightened compact size into the union", () => {

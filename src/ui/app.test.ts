@@ -7,7 +7,7 @@ import { xpForLevel } from "../core/xp";
 import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
-import { CARD_IDS, mountApp } from "./app";
+import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
 /** A do-nothing WorkspaceChrome for tests that don't care about window resize/position (the vast
@@ -16,14 +16,14 @@ import type { WorkspaceChrome } from "./workspace-chrome";
  * that specifically exercise the card-count seam (see "Workspace cards" below) pass their own spy
  * instead, to assert `setCardCount` is called with the right open-card count. */
 const noopWindowChrome: WorkspaceChrome = {
-  getCapacity: () => Promise.resolve(3),
+  getCapacity: () => Promise.resolve(2),
   setCardCount: () => {},
 };
 
-/** A WorkspaceChrome spy (#136): records every `setCardCount` call in order, with a fixed capacity
- * (3 unless overridden) for `getCapacity()`. Shared by every describe block below that needs to
+/** A WorkspaceChrome spy (#206): records every `setCardCount` call in order, with a fixed capacity
+ * (2 unless overridden) for `getCapacity()`. Shared by every describe block below that needs to
  * assert on the open-card count reported to WorkspaceChrome. */
-function spyWindowChrome(capacity: 1 | 2 | 3 = 3) {
+function spyWindowChrome(capacity: 1 | 2 = 2) {
   const calls: number[] = [];
   const chrome: WorkspaceChrome = {
     getCapacity: () => Promise.resolve(capacity),
@@ -652,82 +652,7 @@ describe("Skills panel icon grid (#135: replaces the abbreviation-chip xp-row)",
   });
 });
 
-describe("Card internal tab strips (#136 §3: Character/Skills, and the seven Resources tabs)", () => {
-  function activeTab(root: HTMLElement, stripId: string): string | undefined {
-    return root.querySelector<HTMLButtonElement>(`#${stripId} button.active`)?.dataset["tab"];
-  }
-
-  it("Character card defaults to the Character tab selected; Skills is present but hidden", () => {
-    const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="skills"]')?.hidden).toBe(true);
-    expect(activeTab(root, "character-tab-strip")).toBe("character");
-  });
-
-  it("Resources card defaults to the Bank tab selected; the other six are present but hidden", () => {
-    const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(false);
-    for (const tab of ["vendor", "smithing", "cooking", "crafting", "herblore", "loot"]) {
-      expect(root.querySelector<HTMLElement>(`[data-tab-panel="${tab}"]`)?.hidden).toBe(true);
-    }
-    expect(activeTab(root, "resource-tab-strip")).toBe("bank");
-  });
-
-  it("clicking a Character internal tab switches the visible panel and highlights it", () => {
-    const { root } = mount(1);
-    root.querySelector<HTMLButtonElement>('#character-tab-strip [data-tab="skills"]')?.click();
-
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="skills"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="character"]')?.hidden).toBe(true);
-    expect(activeTab(root, "character-tab-strip")).toBe("skills");
-  });
-
-  it("clicking a Resources internal tab switches the visible panel among all seven", () => {
-    const { root } = mount(1);
-    root.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="smithing"]')?.click();
-
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="smithing"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(true);
-    expect(activeTab(root, "resource-tab-strip")).toBe("smithing");
-  });
-
-  it("clicking a tab strip button's nested icon image or label switches the tab (delegated closest())", () => {
-    const { root } = mount(1);
-    root.querySelector<HTMLImageElement>('#character-tab-strip [data-tab="skills"] img')?.click();
-    expect(activeTab(root, "character-tab-strip")).toBe("skills");
-
-    root.querySelector<HTMLElement>('#resource-tab-strip [data-tab="vendor"] span')?.click();
-    expect(activeTab(root, "resource-tab-strip")).toBe("vendor");
-  });
-
-  it("the active internal tab persists visually across re-renders", () => {
-    const { engine, root, app } = mount(1);
-    root.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="smithing"]')?.click();
-
-    engine.tick();
-    app.render();
-
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="smithing"]')?.hidden).toBe(false);
-    expect(activeTab(root, "resource-tab-strip")).toBe("smithing");
-  });
-
-  it("existing panel content (Character, Bank, Loot Feed) still renders inside its tab panel", () => {
-    const { root } = mount(1);
-    expect(root.querySelector("#character-slots")).not.toBeNull();
-    expect(root.querySelector("#bank")).not.toBeNull();
-    expect(root.querySelector("#feed")).not.toBeNull();
-  });
-
-  it("the gold chip lives in the main column, outside any tab panel", () => {
-    const { root } = mount(1);
-    const gold = root.querySelector("#gold");
-    expect(gold).not.toBeNull();
-    expect(gold?.closest("#main-column")).not.toBeNull();
-    expect(gold?.closest("[data-tab-panel]")).toBeNull();
-  });
-});
-
-describe("Workspace cards (#136: three-card launcher navigation — World, Character, Resources)", () => {
+describe("Character hub destination nav (#206: World/Workshop/Activity nav buttons and Expand Bank)", () => {
   function mountWithChrome(chrome: WorkspaceChrome) {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
@@ -735,23 +660,23 @@ describe("Workspace cards (#136: three-card launcher navigation — World, Chara
     return { engine, root, app };
   }
 
-  function launcher(root: HTMLElement, card: string) {
-    return root.querySelector<HTMLButtonElement>(`[data-card-launcher="${card}"]`);
+  function destinationBtn(root: HTMLElement, destination: string) {
+    return root.querySelector<HTMLButtonElement>(`[data-destination="${destination}"]`);
   }
 
-  function cardHidden(root: HTMLElement, card: string): boolean | undefined {
-    return root.querySelector<HTMLElement>(`#card-${card}`)?.hidden;
+  function cardHidden(root: HTMLElement, id: string): boolean | undefined {
+    return root.querySelector<HTMLElement>(`#${id}`)?.hidden;
   }
 
-  function visibleCardIds(root: HTMLElement): string[] {
-    return [...root.querySelectorAll<HTMLElement>(".management-card")]
-      .filter((c) => !c.hidden)
-      .map((c) => c.id);
+  function pageHidden(root: HTMLElement, destination: string): boolean | undefined {
+    return root.querySelector<HTMLElement>(`[data-management-page="${destination}"]`)?.hidden;
   }
 
-  it("every card is closed on a fresh mount", () => {
+  it("both cards are closed on a fresh mount", () => {
     const { root } = mountWithChrome(noopWindowChrome);
-    for (const card of CARD_IDS) expect(cardHidden(root, card)).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(true);
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
   });
 
   it("boot sync requests zero cards exactly once when starting closed", () => {
@@ -760,164 +685,147 @@ describe("Workspace cards (#136: three-card launcher navigation — World, Chara
     expect(calls).toEqual([0]);
   });
 
-  it("clicking a closed card's launcher opens it, highlights the launcher, and reports the new count", async () => {
+  it("the menu button opens Character alone; pressing it again while either card is visible closes both", async () => {
     const { chrome, calls } = spyWindowChrome();
     const { root } = mountWithChrome(chrome);
     calls.length = 0; // ignore the initial boot-sync call
+    const menu = root.querySelector<HTMLButtonElement>("#menu-toggle");
 
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
-
+    menu?.click();
+    expect(cardHidden(root, "card-character")).toBe(false);
+    expect(cardHidden(root, "card-management")).toBe(true);
     expect(calls).toEqual([1]);
-    expect(launcher(root, "world")?.classList.contains("active")).toBe(true);
+    expect(menu?.classList.contains("active")).toBe(true);
+
+    // Open a destination too, then confirm one more menu click closes both cards at once.
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+
+    menu?.click();
+    expect(cardHidden(root, "card-character")).toBe(true);
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(menu?.classList.contains("active")).toBe(false);
   });
 
-  it("clicking an open card's launcher closes it synchronously and reports the new count", async () => {
-    const { chrome, calls } = spyWindowChrome();
-    const { root } = mountWithChrome(chrome);
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
-    calls.length = 0;
+  it("a destination click opens the Management card alongside Character at capacity 2 (nested-icon clicks resolve via closest())", async () => {
+    const { root } = mountWithChrome(noopWindowChrome); // noop chrome resolves capacity 2
+    root.querySelector<HTMLImageElement>('[data-destination="world"] img')?.click();
 
-    launcher(root, "world")?.click(); // closing needs no capacity check, so this is synchronous
-    expect(cardHidden(root, "world")).toBe(true);
-    expect(launcher(root, "world")?.classList.contains("active")).toBe(false);
-    expect(calls).toEqual([0]);
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(cardHidden(root, "card-character")).toBe(false); // both coexist at capacity 2
+    expect(pageHidden(root, "world")).toBe(false);
+    expect(pageHidden(root, "bank")).toBe(true);
+    expect(pageHidden(root, "workshop")).toBe(true);
+    expect(pageHidden(root, "activity")).toBe(true);
+    expect(destinationBtn(root, "world")?.classList.contains("active")).toBe(true);
   });
 
-  it("clicking a launcher's nested icon image or label also opens its card (delegated closest())", async () => {
+  it("selecting another destination replaces the Management card's body, without touching Character", async () => {
     const { root } = mountWithChrome(noopWindowChrome);
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "world")).toBe(false));
 
-    root.querySelector<HTMLImageElement>('[data-card-launcher="character"] img')?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
+    root.querySelector<HTMLElement>('[data-destination="workshop"] span')?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "workshop")).toBe(false));
 
-    root.querySelector<HTMLElement>('[data-card-launcher="resources"] span')?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "resources")).toBe(false));
+    expect(pageHidden(root, "world")).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(false); // still open, untouched
+    expect(destinationBtn(root, "workshop")?.classList.contains("active")).toBe(true);
   });
 
-  it("three cards can coexist at capacity 3 and always appear World -> Character -> Resources, regardless of open order", async () => {
-    const { root } = mountWithChrome(noopWindowChrome); // noop chrome resolves capacity 3
-    launcher(root, "resources")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "resources")).toBe(false));
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
+  it("at capacity 1, a destination click replaces Character outright, and Back restores it", async () => {
+    const { chrome } = spyWindowChrome(1);
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    expect(cardHidden(root, "card-character")).toBe(false);
 
-    expect(visibleCardIds(root)).toEqual(["card-world", "card-character", "card-resources"]);
+    destinationBtn(root, "activity")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(cardHidden(root, "card-character")).toBe(true); // replaced, not coexisting
+
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(cardHidden(root, "card-character")).toBe(false);
+    expect(cardHidden(root, "card-management")).toBe(true);
   });
 
-  it("opening a third card at capacity 2 evicts the LRU-oldest open card first", async () => {
-    const { chrome: chrome2 } = spyWindowChrome(2);
-    const { root } = mountWithChrome(chrome2);
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
+  it("the Management card's Back control also closes it when both cards were open (second-card close)", async () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
 
-    launcher(root, "resources")?.click(); // at capacity: world (oldest) must go first
-    await vi.waitFor(() => expect(cardHidden(root, "resources")).toBe(false));
-
-    expect(cardHidden(root, "world")).toBe(true);
-    expect(cardHidden(root, "character")).toBe(false);
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(false); // Character remains
   });
 
-  it("capacity 1 evicts every previously open card, leaving only the requested one open", async () => {
-    const { chrome: chrome1 } = spyWindowChrome(1);
-    const { root } = mountWithChrome(chrome1);
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
+  it('"Expand Bank" dispatches the bank destination', async () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
 
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
-
-    expect(cardHidden(root, "world")).toBe(true);
-    expect(visibleCardIds(root)).toEqual(["card-character"]);
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "bank")).toBe(false));
+    expect(root.querySelector<HTMLElement>("#management-title")?.textContent).toBe("Bank");
   });
 
-  it("touching an internal tab on an open card moves it to the recency tail, changing which card the next LRU eviction picks", async () => {
-    const { chrome: chrome2 } = spyWindowChrome(2);
-    const { root } = mountWithChrome(chrome2);
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
-    launcher(root, "world")?.click(); // recency: [character, world] — character is now LRU-oldest
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
-
-    // Activate Character via an internal-tab click: recency becomes [world, character].
-    root.querySelector<HTMLButtonElement>('#character-tab-strip [data-tab="skills"]')?.click();
-
-    launcher(root, "resources")?.click(); // world is now LRU-oldest, must be evicted instead
-    await vi.waitFor(() => expect(cardHidden(root, "resources")).toBe(false));
-
-    expect(cardHidden(root, "world")).toBe(true);
-    expect(cardHidden(root, "character")).toBe(false);
-  });
-
-  it("switching an internal tab does not change the reported card count or canonical DOM order", async () => {
+  it("switching destinations reports the same card count exactly once (one geometry sync per action)", async () => {
     const { chrome, calls } = spyWindowChrome();
     const { root } = mountWithChrome(chrome);
-    launcher(root, "resources")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "resources")).toBe(false));
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "world")).toBe(false));
     calls.length = 0;
 
-    root.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="smithing"]')?.click();
+    destinationBtn(root, "workshop")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "workshop")).toBe(false));
 
-    expect(calls).toEqual([2]); // syncWorkspace fires once, but the count is unchanged from before
-    expect(visibleCardIds(root)).toEqual(["card-character", "card-resources"]);
+    expect(calls).toEqual([2]); // still Character + Management, unchanged count
   });
 
-  it("selected internal tabs survive a remount while every card restarts closed", () => {
-    vi.stubGlobal("localStorage", stubLocalStorage());
-    try {
-      const engine = createEngine(fixtureContent, seededRng(1));
-      const root1 = document.createElement("main");
-      mountApp(engine, root1, resolveContent(fixtureContent), noopWindowChrome);
-      root1.querySelector<HTMLButtonElement>('#character-tab-strip [data-tab="skills"]')?.click();
-      root1.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="vendor"]')?.click();
+  it("stable canonical Character -> Management DOM order, regardless of which is open", async () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    const domOrder = () =>
+      [...root.querySelectorAll<HTMLElement>(".management-card")].map((c) => c.id);
+    expect(domOrder()).toEqual(["card-character", "card-management"]);
 
-      const root2 = document.createElement("main");
-      mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
-
-      expect(root2.querySelector<HTMLElement>('[data-tab-panel="skills"]')?.hidden).toBe(false);
-      expect(root2.querySelector<HTMLElement>('[data-tab-panel="vendor"]')?.hidden).toBe(false);
-      for (const card of CARD_IDS) expect(cardHidden(root2, card)).toBe(true);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "world")).toBe(false));
+    expect(domOrder()).toEqual(["card-character", "card-management"]); // order never changes
   });
 
-  it("the picker, XP row, and style/auto-eat controls still work from their new homes", async () => {
+  it("the picker, XP row, and style/auto-eat controls still work from the Character hub / World destination", async () => {
     const { engine, root } = mountWithChrome(noopWindowChrome);
-    launcher(root, "world")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "world")).toBe(false));
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "world")).toBe(false));
+
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     expect(engine.snapshot().monster?.id).toBe("dummy");
     expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
 
-    launcher(root, "character")?.click();
-    await vi.waitFor(() => expect(cardHidden(root, "character")).toBe(false));
     root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
     expect(engine.snapshot().player.combatStyle).toBe("accurate");
     root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
     expect(engine.snapshot().player.autoEatThreshold).toBe(0);
 
-    root.querySelector<HTMLButtonElement>('#character-tab-strip [data-tab="skills"]')?.click();
     expect(root.querySelector('[data-skill="attack"]')).not.toBeNull();
+  });
+
+  it("the Bank|Vendor toggle switches the Management card's bank-destination body", async () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() => expect(pageHidden(root, "bank")).toBe(false));
+
+    expect(root.querySelector<HTMLElement>('[data-bank-page="bank"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-bank-page="vendor"]')?.hidden).toBe(true);
+
+    root.querySelector<HTMLButtonElement>('[data-bankpage="vendor"]')?.click();
+    expect(root.querySelector<HTMLElement>('[data-bank-page="vendor"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-bank-page="bank"]')?.hidden).toBe(true);
+    expect(root.querySelector("#vendor-list")).not.toBeNull();
   });
 });
 
-describe("Workspace persistence (#136 §1: sidescape-ui-workspace-v2, tolerant load)", () => {
-  function withStubStorage(fn: () => void): void {
-    vi.stubGlobal("localStorage", stubLocalStorage());
-    try {
-      fn();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  }
-
+describe("Workspace state is session-only (#206: stale sidescape-ui-workspace-v2/-panels keys are ignored)", () => {
   function mountFresh() {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
@@ -925,80 +833,75 @@ describe("Workspace persistence (#136 §1: sidescape-ui-workspace-v2, tolerant l
     return { engine, root };
   }
 
-  it("a fresh mount with no stored state writes the hardcoded default and never an open-card list", () => {
-    withStubStorage(() => {
-      mountFresh();
-      const raw = localStorage.getItem("sidescape-ui-workspace-v2");
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw as string);
-      expect(parsed).toEqual({ version: 2, characterTab: "character", resourceTab: "bank" });
-      expect(parsed.recency).toBeUndefined();
-    });
-  });
-
-  it("malformed JSON under the v2 key falls back to defaults without throwing", () => {
-    withStubStorage(() => {
-      localStorage.setItem("sidescape-ui-workspace-v2", "{not json");
+  it("never writes sidescape-ui-workspace-v2 any more", () => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
       const { root } = mountFresh();
-      expect(
-        root.querySelector<HTMLButtonElement>("#character-tab-strip button.active")?.dataset["tab"],
-      ).toBe("character");
-      expect(
-        root.querySelector<HTMLButtonElement>("#resource-tab-strip button.active")?.dataset["tab"],
-      ).toBe("bank");
-    });
+      root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+      expect(localStorage.getItem("sidescape-ui-workspace-v2")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
-  it("a malformed individual tab defaults independently, keeping the sibling field's valid stored value", () => {
-    withStubStorage(() => {
+  it("ignores a stale v2 value left by a pre-#206 build — both cards still start closed", () => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
       localStorage.setItem(
         "sidescape-ui-workspace-v2",
-        JSON.stringify({ version: 2, characterTab: 42, resourceTab: "vendor" }),
+        JSON.stringify({ version: 2, characterTab: "skills", resourceTab: "vendor" }),
       );
       const { root } = mountFresh();
-      expect(
-        root.querySelector<HTMLButtonElement>("#character-tab-strip button.active")?.dataset["tab"],
-      ).toBe("character"); // malformed -> its own default
-      expect(
-        root.querySelector<HTMLButtonElement>("#resource-tab-strip button.active")?.dataset["tab"],
-      ).toBe("vendor"); // valid sibling untouched
-    });
+      expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
+      expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
-  it("recovers an initial Character tab from the legacy sidescape-ui-panels key when the v2 key is missing, without reopening any card", () => {
-    withStubStorage(() => {
+  it("ignores a stale legacy sidescape-ui-panels value too", () => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
       localStorage.setItem("sidescape-ui-panels", JSON.stringify({ left: true, tab: "skills" }));
       const { root } = mountFresh();
-
-      expect(
-        root.querySelector<HTMLButtonElement>("#character-tab-strip button.active")?.dataset["tab"],
-      ).toBe("skills");
-      for (const card of CARD_IDS) {
-        expect(root.querySelector<HTMLElement>(`#card-${card}`)?.hidden).toBe(true);
-      }
-    });
+      expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
+      expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
-  it("recovers an initial Resources tab from the legacy key too", () => {
-    withStubStorage(() => {
-      localStorage.setItem("sidescape-ui-panels", JSON.stringify({ left: false, tab: "smithing" }));
-      const { root } = mountFresh();
-      expect(
-        root.querySelector<HTMLButtonElement>("#resource-tab-strip button.active")?.dataset["tab"],
-      ).toBe("smithing");
-    });
+  it("a remount always restarts with both cards closed, even after opening them pre-remount", () => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
+      const engine = createEngine(fixtureContent, seededRng(1));
+      const root1 = document.createElement("main");
+      mountApp(engine, root1, resolveContent(fixtureContent), noopWindowChrome);
+      root1.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+      expect(root1.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false);
+
+      const root2 = document.createElement("main");
+      mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
+      expect(root2.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
+      expect(root2.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("never touches the Engine Snapshot/save", () => {
-    withStubStorage(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+    try {
       const { engine, root } = mountFresh();
-      root.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="vendor"]')?.click();
+      root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
       expect(JSON.stringify(engine.snapshot())).not.toMatch(/workspace/i);
-    });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
-describe("Vertical cards-on-glass composition (#151 §1/§2)", () => {
+describe("Vertical cards-on-glass composition (#151 §1/§2, #206)", () => {
   it("builds one transparent union (#app) with the management row and the opaque compact widget as siblings", () => {
     const { root } = mount(1);
     const managementRow = root.querySelector<HTMLElement>("#management-row");
@@ -1013,33 +916,33 @@ describe("Vertical cards-on-glass composition (#151 §1/§2)", () => {
     expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it("nests the titlebar and its export/import/mute/close controls inside the compact widget card", () => {
+  it("nests the titlebar and its close control, plus the Settings popover's export/import/mute controls, inside the compact/Character cards (#206 moved Mute/Export/Import into the Settings popover)", () => {
     const { root } = mount(1);
     const compact = root.querySelector<HTMLElement>("#compact-widget");
+    const character = root.querySelector<HTMLElement>("#card-character");
     expect(root.querySelector("#titlebar")?.closest("#compact-widget")).toBe(compact);
-    for (const id of ["#export-save", "#import-save", "#mute-toggle", "#close-btn"]) {
-      expect(root.querySelector(id)?.closest("#compact-widget")).toBe(compact);
+    expect(root.querySelector("#close-btn")?.closest("#compact-widget")).toBe(compact);
+    for (const id of ["#export-save", "#import-save", "#mute-toggle"]) {
+      expect(root.querySelector(id)?.closest("#card-character")).toBe(character);
     }
-    // No opaque shell wraps the union any more — the old #compact-widget-shell is gone.
-    expect(root.querySelector("#compact-widget-shell")).toBeNull();
   });
 
-  it("collapses the management row while every card is closed, and reveals it once one opens", async () => {
+  it("collapses the management row while both cards are closed, and reveals it once one opens", async () => {
     const { root } = mount(1);
     expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
 
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="resources"]')?.click();
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
     await vi.waitFor(() =>
       expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(false),
     );
 
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="resources"]')?.click();
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
     expect(root.querySelector<HTMLElement>("#management-row")?.hidden).toBe(true);
   });
 });
 
-describe("Cards on glass — close interactions, drag regions, and Escape (#136 §4)", () => {
-  it("clicking the transparent glass (document.body itself) closes every open card", async () => {
+describe("Cards on glass — close interactions, drag regions, and Escape (#206)", () => {
+  it("clicking the transparent glass (document.body itself) closes both cards", async () => {
     const engine = createEngine(fixtureContent, seededRng(1));
     // Mount into document.body so the body-level glass-click handler has a real body to fire on.
     document.body.innerHTML = "";
@@ -1047,74 +950,60 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#136 
     document.body.appendChild(root);
     try {
       mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-      root.querySelector<HTMLButtonElement>('[data-card-launcher="world"]')?.click();
+      root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+      root.querySelector<HTMLButtonElement>('[data-destination="world"]')?.click();
       await vi.waitFor(() =>
-        expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false),
-      );
-      root.querySelector<HTMLButtonElement>('[data-card-launcher="resources"]')?.click();
-      await vi.waitFor(() =>
-        expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(false),
+        expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false),
       );
 
       document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-      expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(true);
-      expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(true);
+      expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
+      expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
     } finally {
       document.body.innerHTML = "";
     }
   });
 
-  it("a card's own close button closes only that card, leaving the others open", async () => {
-    const { root } = mount(1);
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="world"]')?.click();
-    await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false),
-    );
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="resources"]')?.click();
-    await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(false),
-    );
-
-    root.querySelector<HTMLButtonElement>('[data-card-close="resources"]')?.click();
-    expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false); // still open
-
-    root.querySelector<HTMLButtonElement>('[data-card-close="world"]')?.click();
-    expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(true);
-  });
-
-  it("Escape closes only the most-recently-opened card, and is a no-op while none are open", async () => {
+  it("Escape closes the Management card back to Character first, then closes Character — a no-op once both are closed", async () => {
     const { root } = mount(1);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    for (const card of CARD_IDS) {
-      expect(root.querySelector<HTMLElement>(`#card-${card}`)?.hidden).toBe(true);
-    }
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
 
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="world"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-destination="world"]')?.click();
     await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false),
+      expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false),
     );
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="character"]')?.click();
-    await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false),
-    );
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false);
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false); // Back step first
 
-    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true); // most recent
-    expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false); // untouched
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true); // then Character
   });
 
-  it("card headers are Tauri drag regions but their close buttons are not", () => {
+  it("card headers are Tauri drag regions but their own interactive controls are not", () => {
     const { root } = mount(1);
-    for (const card of CARD_IDS) {
-      const header = root.querySelector<HTMLElement>(`#card-${card} .management-card-header`);
-      expect(header?.hasAttribute("data-tauri-drag-region")).toBe(true);
-      const closeBtn = header?.querySelector<HTMLElement>(".card-close");
-      expect(closeBtn).not.toBeNull();
-      expect(closeBtn?.hasAttribute("data-tauri-drag-region")).toBe(false);
-    }
+    const characterHeader = root.querySelector<HTMLElement>(
+      "#card-character .management-card-header",
+    );
+    expect(characterHeader?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(
+      characterHeader
+        ?.querySelector<HTMLElement>("button[data-destination], button[data-nav]")
+        ?.hasAttribute("data-tauri-drag-region"),
+    ).toBe(false);
+
+    const managementHeader = root.querySelector<HTMLElement>(
+      "#card-management .management-card-header",
+    );
+    expect(managementHeader?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    const backBtn = managementHeader?.querySelector<HTMLElement>("[data-management-back]");
+    expect(backBtn).not.toBeNull();
+    expect(backBtn?.hasAttribute("data-tauri-drag-region")).toBe(false);
   });
 
   it("opening, switching, and closing cards never mutates the Engine's Snapshot (presentation-only)", async () => {
@@ -1126,39 +1015,36 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#136 
     };
     const before = stateOf();
 
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="world"]')?.click();
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>('[data-destination="world"]')?.click();
     await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-world")?.hidden).toBe(false),
+      expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false),
     );
-    root.querySelector<HTMLButtonElement>('[data-card-launcher="resources"]')?.click();
-    await vi.waitFor(() =>
-      expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(false),
-    );
-    root.querySelector<HTMLButtonElement>('#resource-tab-strip [data-tab="smithing"]')?.click();
-    root.querySelector<HTMLButtonElement>('[data-card-close="world"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-destination="workshop"]')?.click();
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
-    expect(stateOf()).toBe(before);
+    expect(stateOf()).toEqual(before);
   });
 });
 
-describe("Hidden internal panels keep rendering (#136: visibility never stales gameplay-derived content)", () => {
-  it("Bank tiles still populate on every Tick while the Resources card and its Bank tab have never been opened", () => {
+describe("Hidden pages keep rendering every Tick (#206: visibility never stales gameplay-derived content)", () => {
+  it("the full Bank grid still populates on every Tick while the Management card and its bank destination have never been opened", () => {
     const { engine, root, app } = mount(1);
-    expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="bank"]')?.hidden).toBe(false); // default tab, card hidden
+    expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(true);
 
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     grindFor(engine, "bronze-sword");
     app.render();
 
     expect(root.querySelector<HTMLElement>('#bank .tile[data-item="bronze-sword"]')).not.toBeNull();
-    expect(root.querySelector<HTMLElement>("#card-resources")?.hidden).toBe(true); // still closed
+    expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(true); // still closed
   });
 
-  it("the Skills icon grid still populates on every Tick while its internal tab has never been selected", () => {
+  it("the Skills icon grid and Equipment Bank tray still populate every Tick while Character has never been opened", () => {
     const { engine, root, app } = mount(1);
-    expect(root.querySelector<HTMLElement>('[data-tab-panel="skills"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true);
 
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     for (let i = 0; i < 4; i++) {
@@ -1169,6 +1055,169 @@ describe("Hidden internal panels keep rendering (#136: visibility never stales g
     const attackCell = root.querySelector<HTMLElement>('[data-skill="attack"]');
     expect(attackCell).not.toBeNull();
     expect(attackCell?.querySelector(".skill-level")?.textContent).not.toBe("");
+    expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true); // still closed
+  });
+
+  it("the Workshop and Activity destination pages keep rendering while never selected", () => {
+    const { engine, root, app } = mount(1);
+    engine.tick();
+    app.render();
+    expect(root.querySelector("#smithing-recipes")).not.toBeNull();
+    expect(root.querySelector("#feed")).not.toBeNull();
+    expect(root.querySelector<HTMLElement>('[data-management-page="workshop"]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-management-page="activity"]')?.hidden).toBe(true);
+  });
+});
+
+describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank tray scrolls)", () => {
+  it("every seven Gear Slots, the Loadout Slot grid, the Skills grid, compact controls, and the Equipment Bank tray are all present with no player portrait", () => {
+    const { root } = mount(1);
+    for (const slot of ["weapon", "shield", "head", "body", "legs", "amulet", "ring"]) {
+      expect(root.querySelector(`[data-slot="${slot}"]`)).not.toBeNull();
+    }
+    expect(root.querySelector("#character-food-slots")).not.toBeNull();
+    expect(root.querySelector("#potion-slot")).not.toBeNull();
+    expect(root.querySelector("#quiver-slot")).not.toBeNull();
+    expect(root.querySelector("#rune-pouch")).not.toBeNull();
+    expect(root.querySelector("#xp-row")).not.toBeNull();
+    expect(root.querySelector("#style-row")).not.toBeNull();
+    expect(root.querySelector("#spell-row")).not.toBeNull();
+    expect(root.querySelector("#autoeat-row")).not.toBeNull();
+    expect(root.querySelector("#autosell-duplicates-row")).not.toBeNull();
+    expect(root.querySelector("#pets-summary")).not.toBeNull();
+    expect(root.querySelector("#character-bank-tray")).not.toBeNull();
+    expect(root.querySelector("#expand-bank-btn")).not.toBeNull();
+    expect(root.querySelector("img.player-portrait, .portrait, [data-portrait]")).toBeNull();
+  });
+
+  it("the Character/Skills tab pair and the seven-tab Resources strip are both gone — no horizontal tab scrolling markup remains", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#character-tab-strip")).toBeNull();
+    expect(root.querySelector("#resource-tab-strip")).toBeNull();
+    expect(root.querySelector(".card-tab-strip")).toBeNull();
+    expect(root.querySelector('[data-tab-panel="skills"]')).toBeNull();
+  });
+
+  it("only the Equipment Bank tray sits inside a scrolling container; the fixed dashboard content does not", () => {
+    const { root } = mount(1);
+    const tray = root.querySelector("#character-bank-tray");
+    expect(tray?.closest(".card-scroll")).not.toBeNull();
+    const gearGrid = root.querySelector("#character-slots");
+    expect(gearGrid?.closest(".card-scroll")).toBeNull();
+    const xpRow = root.querySelector("#xp-row");
+    expect(xpRow?.closest(".card-scroll")).toBeNull();
+  });
+
+  it("the embedded Bank tray shows only Equipment items from the same Bank, sorted the same way as the full Bank page", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        bank: {
+          items: [
+            { itemId: "bronze-sword", qty: 1 },
+            { itemId: "meat", qty: 3 },
+          ],
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    const tray = root.querySelector<HTMLElement>("#character-bank-tray");
+    expect(tray?.querySelector('[data-item="bronze-sword"]')).not.toBeNull();
+    expect(tray?.querySelector('[data-item="meat"]')).toBeNull(); // Food excluded, equipment only
+
+    const fullBank = root.querySelector<HTMLElement>("#bank");
+    expect(fullBank?.querySelector('[data-item="bronze-sword"]')).not.toBeNull();
+    expect(fullBank?.querySelector('[data-item="meat"]')).not.toBeNull(); // full Bank keeps Food
+  });
+
+  it("selecting a tile in the embedded tray shows the same Equip/Sell detail strip as the full Bank, independent of the full Bank's own selection", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root
+      .querySelector<HTMLButtonElement>('#character-bank-tray [data-item="bronze-sword"]')
+      ?.click();
+    const trayDetail = root.querySelector<HTMLElement>("#character-bank-detail");
+    expect(trayDetail?.hidden).toBe(false);
+    expect(trayDetail?.querySelector('[data-equip="bronze-sword"]')).not.toBeNull();
+    // The full Bank page's own detail strip is untouched by the tray's selection.
+    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
+  });
+
+  it("clicking Equip in the embedded tray equips the item via the same Engine command as the full Bank", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root
+      .querySelector<HTMLButtonElement>('#character-bank-tray [data-item="bronze-sword"]')
+      ?.click();
+    root
+      .querySelector<HTMLButtonElement>('#character-bank-detail [data-equip="bronze-sword"]')
+      ?.click();
+
+    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+  });
+
+  it("an empty Gear Slot's [+] opens an anchored chooser of matching Bank Equipment; picking one equips it", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    expect(root.querySelector('[data-slot="weapon"] [data-gear-add]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
+
+    const assignBtn = root.querySelector<HTMLButtonElement>(
+      '[data-slot="weapon"] [data-gear-assign="bronze-sword"]',
+    );
+    expect(assignBtn).not.toBeNull();
+    assignBtn?.click();
+
+    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+    // The chooser closes after picking.
+    expect(root.querySelector('[data-slot="weapon"] [data-gear-assign]')).toBeNull();
+  });
+
+  it("the Pets summary shows a compact owned/total count, with the full roster grid behind its own popover", () => {
+    const { root } = mount(1);
+    const count = root.querySelector<HTMLElement>("#pets-summary-count");
+    expect(count?.textContent).toMatch(/^\d+\/\d+$/);
+    expect(root.querySelector<HTMLElement>("#pets-popover")?.hidden).toBe(true);
+
+    root.querySelector<HTMLButtonElement>('[data-nav="pets"]')?.click();
+    expect(root.querySelector<HTMLElement>("#pets-popover")?.hidden).toBe(false);
+    expect(root.querySelector("#pets-grid [data-pet]")).not.toBeNull();
+  });
+
+  it("the Settings popover is closed by default and toggles Mute/Export/Import visibility without changing card height markup", () => {
+    const { root } = mount(1);
+    expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
+
+    root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
+    const popover = root.querySelector<HTMLElement>("#settings-popover");
+    expect(popover?.hidden).toBe(false);
+    expect(popover?.querySelector("#mute-toggle")).not.toBeNull();
+    expect(popover?.querySelector("#export-save")).not.toBeNull();
+    expect(popover?.querySelector("#import-save")).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
+    expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
   });
 });
 
@@ -1230,7 +1279,6 @@ describe("Bank", () => {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
     return { engine, root, app };
   }
 
@@ -1801,144 +1849,6 @@ describe("Character panel (#26)", () => {
   });
 });
 
-describe("Character panel collapsible sections (#134)", () => {
-  beforeEach(() => {
-    vi.stubGlobal("localStorage", stubLocalStorage());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function sectionHeader(root: HTMLElement, id: string) {
-    return root.querySelector<HTMLButtonElement>(`button[data-section="${id}"]`);
-  }
-
-  function sectionBody(root: HTMLElement, id: string) {
-    return root.querySelector<HTMLElement>(`[data-section-body="${id}"]`);
-  }
-
-  it("all six sections start open (aria-expanded true, body not hidden) on a fresh mount", () => {
-    const { root } = mount(1);
-    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
-      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
-      expect(sectionBody(root, id)?.hidden).toBe(false);
-    }
-  });
-
-  it("clicking a section header collapses its body and sets aria-expanded to false", () => {
-    const { root } = mount(1);
-    sectionHeader(root, "gear")?.click();
-
-    expect(sectionHeader(root, "gear")?.getAttribute("aria-expanded")).toBe("false");
-    expect(sectionBody(root, "gear")?.hidden).toBe(true);
-    // Other sections are unaffected.
-    expect(sectionHeader(root, "potion")?.getAttribute("aria-expanded")).toBe("true");
-    expect(sectionBody(root, "potion")?.hidden).toBe(false);
-  });
-
-  it("clicking a collapsed section's header re-expands it", () => {
-    const { root } = mount(1);
-    sectionHeader(root, "spells")?.click();
-    sectionHeader(root, "spells")?.click();
-
-    expect(sectionHeader(root, "spells")?.getAttribute("aria-expanded")).toBe("true");
-    expect(sectionBody(root, "spells")?.hidden).toBe(false);
-  });
-
-  it("#style-row, #autoeat-row, and the auto-sell checkbox stay visible regardless of section state", () => {
-    const { root } = mount(1);
-    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
-      sectionHeader(root, id)?.click();
-    }
-
-    expect(root.querySelector<HTMLElement>("#style-row")?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>("#autoeat-row")?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>("#autosell-duplicates-row")?.hidden).toBe(false);
-  });
-
-  it("collapsed state survives a remount via localStorage (sidescape-ui-panels)", () => {
-    const engine = createEngine(fixtureContent, seededRng(1));
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
-    sectionHeader(root, "quiver")?.click();
-
-    const root2 = document.createElement("main");
-    mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
-    root2.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
-
-    expect(sectionHeader(root2, "quiver")?.getAttribute("aria-expanded")).toBe("false");
-    expect(sectionBody(root2, "quiver")?.hidden).toBe(true);
-    // Untouched sections still default open on the remount.
-    expect(sectionHeader(root2, "gear")?.getAttribute("aria-expanded")).toBe("true");
-  });
-
-  it("a stored panel value with no charSections key loads with every section open (legacy tolerance)", () => {
-    localStorage.setItem("sidescape-ui-panels", JSON.stringify({ left: false, tab: "character" }));
-    const { root } = mount(1);
-
-    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
-      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
-    }
-  });
-
-  it("a malformed charSections value loads with every section open and never throws", () => {
-    localStorage.setItem(
-      "sidescape-ui-panels",
-      JSON.stringify({ left: false, tab: "character", charSections: "not-an-object" }),
-    );
-
-    expect(() => mount(1)).not.toThrow();
-    const { root } = mount(1);
-    for (const id of ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"]) {
-      expect(sectionHeader(root, id)?.getAttribute("aria-expanded")).toBe("true");
-    }
-  });
-
-  it("toggling a section persists charSections to sidescape-ui-panels — tab/left are always written closed/null now that #136 owns workspace state in its own key", () => {
-    const { root } = mount(1);
-    sectionHeader(root, "pets")?.click();
-
-    const raw = localStorage.getItem("sidescape-ui-panels");
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.left).toBe(false);
-    expect(parsed.tab).toBeNull();
-    expect(parsed.charSections).toMatchObject({ pets: false });
-  });
-
-  it("toggling a section changes nothing in the Engine Snapshot (presentation-only)", () => {
-    const { engine, root } = mount(1);
-    // `savedAt` is re-stamped on every snapshot() call, so drop it before comparing state.
-    const stateOf = () => {
-      const { savedAt: _savedAt, ...rest } = engine.snapshot();
-      return rest;
-    };
-    const before = stateOf();
-
-    sectionHeader(root, "gear")?.click();
-
-    expect(stateOf()).toEqual(before);
-  });
-
-  it("ticks while a section is collapsed keep its content current — expanding after a level-up/equip shows fresh data", () => {
-    const { engine, root, app } = mount(1);
-    sectionHeader(root, "gear")?.click(); // collapse Gear while hidden
-    expect(sectionBody(root, "gear")?.hidden).toBe(true);
-
-    engine.selectMonster("dummy");
-    grindFor(engine, "bronze-sword");
-    engine.equip("bronze-sword");
-    app.render();
-
-    sectionHeader(root, "gear")?.click(); // re-expand
-    expect(root.querySelector('[data-slot="weapon"]')?.getAttribute("data-item")).toBe(
-      "bronze-sword",
-    );
-  });
-});
-
 describe("Spell picker (#101)", () => {
   function spellButtons(root: HTMLElement) {
     return [...root.querySelectorAll<HTMLButtonElement>("#spell-row button")];
@@ -2413,7 +2323,6 @@ describe("Cooking (#115)", () => {
 
   it("renders a Cooking recipe row for the fixture's test-cook Recipe, with level req and owned counts", () => {
     const { root } = mountWithRawFish(0);
-    root.querySelector<HTMLButtonElement>('[data-tab="cooking"]')?.click();
 
     const row = root.querySelector('[data-recipe-row="test-cook"]');
     expect(row?.textContent).toContain("Cook Fish");
@@ -2470,7 +2379,6 @@ describe("Crafting (#116)", () => {
 
   it("renders a Crafting recipe row for the fixture's test-craft Recipe, with level req and owned counts", () => {
     const { root } = mountWithHide(0);
-    root.querySelector<HTMLButtonElement>('[data-tab="crafting"]')?.click();
 
     const row = root.querySelector('[data-recipe-row="test-craft"]');
     expect(row?.textContent).toContain("Craft Vest");
@@ -2527,7 +2435,6 @@ describe("Herblore (#118)", () => {
 
   it("renders a Herblore recipe row for the fixture's test-brew Recipe, with level req and owned counts", () => {
     const { root } = mountWithHerb(0);
-    root.querySelector<HTMLButtonElement>('[data-tab="herblore"]')?.click();
 
     const row = root.querySelector('[data-recipe-row="test-brew"]');
     expect(row?.textContent).toContain("Brew Strength Potion");
@@ -2585,9 +2492,6 @@ describe("Potion Slot tile (#118)", () => {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    // The Potion Slot lives on the Character tab panel (#118) — open it, mirroring how a real
-    // user would reach it (the panel is hidden by default, #62).
-    root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
     return { engine, root, app };
   }
 
@@ -2666,23 +2570,19 @@ describe("Potion Slot tile (#118)", () => {
   });
 });
 
-/** Shared by the Quiver/Rune Pouch/Vendor describe blocks below (#119): mounts on the Character
- * (or, for the Vendor block, the Vendor) tab so the panel under test is actually visible — mirrors
- * potionMount's own "open the panel a real user would" rationale above. */
-function ammoMount(
-  tab: "character" | "vendor",
-  overrides: Parameters<typeof makeSnapshot>[0] = {},
-) {
+/** Shared by the Quiver/Rune Pouch/Vendor describe blocks below (#119): mounts a fresh engine —
+ * every panel renders regardless of Character/Management card visibility (#206), so there is no
+ * panel to open first any more. */
+function ammoMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
   const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
   const root = document.createElement("main");
   const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-  root.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
   return { engine, root, app };
 }
 
 describe("Quiver tile (#119)", () => {
   it("an empty Quiver shows a [+] that opens a chooser listing only the Bank's arrow stacks", () => {
-    const { root } = ammoMount("character", {
+    const { root } = ammoMount({
       bank: {
         items: [
           { itemId: "arrow", qty: 30 },
@@ -2707,13 +2607,13 @@ describe("Quiver tile (#119)", () => {
   });
 
   it("an empty Quiver's chooser shows a hint when the Bank has no arrows at all", () => {
-    const { root } = ammoMount("character");
+    const { root } = ammoMount();
     root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
     expect(root.querySelector("#quiver-slot .hint")?.textContent).toMatch(/no arrows/i);
   });
 
   it("picking an arrow from the chooser loads it (moving the whole Bank stock) and closes the chooser", () => {
-    const { engine, root } = ammoMount("character", {
+    const { engine, root } = ammoMount({
       bank: { items: [{ itemId: "arrow", qty: 30 }] },
     });
     root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
@@ -2729,7 +2629,7 @@ describe("Quiver tile (#119)", () => {
   });
 
   it("clicking ✕ unloads the Quiver, returning the whole stack to the Bank", () => {
-    const { engine, root } = ammoMount("character", {
+    const { engine, root } = ammoMount({
       player: { quiver: { itemId: "arrow", qty: 12 } },
     });
     root.querySelector<HTMLButtonElement>("[data-quiver-unassign]")?.click();
@@ -2742,7 +2642,7 @@ describe("Quiver tile (#119)", () => {
 
 describe("Rune Pouch panel (#119)", () => {
   it("renders 4 slots, one per Element (air/water/earth/fire), independent of load order", () => {
-    const { root } = ammoMount("character", {
+    const { root } = ammoMount({
       player: {
         runePouch: [
           { itemId: "fire-rune", qty: 5 },
@@ -2758,7 +2658,7 @@ describe("Rune Pouch panel (#119)", () => {
   });
 
   it("loading one Element's rune never displaces another — all four can be loaded simultaneously with zero reload", () => {
-    const { engine, root } = ammoMount("character", {
+    const { engine, root } = ammoMount({
       bank: {
         items: [
           { itemId: "air-rune", qty: 10 },
@@ -2786,7 +2686,7 @@ describe("Rune Pouch panel (#119)", () => {
   });
 
   it("an empty Element slot's chooser lists only that Element's own rune stacks, never another Element's", () => {
-    const { root } = ammoMount("character", {
+    const { root } = ammoMount({
       bank: {
         items: [
           { itemId: "air-rune", qty: 5 },
@@ -2809,7 +2709,7 @@ describe("Rune Pouch panel (#119)", () => {
   });
 
   it("clicking ✕ on a loaded Element returns that stack to the Bank, leaving other Elements untouched", () => {
-    const { engine, root } = ammoMount("character", {
+    const { engine, root } = ammoMount({
       player: {
         runePouch: [
           { itemId: "air-rune", qty: 20 },
@@ -2828,7 +2728,7 @@ describe("Rune Pouch panel (#119)", () => {
 
 describe("Vendor tab panel (#119)", () => {
   it("lists every vendor entry with its price and how many the player already owns", () => {
-    const { root } = ammoMount("vendor", { bank: { items: [{ itemId: "arrow", qty: 7 }] } });
+    const { root } = ammoMount({ bank: { items: [{ itemId: "arrow", qty: 7 }] } });
     const arrowRow = root.querySelector<HTMLElement>('[data-vendor-row="arrow"]');
     expect(arrowRow?.textContent).toMatch(/Test Arrow/);
     expect(arrowRow?.textContent).toMatch(/2g/); // fixture vendor price
@@ -2836,13 +2736,13 @@ describe("Vendor tab panel (#119)", () => {
   });
 
   it("the Buy button is disabled while gold is short of the price", () => {
-    const { root } = ammoMount("vendor", { player: { gold: 1 } });
+    const { root } = ammoMount({ player: { gold: 1 } });
     const buyBtn = root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]');
     expect(buyBtn?.disabled).toBe(true);
   });
 
   it("clicking Buy purchases 1 unit, charging gold and adding it to the Bank, logging a feed line", () => {
-    const { engine, root } = ammoMount("vendor", { player: { gold: 100 } });
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
     root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]')?.click();
 
     expect(engine.snapshot().player.gold).toBe(98); // fixture vendor price 2

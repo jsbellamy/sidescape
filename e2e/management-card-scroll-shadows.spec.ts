@@ -3,16 +3,21 @@ import { PNG } from "pngjs";
 
 /**
  * #133: the scroll-shadow technique is pure CSS (`background-attachment: local` vs `scroll`
- * layers on `.management-card` itself). jsdom/happy-dom don't render backgrounds, so this is
- * verified the same way a manual Tauri check would: render the real card, force overflow,
- * screenshot it at each scroll position, and read back rendered pixel darkness at the top/bottom
- * edge as the end-to-end equivalent of "look at the card and see a shadow."
+ * layers). jsdom/happy-dom don't render backgrounds, so this is verified the same way a manual
+ * Tauri check would: render the real card, force overflow, screenshot it at each scroll position,
+ * and read back rendered pixel darkness at the top/bottom edge as the end-to-end equivalent of
+ * "look at the card and see a shadow."
+ *
+ * #206 moved the scroll surface (and its scroll-shadow background) off `.management-card` itself
+ * — which no longer scrolls as a whole ("Character never page-scrolls") — onto its `.card-scroll`
+ * inner wrapper; this spec samples/scrolls `.card-scroll` accordingly, while the opaque
+ * fill/border/radius/shadow checks stay on `.management-card` (unchanged by #206).
  */
 
 async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<boolean> {
-  const card = page.locator("#card-resources");
-  const box = await card.boundingBox();
-  if (!box) throw new Error("#card-resources has no box");
+  const scroll = page.locator("#card-management .card-scroll");
+  const box = await scroll.boundingBox();
+  if (!box) throw new Error("#card-management .card-scroll has no box");
 
   // Sample a 1px-tall strip a few px in from the sampled edge, centered horizontally. The
   // `farthest-side` radial gradient is a wide, flat ellipse (card-width by shadow-height), so it
@@ -44,17 +49,18 @@ async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<bool
 
 async function openManagementCardWithOverflow(page: Page): Promise<void> {
   await page.goto("/");
-  await page.locator('[data-card-launcher="resources"]').click();
-  await expect(page.locator("#card-resources")).toBeVisible();
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="world"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
 
-  // Force deterministic overflow inside the real `.management-card` scroll surface regardless of
-  // current save/bank contents, so the test doesn't depend on gameplay state.
+  // Force deterministic overflow inside the real `.card-scroll` surface regardless of current
+  // save/bank contents, so the test doesn't depend on gameplay state.
   await page.evaluate(() => {
-    const card = document.querySelector("#card-resources") as HTMLElement;
+    const scroll = document.querySelector("#card-management .card-scroll") as HTMLElement;
     const filler = document.createElement("div");
     filler.id = "e2e-overflow-filler";
     filler.style.height = "2000px";
-    card.appendChild(filler);
+    scroll.appendChild(filler);
   });
 }
 
@@ -62,7 +68,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#card-resources").evaluate((el) => (el.scrollTop = 0));
+  await page.locator("#card-management .card-scroll").evaluate((el) => (el.scrollTop = 0));
 
   expect(await edgePixelIsDark(page, "top")).toBe(false);
   expect(await edgePixelIsDark(page, "bottom")).toBe(true);
@@ -70,7 +76,7 @@ test("overflowing management card shows only the bottom shadow when scrolled to 
 
 test("overflowing management card shows both shadows mid-scroll", async ({ page }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#card-resources").evaluate((el) => {
+  await page.locator("#card-management .card-scroll").evaluate((el) => {
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
   });
 
@@ -82,7 +88,9 @@ test("overflowing management card shows only the top shadow when scrolled to bot
   page,
 }) => {
   await openManagementCardWithOverflow(page);
-  await page.locator("#card-resources").evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await page
+    .locator("#card-management .card-scroll")
+    .evaluate((el) => (el.scrollTop = el.scrollHeight));
 
   expect(await edgePixelIsDark(page, "top")).toBe(true);
   expect(await edgePixelIsDark(page, "bottom")).toBe(false);
@@ -90,23 +98,24 @@ test("overflowing management card shows only the top shadow when scrolled to bot
 
 test("non-overflowing management card shows neither shadow", async ({ page }) => {
   await page.goto("/");
-  await page.locator('[data-card-launcher="resources"]').click();
-  const card = page.locator("#card-resources");
-  await expect(card).toBeVisible();
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="world"]').click();
+  const scroll = page.locator("#card-management .card-scroll");
+  await expect(page.locator("#card-management")).toBeVisible();
 
-  const overflowing = await card.evaluate((el) => el.scrollHeight > el.clientHeight);
+  const overflowing = await scroll.evaluate((el) => el.scrollHeight > el.clientHeight);
   expect(overflowing).toBe(false);
 
   expect(await edgePixelIsDark(page, "top")).toBe(false);
   expect(await edgePixelIsDark(page, "bottom")).toBe(false);
 });
 
-test("management card keeps #138's opaque fill, border, radius, and shadow, and gets a themed thin scrollbar", async ({
+test("management card keeps #138's opaque fill, border, radius, and shadow, and its scroll surface gets a themed thin scrollbar", async ({
   page,
 }) => {
   await openManagementCardWithOverflow(page);
 
-  const card = page.locator("#card-resources");
+  const card = page.locator("#card-management");
   const style = await card.evaluate((el) => {
     const computed = getComputedStyle(el);
     return {
@@ -121,11 +130,12 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   expect(style.borderWidth).toBe("1px");
   expect(style.boxShadow).not.toBe("none");
 
-  const header = page.locator("#card-resources .management-card-header");
+  const header = page.locator("#card-management .management-card-header");
   await expect(header).toBeVisible();
   await expect(header).toHaveAttribute("data-tauri-drag-region", "");
 
-  const barWidth = await card.evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width);
+  const scroll = page.locator("#card-management .card-scroll");
+  const barWidth = await scroll.evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width);
   expect(barWidth).toBe("6px");
 
   // Headless Chromium paints `::-webkit-scrollbar-thumb` as if permanently hovered, so
@@ -145,10 +155,10 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
       }
       for (const rule of rules) {
         if (!(rule instanceof CSSStyleRule)) continue;
-        if (rule.selectorText === ".management-card::-webkit-scrollbar-thumb") {
+        if (rule.selectorText === ".card-scroll::-webkit-scrollbar-thumb") {
           found.base = rule.style.background || rule.style.backgroundColor;
         }
-        if (rule.selectorText === ".management-card::-webkit-scrollbar-thumb:hover") {
+        if (rule.selectorText === ".card-scroll::-webkit-scrollbar-thumb:hover") {
           found.hover = rule.style.background || rule.style.backgroundColor;
         }
       }
