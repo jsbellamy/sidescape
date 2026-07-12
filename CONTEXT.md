@@ -79,6 +79,10 @@ An **Item** auto-eaten when the player's HP falls below a threshold, restoring H
 **Food Slot**:
 One of 3 loadout slots holding the player's active Food; the slot is that Food's home (its whole stock lives there while assigned, and new arrivals flow to it), auto-eat drains slots in order, and clicking a slot eats one.
 
+**Loadout Slot**:
+A slot in the player's loadout that is an **Item**'s home while assigned — the **Food Slots**, the Potion Slot, the Quiver, and the Rune Pouch are its four kinds. Assigning pulls the Item's whole **Bank** stock into the slot; swapping returns the displaced stock to the Bank, room-checked before the swap lands (the incoming Item's freed Bank Slot counts). One shared implementation inside the Engine; each kind keeps only its own rules (Food's 3 indexed slots, the Potion's charges, the Rune Pouch's per-**Element** stacks).
+_Avoid_: store slot, gear slot (reserved for worn **Equipment**)
+
 **Material**:
 An **Item** consumed as a **Recipe** input — stackable, unequippable, uneatable; sellable when it carries a value and always bankable, same as any other Item. A **Bar** is the only Material in v1.
 _Avoid_: resource, ingredient (as the general term)
