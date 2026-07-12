@@ -28,6 +28,8 @@ import {
   productionPanelMarkup,
   resolveProp,
 } from "./production";
+import { createLoadoutSlotDispatcher, loadoutSlotMarkup } from "./loadout-slot";
+import type { LoadoutSlotChooserItem } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { itemIcon } from "./icons";
 import { formatQty } from "./format";
@@ -502,36 +504,36 @@ export function mountApp(
     const foodStacks = bankItems.filter(
       (s) => content.items.find((i) => i.id === s.itemId)?.kind === "food",
     );
+    const chooserItems: LoadoutSlotChooserItem[] = foodStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+
     el("#food-slots").innerHTML = foodSlots
-      .map((slot, i) => {
-        if (slot) {
-          return `<div class="food-slot filled" data-slot="${i}">
-                    <button class="food-slot-eat tile" data-eat="${i}" data-item="${slot.itemId}">
-                      ${tileMarkup(slot.itemId, slot.qty)}
-                    </button>
-                    <button class="food-slot-unassign" data-unassign="${i}" title="Unassign">✕</button>
-                  </div>`;
-        }
-        const chooserOpen = openFoodChooserSlot === i;
-        const chooser = chooserOpen
-          ? `<div class="food-slot-chooser">
-              ${
-                foodStacks.length > 0
-                  ? foodStacks
-                      .map(
-                        (s) =>
-                          `<button data-assign="${i}" data-item="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
-                      )
-                      .join("")
-                  : `<p class="hint">No Food in Bank</p>`
-              }
-            </div>`
-          : "";
-        return `<div class="food-slot empty" data-slot="${i}">
-                  <button class="food-slot-add" data-add="${i}">+</button>
-                  ${chooser}
-                </div>`;
-      })
+      .map((slot, i) =>
+        loadoutSlotMarkup(
+          {
+            wrapperClass: "food-slot",
+            keyAttr: `data-slot="${i}"`,
+            filledInner: slot
+              ? `<button class="food-slot-eat tile" data-eat="${i}" data-item="${slot.itemId}">
+                   ${tileMarkup(slot.itemId, slot.qty)}
+                 </button>`
+              : "",
+            unassignClass: "food-slot-unassign",
+            unassignAttr: `data-unassign="${i}"`,
+            unassignTitle: "Unassign",
+            addClass: "food-slot-add",
+            addAttr: `data-add="${i}"`,
+            chooserClass: "food-slot-chooser",
+            chooserOpen: openFoodChooserSlot === i,
+            chooserItems,
+            assignAttr: (itemId) => `data-assign="${i}" data-item="${itemId}"`,
+            emptyHint: "No Food in Bank",
+          },
+          slot !== null,
+        ),
+      )
       .join("");
   }
 
@@ -546,37 +548,40 @@ export function mountApp(
     potionSlot: PotionSlot,
     bankItems: { itemId: string; qty: number }[],
   ): void {
-    if (potionSlot) {
-      const def = content.items.find((i) => i.id === potionSlot.itemId);
-      const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
-      el("#potion-slot").innerHTML = `<div class="potion-slot-tile filled">
-                <div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
-                <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>
-                <button class="potion-slot-unassign" data-potion-unassign title="Unassign">✕</button>
-              </div>`;
-      return;
-    }
     const potionStacks = bankItems.filter(
       (s) => content.items.find((i) => i.id === s.itemId)?.kind === "potion",
     );
-    const chooser = openPotionChooser
-      ? `<div class="potion-slot-chooser">
-          ${
-            potionStacks.length > 0
-              ? potionStacks
-                  .map(
-                    (s) =>
-                      `<button data-potion-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
-                  )
-                  .join("")
-              : `<p class="hint">No Potions in Bank</p>`
-          }
-        </div>`
+    const chooserItems: LoadoutSlotChooserItem[] = potionStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+    const filledInner = potionSlot
+      ? (() => {
+          const def = content.items.find((i) => i.id === potionSlot.itemId);
+          const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
+          return `<div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
+                  <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>`;
+        })()
       : "";
-    el("#potion-slot").innerHTML = `<div class="potion-slot-tile empty">
-              <button class="potion-slot-add" data-potion-add>+</button>
-              ${chooser}
-            </div>`;
+
+    el("#potion-slot").innerHTML = loadoutSlotMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-potion-unassign",
+        unassignTitle: "Unassign",
+        addClass: "potion-slot-add",
+        addAttr: "data-potion-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openPotionChooser,
+        chooserItems,
+        assignAttr: (itemId) => `data-potion-assign="${itemId}"`,
+        emptyHint: "No Potions in Bank",
+      },
+      potionSlot !== null,
+    );
   }
 
   /** Renders the Quiver tile on the Character tab panel (#119): the single active arrow stack,
@@ -588,35 +593,36 @@ export function mountApp(
     quiver: Snapshot["player"]["quiver"],
     bankItems: { itemId: string; qty: number }[],
   ): void {
-    if (quiver) {
-      el("#quiver-slot").innerHTML = `<div class="potion-slot-tile filled">
-                <div class="tile" data-item="${quiver.itemId}">${tileMarkup(quiver.itemId, quiver.qty)}</div>
-                <button class="potion-slot-unassign" data-quiver-unassign title="Unload">✕</button>
-              </div>`;
-      return;
-    }
     const arrowStacks = bankItems.filter((s) => {
       const def = content.items.find((i) => i.id === s.itemId);
       return def?.kind === "ammo" && def.ammoType === "arrow";
     });
-    const chooser = openQuiverChooser
-      ? `<div class="potion-slot-chooser">
-          ${
-            arrowStacks.length > 0
-              ? arrowStacks
-                  .map(
-                    (s) =>
-                      `<button data-quiver-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
-                  )
-                  .join("")
-              : `<p class="hint">No Arrows in Bank</p>`
-          }
-        </div>`
+    const chooserItems: LoadoutSlotChooserItem[] = arrowStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+    const filledInner = quiver
+      ? `<div class="tile" data-item="${quiver.itemId}">${tileMarkup(quiver.itemId, quiver.qty)}</div>`
       : "";
-    el("#quiver-slot").innerHTML = `<div class="potion-slot-tile empty">
-              <button class="potion-slot-add" data-quiver-add>+</button>
-              ${chooser}
-            </div>`;
+
+    el("#quiver-slot").innerHTML = loadoutSlotMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-quiver-unassign",
+        unassignTitle: "Unload",
+        addClass: "potion-slot-add",
+        addAttr: "data-quiver-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openQuiverChooser,
+        chooserItems,
+        assignAttr: (itemId) => `data-quiver-assign="${itemId}"`,
+        emptyHint: "No Arrows in Bank",
+      },
+      quiver !== null,
+    );
   }
 
   /** Renders the Rune Pouch panel on the Character tab panel (#119): one slot per Element, in
@@ -637,35 +643,36 @@ export function mountApp(
         const def = content.items.find((i) => i.id === s.itemId);
         return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
       });
-      if (loaded) {
-        return `<div class="food-slot filled" data-element="${element}">
-                  <div class="tile" data-item="${loaded.itemId}">${tileMarkup(loaded.itemId, loaded.qty)}</div>
-                  <button class="food-slot-unassign" data-rune-unassign="${loaded.itemId}" title="Unload">✕</button>
-                </div>`;
-      }
       const runeStacks = bankItems.filter((s) => {
         const def = content.items.find((i) => i.id === s.itemId);
         return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
       });
-      const chooserOpen = openRunePouchChooserElement === element;
-      const chooser = chooserOpen
-        ? `<div class="food-slot-chooser">
-            ${
-              runeStacks.length > 0
-                ? runeStacks
-                    .map(
-                      (s) =>
-                        `<button data-rune-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
-                    )
-                    .join("")
-                : `<p class="hint">No ${element} Runes in Bank</p>`
-            }
-          </div>`
+      const chooserItems: LoadoutSlotChooserItem[] = runeStacks.map((s) => ({
+        itemId: s.itemId,
+        label: `${itemName(s.itemId)} ×${s.qty}`,
+      }));
+      const filledInner = loaded
+        ? `<div class="tile" data-item="${loaded.itemId}">${tileMarkup(loaded.itemId, loaded.qty)}</div>`
         : "";
-      return `<div class="food-slot empty" data-element="${element}">
-                <button class="food-slot-add" data-rune-add="${element}">+</button>
-                ${chooser}
-              </div>`;
+
+      return loadoutSlotMarkup(
+        {
+          wrapperClass: "food-slot",
+          keyAttr: `data-element="${element}"`,
+          filledInner,
+          unassignClass: "food-slot-unassign",
+          unassignAttr: `data-rune-unassign="${loaded?.itemId ?? ""}"`,
+          unassignTitle: "Unload",
+          addClass: "food-slot-add",
+          addAttr: `data-rune-add="${element}"`,
+          chooserClass: "food-slot-chooser",
+          chooserOpen: openRunePouchChooserElement === element,
+          chooserItems,
+          assignAttr: (itemId) => `data-rune-assign="${itemId}"`,
+          emptyHint: `No ${element} Runes in Bank`,
+        },
+        loaded !== undefined,
+      );
     }).join("");
   }
 
@@ -1404,120 +1411,111 @@ export function mountApp(
     el<HTMLElement>("#item-tooltip").hidden = true;
   });
 
-  // Food Slot bar (#61): dispatch order is load-bearing — data-unassign (✕) is checked before the
-  // slot-level eat, so unassigning never also eats; data-assign (a chooser pick) is checked before
-  // data-add (the [+] toggle) so picking a Food both assigns it and doesn't re-toggle the chooser.
-  el("#food-slots").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-
-    const unassignIndex = target.dataset["unassign"];
-    if (unassignIndex !== undefined) {
-      engine.unassignFoodSlot(Number(unassignIndex)); // logs nothing; no feed line for unassign
-      render();
-      return;
-    }
-
-    const eatIndex = target.dataset["eat"];
-    if (eatIndex !== undefined) {
-      engine.eatFromSlot(Number(eatIndex)); // logs its own feed line via the food-eaten listener
-      render();
-      return;
-    }
-
-    const assignIndex = target.dataset["assign"];
-    const assignItemId = target.dataset["item"];
-    if (assignIndex !== undefined && assignItemId !== undefined) {
-      engine.assignFoodSlot(Number(assignIndex), assignItemId);
-      openFoodChooserSlot = null;
-      render();
-      return;
-    }
-
-    const addIndex = target.dataset["add"];
-    if (addIndex !== undefined) {
-      const index = Number(addIndex);
-      openFoodChooserSlot = openFoodChooserSlot === index ? null : index; // re-click dismisses
-      render();
-    }
-  });
+  // Food Slot bar (#61): dispatch order is load-bearing — unassign (✕) is checked before the
+  // slot-level eat, so unassigning never also eats; a chooser pick is checked before the [+]
+  // toggle so picking a Food both assigns it and doesn't re-toggle the chooser. One shared
+  // dispatcher factory (#183) drives all four Loadout Slot listeners below — see loadout-slot.ts.
+  el("#food-slots").addEventListener(
+    "click",
+    createLoadoutSlotDispatcher(
+      { unassign: "unassign", eat: "eat", assign: "assign", assignItem: "item", add: "add" },
+      {
+        onUnassign: (index) => {
+          engine.unassignFoodSlot(Number(index)); // logs nothing; no feed line for unassign
+          render();
+        },
+        onEat: (index) => {
+          engine.eatFromSlot(Number(index)); // logs its own feed line via the food-eaten listener
+          render();
+        },
+        onAssign: (index, itemId) => {
+          engine.assignFoodSlot(Number(index), itemId);
+          openFoodChooserSlot = null;
+          render();
+        },
+        onAdd: (index) => {
+          const i = Number(index);
+          openFoodChooserSlot = openFoodChooserSlot === i ? null : i; // re-click dismisses
+          render();
+        },
+      },
+    ),
+  );
 
   // Potion Slot tile (#118): dispatch order mirrors the Food Slot bar above — unassign (✕) is
   // checked before a chooser pick, which is checked before the [+] toggle.
-  el("#potion-slot").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-
-    if (target.dataset["potionUnassign"] !== undefined) {
-      engine.unassignPotionSlot(); // logs nothing; no feed line for unassign (mirrors Food Slot)
-      render();
-      return;
-    }
-
-    const assignItemId = target.dataset["potionAssign"];
-    if (assignItemId !== undefined) {
-      engine.assignPotionSlot(assignItemId);
-      openPotionChooser = false;
-      render();
-      return;
-    }
-
-    if (target.dataset["potionAdd"] !== undefined) {
-      openPotionChooser = !openPotionChooser; // re-click dismisses
-      render();
-    }
-  });
+  el("#potion-slot").addEventListener(
+    "click",
+    createLoadoutSlotDispatcher(
+      { unassign: "potionUnassign", assign: "potionAssign", add: "potionAdd" },
+      {
+        onUnassign: () => {
+          engine.unassignPotionSlot(); // logs nothing; no feed line for unassign (mirrors Food Slot)
+          render();
+        },
+        onAssign: (_value, itemId) => {
+          engine.assignPotionSlot(itemId);
+          openPotionChooser = false;
+          render();
+        },
+        onAdd: () => {
+          openPotionChooser = !openPotionChooser; // re-click dismisses
+          render();
+        },
+      },
+    ),
+  );
 
   // Quiver tile (#119): dispatch order mirrors the Potion Slot above — unassign (✕) before a
   // chooser pick, before the [+] toggle.
-  el("#quiver-slot").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-
-    if (target.dataset["quiverUnassign"] !== undefined) {
-      engine.unloadQuiver(); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
-      render();
-      return;
-    }
-
-    const assignItemId = target.dataset["quiverAssign"];
-    if (assignItemId !== undefined) {
-      engine.loadQuiver(assignItemId);
-      openQuiverChooser = false;
-      render();
-      return;
-    }
-
-    if (target.dataset["quiverAdd"] !== undefined) {
-      openQuiverChooser = !openQuiverChooser; // re-click dismisses
-      render();
-    }
-  });
+  el("#quiver-slot").addEventListener(
+    "click",
+    createLoadoutSlotDispatcher(
+      { unassign: "quiverUnassign", assign: "quiverAssign", add: "quiverAdd" },
+      {
+        onUnassign: () => {
+          engine.unloadQuiver(); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
+          render();
+        },
+        onAssign: (_value, itemId) => {
+          engine.loadQuiver(itemId);
+          openQuiverChooser = false;
+          render();
+        },
+        onAdd: () => {
+          openQuiverChooser = !openQuiverChooser; // re-click dismisses
+          render();
+        },
+      },
+    ),
+  );
 
   // Rune Pouch panel (#119): dispatch order mirrors the Food Slot bar — unassign (✕) before a
   // chooser pick, before the [+] toggle; `data-rune-add` carries the Element rather than an index.
-  el("#rune-pouch").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-
-    const unassignItemId = target.dataset["runeUnassign"];
-    if (unassignItemId !== undefined) {
-      engine.unloadRunePouch(unassignItemId); // logs nothing; no feed line for unload
-      render();
-      return;
-    }
-
-    const assignItemId = target.dataset["runeAssign"];
-    if (assignItemId !== undefined) {
-      engine.loadRunePouch(assignItemId);
-      openRunePouchChooserElement = null;
-      render();
-      return;
-    }
-
-    const addElement = target.dataset["runeAdd"] as Element | undefined;
-    if (addElement !== undefined) {
-      // re-click dismisses
-      openRunePouchChooserElement = openRunePouchChooserElement === addElement ? null : addElement;
-      render();
-    }
-  });
+  el("#rune-pouch").addEventListener(
+    "click",
+    createLoadoutSlotDispatcher(
+      { unassign: "runeUnassign", assign: "runeAssign", add: "runeAdd" },
+      {
+        onUnassign: (itemId) => {
+          engine.unloadRunePouch(itemId); // logs nothing; no feed line for unload
+          render();
+        },
+        onAssign: (_value, itemId) => {
+          engine.loadRunePouch(itemId);
+          openRunePouchChooserElement = null;
+          render();
+        },
+        onAdd: (value) => {
+          const addElement = value as Element;
+          // re-click dismisses
+          openRunePouchChooserElement =
+            openRunePouchChooserElement === addElement ? null : addElement;
+          render();
+        },
+      },
+    ),
+  );
 
   // Vendor tab panel (#119): a fixed-price Buy control per row, mirroring the Smithing/Cooking/
   // Crafting/Herblore recipe lists' single Craft-button dispatch shape.
