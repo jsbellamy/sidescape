@@ -360,6 +360,102 @@ describe("manual-check: resize", () => {
   });
 });
 
+// Regression coverage for the bug a human tester found while manually verifying #137's
+// "user-increased compact width and height persist across relaunch" criterion: widening the
+// native window while a card stayed open was silently dropped on the *next* sync (re-applying the
+// stale stored width/height snapped the window back), and nothing ever wired the compact widget's
+// rendered CSS width to a live/stored value at all (see the `--compact-w` assertions below —
+// mirrors the pre-existing `--card-h` wiring). `applyCards`'s old branch structure only captured
+// width/height on the very first closed→open transition and only derived `cardHeight` (never
+// `compact.width`) on open→open; open→closed captured nothing at all.
+describe("manual-check: resize (#137 follow-up — width capture while cards stay open, and on close)", () => {
+  it("captures a native window widened past the card row's own width while a card remains open, instead of reverting on the next sync (open -> open)", async () => {
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+    );
+    const port = fakePort({
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const chrome = createTauriWindowChrome(root(), port);
+    chrome.setCardCount(1);
+    await chrome.settled();
+
+    // One 300px card's row is only 300px wide; a live width of 500 unambiguously means the user
+    // dragged the *compact* widget wider, not the row.
+    port.setRect({ width: 500 });
+    chrome.setCardCount(2); // any further workspace sync -- not just a resize -- re-applies geometry
+    await chrome.settled();
+
+    expect(loadGeometry().compact.width).toBe(500);
+  });
+
+  it("captures both the live width and the live cardHeight made while a card was open even when the very next sync closes it (open -> closed), so reopening later reflects the drag instead of the pre-drag geometry", async () => {
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+    );
+    const port = fakePort({
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const chrome = createTauriWindowChrome(root(), port);
+    chrome.setCardCount(1);
+    await chrome.settled();
+
+    port.setRect({ width: 500, height: 1000 });
+    chrome.setCardCount(0); // closes directly -- no intermediate open -> open sync ever ran
+    await chrome.settled();
+
+    expect(loadGeometry().compact.width).toBe(500);
+    // compactVisibleH = max(MIN_COMPACT_H, 460) = 460; cardHeight = 1000 - 460 - CARD_GAP(8) = 532.
+    expect(loadGeometry().cardHeight).toBe(532);
+
+    // Reopening should now size the card row from the captured 532, not the stale pre-drag 400.
+    chrome.setCardCount(1);
+    await chrome.settled();
+    expect(last(port.calls.setSize)).toMatchObject({ width: 500, height: 1000 });
+  });
+
+  it("wires the compact widget's rendered width to the stored/live value via --compact-w, the same mechanism --card-h already uses for height", async () => {
+    localStorage.setItem(
+      GEOMETRY_KEY,
+      JSON.stringify({ compact: { width: 320, height: 460 }, cardHeight: 400 }),
+    );
+    const port = fakePort({
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 460,
+      monitor: { x: 0, y: 0, width: 1920, height: 1200 },
+    });
+    const appRoot = root();
+    const chrome = createTauriWindowChrome(appRoot, port);
+
+    // Closed (zero cards), the very first call: exposes the *stored* compact width (320px) as
+    // --compact-w — this must happen unconditionally (unlike --card-h, which only applies while a
+    // card is open), since #compact-widget is visible closed too and previously had no wiring at
+    // all (a hardcoded 320px in styles.css, regardless of any stored/live value).
+    chrome.setCardCount(0);
+    await chrome.settled();
+    expect(appRoot.style.getPropertyValue("--compact-w")).toBe("320px");
+
+    // Open, and the user drags the window wider than the 1-card row: --compact-w picks up the
+    // captured width, independent of the card row's own (narrower) width.
+    port.setRect({ width: 400 });
+    chrome.setCardCount(1);
+    await chrome.settled();
+    expect(appRoot.style.getPropertyValue("--compact-w")).toBe("400px");
+  });
+});
+
 describe("manual-check: close/reopen", () => {
   it.each([
     { name: "top", y: 100 },
