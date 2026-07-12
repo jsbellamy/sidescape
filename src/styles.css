@@ -905,6 +905,42 @@ body {
   margin: 8px 0 3px;
 }
 
+/* Character tab-panel collapsible section headers (#134) — same dim/uppercase look as
+   .panel-subtitle, but a full-width button so the whole header is a click target. The chevron is a
+   ::before glyph keyed on aria-expanded, no extra DOM. */
+.section-header {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  margin: 8px 0 3px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.section-header:hover {
+  color: var(--accent);
+}
+
+.section-header::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+}
+
+.section-header[aria-expanded="true"]::before {
+  content: "▾";
+}
+
+.section-body[hidden] {
+  display: none;
+}
+
 .spell-row {
   display: flex;
   flex-direction: column;
