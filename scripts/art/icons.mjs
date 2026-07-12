@@ -1,32 +1,12 @@
 import { fileURLToPath } from "node:url";
-import { createCanvas, createMask, writeIcon } from "./icon-canvas.mjs";
+import { createCanvas, writeIcon } from "./icon-canvas.mjs";
 import { loadSourceGrid, paintSourceIcon } from "./icon-source.mjs";
-import { materialPalettes, P, zonePalettes } from "./palettes.mjs";
 import { writePng } from "./write-png.mjs";
 
 /** Directory holding committed compact icon sources (`<name>.png`) for source-driven icons —
  * produced by `npm run art:ingest` from prompt-kit generations (docs/icon-gen.md) and conformed to
  * house style at build by `paintSourceIcon`. */
 const ICON_SOURCES_DIR = fileURLToPath(new URL("./icon-sources", import.meta.url));
-
-/** Legacy convenience for simple rectangular parts. New multi-part subjects should use a unioned
- * `createMask()` silhouette so constituent primitives do not leave internal outline seams. */
-function block(canvas, x0, y0, x1, y1, fill, outline = P.ink) {
-  canvas.rect(x0 - 1, y0 - 1, x1 + 1, y1 + 1, outline);
-  canvas.rect(x0, y0, x1, y1, fill);
-}
-
-/** Filled circle with a 1px outline ring, same "outline then inset fill" idea as `block` above,
- * for round silhouette parts (pommels, potion bulbs, coin stacks). */
-function disc(canvas, cx, cy, r, fill, outline = P.ink) {
-  canvas.circle(cx, cy, r + 1, outline);
-  canvas.circle(cx, cy, r, fill);
-}
-
-const meadow = zonePalettes.meadow; // [sky, spring-green, mid-green, deep-green, forest-green, gold]
-const crypt = zonePalettes.crypt; // [violet-lt, violet, violet-mid, violet-dk, bone, ink-violet]
-const sewer = zonePalettes.sewer;
-const water = materialPalettes.water;
 
 const sapphireToEmerald = {
   "forest[1]": "meadow[4]",
@@ -68,21 +48,7 @@ export const icons = [
   },
   {
     name: "skill-defence",
-    paint(c) {
-      // Heater shield: flat-topped body tapering to a point. The outline is drawn as its own
-      // pass around the whole silhouette instead of via per-row block() calls, which stacked
-      // outline ink into a near-solid dark point that sank into the panel (#164 sheet sweep).
-      c.rect(8, 5, 25, 20, P.ink);
-      c.rect(9, 6, 24, 20, meadow[2]);
-      for (let y = 21; y <= 30; y++) {
-        const inset = Math.round(((y - 20) / 10) * 8);
-        c.rect(8 + inset, y, 25 - inset, y, P.ink);
-        c.rect(9 + inset, y, 24 - inset, y, meadow[2]);
-      }
-      c.line(16, 8, 16, 18, meadow[1]);
-      c.line(17, 8, 17, 18, meadow[1]);
-      disc(c, 16.5, 13, 2, meadow[5]);
-    },
+    source: "golden-armor-kiteshield.png",
   },
   {
     name: "skill-hitpoints",
@@ -90,33 +56,7 @@ export const icons = [
   },
   {
     name: "skill-fishing",
-    paint(c) {
-      // Canonical native-grid sample: plump profile with stepped belly, highlights, fin, and tail.
-      const fish = createMask();
-      fish.circle(14, 17, 10);
-      fish.rect(13, 8, 25, 25);
-      for (let x = 25; x <= 31; x++) {
-        const half = 2 + Math.round((x - 25) * 0.9);
-        fish.rect(x, 17 - half, x, 17 + half);
-      }
-      fish.rect(14, 24, 20, 27);
-      fish.rect(17, 27, 22, 29);
-      fish.rect(19, 29, 22, 30);
-
-      c.outlineMask(fish, P.ink);
-      c.paintMask(fish, water.base);
-      c.paintInside(fish, (inside) => {
-        inside.rect(7, 21, 21, 24, water.shadow);
-        inside.rect(9, 24, 18, 26, water.light);
-        inside.rect(8, 8, 15, 10, water.light);
-        inside.rect(10, 7, 15, 8, water.glint);
-        inside.rect(6, 13, 8, 15, P.ink);
-        inside.plot(7, 13, P.glint);
-        inside.rect(14, 25, 20, 27, meadow[3]);
-        inside.rect(17, 27, 22, 29, meadow[2]);
-        inside.rect(19, 29, 22, 30, meadow[1]);
-      });
-    },
+    source: "golden-base-raw-trout.png",
   },
   {
     name: "skill-smithing",
@@ -124,29 +64,11 @@ export const icons = [
   },
   {
     name: "skill-ranged",
-    paint(c) {
-      // Recurve bow with drawn string + nocked arrow.
-      for (let y = 4; y <= 29; y++) {
-        const bow = Math.round(9 * Math.sin(((y - 4) / 25) * Math.PI));
-        c.plot(16 - bow, y, P.umber);
-        c.plot(17 - bow, y, P.sand);
-      }
-      c.thickLine(16, 4, 8, 16, 2, P.cream);
-      c.thickLine(8, 16, 16, 29, 2, P.cream);
-      c.line(6, 16, 27, 16, P.sand);
-      c.thickLine(21, 16, 27, 16, 2, P.umber);
-    },
+    source: "golden-base-shortbow.png",
   },
   {
     name: "skill-magic",
-    paint(c) {
-      // Staff with a glinting orb — one connected silhouette, thickLine shaft (#164: the prior
-      // staff was a 1px stroke and the sparkle was two dashes that read as floating detail).
-      c.thickLine(13, 12, 24, 29, 2, P.umber);
-      disc(c, 13, 10, 5, crypt[2]);
-      c.circle(13, 10, 2, crypt[4]);
-      c.plot(12, 8, P.glint);
-    },
+    source: "golden-base-apprentice-staff.png",
   },
   {
     name: "skill-cooking",
@@ -154,23 +76,14 @@ export const icons = [
   },
   {
     name: "skill-crafting",
-    paint(c) {
-      // Needle + eye + thread coil — the needle is now a thickLine shaft (#164 sheet sweep: the
-      // prior needle was a bare 1px diagonal) and the coil uses a visible sand tone instead of
-      // pure ink, which sank into the panel.
-      c.thickLine(6, 28, 27, 7, 2, P.sand);
-      disc(c, 6, 28, 2, P.umber, P.ink);
-      c.line(21, 13, 25, 9, P.cream);
-      c.thickLine(9, 22, 14, 27, 2, sewer[3]);
-      c.thickLine(13, 18, 18, 23, 2, sewer[3]);
-    },
+    source: "golden-skill-crafting-v2.png",
   },
   {
     name: "skill-herblore",
     source: "golden-skill-herblore.png",
   },
   // --- Workspace/navigation icons ---
-  { name: "tab-world", source: "golden-tab-world.png" },
+  { name: "tab-world", source: "golden-tab-world-v2.png" },
   { name: "tab-skills", source: "golden-tab-skills.png" },
   { name: "tab-character", source: "golden-tab-character.png" },
   { name: "tab-bank", source: "golden-tab-bank.png" },
