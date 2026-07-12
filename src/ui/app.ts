@@ -110,13 +110,6 @@ function ammoDetailLines(def: AmmoDef): string[] {
   return lines;
 }
 
-/** A Monster's weak spot (Combat Depth #102): the lowest entry in its defence vector, ties broken
- * by ATTACK_TYPES order — UI-derived, not stored on MonsterDef (monster stats are static content,
- * matching the W2-4 pattern of never widening Snapshot for renderable-from-Content data). */
-function weakSpot(def: Record<AttackType, number>): AttackType {
-  return ATTACK_TYPES.reduce((weakest, t) => (def[t] < def[weakest] ? t : weakest));
-}
-
 /** One line per stat on `def`: the weapon's own attack type (weapon rows only), non-zero
  * atk/str bonuses, the compact defence vector (#99, always shown — it's the piece's whole
  * defensive contribution), and the weapon's own speed for weapon-slot items. */
@@ -780,16 +773,14 @@ export function mountApp(
       el("#monster-hp-fill").style.width = `${(monster.hp / monster.maxHp) * 100}%`;
       el("#monster-hp-text").textContent = `${monster.hp}/${monster.maxHp}`;
 
-      const def = content.monsters.find((m) => m.id === monster.id);
-      if (def) {
-        const attackTypeLabel = def.attackType.charAt(0).toUpperCase() + def.attackType.slice(1);
-        const weakSuffix = ` · Weak: ${weakSpot(def.def)}${def.weakElement ? ` · Weak: ${def.weakElement}` : ""}`;
-        monsterStats.textContent = `${attackTypeLabel} · Atk ${def.attackLevel} · Def ${def.defenceLevel} · Max hit ${def.maxHit} · Speed ${def.attackSpeed}t${weakSuffix}`;
-        monsterStats.hidden = false;
-      } else {
-        monsterStats.textContent = "";
-        monsterStats.hidden = true;
-      }
+      // Deepened Snapshot (#184): every stat below is read straight from snap.monster — the
+      // Engine derives them fresh from the active MonsterDef at snapshot() time, so this no
+      // longer re-opens raw Content (no content.monsters.find/local weakSpot here anymore).
+      const attackTypeLabel =
+        monster.attackType.charAt(0).toUpperCase() + monster.attackType.slice(1);
+      const weakSuffix = ` · Weak: ${monster.weakSpot}${monster.weakElement ? ` · Weak: ${monster.weakElement}` : ""}`;
+      monsterStats.textContent = `${attackTypeLabel} · Atk ${monster.attackLevel} · Def ${monster.defenceLevel} · Max hit ${monster.maxHit} · Speed ${monster.attackSpeed}t${weakSuffix}`;
+      monsterStats.hidden = false;
 
       const sprite = monsterSprite(monster.id);
       if (sprite) {

@@ -71,10 +71,20 @@ describe("makeSnapshot", () => {
   });
 
   it("sets monster wholesale and leaves fishing null", () => {
-    const snap = makeSnapshot({
-      monster: { id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 },
-    });
-    expect(snap.monster).toEqual({ id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 });
+    const monster = {
+      id: "dummy",
+      name: "Training Dummy",
+      hp: 3,
+      maxHp: 3,
+      attackType: "crush" as const,
+      weakSpot: "stab" as const,
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 1,
+      attackSpeed: 4,
+    };
+    const snap = makeSnapshot({ monster });
+    expect(snap.monster).toEqual(monster);
     expect(snap.fishing).toBeNull();
   });
 

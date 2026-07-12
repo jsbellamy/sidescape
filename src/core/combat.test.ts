@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attackRoll, effectiveLevel, hitChance, maxHit } from "./combat";
+import { attackRoll, effectiveLevel, hitChance, maxHit, weakSpot } from "./combat";
 
 // Expected values hand-computed from the OSRS formulas (docs/design.md).
 describe("effectiveLevel", () => {
@@ -33,5 +33,15 @@ describe("hitChance", () => {
   it("attack roll composes level and bonus", () => {
     expect(attackRoll(12, 0)).toBe(768);
     expect(attackRoll(12, 7)).toBe(852);
+  });
+});
+
+describe("weakSpot", () => {
+  it("returns the lowest Defence Vector entry", () => {
+    expect(weakSpot({ stab: 5, slash: 1, crush: 5, ranged: 5, magic: 5 })).toBe("slash");
+  });
+
+  it("ties break to the first type in ATTACK_TYPES order (stab, slash, crush, ranged, magic)", () => {
+    expect(weakSpot({ stab: 3, slash: 3, crush: 3, ranged: 3, magic: 3 })).toBe("stab");
   });
 });

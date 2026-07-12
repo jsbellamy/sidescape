@@ -479,7 +479,32 @@ export interface Snapshot {
      * `completedDungeonIds`), serialised to an array here. Tolerant load: missing/pre-#120-> []. */
     ownedPets: string[];
   };
-  monster: { id: string; name: string; hp: number; maxHp: number } | null;
+  /** Deepened (#184, "a rule, not raw data" — mirrors player.bonuses/areas.gatedBy): the six
+   * fields below are ALWAYS recomputed from the active MonsterDef at `snapshot()` time, never
+   * trusted from a saved Snapshot — see engine.ts's snapshot(). Populated for both a farmed
+   * Monster and the current Dungeon Wave/Boss (dungeon reuses this same field, see
+   * `Snapshot.dungeon`'s own doc). */
+  monster: {
+    id: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    /** Mirrors MonsterDef.attackType — the Monster's own offence Attack Type. */
+    attackType: AttackType;
+    /** The lowest entry in the Monster's Defence Vector, ties broken by ATTACK_TYPES order — see
+     * `weakSpot` in combat.ts and CONTEXT.md's Weak Spot entry. */
+    weakSpot: AttackType;
+    attackLevel: number;
+    defenceLevel: number;
+    maxHit: number;
+    /** Ticks between monster attacks. */
+    attackSpeed: number;
+    /** Mirrors MonsterDef.weakElement (optional, magic-only) — kept so renderScene's existing
+     * "Weak: <element>" suffix needs no separate Content lookup; not one of #184's six required
+     * derived fields, but necessary so `renderScene` can drop `content.monsters.find` entirely
+     * while still rendering identical text. */
+    weakElement?: Element;
+  } | null;
   fishing: { spotId: string; name: string } | null;
   /** Sibling to monster/fishing; monster stays populated with the current wave Monster so the
    * existing HP-bar rendering works untouched. 1-based wave, mid-run only — never persisted

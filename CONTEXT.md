@@ -45,7 +45,7 @@ A Monster's optional `weakElement` and the ×1.5 damage bonus a matching **Spell
 _Avoid_: resistance (reserved for **Defence Vector**), elemental wheel (not implemented — explicit per-Monster weakness only)
 
 **Weak Spot**:
-A Monster's lowest **Defence Vector** entry — the **Attack Type** it defends worst, so the type most rewarding to switch a weapon to. UI-derived (`src/ui/app.ts`), not a stored field: ties break by ATTACK_TYPES order (stab, slash, crush, ranged, magic). Distinct from **Weakness**, which is `weakElement`-based and Magic-only; a Monster always has a Weak Spot, but only some carry a `weakElement` too.
+A Monster's lowest **Defence Vector** entry — the **Attack Type** it defends worst, so the type most rewarding to switch a weapon to. Derived by the **Engine** (`weakSpot` in `src/core/combat.ts`) and carried on the **Snapshot**'s monster view, not a stored Content field: ties break by ATTACK_TYPES order (stab, slash, crush, ranged, magic). Distinct from **Weakness**, which is `weakElement`-based and Magic-only; a Monster always has a Weak Spot, but only some carry a `weakElement` too.
 _Avoid_: weakness (reserved for the `weakElement` mechanic above), soft spot
 
 **Tick**:

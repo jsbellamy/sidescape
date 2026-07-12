@@ -174,11 +174,27 @@ describe("combat", () => {
   it("selectMonster spawns the Monster at full HP", () => {
     const engine = freshEngine();
     engine.selectMonster("dummy");
+    const monster = engine.snapshot().monster;
+    expect(monster?.hp).toBe(3);
+    expect(monster?.maxHp).toBe(3);
+  });
+
+  it("carries the six derived combat fields from the active MonsterDef (#184) — attackType, weakSpot, attackLevel, defenceLevel, maxHit, attackSpeed", () => {
+    const engine = freshEngine();
+    engine.selectMonster("dummy");
+    // "dummy" (fixture-content.ts): attackLevel 1, defenceLevel 1, maxHit 1, attackSpeed 4,
+    // attackType "crush", def all-equal-zero -> weakSpot ties to "stab" (first in ATTACK_TYPES).
     expect(engine.snapshot().monster).toEqual({
       id: "dummy",
       name: "Training Dummy",
       hp: 3,
       maxHp: 3,
+      attackType: "crush",
+      weakSpot: "stab",
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 1,
+      attackSpeed: 4,
     });
   });
 
@@ -2042,10 +2058,12 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
     expect(engine.snapshot().monster).toBeNull();
   });
 
-  it("a save with a valid monster still resumes combat with its saved HP (no regression)", () => {
+  it("a save with a valid monster still resumes combat with its saved HP (no regression); an old-shape saved monster (no derived fields, #184) still loads and the next snapshot() carries them, freshly computed from Content", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
+      // Deliberately the OLD monster shape (id/name/hp/maxHp only, no derived fields) — mirrors a
+      // pre-#184 save.
       makeSnapshot({ monster: { id: "dummy", name: "Training Dummy", hp: 2, maxHp: 3 } }),
     );
     expect(engine.snapshot().monster).toEqual({
@@ -2053,11 +2071,56 @@ describe("loadState: full-sweep tolerant save validation (#38)", () => {
       name: "Training Dummy",
       hp: 2,
       maxHp: 3,
+      // Recomputed from fixtureContent's "dummy" MonsterDef, not read from the saved Snapshot
+      // (which had none of these fields).
+      attackType: "crush",
+      weakSpot: "stab",
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 1,
+      attackSpeed: 4,
     });
     let kills = 0;
     engine.on("kill", () => kills++);
     for (let i = 0; i < 5000; i++) engine.tick();
     expect(kills).toBeGreaterThan(0);
+  });
+
+  it("ignores tampered derived monster fields on a saved Snapshot — they are always recomputed from Content at snapshot() time (#184)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        monster: {
+          id: "dummy",
+          name: "Training Dummy",
+          hp: 2,
+          maxHp: 3,
+          // Every derived field below is deliberately WRONG relative to fixtureContent's real
+          // "dummy" MonsterDef (attackType "crush", weakSpot "stab" (all-zero vector),
+          // attackLevel/defenceLevel/maxHit 1, attackSpeed 4) — if the Engine ever trusted these
+          // instead of recomputing them, this test would see the tampered values below.
+          attackType: "magic",
+          weakSpot: "magic",
+          attackLevel: 99,
+          defenceLevel: 99,
+          maxHit: 99,
+          attackSpeed: 99,
+        },
+      }),
+    );
+    expect(engine.snapshot().monster).toEqual({
+      id: "dummy",
+      name: "Training Dummy",
+      hp: 2,
+      maxHp: 3,
+      attackType: "crush",
+      weakSpot: "stab",
+      attackLevel: 1,
+      defenceLevel: 1,
+      maxHit: 1,
+      attackSpeed: 4,
+    });
   });
 
   it("never throws even when every field is corrupted at once", () => {
@@ -2489,7 +2552,18 @@ describe("Dungeons", () => {
         wave: 1,
         totalWaves: 3,
       });
-      expect(snap.monster).toEqual({ id: "dummy", name: "Training Dummy", hp: 3, maxHp: 3 });
+      expect(snap.monster).toEqual({
+        id: "dummy",
+        name: "Training Dummy",
+        hp: 3,
+        maxHp: 3,
+        attackType: "crush",
+        weakSpot: "stab",
+        attackLevel: 1,
+        defenceLevel: 1,
+        maxHit: 1,
+        attackSpeed: 4,
+      });
     });
 
     it("clears any selected Fishing Spot on entry", () => {
@@ -2574,7 +2648,21 @@ describe("Dungeons", () => {
         wave: 3,
         totalWaves: 3,
       });
-      expect(snap.monster).toEqual({ id: "boss-dummy", name: "Boss Dummy", hp: 5, maxHp: 5 });
+      // On wave-cleared, the next Wave's own MonsterDef facts appear (#184) — "boss-dummy" has its
+      // own attackLevel/defenceLevel/maxHit/attackSpeed distinct from "dummy"'s, proving they come
+      // from the new active MonsterDef rather than being carried over from the prior wave.
+      expect(snap.monster).toEqual({
+        id: "boss-dummy",
+        name: "Boss Dummy",
+        hp: 5,
+        maxHp: 5,
+        attackType: "crush",
+        weakSpot: "stab",
+        attackLevel: 1,
+        defenceLevel: 1,
+        maxHit: 1,
+        attackSpeed: 4,
+      });
       // wave Monsters still roll their normal Drop Table (guaranteed gold ×5 lands on every kill,
       // credited straight to gold, #59).
       expect(snap.player.gold).toBeGreaterThanOrEqual(10);
