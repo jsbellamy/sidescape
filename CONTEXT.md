@@ -94,6 +94,10 @@ A metal Material dropped by certain Monsters (e.g. Bronze Bar, Iron Bar) and smi
 A Smithing-level-gated conversion of Materials into one Equipment Item, trained via the Smithing Skill. Selecting a Recipe crafts it repeatedly on a per-craft cooldown (mirroring a Fishing Spot's Catch cooldown) for as long as its inputs hold out, consuming them and granting Smithing XP at each completion.
 _Avoid_: blueprint, formula
 
+**Production Skill**:
+A Recipe-driven **Skill** trained by crafting — Smithing, Cooking, Crafting, and Herblore. Each has one management panel, one activity prop, and one scene label, all declared in a single descriptor table (`src/ui/production.ts`); adding a Production Skill is one descriptor row, not new renderer code.
+_Avoid_: craft skill, trade skill
+
 **Bank**:
 The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here, unless it's Food assigned to a **Food Slot**, which routes there instead; **Equipment** is worn directly from the Bank, while **Food** is eaten only via a Food Slot. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
 _Avoid_: storage, chest, warehouse, inventory

@@ -347,7 +347,7 @@ body {
 }
 
 /* Activity foreground prop (#80): follows the ACTIVITY (unlike the backdrop, which follows the
-   Area) — see props.ts's registry. Sits at the near-layer depth, beside the player sprite (right
+   Area) — see production.ts's PRODUCTION_SKILLS/resolveProp. Sits at the near-layer depth, beside the player sprite (right
    side of #sprite-row, see the flex layout above), so still behind sprites/splats/bars like the
    rest of #backdrop, never overlapping them. */
 #activity-prop {

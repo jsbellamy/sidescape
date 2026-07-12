@@ -22,7 +22,12 @@ import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
 import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
-import { resolveProp } from "./props";
+import {
+  PRODUCTION_SKILLS,
+  productionLabel,
+  productionPanelMarkup,
+  resolveProp,
+} from "./production";
 import { resolveTheme } from "./theme";
 import { itemIcon } from "./icons";
 import { formatQty } from "./format";
@@ -682,9 +687,9 @@ export function mountApp(
       .join("");
   }
 
-  /** Renders the Vendor tab panel's fixed-price buy list (#119): mirrors renderSmithing's own
-   * name/level-row/action-button shape (reusing its `.recipe-name`/`.craft-btn` CSS classes rather
-   * than inventing a parallel set), substituting the gold price for a level requirement and a
+  /** Renders the Vendor tab panel's fixed-price buy list (#119): mirrors a Production Skill panel's
+   * (production.ts) own name/level-row/action-button shape (reusing its `.recipe-name`/`.craft-btn`
+   * CSS classes rather than inventing a parallel set), substituting the gold price for a level requirement and a
    * "Buy" command for "Craft". Each row also shows how many the player already owns in the Bank.
    * The Buy button disables while short on gold; `buy` itself still throws on a full Bank (#119's
    * "player commands throw" rule), surfaced via the item-bought/error path same as any other
@@ -706,7 +711,8 @@ export function mountApp(
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
    * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
    * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
-   * and shows/hides the activity's foreground prop (Smithing's anvil, this wave — see props.ts).
+   * and shows/hides the activity's foreground prop (Smithing's anvil, this wave — see
+   * production.ts's `resolveProp`).
    * Updates `lastAreaId` whenever an Area-following activity resolves one, so later idle stretches
    * keep showing the most recently visited Area rather than flashing back to the first-unlocked. */
   function renderBackdrop(snap: Snapshot): void {
@@ -749,19 +755,8 @@ export function mountApp(
     const monsterBar = el<HTMLElement>("#monster-bar");
     const monsterStats = el<HTMLElement>("#monster-stats");
     if (production) {
-      // Smithing keeps its exact label this wave (byte-identical, #113); Cooking (#115), Crafting
-      // (#116), and Herblore (#118) each pick their own emoji here.
-      const label =
-        production.skill === "smithing"
-          ? "🔨 Smithing"
-          : production.skill === "cooking"
-            ? "🍳 Cooking"
-            : production.skill === "crafting"
-              ? "🧵 Crafting"
-              : production.skill === "herblore"
-                ? "🧪 Herblore"
-                : production.skill;
-      el("#monster-name").textContent = `${label}: ${production.name}`;
+      // Scene label is descriptor-backed (#181, production.ts) — see productionLabel.
+      el("#monster-name").textContent = `${productionLabel(production.skill)}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
       monsterStats.hidden = true;
@@ -943,100 +938,9 @@ export function mountApp(
       <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
   }
 
-  /** Renders the Smithing tab panel's recipe list: each Recipe's inputs (with owned quantities),
-   * level gate, and a Craft button disabled while under-leveled or short on inputs. Filtered to
-   * `skill === "smithing"` (#113: `content.recipes` now spans every production Skill, but this
-   * tab is Smithing's own — Cooking/Crafting/Herblore add their own tabs in their own slices). */
-  function renderSmithing(bankItems: Snapshot["bank"]["items"], smithingLevel: number): void {
-    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#smithing-recipes").innerHTML = content.recipes
-      .filter((recipe) => recipe.skill === "smithing")
-      .map((recipe) => {
-        const inputsLine = recipe.inputs
-          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
-          .join(", ");
-        const underLeveled = smithingLevel < recipe.levelReq;
-        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
-        const disabled = underLeveled || shortOnInputs;
-        return `<li data-recipe-row="${recipe.id}">
-                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
-                  <p class="recipe-inputs">${inputsLine}</p>
-                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
-                </li>`;
-      })
-      .join("");
-  }
-
-  /** Renders the Cooking tab panel's recipe list (#115): mirrors renderSmithing exactly, filtered
-   * to `skill === "cooking"` instead — Crafting/Herblore add their own tabs the same way in their
-   * own slices. */
-  function renderCooking(bankItems: Snapshot["bank"]["items"], cookingLevel: number): void {
-    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#cooking-recipes").innerHTML = content.recipes
-      .filter((recipe) => recipe.skill === "cooking")
-      .map((recipe) => {
-        const inputsLine = recipe.inputs
-          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
-          .join(", ");
-        const underLeveled = cookingLevel < recipe.levelReq;
-        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
-        const disabled = underLeveled || shortOnInputs;
-        return `<li data-recipe-row="${recipe.id}">
-                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
-                  <p class="recipe-inputs">${inputsLine}</p>
-                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
-                </li>`;
-      })
-      .join("");
-  }
-
-  /** Renders the Crafting tab panel's recipe list (#116): mirrors renderSmithing/renderCooking
-   * exactly, filtered to `skill === "crafting"` instead — Herblore adds its own tab the same way
-   * in its own slice. */
-  function renderCrafting(bankItems: Snapshot["bank"]["items"], craftingLevel: number): void {
-    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#crafting-recipes").innerHTML = content.recipes
-      .filter((recipe) => recipe.skill === "crafting")
-      .map((recipe) => {
-        const inputsLine = recipe.inputs
-          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
-          .join(", ");
-        const underLeveled = craftingLevel < recipe.levelReq;
-        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
-        const disabled = underLeveled || shortOnInputs;
-        return `<li data-recipe-row="${recipe.id}">
-                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
-                  <p class="recipe-inputs">${inputsLine}</p>
-                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
-                </li>`;
-      })
-      .join("");
-  }
-
-  /** Renders the Herblore tab panel's recipe list (#118): mirrors renderSmithing/renderCooking/
-   * renderCrafting exactly, filtered to `skill === "herblore"` instead. */
-  function renderHerblore(bankItems: Snapshot["bank"]["items"], herbloreLevel: number): void {
-    const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#herblore-recipes").innerHTML = content.recipes
-      .filter((recipe) => recipe.skill === "herblore")
-      .map((recipe) => {
-        const inputsLine = recipe.inputs
-          .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
-          .join(", ");
-        const underLeveled = herbloreLevel < recipe.levelReq;
-        const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
-        const disabled = underLeveled || shortOnInputs;
-        return `<li data-recipe-row="${recipe.id}">
-                  <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
-                  <p class="recipe-inputs">${inputsLine}</p>
-                  <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
-                </li>`;
-      })
-      .join("");
-  }
-
-  /** Dispatcher (#39): reads the latest Snapshot, then calls each per-panel renderer in turn. No
-   * panel-rendering logic lives here — see the per-panel functions above for what each one owns. */
+  /** Dispatcher (#39): reads the latest Snapshot, then renders each Production Skill's panel in
+   * turn (#181: descriptor-driven, see production.ts — one loop replaces the four former
+   * per-skill panel-rendering functions this module used to define). */
   function render(): void {
     const snap = engine.snapshot();
     const { player, monster, fishing, dungeon, production, bank } = snap;
@@ -1053,10 +957,14 @@ export function mountApp(
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
     renderVendor(bank, player.gold);
-    renderSmithing(bank.items, player.skills.smithing.level);
-    renderCooking(bank.items, player.skills.cooking.level);
-    renderCrafting(bank.items, player.skills.crafting.level);
-    renderHerblore(bank.items, player.skills.herblore.level);
+    for (const descriptor of PRODUCTION_SKILLS) {
+      el(`#${descriptor.panelId}`).innerHTML = productionPanelMarkup(
+        descriptor,
+        content,
+        bank.items,
+        player.skills[descriptor.skill].level,
+      );
+    }
   }
 
   function buildPicker(): void {
@@ -1638,33 +1546,16 @@ export function mountApp(
     render();
   });
 
-  el("#smithing-recipes").addEventListener("click", (event) => {
-    const recipeId = (event.target as HTMLElement).dataset["recipe"];
-    if (!recipeId) return;
-    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
-    render();
-  });
-
-  el("#cooking-recipes").addEventListener("click", (event) => {
-    const recipeId = (event.target as HTMLElement).dataset["recipe"];
-    if (!recipeId) return;
-    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
-    render();
-  });
-
-  el("#crafting-recipes").addEventListener("click", (event) => {
-    const recipeId = (event.target as HTMLElement).dataset["recipe"];
-    if (!recipeId) return;
-    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
-    render();
-  });
-
-  el("#herblore-recipes").addEventListener("click", (event) => {
-    const recipeId = (event.target as HTMLElement).dataset["recipe"];
-    if (!recipeId) return;
-    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
-    render();
-  });
+  // One identical Craft-click handler per Production Skill panel (#181: descriptor-driven, see
+  // production.ts — replaces the four former per-skill listeners).
+  for (const descriptor of PRODUCTION_SKILLS) {
+    el(`#${descriptor.panelId}`).addEventListener("click", (event) => {
+      const recipeId = (event.target as HTMLElement).dataset["recipe"];
+      if (!recipeId) return;
+      engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
+      render();
+    });
+  }
 
   buildPicker();
   render();
