@@ -1491,3 +1491,29 @@ button.tile:hover {
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+/* Compact minimum (#137): pure CSS height media queries progressively hide the two lowest-value
+   #main-column regions as the compact widget shortens, freeing vertical room for the three
+   regions that must ALWAYS be visible — titlebar, the complete scene (backdrop, sprites/prop,
+   name/stats, both HP bars, Food Slots), and #136's launcher row. No JS resize listener and no
+   new persisted mode state: the browser alone applies/un-applies these rules as height crosses
+   each threshold, so shrinking and growing automatically reverse each other. Pinned hide order
+   (issue's owner direction): Loot Strip goes first (its own threshold is the taller of the two,
+   so it disappears sooner while shortening), the ticker goes second. Thresholds are tuned against
+   the actual post-#136 DOM (measured via a headless-Chromium sweep at MIN_COMPACT_W, checking
+   `#food-slots`/`#card-launchers` for clipping against `#scene`/`#compact-widget`'s own box), not
+   the issue's illustrative starting values — see the PR for the measurement floors each threshold
+   carries a safety margin over. This is independent of `#loot-strip[hidden]` (set by
+   `renderLootStrip` in app.ts when the Loot Zone is empty): the two mechanisms both just resolve
+   to `display: none` and freely coexist — neither refactors the other away. */
+@media (max-height: 375px) {
+  #loot-strip {
+    display: none;
+  }
+}
+
+@media (max-height: 335px) {
+  #ticker {
+    display: none;
+  }
+}
