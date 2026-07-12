@@ -5,7 +5,7 @@ import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
 import { mountApp } from "./app";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(3),

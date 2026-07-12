@@ -4,7 +4,7 @@ import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 import { boot, SAVE_KEY, TICK_MS } from "./boot";
 import {
   type AwayCardModel,

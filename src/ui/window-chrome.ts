@@ -1,7 +1,7 @@
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import type { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 import { currentMonitor, getCurrentWindow, type Monitor } from "@tauri-apps/api/window";
-import type { WorkspaceChrome } from "./app";
+import type { WorkspaceChrome } from "./workspace-chrome";
 import {
   CARD_GAP,
   DEFAULT_CARD_H,
