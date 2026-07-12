@@ -34,8 +34,9 @@ function synthSheet(
 ): Image {
   const cols = grid[0]!.length;
   const rows = grid.length;
-  const width = cols * pitch + border * 2;
-  const height = rows * pitch + border * 2;
+  // Rounded like a real bitmap: a fractional pitch must never yield fractional pixel dimensions.
+  const width = Math.round(cols * pitch) + border * 2;
+  const height = Math.round(rows * pitch) + border * 2;
   const data = new Uint8Array(width * height * 4);
   const put = (x: number, y: number, [r, g, b]: RGB) => {
     const at = (y * width + x) * 4;
@@ -165,7 +166,66 @@ describe("keyBackground", () => {
     expect(at(0, 0)).toBe(0); // outer background corner keyed out
     // The enclosed center hole is bg-colored but unreachable from the border → not keyed as bg.
     expect(enclosedBgCount).toBeGreaterThan(0);
+    expect(at(16, 16)).toBe(1); // center of the hole stays foreground by default
     expect(bbox).toEqual({ x0: 4, y0: 4, x1: 33, y1: 33 });
+  });
+
+  it("keyEnclosed also keys bg-colored holes the flood cannot reach", () => {
+    // Same ring-with-hole sheet as above; the ingest path passes keyEnclosed because its key color
+    // is saturated magenta no subject uses — the hole must become background, the ring must stay.
+    const grid = [
+      ["K", "K", "K", "K", "K"],
+      ["K", "B", "B", "B", "K"],
+      ["K", "B", null, "B", "K"],
+      ["K", "B", "B", "B", "K"],
+      ["K", "K", "K", "K", "K"],
+    ];
+    const sheet = synthSheet(grid, (k: string) => HEX[k]!, {
+      pitch: 6,
+      border: 4,
+      bg: [235, 8, 230],
+    });
+    const bg = sampleBackground(sheet);
+    const { fg, bbox, enclosedBgCount } = keyBackground(sheet, bg, 16, { keyEnclosed: true });
+    const at = (x: number, y: number) => fg[y * sheet.width + x];
+
+    expect(at(16, 16)).toBe(0); // enclosed hole keyed out
+    expect(at(4, 4)).toBe(1); // ring survives
+    expect(at(10, 10)).toBe(1); // body survives
+    expect(enclosedBgCount).toBeGreaterThan(0); // still reported
+    expect(bbox).toEqual({ x0: 4, y0: 4, x1: 33, y1: 33 }); // bbox is the ring, unchanged
+  });
+
+  it("treats zero-alpha pixels as background regardless of their RGB", () => {
+    // A transparent-background export: the border ring and an enclosed hole are opaque-black in
+    // RGB but alpha 0. Both must key out (the hole via keyEnclosed), leaving only the body.
+    const grid = [
+      ["B", "B", "B"],
+      ["B", null, "B"],
+      ["B", "B", "B"],
+    ];
+    const sheet = synthSheet(grid, (k: string) => HEX[k]!, {
+      pitch: 6,
+      border: 4,
+      bg: [0, 0, 0],
+    });
+    // Zero out alpha on every non-body pixel (synthSheet writes bg as opaque [0,0,0]).
+    for (let i = 0; i < sheet.data.length; i += 4) {
+      if (sheet.data[i] === 0 && sheet.data[i + 1] === 0 && sheet.data[i + 2] === 0) {
+        sheet.data[i + 3] = 0;
+      }
+    }
+    // Pretend background sampling reported a color nowhere near the outside pixels' RGB — the
+    // alpha rule alone must carry the keying.
+    const { fg, bbox, enclosedBgCount } = keyBackground(sheet, [255, 0, 255], 16, {
+      keyEnclosed: true,
+    });
+    const at = (x: number, y: number) => fg[y * sheet.width + x];
+    expect(at(0, 0)).toBe(0); // transparent border keyed despite RGB mismatch with bg
+    expect(at(13, 13)).toBe(0); // transparent enclosed hole keyed
+    expect(at(5, 5)).toBe(1); // opaque body survives
+    expect(enclosedBgCount).toBeGreaterThan(0);
+    expect(bbox).toEqual({ x0: 4, y0: 4, x1: 21, y1: 21 });
   });
 
   it("removes a near-ink dark background without leaking through into the body", () => {
@@ -218,6 +278,23 @@ describe("quantizeGrid", () => {
     const { report } = quantizeGrid(grid, named, 40);
     expect(report[0].warn).toBe(true);
     expect(report[0].distance).toBeGreaterThan(40);
+  });
+
+  it("gives red and orange subjects a faithful ramp (blood/ember)", () => {
+    // Before the blood/ember ramps existed, potion reds and flame oranges quantized into the
+    // brown/gold ramps — a red potion shipped brown. Representative generation colors must now
+    // land on the red/orange vocabulary within the 40-distance warn threshold.
+    const named = buildNamedPalette();
+    const grid = [
+      [
+        [192, 40, 35], // potion red
+        [230, 150, 60], // flame orange
+      ],
+    ];
+    const { cells, report } = quantizeGrid(grid, named, 40);
+    expect(cells[0][0].ref).toMatch(/^blood\./);
+    expect(cells[0][1].ref).toMatch(/^ember\./);
+    expect(report.some((r) => r.warn)).toBe(false);
   });
 });
 

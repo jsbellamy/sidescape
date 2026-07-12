@@ -72,19 +72,25 @@ export function sampleBackground(image) {
 
 /**
  * 4-connected flood fill from the crop border, consuming pixels within per-channel `tolerance` of
- * `bg`. Returns `fg` (1 = foreground, 0 = background) for every pixel, the foreground `bbox`, and
- * `enclosedBgCount` — bg-colored pixels the flood never reached (holes enclosed by the subject),
- * which stay foreground and are reported so the operator can decide during cleanup. Deliberately
- * NOT a global color-distance test: a near-black outline the same color as a dark bg is only ever
- * eaten where it is edge-connected to the bg (harmless — the outline is re-derived downstream),
- * and the flood provably cannot leak through the outline into a lighter body.
+ * `bg` (a zero-alpha pixel counts as background regardless of its RGB). Returns `fg`
+ * (1 = foreground, 0 = background) for every pixel, the foreground `bbox`, and `enclosedBgCount` —
+ * bg-colored/transparent pixels the flood never reached (holes enclosed by the subject).
+ *
+ * By default enclosed holes stay foreground and are only reported, deliberately NOT a global
+ * color-distance test: on a reference sheet a near-black outline the same color as a dark bg is
+ * only ever eaten where it is edge-connected to the bg (harmless — the outline is re-derived
+ * downstream), and the flood provably cannot leak through the outline into a lighter body.
+ * `keyEnclosed: true` (the ingest path, where the bg is a saturated key color no subject ever
+ * uses) also keys the enclosed holes out, so a bow's window or a ring's center stays transparent
+ * instead of quantizing into a body color.
  */
-export function keyBackground(image, bg, tolerance = 16) {
+export function keyBackground(image, bg, tolerance = 16, { keyEnclosed = false } = {}) {
   const { width: w, height: h, data } = image;
   const within = (o) =>
-    Math.abs(data[o] - bg[0]) <= tolerance &&
-    Math.abs(data[o + 1] - bg[1]) <= tolerance &&
-    Math.abs(data[o + 2] - bg[2]) <= tolerance;
+    data[o + 3] < 128 ||
+    (Math.abs(data[o] - bg[0]) <= tolerance &&
+      Math.abs(data[o + 1] - bg[1]) <= tolerance &&
+      Math.abs(data[o + 2] - bg[2]) <= tolerance);
 
   const flooded = new Uint8Array(w * h);
   const stack = [];
@@ -123,8 +129,11 @@ export function keyBackground(image, bg, tolerance = 16) {
     for (let x = 0; x < w; x++) {
       const idx = y * w + x;
       if (flooded[idx]) continue;
+      if (within(idx * 4)) {
+        enclosedBgCount++;
+        if (keyEnclosed) continue;
+      }
       fg[idx] = 1;
-      if (within(idx * 4)) enclosedBgCount++;
       if (x < x0) x0 = x;
       if (x > x1) x1 = x;
       if (y < y0) y0 = y;

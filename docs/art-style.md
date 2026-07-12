@@ -24,10 +24,12 @@ These drive backdrops, sprite accents, and scene props so each Theme is coherent
 
 ## Icon material ramps
 
-Close-up icons may use the named steel, water/scale, and gold ramps in
-`scripts/art/palettes.mjs`. These ramps exist to reproduce the golden master's readable material
+Close-up icons may use the named steel, water/scale, gold, blood (red), and ember (orange) ramps
+in `scripts/art/palettes.mjs`. These ramps exist to reproduce the golden master's readable material
 planes; use their named `shadow`, `base`, `light`, and `glint` roles and spend the 8–12-color budget
-intentionally.
+intentionally. The ramps are also the entire hue vocabulary build-time quantization can speak: a
+subject whose dominant hue has no ramp (the red potion, before `blood` existed) silently ships
+recolored into the nearest ramp, so add a ramp here rather than letting an off-hue subject drift.
 
 ## Grids and pixel rules
 

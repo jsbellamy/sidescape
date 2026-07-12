@@ -24,11 +24,15 @@ export const zonePalettes = {
 };
 
 /** Material ramps used by close-up UI icons. Zone palettes establish atmosphere; these ramps
- * establish readable steel, water/scale, and gold volume at 34x34 without gradients. */
+ * establish readable steel, water/scale, gold, blood-red, and ember-orange volume at 34x34
+ * without gradients. Without `blood`/`ember`, quantization has no red or orange vocabulary at
+ * all and pulls potions, hearts, and flames into the brown/gold ramps. Hexes are tuning. */
 export const materialPalettes = {
   steel: { shadow: "#59636d", base: "#8d99a3", light: "#c4ccd1", glint: "#eef2f2" },
   water: { shadow: "#4f7f9f", base: "#72a7cc", light: "#9bc9e3", glint: "#c6e4f2" },
   gold: { shadow: "#8f5b00", base: "#d49b00", light: "#f0bd36", glint: "#ffe18a" },
+  blood: { shadow: "#71201d", base: "#a53026", light: "#d05c47", glint: "#f1a58c" },
+  ember: { shadow: "#8a3c12", base: "#c56a1e", light: "#e99a37", glint: "#ffcf6f" },
 };
 
 /** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources
