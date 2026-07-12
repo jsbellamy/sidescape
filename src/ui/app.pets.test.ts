@@ -11,7 +11,7 @@ import type { WorkspaceChrome } from "./workspace-chrome";
 const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
-  getCapacity: () => Promise.resolve(3),
+  getCapacity: () => Promise.resolve(2),
   setCardCount: () => {},
 };
 
@@ -19,7 +19,6 @@ function mountWith(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
   const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
   const root = document.createElement("main");
   const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
-  root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
   return { engine, root, app };
 }
 

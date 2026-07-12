@@ -175,7 +175,7 @@ export function createTauriWindowChrome(
     // current width the row could explain by itself; whenever the live width exceeds it, the
     // excess is unambiguously the compact widget's own width, safe to persist regardless of
     // whether cards are open, opening, or closing this call.
-    const capacity = monitorRect ? workspaceCapacity(monitorRect.width) : 3;
+    const capacity = monitorRect ? workspaceCapacity(monitorRect.width) : 2;
     const wasEffective = Math.min(Math.max(0, cardCount), capacity);
     const wasRowWidth =
       wasEffective > 0 ? wasEffective * CARD_W + Math.max(0, wasEffective - 1) * CARD_GAP : 0;
@@ -253,13 +253,13 @@ export function createTauriWindowChrome(
     // browser-degraded `npm run dev` path (no `__TAURI_INTERNALS__`) degrades to the most
     // permissive capacity instead of leaving the launcher's click handler's promise to reject
     // uncaught.
-    async getCapacity(): Promise<1 | 2 | 3> {
+    async getCapacity(): Promise<1 | 2> {
       try {
         const monitor = await port.currentMonitor();
-        return monitor ? workspaceCapacity(monitor.size.toLogical(monitor.scaleFactor).width) : 3;
+        return monitor ? workspaceCapacity(monitor.size.toLogical(monitor.scaleFactor).width) : 2;
       } catch (error) {
         console.error(error);
-        return 3;
+        return 2;
       }
     },
     setCardCount(nextCardCount: number): void {

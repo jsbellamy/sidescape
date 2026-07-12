@@ -287,7 +287,7 @@ describe("manual-check: narrow-monitor", () => {
 
     await expect(single.getCapacity()).resolves.toBe(1);
     await expect(doubled.getCapacity()).resolves.toBe(2);
-    await expect(noMonitor.getCapacity()).resolves.toBe(3);
+    await expect(noMonitor.getCapacity()).resolves.toBe(2);
 
     const port = fakePort({
       x: 0,
@@ -302,7 +302,7 @@ describe("manual-check: narrow-monitor", () => {
     expect(last(port.calls.setSize)).toMatchObject({ width: 320 });
   });
 
-  it("resolves capacity 3 instead of rejecting when the native call fails (#136: browser-degraded getCapacity() caller)", async () => {
+  it("resolves capacity 2 instead of rejecting when the native call fails (#136/#206: browser-degraded getCapacity() caller)", async () => {
     // Mirrors setCardCount's own `.catch(console.error)` resilience: `npm run dev`'s plain-browser
     // fallback has no `__TAURI_INTERNALS__`, so every Tauri API call rejects there. #136's launcher
     // click handler awaits getCapacity() directly (no try/catch of its own), so the adapter itself
@@ -318,7 +318,7 @@ describe("manual-check: narrow-monitor", () => {
     };
     const chrome = createTauriWindowChrome(root(), rejectingPort);
 
-    await expect(chrome.getCapacity()).resolves.toBe(3);
+    await expect(chrome.getCapacity()).resolves.toBe(2);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });

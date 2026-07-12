@@ -35,12 +35,14 @@ export interface WorkspaceRectResult {
   width: number;
   height: number;
   anchor: VerticalAnchor | null;
-  capacity: 1 | 2 | 3;
+  capacity: 1 | 2;
 }
 
-export function workspaceCapacity(monitorWidth: number): 1 | 2 | 3 {
-  return Math.max(1, Math.min(3, Math.floor((monitorWidth + CARD_GAP) / (CARD_W + CARD_GAP)))) as
-    1 | 2 | 3;
+/** The Management Row now holds at most two cards — Character and one Management destination
+ * (#206: the three-card World/Character/Resources workspace is gone). */
+export function workspaceCapacity(monitorWidth: number): 1 | 2 {
+  return Math.max(1, Math.min(2, Math.floor((monitorWidth + CARD_GAP) / (CARD_W + CARD_GAP)))) as
+    1 | 2;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -61,7 +63,7 @@ function clampRect(
 
 export function workspaceRect(args: WorkspaceRectArgs): WorkspaceRectResult {
   const { current, compact, wasCardCount, cardCount, monitor } = args;
-  const capacity = monitor ? workspaceCapacity(monitor.width) : 3;
+  const capacity = monitor ? workspaceCapacity(monitor.width) : 2;
   const effective = Math.min(Math.max(0, cardCount), capacity);
   if (effective === 0) {
     // The current union's anchored compact point is converted back to its compact rect.

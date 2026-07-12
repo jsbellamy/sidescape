@@ -163,9 +163,11 @@ window with transparent glass around and between them. Cards-on-Glass never
 creates child windows; it contains the Compact Widget and the Management Row.
 
 **Management Row**:
-The horizontal row of zero to three opaque management cards. Each card is
-300px wide and cards are separated by an 8px gap; the row is vertically
-adjacent to the Compact Widget within Cards-on-Glass.
+The horizontal row of zero to two opaque management cards: the fixed
+Character hub and one shared Management card whose body swaps between the
+`world`/`bank`/`workshop`/`activity` destinations. Each card is 300px wide and
+cards are separated by an 8px gap; the row is vertically adjacent to the
+Compact Widget within Cards-on-Glass.
 
 **Workspace Rect** (`workspaceRect`):
 The pure, logical rectangle for the complete Compact Widget/Card Row union.
@@ -180,7 +182,7 @@ all cards close. `workspaceRect` chooses it by monitor-midpoint comparison
 with the 50px `ANCHOR_DEADBAND`.
 
 **Capacity** (`workspaceCapacity`):
-The one-to-three-card Management Row limit derived from logical monitor width.
+The one-to-two-card Management Row limit derived from logical monitor width.
 `workspaceCapacity` computes it from 300px cards and the 8px `CARD_GAP`.
 
 **Workspace Chrome** (`WorkspaceChrome`):

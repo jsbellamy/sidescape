@@ -5,6 +5,6 @@
  * seam — everything else in this file is plain in-page flex layout.
  */
 export interface WorkspaceChrome {
-  getCapacity(): Promise<1 | 2 | 3>;
+  getCapacity(): Promise<1 | 2>;
   setCardCount(cardCount: number): void;
 }

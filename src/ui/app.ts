@@ -172,237 +172,58 @@ function skillProgress(skill: SkillSnapshot): number {
   return (skill.xp - floor) / (ceil - floor);
 }
 
-/** The three Management Row cards (#136), in canonical DOM/display order — World, Character,
- * Resources. Rendering always shows open cards in this order, independent of the order they were
- * opened/activated in (see `WorkspaceState.recency`'s own doc comment below). */
-export const CARD_IDS = ["world", "character", "resources"] as const;
-export type CardId = (typeof CARD_IDS)[number];
+/** The two Management Row cards (#206: replaces the three-card World/Character/Resources
+ * workspace) — a fixed Character hub plus one shared Management card whose body swaps between
+ * four destinations. */
+export const MANAGEMENT_DESTINATIONS = ["world", "bank", "workshop", "activity"] as const;
+export type ManagementDestination = (typeof MANAGEMENT_DESTINATIONS)[number];
 
-/** The Character card's two internal tabs (#136), replacing the Character/Skills entries the old
- * nine-tab RIGHT panel used to carry as separate top-level tabs. */
-export const CHARACTER_TABS = ["character", "skills"] as const;
-export type CharacterTabId = (typeof CHARACTER_TABS)[number];
-
-/** The Resources card's seven internal tabs (#136), replacing the remaining old nine-tab RIGHT
- * panel entries. */
-export const RESOURCE_TABS = [
-  "bank",
-  "vendor",
-  "smithing",
-  "cooking",
-  "crafting",
-  "herblore",
-  "loot",
-] as const;
-export type ResourceTabId = (typeof RESOURCE_TABS)[number];
-
-/** Display labels for the three launcher buttons, `CARD_IDS` order. */
-const CARD_LABELS: Record<CardId, string> = {
+/** Display labels for the Management card's own title and for the Character hub's destination
+ * nav buttons (a subset — see `CHARACTER_NAV_DESTINATIONS` below). */
+const MANAGEMENT_DESTINATION_LABELS: Record<ManagementDestination, string> = {
   world: "World",
-  character: "Character",
-  resources: "Resources",
-};
-/** Display labels for the Character card's internal tab strip, `CHARACTER_TABS` order. */
-const CHARACTER_TAB_LABELS: Record<CharacterTabId, string> = {
-  character: "Character",
-  skills: "Skills",
-};
-/** Display labels for the Resources card's internal tab strip, `RESOURCE_TABS` order. */
-const RESOURCE_TAB_LABELS: Record<ResourceTabId, string> = {
   bank: "Bank",
-  vendor: "Vendor",
-  smithing: "Smithing",
-  cooking: "Cooking",
-  crafting: "Crafting",
-  herblore: "Herblore",
-  loot: "Loot Feed",
+  workshop: "Workshop",
+  activity: "Activity",
 };
 
-function isCharacterTabId(value: unknown): value is CharacterTabId {
-  return (CHARACTER_TABS as readonly unknown[]).includes(value);
-}
+/** The Character hub's own destination nav buttons, in display order (#206 "header: Character |
+ * World | Workshop | Activity | Settings") — `bank` is deliberately excluded from the nav strip;
+ * it's reached only via the embedded Equipment Bank tray's own "Expand Bank" button, which
+ * dispatches the same destination-click path as these buttons. */
+const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = ["world", "workshop", "activity"];
 
-function isResourceTabId(value: unknown): value is ResourceTabId {
-  return (RESOURCE_TABS as readonly unknown[]).includes(value);
-}
-
-/** Presentation-only, session-only open-card state (#136) — never persisted (a relaunch always
- * starts with every card closed, see `StoredWorkspaceStateV2`'s own doc comment). `recency` is
- * both the open-card *set* and its LRU order, oldest -> most-recently opened/activated; rendering
- * never reads this order — visible DOM order always follows `CARD_IDS` (World -> Character ->
- * Resources), independent of open order. */
+/** Presentation-only, session-only workspace state (#206) — never persisted under any key (a
+ * relaunch always starts with both cards closed) and never entering the Engine Snapshot/save.
+ * `characterOpen` and `management` independently track the two Management Row cards; stale
+ * `sidescape-ui-workspace-v2`/`sidescape-ui-panels` values that a pre-#206 build may have left in
+ * localStorage are never read any more. */
 interface WorkspaceState {
-  recency: CardId[];
-  characterTab: CharacterTabId;
-  resourceTab: ResourceTabId;
+  characterOpen: boolean;
+  management: ManagementDestination | null;
 }
 
-/** The shape persisted under `sidescape-ui-workspace-v2` (#136) — internal tab selections only,
- * never the open-card set (`WorkspaceState.recency`), so a relaunch always starts compact/closed
- * while remembering which Character/Resources tab was last selected. Presentation-only
- * localStorage, never the Engine Snapshot/save. */
-interface StoredWorkspaceStateV2 {
-  version: 2;
-  characterTab: CharacterTabId;
-  resourceTab: ResourceTabId;
-}
-
-const WORKSPACE_STORAGE_KEY = "sidescape-ui-workspace-v2";
-const DEFAULT_STORED_WORKSPACE: StoredWorkspaceStateV2 = {
-  version: 2,
-  characterTab: "character",
-  resourceTab: "bank",
-};
-
-/** One button per `ids` entry: an icon (via `tabIcon`) plus a label, carrying `data-tab="<id>"` —
- * shared shape for both the Character (2-button) and Resources (7-button) internal tab strips
- * (#136 §3). Delegated click handlers resolve the id via `closest("button[data-tab]")`, so clicks
- * on the nested `<img>`/`<span>` work same as a direct button click. */
-function tabStripMarkup<T extends string>(ids: readonly T[], labels: Record<T, string>): string {
-  return ids
-    .map(
-      (id) => `<button data-tab="${id}" title="${labels[id]}">
-      <img class="tab-icon pixel" src="${tabIcon(id)}" alt="" />
-      <span>${labels[id]}</span>
-    </button>`,
-    )
-    .join("");
-}
-
-/** The three always-available launcher buttons (#136 §2), replacing the old LEFT arrow + nine-tab
- * RIGHT strip. Resources has no dedicated launcher icon of its own — it reuses `tabIcon("bank")`,
- * mirroring the icon registry's own documented choice (icons.ts). Delegated click handlers resolve
- * the id via `closest("button[data-card-launcher]")`, so clicks on the nested `<img>`/`<span>`
- * work same as a direct button click. */
-function cardLauncherMarkup(): string {
-  return CARD_IDS.map((card) => {
-    const icon = card === "resources" ? tabIcon("bank") : tabIcon(card);
-    return `<button data-card-launcher="${card}" title="${CARD_LABELS[card]}">
-      <img class="tab-icon pixel" src="${icon}" alt="" />
-      <span>${CARD_LABELS[card]}</span>
-    </button>`;
-  }).join("");
-}
-
-/** Presentation-only panel state (#62) — localStorage only, never the Snapshot/save (same
- * boundary as the sort choice, #26, and the SFX mute preference, #20). `left`/`tab` are legacy
- * fields (pre-#136): they are still read tolerantly (see `loadStoredWorkspace`'s own doc comment,
- * which recovers an initial Character/Resources tab selection from `tab` on a fresh v2 key) but
- * are always written back as closed/null going forward — only `charSections` is still live state
- * carried by this key today. */
-interface PanelState {
-  left: boolean;
-  tab: CharacterTabId | ResourceTabId | null;
-  /** Character-section open flags (#134); a missing/malformed value means all open. */
-  charSections?: Record<string, boolean>;
-}
-
-const PANEL_STORAGE_KEY = "sidescape-ui-panels";
-const CLOSED_PANELS: PanelState = { left: false, tab: null };
-
-/** The six collapsible Character tab-panel sections (#134), in on-screen order — the combat-style
- * row, auto-eat row, and auto-sell checkbox are compact one-line settings and stay always visible,
- * so they never get a section id. */
-const CHAR_SECTION_IDS = ["gear", "potion", "quiver", "rune-pouch", "pets", "spells"] as const;
-type CharSectionId = (typeof CHAR_SECTION_IDS)[number];
-
-function isCharSectionId(value: unknown): value is CharSectionId {
-  return CHAR_SECTION_IDS.some((id) => id === value);
-}
-
-/** Sanitizes a possibly-malformed `charSections` value from localStorage down to known section ids
- * with boolean values only — never throws, and anything that isn't a plain object (or holds no
- * recognizable entries) degrades to `{}`, which reads as "all open" everywhere a missing key is
- * checked (see `PanelState.charSections`'s own doc comment). */
-function sanitizeCharSections(value: unknown): Record<string, boolean> {
-  if (typeof value !== "object" || value === null) return {};
-  const result: Record<string, boolean> = {};
-  for (const [key, open] of Object.entries(value as Record<string, unknown>)) {
-    if (isCharSectionId(key) && typeof open === "boolean") result[key] = open;
-  }
-  return result;
-}
-
-/** The persisted panel state, or both panels closed if unset/malformed or localStorage is
- * unavailable (private mode, disabled) — the same fail-safe shape as `loadSortKey`. */
-function loadPanelState(): PanelState {
-  try {
-    const raw = localStorage.getItem(PANEL_STORAGE_KEY);
-    if (!raw) return CLOSED_PANELS;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return CLOSED_PANELS;
-    const left = (parsed as { left?: unknown }).left === true;
-    const tabRaw = (parsed as { tab?: unknown }).tab;
-    const tab = isCharacterTabId(tabRaw) || isResourceTabId(tabRaw) ? tabRaw : null;
-    const charSections = sanitizeCharSections((parsed as { charSections?: unknown }).charSections);
-    return { left, tab, charSections };
-  } catch {
-    return CLOSED_PANELS;
-  }
-}
-
-function savePanelState(state: PanelState): void {
-  try {
-    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage may be unavailable; the choice just won't persist.
-  }
-}
-
-/** Recovers an initial Character/Resources tab selection from the legacy `sidescape-ui-panels`
- * key's single `tab` field (pre-#136's one-active-RIGHT-tab model) — used only as
- * `loadStoredWorkspace`'s own fallback when the new v2 key itself is missing, never to reopen a
- * card (a relaunch always starts every card closed, migration or not). */
-function legacyStoredWorkspace(): StoredWorkspaceStateV2 {
-  const legacyTab = loadPanelState().tab;
-  return {
-    version: 2,
-    characterTab: isCharacterTabId(legacyTab) ? legacyTab : DEFAULT_STORED_WORKSPACE.characterTab,
-    resourceTab: isResourceTabId(legacyTab) ? legacyTab : DEFAULT_STORED_WORKSPACE.resourceTab,
-  };
-}
-
-/** Tolerant load for `sidescape-ui-workspace-v2` (#136 §1): a missing key falls back to recovering
- * an initial tab selection from the legacy `sidescape-ui-panels` key (see `legacyStoredWorkspace`),
- * or the hardcoded default if that has nothing to recover either. A malformed top-level value
- * (unparseable JSON, not an object, wrong `version`) gets the same legacy-or-default fallback.
- * Once the v2 shape itself is recognized, `characterTab`/`resourceTab` are validated
- * independently — a malformed individual tab defaults to its own hardcoded default without
- * affecting the other, sibling field. */
-function loadStoredWorkspace(): StoredWorkspaceStateV2 {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-    if (!raw) return legacyStoredWorkspace();
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      (parsed as { version?: unknown }).version !== 2
-    ) {
-      return legacyStoredWorkspace();
-    }
-    const characterTabRaw = (parsed as { characterTab?: unknown }).characterTab;
-    const resourceTabRaw = (parsed as { resourceTab?: unknown }).resourceTab;
-    return {
-      version: 2,
-      characterTab: isCharacterTabId(characterTabRaw)
-        ? characterTabRaw
-        : DEFAULT_STORED_WORKSPACE.characterTab,
-      resourceTab: isResourceTabId(resourceTabRaw)
-        ? resourceTabRaw
-        : DEFAULT_STORED_WORKSPACE.resourceTab,
-    };
-  } catch {
-    return legacyStoredWorkspace();
-  }
-}
-
-function saveWorkspaceState(stored: StoredWorkspaceStateV2): void {
-  try {
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(stored));
-  } catch {
-    // localStorage may be unavailable; the choice just won't persist.
-  }
+/** The Character hub's own header nav (#206: "header: Character | World | Workshop | Activity |
+ * Settings") — a static "Character" title (the hub's own label; there is no click behavior for
+ * it, unlike the other four) plus one `data-destination` button per
+ * `CHARACTER_NAV_DESTINATIONS` and a trailing `data-nav="settings"` popover toggle. Delegated
+ * click handling on `#card-character` resolves buttons via `closest`, so nested `<img>`/`<span>`
+ * clicks work the same as a direct button click. */
+function characterNavMarkup(): string {
+  const destinationButtons = CHARACTER_NAV_DESTINATIONS.map(
+    (destination) =>
+      `<button data-destination="${destination}" title="${MANAGEMENT_DESTINATION_LABELS[destination]}">
+        <img class="tab-icon pixel" src="${tabIcon(destination)}" alt="" />
+        <span>${MANAGEMENT_DESTINATION_LABELS[destination]}</span>
+      </button>`,
+  ).join("");
+  return `<span class="card-nav-title" data-tauri-drag-region>Character</span>
+    <nav id="character-nav" class="card-nav">
+      ${destinationButtons}
+      <button data-nav="settings" title="Settings" aria-expanded="false">
+        <span aria-hidden="true">⚙</span>
+      </button>
+    </nav>`;
 }
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
@@ -422,18 +243,28 @@ export function mountApp(
   content: ResolvedContent,
   windowChrome: WorkspaceChrome,
 ): MountedApp {
-  // Presentation-only workspace state (#136): up to three Management Row cards — World, Character,
-  // Resources — open via `workspace.recency` (the open-card set and its LRU order; see
-  // WorkspaceState's own doc comment above). Cards deliberately never restore open after relaunch;
-  // only the Character/Resources internal tab selections survive a reload (loadStoredWorkspace,
-  // which also recovers an initial selection from the pre-#136 `sidescape-ui-panels` key the first
-  // time the new v2 key hasn't been written yet — see legacyStoredWorkspace).
-  const storedWorkspace = loadStoredWorkspace();
-  const workspace: WorkspaceState = {
-    recency: [],
-    characterTab: storedWorkspace.characterTab,
-    resourceTab: storedWorkspace.resourceTab,
-  };
+  // Presentation-only, session-only workspace state (#206): both cards always start closed —
+  // never persisted, never restored across a relaunch, never part of the Snapshot/save (see
+  // WorkspaceState's own doc comment above).
+  const workspace: WorkspaceState = { characterOpen: false, management: null };
+  // Which Bank|Vendor page is showing inside the Management card's "bank" destination (#206) —
+  // purely presentational, session-only, independent of `workspace.management` itself so the
+  // choice survives switching away to another destination and back.
+  let managementBankPage: "bank" | "vendor" = "bank";
+  // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
+  // presentational UI state, an anchored popover that never changes card height.
+  let openSettings = false;
+  // Whether the Character hub's Pets summary popover (the full owned/total roster grid) is open
+  // (#206) — same presentational shape as `openSettings`.
+  let openPetsPopover = false;
+  // Which empty Gear Slot (if any) currently has its Bank-Equipment chooser open (#206: Gear Slots
+  // become clickable slot tiles, mirroring the Loadout Slot choosers below) — purely
+  // presentational, closes on a re-click of the same slot's `[+]` or on picking an Equipment item.
+  let openGearChooserSlot: GearSlot | null = null;
+  // Which tile (if any) is selected in the Character hub's embedded Equipment-only Bank tray,
+  // driving its own detail strip (#206) — independent of `selectedBankItem` below (the full Bank
+  // page's own selection), since the two grids show different, independently-scrollable subsets.
+  let selectedEquipmentTrayItem: string | null = null;
   // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
   let sortKey: SortKey = loadSortKey();
   // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
@@ -456,11 +287,6 @@ export function mountApp(
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
   // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
   let selectedBankItem: string | null = null;
-  // Character tab-panel section open/closed flags (#134) — purely presentational, persisted
-  // alongside left/tab in the same `sidescape-ui-panels` value. A missing key means that section is
-  // open (the interface's own documented default), so this only ever needs to record explicit
-  // closes/reopens, not a full map of every section id.
-  let charSectionsState: Record<string, boolean> = loadPanelState().charSections ?? {};
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -472,124 +298,122 @@ export function mountApp(
   // Presentation-only, in-memory (never the Snapshot/save), same boundary as sortKey/panelState.
   let lastAreaId: string | null = null;
 
-  /** Shows the open Management Row cards (World/Character/Resources) and their internal
-   * Character/Resources tab selections, hiding the rest; highlights the matching launcher and
-   * internal-tab buttons. Visible DOM order always follows `CARD_IDS` — World -> Character ->
-   * Resources — independent of `workspace.recency`'s open/activation order (#136 §1/§3). Does not
-   * itself notify WorkspaceChrome or persist — callers that change `workspace` do that via
+  /** Shows/hides the two Management Row cards and the Management card's four destination page
+   * bodies, and mirrors the Bank|Vendor toggle and Settings/Pets popovers onto the DOM (#206). DOM
+   * order is always Character -> Management, stable regardless of which is open — only `hidden`
+   * changes. Does not itself notify WorkspaceChrome — callers that change `workspace` do that via
    * `syncWorkspace` below. */
   function renderWorkspace(): void {
-    const open = new Set(workspace.recency);
-    for (const card of CARD_IDS) {
-      el<HTMLElement>(`#card-${card}`).hidden = !open.has(card);
+    el<HTMLElement>("#card-character").hidden = !workspace.characterOpen;
+    el<HTMLElement>("#card-management").hidden = workspace.management === null;
+
+    root.querySelectorAll<HTMLElement>("[data-management-page]").forEach((page) => {
+      page.hidden = page.dataset["managementPage"] !== workspace.management;
+    });
+    if (workspace.management) {
+      el<HTMLElement>("#management-title").textContent =
+        MANAGEMENT_DESTINATION_LABELS[workspace.management];
     }
     root
-      .querySelectorAll<HTMLButtonElement>("#card-launchers button[data-card-launcher]")
+      .querySelectorAll<HTMLButtonElement>("#character-nav button[data-destination]")
       .forEach((btn) => {
-        btn.classList.toggle("active", open.has(btn.dataset["cardLauncher"] as CardId));
+        btn.classList.toggle("active", btn.dataset["destination"] === workspace.management);
       });
-    root
-      .querySelectorAll<HTMLButtonElement>("#character-tab-strip button[data-tab]")
-      .forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset["tab"] === workspace.characterTab);
-      });
-    root
-      .querySelectorAll<HTMLButtonElement>("#resource-tab-strip button[data-tab]")
-      .forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset["tab"] === workspace.resourceTab);
-      });
-    root.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      const id = panel.dataset["tabPanel"];
-      if (isCharacterTabId(id)) panel.hidden = id !== workspace.characterTab;
-      else if (isResourceTabId(id)) panel.hidden = id !== workspace.resourceTab;
+
+    root.querySelectorAll<HTMLElement>("[data-bank-page]").forEach((page) => {
+      page.hidden = page.dataset["bankPage"] !== managementBankPage;
     });
-    // Collapse the whole row when no card is open, so the transparent union has no phantom CARD_GAP
-    // above/below the compact widget — the window is exactly compact-sized while closed.
-    el<HTMLElement>("#management-row").hidden = workspace.recency.length === 0;
+    root
+      .querySelectorAll<HTMLButtonElement>("#bank-vendor-toggle button[data-bankpage]")
+      .forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset["bankpage"] === managementBankPage);
+      });
+
+    el<HTMLElement>("#settings-popover").hidden = !openSettings;
+    root
+      .querySelector<HTMLButtonElement>('[data-nav="settings"]')
+      ?.setAttribute("aria-expanded", String(openSettings));
+    el<HTMLElement>("#pets-popover").hidden = !openPetsPopover;
+    root
+      .querySelector<HTMLButtonElement>('[data-nav="pets"]')
+      ?.setAttribute("aria-expanded", String(openPetsPopover));
+
+    el<HTMLElement>("#menu-toggle").classList.toggle(
+      "active",
+      workspace.characterOpen || workspace.management !== null,
+    );
+    // Collapse the whole row when both cards are closed, so the transparent union has no phantom
+    // CARD_GAP above/below the compact widget — the window is exactly compact-sized while closed.
+    el<HTMLElement>("#management-row").hidden =
+      !workspace.characterOpen && workspace.management === null;
   }
 
-  /** The single synchronization path (#136 §4): re-renders card/tab visibility, notifies
-   * `WorkspaceChrome` of the new open-card *count* exactly once (the seam main.ts's real Tauri
-   * adapter resizes/anchors the transparent window from), and persists the Character/Resources tab
-   * selections to `sidescape-ui-workspace-v2` — never the open-card set, and never the Engine
-   * Snapshot/save. Every workspace change goes through this one function: launchers, internal tabs,
-   * card close, LRU eviction, transparent-glass close, Escape, and the initial boot sync (called
-   * once up front with zero cards open). */
+  /** The single synchronization path (#206): re-renders card/page visibility and notifies
+   * `WorkspaceChrome` of the new open-card *count* exactly once — `(characterOpen ? 1 : 0) +
+   * (management ? 1 : 0)` — the seam main.ts's real Tauri adapter resizes/anchors the transparent
+   * window from. Workspace state is session-only (never persisted, never the Engine
+   * Snapshot/save); every workspace change goes through this one function: the menu toggle,
+   * destination clicks, Back/second-card-close, transparent-glass close, Escape, and the initial
+   * boot sync (called once up front with both cards closed). */
   function syncWorkspace(): void {
     renderWorkspace();
-    windowChrome.setCardCount(workspace.recency.length);
-    saveWorkspaceState({
-      version: 2,
-      characterTab: workspace.characterTab,
-      resourceTab: workspace.resourceTab,
-    });
+    const cardCount = (workspace.characterOpen ? 1 : 0) + (workspace.management ? 1 : 0);
+    windowChrome.setCardCount(cardCount);
   }
 
-  /** Opens `card` if closed — evicting the LRU-oldest open card first while at
-   * `WorkspaceChrome.getCapacity()` for the current monitor — or closes it if already open (#136
-   * §2). Closing runs fully synchronously through `syncWorkspace()` despite the `async` signature:
-   * a JS async function's body runs synchronously up to its first `await`, and the closing branch
-   * returns before ever reaching one. */
-  async function toggleCard(card: CardId): Promise<void> {
-    if (workspace.recency.includes(card)) {
-      workspace.recency = workspace.recency.filter((c) => c !== card);
+  /** "menu click" (#206): if either card is visible, closes both; otherwise opens Character alone.
+   * Wired to `#menu-toggle` (always visible in the compact widget) and to the transparent-glass
+   * click, which always closes (see `closeWorkspace` below) rather than toggling. */
+  function onMenuToggle(): void {
+    if (workspace.characterOpen || workspace.management !== null) {
+      closeWorkspace();
+    } else {
+      workspace.characterOpen = true;
       syncWorkspace();
-      return;
     }
-    const capacity = await windowChrome.getCapacity();
-    while (workspace.recency.length >= capacity) workspace.recency = workspace.recency.slice(1);
-    workspace.recency = [...workspace.recency, card];
+  }
+
+  /** Closes both cards unconditionally — the transparent-glass click and the menu button's
+   * "already open" branch both resolve here (#206). */
+  function closeWorkspace(): void {
+    workspace.characterOpen = false;
+    workspace.management = null;
     syncWorkspace();
   }
 
-  /** Moves an already-open card to the recency tail (most-recently-activated) without opening,
-   * closing, or reordering anything visually — internal-tab clicks call this so a later LRU
-   * eviction reflects real recent activity, not just launcher clicks (#136 §2's "activating an
-   * already-open card... moves it to the recency tail" rule). A no-op if `card` isn't open. */
-  function activateCard(card: CardId): void {
-    if (!workspace.recency.includes(card)) return;
-    workspace.recency = [...workspace.recency.filter((c) => c !== card), card];
+  /** "destination click" (#206): opens `destination` in the Management card, alongside Character
+   * when the monitor has room for two cards, replacing Character outright at capacity 1. Wired to
+   * the Character hub's own World/Workshop/Activity nav buttons and its Bank tray's "Expand Bank"
+   * button (which dispatches the "bank" destination). */
+  async function openDestination(destination: ManagementDestination): Promise<void> {
+    const capacity = await windowChrome.getCapacity();
+    if (capacity >= 2) {
+      workspace.characterOpen = true;
+      workspace.management = destination;
+    } else {
+      workspace.characterOpen = false;
+      workspace.management = destination;
+    }
+    syncWorkspace();
   }
 
-  /** A missing key means open — the interface's own documented default (#134). */
-  function isCharSectionOpen(id: string): boolean {
-    return charSectionsState[id] !== false;
+  /** "Back to Character / second-card close" (#206): always returns to Character alone, whether
+   * triggered from the Management card's own Back control or (indirectly) from Escape. */
+  function backToCharacter(): void {
+    workspace.management = null;
+    workspace.characterOpen = true;
+    syncWorkspace();
   }
 
-  /** `charSectionsState` for persistence: `undefined` (dropped by `JSON.stringify`) while no
-   * section has ever been toggled, so a save untouched by #134 round-trips through the exact same
-   * `{ left, tab }` shape it always has — only writes the extra key once there's something to say. */
-  function persistedCharSections(): Record<string, boolean> | undefined {
-    return Object.keys(charSectionsState).length > 0 ? charSectionsState : undefined;
-  }
-
-  /** Builds the full `PanelState` to persist — `exactOptionalPropertyTypes` means `charSections`
-   * must be omitted outright rather than set to `undefined` when there's nothing to say (see
-   * `persistedCharSections`'s own doc comment). `left`/`tab` are always written closed/null now
-   * (#136 retired the open-card meaning they used to carry); `sidescape-ui-workspace-v2` is the
-   * live workspace-state key going forward — see `loadStoredWorkspace`. */
-  function buildPanelState(): PanelState {
-    const charSections = persistedCharSections();
-    const base: PanelState = { left: false, tab: null };
-    return charSections ? { ...base, charSections } : base;
-  }
-
-  /** Mirrors one Character section's open/closed flag onto its header/body DOM — `aria-expanded` on
-   * the header, `hidden` on the body — without touching any renderer (#134: renderers keep painting
-   * into hidden section bodies unconditionally, same as they already do into hidden tab-panels). */
-  function applyCharSectionDom(id: string): void {
-    const open = isCharSectionOpen(id);
-    const header = root.querySelector<HTMLButtonElement>(`button[data-section="${id}"]`);
-    const body = root.querySelector<HTMLElement>(`[data-section-body="${id}"]`);
-    if (header) header.setAttribute("aria-expanded", String(open));
-    if (body) body.hidden = !open;
-  }
-
-  /** Applies every Character section's persisted open/closed flag to the DOM — called once on
-   * mount, after the restored `charSectionsState` is known, so a reload shows collapsed sections
-   * collapsed immediately rather than flashing open first. */
-  function applyCharSections(): void {
-    for (const id of CHAR_SECTION_IDS) applyCharSectionDom(id);
+  /** Escape (#206): closes the Management card back to Character first, then closes Character —
+   * one step per press, no-op once both are already closed. */
+  function onEscape(): void {
+    if (workspace.management !== null) {
+      backToCharacter();
+    } else if (workspace.characterOpen) {
+      workspace.characterOpen = false;
+      syncWorkspace();
+    }
   }
 
   function itemName(itemId: string): string {
@@ -755,22 +579,26 @@ export function mountApp(
     tip.style.top = `${top}px`;
   }
 
-  /** Renders the 3-slot Active Food Slot bar (#61), near the player HP bar: a filled slot shows
-   * name/qty (click = eatFromSlot) plus a small ✕ (click = unassignFoodSlot); an empty slot shows
-   * a `[+]` that opens a chooser listing the Bank's Food stacks (click one = assignFoodSlot).
-   * `openFoodChooserSlot` is presentation-only UI state (never part of the Snapshot), so this
-   * reads it directly from the enclosing closure rather than taking it as a parameter. */
-  function renderFoodSlots(
+  /** Markup for the 3-slot Active Food Slot bar (#61): a filled slot shows name/qty (click =
+   * eatFromSlot) plus a small ✕ (click = unassignFoodSlot); an empty slot shows a `[+]` that opens
+   * a chooser listing the Bank's Food stacks (click one = assignFoodSlot). `openFoodChooserSlot`
+   * is presentation-only UI state (never part of the Snapshot), so this reads it directly from the
+   * enclosing closure rather than taking it as a parameter. Shared by two DOM locations (#206): the
+   * compact widget's own always-visible bar near the player HP bar (`#food-slots`, pre-existing,
+   * unrelated to this issue's card redesign) and the Character hub's Loadout Slot grid
+   * (`#character-food-slots`) — `renderFoodSlots` below paints the identical markup into both, and
+   * both share one click-dispatcher instance (see the event wiring near the bottom of this file). */
+  function foodSlotsMarkup(
     foodSlots: FoodSlot[],
     bankItems: { itemId: string; qty: number }[],
-  ): void {
+  ): string {
     const foodStacks = bankItems.filter((s) => content.itemsById.get(s.itemId)?.kind === "food");
     const chooserItems: LoadoutSlotChooserItem[] = foodStacks.map((s) => ({
       itemId: s.itemId,
       label: `${itemName(s.itemId)} ×${s.qty}`,
     }));
 
-    el("#food-slots").innerHTML = foodSlots
+    return foodSlots
       .map((slot, i) =>
         loadoutSlotMarkup(
           {
@@ -796,6 +624,15 @@ export function mountApp(
         ),
       )
       .join("");
+  }
+
+  function renderFoodSlots(
+    foodSlots: FoodSlot[],
+    bankItems: { itemId: string; qty: number }[],
+  ): void {
+    const markup = foodSlotsMarkup(foodSlots, bankItems);
+    el("#food-slots").innerHTML = markup;
+    el("#character-food-slots").innerHTML = markup;
   }
 
   /** Renders the single Potion Slot tile on the Character tab panel (#118): mirrors
@@ -937,14 +774,17 @@ export function mountApp(
     }).join("");
   }
 
-  /** Renders the Pets tab panel's collection grid (#120): one tile per `content.pets` entry, in
-   * Content order — never filtered down, so the roster itself previews what's collectible. An
-   * owned pet's tile renders normally; an unobtained one is dimmed via `.tile-unowned` (CSS
-   * greyscale/opacity) rather than hidden — "owned lit, unobtained greyed" is the issue's own
-   * instruction. No qty badge (`tileMarkup`'s corner badge) since pets aren't stackable Items,
-   * just `iconMarkup`'s bare `<img>`, mirroring a Character Gear Slot tile. */
+  /** Renders the Character hub's Pets summary (#206: "compact owned/total summary whose popover
+   * reveals the roster") — a compact `<owned>/<total>` count always visible, plus the full
+   * collection grid inside `#pets-popover` (one tile per `content.pets` entry, in Content order —
+   * never filtered down, so the roster itself previews what's collectible). An owned pet's tile
+   * renders normally; an unobtained one is dimmed via `.tile-unowned` (CSS greyscale/opacity)
+   * rather than hidden — "owned lit, unobtained greyed" is the issue's own instruction (#120). No
+   * qty badge (`tileMarkup`'s corner badge) since pets aren't stackable Items, just
+   * `iconMarkup`'s bare `<img>`, mirroring a Character Gear Slot tile. */
   function renderPets(ownedPets: string[]): void {
     const owned = new Set(ownedPets);
+    el("#pets-summary-count").textContent = `${owned.size}/${content.pets.length}`;
     el("#pets-grid").innerHTML = content.pets
       .map((pet) => {
         const isOwned = owned.has(pet.id);
@@ -1110,7 +950,7 @@ export function mountApp(
    * included) no longer sit on the always-visible row (#78) — they're one hover away on
    * `#item-tooltip`, same as every other item tile; `#character-totals` (the aggregate) stays put
    * since it's the one number that's always worth showing without a hover. */
-  function renderCharacter(player: Snapshot["player"]): void {
+  function renderCharacter(player: Snapshot["player"], bankItems: Snapshot["bank"]["items"]): void {
     root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
     });
@@ -1127,14 +967,40 @@ export function mountApp(
 
     el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
 
+    // Gear Slot tiles (#206): a filled slot stays a plain hover-only tile (its stats surface via
+    // the shared #item-tooltip hover panel, same as before); an empty slot becomes a clickable
+    // slot tile whose `[+]` opens an anchored chooser of the Bank's Equipment stacks for that slot
+    // — mirroring the Loadout Slot choosers below, filtered by `slot` instead of item kind alone.
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
-      if (!itemId) {
-        return `<div class="tile tile-empty" data-slot="${slot}">
-                  <span class="tile-empty-mark" aria-label="${slot} (empty)">—</span>
-                </div>`;
+      if (itemId) {
+        return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${iconMarkup(itemId)}</div>`;
       }
-      return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${iconMarkup(itemId)}</div>`;
+      const stacks = bankItems.filter((s) => {
+        const def = content.itemsById.get(s.itemId);
+        return def?.kind === "equipment" && def.slot === slot;
+      });
+      const chooser =
+        openGearChooserSlot === slot
+          ? `<div class="food-slot-chooser gear-slot-chooser">
+              ${
+                stacks.length > 0
+                  ? stacks
+                      .map(
+                        (s) =>
+                          `<button data-gear-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                      )
+                      .join("")
+                  : `<p class="hint">No ${slot} Equipment in Bank</p>`
+              }
+            </div>`
+          : "";
+      return `<div class="tile tile-empty" data-slot="${slot}">
+                <button class="gear-slot-add" data-gear-add="${slot}" aria-label="Equip ${slot}">
+                  <span class="tile-empty-mark" aria-label="${slot} (empty)">—</span>
+                </button>
+                ${chooser}
+              </div>`;
     }).join("");
 
     const b = player.bonuses;
@@ -1142,8 +1008,31 @@ export function mountApp(
       `+${b.atkBonus} atk +${b.strBonus} str ${defVectorLabel(b.def)} spd ${b.attackSpeed}t`;
   }
 
-  /** Renders the main column's Loot Zone strip: hidden while empty, otherwise one icon+qty tile
-   * per stack. */
+  /** One `.detail-strip` body — name/qty, `itemDetailLines` stats, Equip/Sell actions — shared by
+   * the full Bank page (`renderBankDetail`) and the Character hub's embedded Equipment-only Bank
+   * tray (`renderEquipmentTray`, #206) so the two detail strips can never drift apart. */
+  function bankDetailMarkup(stack: { itemId: string; qty: number }): string {
+    const def = content.itemsById.get(stack.itemId);
+    const price = sellPrice(stack.itemId);
+    const sellBtn =
+      price !== undefined
+        ? `<button class="sell-btn" data-sell="${stack.itemId}">Sell ${price}g</button>`
+        : "";
+    const equipBtn =
+      def?.kind === "equipment"
+        ? `<button class="equip-btn" data-equip="${stack.itemId}">Equip</button>`
+        : "";
+    return `<p class="detail-name">${itemName(stack.itemId)} ×${formatQty(stack.qty)}</p>
+      ${itemDetailLines(stack.itemId)
+        .map((line) => `<p class="detail-stat">${line}</p>`)
+        .join("")}
+      <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
+  }
+
+  /** Renders the main column's interim compact Loot Strip: hidden while empty, otherwise one
+   * icon+qty tile per stack. Explicitly interim (#206): the Activity destination page now carries
+   * its own Loot Zone grid (`renderActivityLootZone`) plus the Loot Feed; this compact strip and
+   * `#ticker` are removed once the final compact-stage slice lands. */
   function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
     const lootStrip = el<HTMLElement>("#loot-strip");
     lootStrip.hidden = lootZone.length === 0;
@@ -1155,11 +1044,23 @@ export function mountApp(
       .join("");
   }
 
-  /** Renders the Bank tab panel: the sort-row's active toggle, the capacity header + buy-slots
-   * button, and the sorted stack grid (#78: `<button class="tile">`s carrying only icon + qty
-   * badge — the click-to-select detail strip below shows the name/stats/Equip/Sell buttons that
-   * used to sit inline on each row). `gold` (rather than the whole player) is all the buy-slots
-   * button's disabled check needs. */
+  /** Renders the Activity destination page's own Loot Zone grid (#206) — the same stacks
+   * `renderLootStrip` shows in the interim compact strip, as a full icon-tile grid rather than a
+   * compact chip row. */
+  function renderActivityLootZone(lootZone: Snapshot["lootZone"]): void {
+    el("#activity-loot-items").innerHTML = lootZone
+      .map(
+        (s) =>
+          `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
+      )
+      .join("");
+  }
+
+  /** Renders the Bank destination page: the sort-row's active toggle, the capacity header +
+   * buy-slots button, and the sorted stack grid (#78: `<button class="tile">`s carrying only icon
+   * + qty badge — the click-to-select detail strip below shows the name/stats/Equip/Sell buttons
+   * that used to sit inline on each row). `gold` (rather than the whole player) is all the
+   * buy-slots button's disabled check needs. */
   function renderBank(bank: Snapshot["bank"], gold: number): void {
     root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
@@ -1191,10 +1092,8 @@ export function mountApp(
     renderBankDetail(stacks);
   }
 
-  /** Renders the Bank's detail strip (#78): hidden while nothing is selected, otherwise the
-   * selected stack's name/qty, `itemDetailLines` stats, and its Equip/Sell buttons — the same
-   * `data-equip`/`data-sell` attributes the old inline row buttons carried, so command wiring
-   * (#59's dispatch-order rule included) is unchanged, just relocated. */
+  /** Renders the Bank page's detail strip (#78): hidden while nothing is selected, otherwise
+   * `bankDetailMarkup`'s shared name/stats/Equip/Sell body. */
   function renderBankDetail(stacks: { itemId: string; qty: number }[]): void {
     const detail = el<HTMLElement>("#bank-detail");
     const stack = selectedBankItem ? stacks.find((s) => s.itemId === selectedBankItem) : undefined;
@@ -1203,29 +1102,54 @@ export function mountApp(
       detail.innerHTML = "";
       return;
     }
-
-    const def = content.itemsById.get(stack.itemId);
-    const price = sellPrice(stack.itemId);
-    const sellBtn =
-      price !== undefined
-        ? `<button class="sell-btn" data-sell="${stack.itemId}">Sell ${price}g</button>`
-        : "";
-    const equipBtn =
-      def?.kind === "equipment"
-        ? `<button class="equip-btn" data-equip="${stack.itemId}">Equip</button>`
-        : "";
-
     detail.hidden = false;
-    detail.innerHTML = `<p class="detail-name">${itemName(stack.itemId)} ×${formatQty(stack.qty)}</p>
-      ${itemDetailLines(stack.itemId)
-        .map((line) => `<p class="detail-stat">${line}</p>`)
-        .join("")}
-      <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
+    detail.innerHTML = bankDetailMarkup(stack);
+  }
+
+  /** Renders the Character hub's embedded Equipment-only Bank tray (#206) — `snapshot.bank.items`
+   * filtered to `content.itemsById.get(itemId)?.kind === "equipment"`, sorted by the same
+   * `sortKey` choice the full Bank page uses (#26). It is the same Bank, never an Inventory or a
+   * second store: this is a filtered view over the identical `bank.items`, and its detail strip
+   * (`selectedEquipmentTrayItem`) reuses the full Bank page's own Equip/Sell action shape via
+   * `bankDetailMarkup`. This tray is the Character hub's only scrollport. */
+  function renderEquipmentTray(bank: Snapshot["bank"], gold: number): void {
+    void gold; // kept for symmetry with renderBank; the tray has no buy-slots control of its own
+    const equipmentItems = bank.items.filter(
+      (s) => content.itemsById.get(s.itemId)?.kind === "equipment",
+    );
+    const stacks = sortStacks(equipmentItems, sortKey, content);
+    if (selectedEquipmentTrayItem && !stacks.some((s) => s.itemId === selectedEquipmentTrayItem)) {
+      selectedEquipmentTrayItem = null;
+    }
+
+    el("#character-bank-tray").innerHTML = stacks
+      .map(
+        (s) =>
+          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === selectedEquipmentTrayItem}">
+             ${tileMarkup(s.itemId, s.qty)}
+           </button>`,
+      )
+      .join("");
+
+    const detail = el<HTMLElement>("#character-bank-detail");
+    const stack = selectedEquipmentTrayItem
+      ? stacks.find((s) => s.itemId === selectedEquipmentTrayItem)
+      : undefined;
+    if (!stack) {
+      detail.hidden = true;
+      detail.innerHTML = "";
+      return;
+    }
+    detail.hidden = false;
+    detail.innerHTML = bankDetailMarkup(stack);
   }
 
   /** Dispatcher (#39): reads the latest Snapshot, then renders each Production Skill's panel in
    * turn (#181: descriptor-driven, see production.ts — one loop replaces the four former
-   * per-skill panel-rendering functions this module used to define). */
+   * per-skill panel-rendering functions this module used to define). Hidden Management-card
+   * destination pages and the Character hub keep rendering unconditionally every Tick (#206 "hidden
+   * bodies continue rendering every Tick so gameplay-derived content never stales") — nothing here
+   * branches on `workspace`. */
   function render(): void {
     const snap = engine.snapshot();
     const { player, monster, fishing, dungeon, production, bank } = snap;
@@ -1237,10 +1161,12 @@ export function mountApp(
     renderQuiver(player.quiver, bank.items);
     renderRunePouch(player.runePouch, bank.items);
     renderXpRow(player.skills);
-    renderCharacter(player);
+    renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
     renderLootStrip(snap.lootZone);
+    renderActivityLootZone(snap.lootZone);
     renderBank(bank, player.gold);
+    renderEquipmentTray(bank, player.gold);
     renderVendor(bank, player.gold);
     for (const descriptor of PRODUCTION_SKILLS) {
       el(`#${descriptor.panelId}`).innerHTML = productionPanelMarkup(
@@ -1295,124 +1221,124 @@ export function mountApp(
     <div id="flash-overlay"></div>
     <div id="item-tooltip" class="item-tooltip" hidden></div>
     <div id="management-row" class="management-row">
-    <section id="card-world" class="side-panel management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>World</p><button class="card-close" data-card-close="world" title="Close World">✕</button></header>
-      <section id="picker"></section>
-    </section>
-    <section id="card-character" class="side-panel management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Character</p><button class="card-close" data-card-close="character" title="Close Character">✕</button></header>
-      <div id="character-tab-strip" class="card-tab-strip">
-        ${tabStripMarkup(CHARACTER_TABS, CHARACTER_TAB_LABELS)}
+    <section id="card-character" class="management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region>
+        ${characterNavMarkup()}
+      </header>
+      <div id="settings-popover" class="settings-popover" hidden>
+        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊 Mute</button>
+        <button id="export-save" title="Export save to clipboard">📤 Export</button>
+        <button id="import-save" title="Import save from clipboard">📥 Import</button>
       </div>
-        <div data-tab-panel="character" class="tab-panel">
-          <button class="section-header" data-section="gear" aria-expanded="true">Gear</button>
-          <div class="section-body" data-section-body="gear">
-            <div id="character-slots" class="tile-grid"></div>
-            <p id="character-totals" class="totals-row"></p>
-          </div>
-          <button class="section-header" data-section="potion" aria-expanded="true">Potion</button>
-          <div class="section-body" data-section-body="potion">
-            <div id="potion-slot" class="potion-slot"></div>
-          </div>
-          <button class="section-header" data-section="quiver" aria-expanded="true">Quiver</button>
-          <div class="section-body" data-section-body="quiver">
-            <div id="quiver-slot" class="potion-slot"></div>
-          </div>
-          <button class="section-header" data-section="rune-pouch" aria-expanded="true">
-            Rune Pouch
+      <div id="import-panel" hidden>
+        <p>Paste a save below, then Apply. This overwrites your current save.</p>
+        <textarea id="import-textarea" rows="4"></textarea>
+        <p id="import-error" hidden></p>
+        <div id="import-actions">
+          <button id="import-apply">Apply</button>
+          <button id="import-cancel">Cancel</button>
+        </div>
+      </div>
+      <div class="card-fixed">
+        <div id="character-slots" class="tile-grid gear-grid"></div>
+        <p id="character-totals" class="totals-row"></p>
+        <div id="loadout-grid" class="loadout-grid">
+          <div id="character-food-slots" class="food-slots"></div>
+          <div id="potion-slot" class="potion-slot"></div>
+          <div id="quiver-slot" class="potion-slot"></div>
+          <div id="rune-pouch" class="food-slots"></div>
+        </div>
+        <section id="xp-row"></section>
+        <div id="style-row" class="style-row">
+          ${Object.entries(STYLE_LABELS)
+            .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
+            .join("")}
+        </div>
+        <div id="spell-row" class="spell-row"></div>
+        <div id="autoeat-row" class="style-row">
+          ${Object.entries(AUTO_EAT_LABELS)
+            .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
+            .join("")}
+        </div>
+        <label id="autosell-duplicates-row" class="checkbox-row">
+          <input type="checkbox" id="autosell-duplicates-toggle" />
+          Auto-sell duplicate gear
+        </label>
+        <div id="pets-summary" class="pets-summary">
+          <button data-nav="pets" title="Pets" aria-expanded="false">
+            <span aria-hidden="true">🐾</span>
+            <span id="pets-summary-count"></span>
           </button>
-          <div class="section-body" data-section-body="rune-pouch">
-            <div id="rune-pouch" class="food-slots"></div>
-          </div>
-          <button class="section-header" data-section="pets" aria-expanded="true">Pets</button>
-          <div class="section-body" data-section-body="pets">
+          <div id="pets-popover" class="pets-popover" hidden>
             <div id="pets-grid" class="tile-grid"></div>
           </div>
-          <div id="style-row" class="style-row">
-            ${Object.entries(STYLE_LABELS)
-              .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
-              .join("")}
-          </div>
-          <button class="section-header" data-section="spells" aria-expanded="true">Spells</button>
-          <div class="section-body" data-section-body="spells">
-            <div id="spell-row" class="spell-row"></div>
-          </div>
-          <div id="autoeat-row" class="style-row">
-            ${Object.entries(AUTO_EAT_LABELS)
-              .map(
-                ([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`,
-              )
-              .join("")}
-          </div>
-          <label id="autosell-duplicates-row" class="checkbox-row">
-            <input type="checkbox" id="autosell-duplicates-toggle" />
-            Auto-sell duplicate gear
-          </label>
         </div>
-        <div data-tab-panel="skills" class="tab-panel">
-          <section id="xp-row"></section>
-        </div>
-    </section>
-    <section id="card-resources" class="side-panel management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region><p class="panel-title" data-tauri-drag-region>Resources</p><button class="card-close" data-card-close="resources" title="Close Resources">✕</button></header>
-      <div id="resource-tab-strip" class="card-tab-strip">
-        ${tabStripMarkup(RESOURCE_TABS, RESOURCE_TAB_LABELS)}
       </div>
-        <div data-tab-panel="bank" class="tab-panel">
-          <p class="panel-title">
-            <span id="bank-header"></span>
-            <button id="buy-slots-btn" data-buy-slots></button>
-          </p>
-          <div id="sort-row" class="style-row">
-            ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
+      <div class="card-scroll">
+        <div id="character-bank-tray" class="tile-grid"></div>
+        <div id="character-bank-detail" class="detail-strip" hidden></div>
+      </div>
+      <button id="expand-bank-btn" class="expand-bank-btn" data-destination="bank">Expand Bank</button>
+    </section>
+    <section id="card-management" class="management-card" hidden>
+      <header class="management-card-header" data-tauri-drag-region>
+        <p class="panel-title" id="management-title" data-tauri-drag-region></p>
+        <button class="card-close" data-management-back title="Back to Character">←</button>
+      </header>
+      <div class="card-scroll">
+        <div data-management-page="world" hidden>
+          <section id="picker"></section>
+        </div>
+        <div data-management-page="bank" hidden>
+          <div id="bank-vendor-toggle" class="style-row">
+            <button data-bankpage="bank">Bank</button>
+            <button data-bankpage="vendor">Vendor</button>
           </div>
-          <div id="bank" class="tile-grid"></div>
-          <div id="bank-detail" class="detail-strip" hidden></div>
+          <div data-bank-page="bank">
+            <p class="panel-title">
+              <span id="bank-header"></span>
+              <button id="buy-slots-btn" data-buy-slots></button>
+            </p>
+            <div id="sort-row" class="style-row">
+              ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
+            </div>
+            <div id="bank" class="tile-grid"></div>
+            <div id="bank-detail" class="detail-strip" hidden></div>
+          </div>
+          <div data-bank-page="vendor" hidden>
+            <p class="panel-title">Vendor</p>
+            <ul id="vendor-list"></ul>
+          </div>
         </div>
-        <div data-tab-panel="vendor" class="tab-panel">
-          <p class="panel-title">Vendor</p>
-          <ul id="vendor-list"></ul>
-        </div>
-        <div data-tab-panel="smithing" class="tab-panel">
+        <div data-management-page="workshop" hidden>
           <p class="panel-title">Smithing</p>
           <ul id="smithing-recipes"></ul>
-        </div>
-        <div data-tab-panel="cooking" class="tab-panel">
           <p class="panel-title">Cooking</p>
           <ul id="cooking-recipes"></ul>
-        </div>
-        <div data-tab-panel="crafting" class="tab-panel">
           <p class="panel-title">Crafting</p>
           <ul id="crafting-recipes"></ul>
-        </div>
-        <div data-tab-panel="herblore" class="tab-panel">
           <p class="panel-title">Herblore</p>
           <ul id="herblore-recipes"></ul>
         </div>
-        <div data-tab-panel="loot" class="tab-panel">
+        <div data-management-page="activity" hidden>
+          <section id="activity-loot-zone">
+            <p class="panel-title">Loot Zone</p>
+            <ul id="activity-loot-items" class="loot-zone-grid"></ul>
+            <button id="activity-loot-all-btn" data-loot-all>Loot all</button>
+          </section>
+          <p class="panel-title">Loot Feed</p>
           <ul id="feed"></ul>
         </div>
+      </div>
     </section>
     </div>
     <section id="compact-widget">
     <header id="titlebar" data-tauri-drag-region>
       <span data-tauri-drag-region>SideScape</span>
       <div id="titlebar-controls">
-        <button id="export-save" title="Export save to clipboard">📤</button>
-        <button id="import-save" title="Import save from clipboard">📥</button>
-        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊</button>
         <button id="close-btn" title="Quit">✕</button>
       </div>
     </header>
-    <div id="import-panel" hidden>
-      <p>Paste a save below, then Apply. This overwrites your current save.</p>
-      <textarea id="import-textarea" rows="4"></textarea>
-      <p id="import-error" hidden></p>
-      <div id="import-actions">
-        <button id="import-apply">Apply</button>
-        <button id="import-cancel">Cancel</button>
-      </div>
-    </div>
     <div id="main-column">
       <div id="chrome-row">
         <span id="gold"></span>
@@ -1448,8 +1374,11 @@ export function mountApp(
         <ul id="loot-strip-items"></ul>
         <button id="loot-all-btn" data-loot-all>Loot all</button>
       </section>
-      <div id="card-launchers" class="launcher-row">
-        ${cardLauncherMarkup()}
+      <div id="menu-row" class="menu-row">
+        <button id="menu-toggle" data-menu title="Character">
+          <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
+          <span>Character</span>
+        </button>
       </div>
     </div>
     </section>`;
@@ -1545,15 +1474,6 @@ export function mountApp(
   // Character section headers (#134): one delegated listener on the whole tab-panel rather than one
   // per header, mirroring #management-row's own closest()-based delegation below. A click anywhere
   // that isn't a `button[data-section]` (e.g. inside a section body) is a no-op.
-  el('[data-tab-panel="character"]').addEventListener("click", (event) => {
-    const id = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-section]")
-      ?.dataset["section"];
-    if (!id) return;
-    charSectionsState = { ...charSectionsState, [id]: !isCharSectionOpen(id) };
-    applyCharSectionDom(id);
-    savePanelState(buildPanelState());
-  });
-
   el("#style-row").addEventListener("click", (event) => {
     const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
     if (style) {
@@ -1596,67 +1516,81 @@ export function mountApp(
     }
   });
 
-  // Three-card launcher row (#136 §2): clicking a closed card's launcher opens it (evicting the
-  // LRU-oldest open card first if already at WorkspaceChrome.getCapacity()); clicking an open
-  // card's launcher closes it. `closest` resolves the click through nested `<img>`/`<span>` clicks,
-  // not just a direct button hit.
-  el("#card-launchers").addEventListener("click", (event) => {
-    const card = (event.target as HTMLElement).closest<HTMLButtonElement>(
-      "button[data-card-launcher]",
-    )?.dataset["cardLauncher"] as CardId | undefined;
-    if (card) void toggleCard(card);
+  // Menu button (#206): always-visible in the compact widget, toggling Character alone open or
+  // closing both cards — see `onMenuToggle`'s own doc comment above.
+  el("#menu-toggle").addEventListener("click", onMenuToggle);
+
+  // Management card's Back control (#206): always returns to Character alone, whether one or two
+  // cards were showing.
+  el("#card-management").addEventListener("click", (event) => {
+    if ((event.target as HTMLElement).closest("[data-management-back]")) backToCharacter();
   });
 
-  // Character card's internal tab strip (#136 §3): switches which of Character/Skills is shown
-  // inside the Character card without changing card count, position, or geometry — and moves the
-  // Character card to the recency tail if it's already open (#136 §2's "activating an already-open
-  // card" rule).
-  el("#character-tab-strip").addEventListener("click", (event) => {
-    const tab = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-tab]")
-      ?.dataset["tab"] as CharacterTabId | undefined;
-    if (!tab) return;
-    workspace.characterTab = tab;
-    activateCard("character");
-    syncWorkspace();
-  });
-
-  // Resources card's internal tab strip (#136 §3): mirrors the Character tab strip above, over
-  // the seven Resources tabs.
-  el("#resource-tab-strip").addEventListener("click", (event) => {
-    const tab = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-tab]")
-      ?.dataset["tab"] as ResourceTabId | undefined;
-    if (!tab) return;
-    workspace.resourceTab = tab;
-    activateCard("resources");
-    syncWorkspace();
-  });
-
-  // Per-card close button (#136 §3): closes only that card, leaving the other open ones alone.
-  el("#management-row").addEventListener("click", (event) => {
-    const card = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-card-close]")
-      ?.dataset["cardClose"] as CardId | undefined;
-    if (!card) return;
-    workspace.recency = workspace.recency.filter((c) => c !== card);
-    syncWorkspace();
-  });
-
-  // Transparent-glass click (#136 §4): clicking the bare union background (document.body itself,
-  // not any card inside it) closes every open card at once.
-  document.body.addEventListener("click", (event) => {
-    if (event.target === document.body) {
-      workspace.recency = [];
-      syncWorkspace();
+  // Character hub's own header nav / Expand Bank / Settings / Pets popovers (#206), delegated on
+  // the whole card so nested `<img>`/`<span>` clicks resolve via `closest`. Checked in a stable
+  // order: a destination click (World/Workshop/Activity nav buttons, or the Bank tray's "Expand
+  // Bank" button — both carry `data-destination`) before the Settings/Pets popover toggles.
+  el("#card-character").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const destinationBtn = target.closest<HTMLElement>("[data-destination]");
+    if (destinationBtn) {
+      void openDestination(destinationBtn.dataset["destination"] as ManagementDestination);
+      return;
+    }
+    const navBtn = target.closest<HTMLElement>("[data-nav]");
+    if (!navBtn) return;
+    const nav = navBtn.dataset["nav"];
+    if (nav === "settings") {
+      openSettings = !openSettings;
+      renderWorkspace();
+    } else if (nav === "pets") {
+      openPetsPopover = !openPetsPopover;
+      renderWorkspace();
     }
   });
 
-  // Escape (#136 §4): closes the most-recently-opened/activated card only, standard card-stack
-  // behavior; a no-op while no card is open, and never touches internal tab selection.
+  // Gear Slot tiles (#206): an empty slot's `[+]` opens/closes its Bank-Equipment chooser; picking
+  // a chooser entry equips it directly (mirrors the Loadout Slot dispatch order — assign check
+  // before the add/toggle check).
+  el("#character-slots").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const assignBtn = target.closest<HTMLElement>("[data-gear-assign]");
+    if (assignBtn) {
+      engine.equip(assignBtn.dataset["gearAssign"] as string); // logs its own feed line via "equipped"
+      openGearChooserSlot = null;
+      render();
+      return;
+    }
+    const addBtn = target.closest<HTMLElement>("[data-gear-add]");
+    if (addBtn) {
+      const slot = addBtn.dataset["gearAdd"] as GearSlot;
+      openGearChooserSlot = openGearChooserSlot === slot ? null : slot; // re-click dismisses
+      render();
+    }
+  });
+
+  // Bank|Vendor compact toggle inside the Management card's "bank" destination (#206) — purely
+  // presentational; doesn't change which destination is open, so a plain visibility sync is
+  // enough (no full render() needed).
+  el("#bank-vendor-toggle").addEventListener("click", (event) => {
+    const page = (event.target as HTMLElement).closest<HTMLElement>("[data-bankpage]")?.dataset[
+      "bankpage"
+    ];
+    if (page !== "bank" && page !== "vendor") return;
+    managementBankPage = page;
+    renderWorkspace();
+  });
+
+  // Transparent-glass click (#206): clicking the bare union background (document.body itself, not
+  // any card inside it) always closes both cards.
+  document.body.addEventListener("click", (event) => {
+    if (event.target === document.body) closeWorkspace();
+  });
+
+  // Escape (#206): closes the Management card back to Character first, then closes Character —
+  // see `onEscape`'s own doc comment above.
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    const top = workspace.recency[workspace.recency.length - 1];
-    if (!top) return;
-    workspace.recency = workspace.recency.filter((c) => c !== top);
-    syncWorkspace();
+    if (event.key === "Escape") onEscape();
   });
 
   el("#picker").addEventListener("click", (event) => {
@@ -1712,6 +1646,35 @@ export function mountApp(
     }
   });
 
+  // Character hub's embedded Equipment-only Bank tray (#206): mirrors the full Bank grid's own
+  // select/deselect-tile behavior above, over its own independent `selectedEquipmentTrayItem`.
+  el("#character-bank-tray").addEventListener("click", (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(".tile[data-item]");
+    if (!tile) return;
+    const itemId = tile.dataset["item"];
+    if (!itemId) return;
+    selectedEquipmentTrayItem = selectedEquipmentTrayItem === itemId ? null : itemId;
+    render();
+  });
+
+  // Character hub's embedded tray detail strip (#206): mirrors the full Bank detail strip's own
+  // sell-before-equip dispatch order above.
+  el("#character-bank-detail").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const sellId = target.dataset["sell"];
+    if (sellId) {
+      engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
+      render();
+      return;
+    }
+
+    const equipId = target.dataset["equip"];
+    if (equipId) {
+      engine.equip(equipId); // logs its own feed line via the equipped listener above
+      render();
+    }
+  });
+
   // Shared item-tooltip hover panel (#78): delegated on `root` itself so it covers every
   // Bank/Character/Food-Slot/Loot tile (anything carrying `data-item`) with one listener, rather
   // than per-panel wiring that could drift. `mouseover`/`mouseout` (not `mouseenter`/`mouseleave`,
@@ -1740,32 +1703,35 @@ export function mountApp(
   // slot-level eat, so unassigning never also eats; a chooser pick is checked before the [+]
   // toggle so picking a Food both assigns it and doesn't re-toggle the chooser. One shared
   // dispatcher factory (#183) drives all four Loadout Slot listeners below — see loadout-slot.ts.
-  el("#food-slots").addEventListener(
-    "click",
-    createLoadoutSlotDispatcher(
-      { unassign: "unassign", eat: "eat", assign: "assign", assignItem: "item", add: "add" },
-      {
-        onUnassign: (index) => {
-          engine.unassignFoodSlot(Number(index)); // logs nothing; no feed line for unassign
-          render();
-        },
-        onEat: (index) => {
-          engine.eatFromSlot(Number(index)); // logs its own feed line via the food-eaten listener
-          render();
-        },
-        onAssign: (index, itemId) => {
-          engine.assignFoodSlot(Number(index), itemId);
-          openFoodChooserSlot = null;
-          render();
-        },
-        onAdd: (index) => {
-          const i = Number(index);
-          openFoodChooserSlot = openFoodChooserSlot === i ? null : i; // re-click dismisses
-          render();
-        },
+  // The dispatcher instance itself is shared by both DOM locations (#206) — the compact widget's
+  // pre-existing always-visible bar and the Character hub's Loadout Slot grid (see
+  // `foodSlotsMarkup`'s own doc comment) — since it only ever reads `event.target.dataset`, not
+  // which element it was bound to.
+  const foodSlotDispatcher = createLoadoutSlotDispatcher(
+    { unassign: "unassign", eat: "eat", assign: "assign", assignItem: "item", add: "add" },
+    {
+      onUnassign: (index) => {
+        engine.unassignFoodSlot(Number(index)); // logs nothing; no feed line for unassign
+        render();
       },
-    ),
+      onEat: (index) => {
+        engine.eatFromSlot(Number(index)); // logs its own feed line via the food-eaten listener
+        render();
+      },
+      onAssign: (index, itemId) => {
+        engine.assignFoodSlot(Number(index), itemId);
+        openFoodChooserSlot = null;
+        render();
+      },
+      onAdd: (index) => {
+        const i = Number(index);
+        openFoodChooserSlot = openFoodChooserSlot === i ? null : i; // re-click dismisses
+        render();
+      },
+    },
   );
+  el("#food-slots").addEventListener("click", foodSlotDispatcher);
+  el("#character-food-slots").addEventListener("click", foodSlotDispatcher);
 
   // Potion Slot tile (#118): dispatch order mirrors the Food Slot bar above — unassign (✕) is
   // checked before a chooser pick, which is checked before the [+] toggle.
@@ -1851,7 +1817,9 @@ export function mountApp(
     render();
   });
 
-  el("#loot-all-btn").addEventListener("click", () => {
+  // Loot All (#206): shared by the compact widget's interim Loot Strip button and the Activity
+  // destination page's own Loot Zone grid button — both sweep the identical Loot Zone.
+  function handleLootAll(): void {
     const before = engine.snapshot().lootZone.length;
     engine.lootAll(); // logs its own feed line via the looted subscription above, if anything moved
     const after = engine.snapshot().lootZone.length;
@@ -1861,7 +1829,9 @@ export function mountApp(
     if (after > 0 && after === before) {
       feedLine("⚠ Bank full — loot left behind", "overflow");
     }
-  });
+  }
+  el("#loot-all-btn").addEventListener("click", handleLootAll);
+  el("#activity-loot-all-btn").addEventListener("click", handleLootAll);
 
   el("#buy-slots-btn").addEventListener("click", () => {
     engine.buyBankSlots();
@@ -1882,14 +1852,11 @@ export function mountApp(
 
   buildPicker();
   render();
-  // Applies the workspace state restored from localStorage above (all cards start closed; only
-  // the Character/Resources tab selections carry over) and notifies WorkspaceChrome of zero open
-  // cards once up front, so the real Tauri adapter (main.ts) sizes/positions the OS window to
-  // match on every mount, not just on the next toggle.
+  // Both cards start closed (#206: workspace state is session-only, never restored across a
+  // relaunch) and notifies WorkspaceChrome of zero open cards once up front, so the real Tauri
+  // adapter (main.ts) sizes/positions the OS window to match on every mount, not just on the next
+  // toggle.
   syncWorkspace();
-  // Applies the restored Character-section open/closed flags (#134) once up front, same reasoning
-  // as syncWorkspace() above.
-  applyCharSections();
 
   return { render };
 }

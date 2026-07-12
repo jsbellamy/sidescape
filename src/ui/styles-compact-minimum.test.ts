@@ -42,7 +42,7 @@ describe("compact minimum responsive stylesheet (#137)", () => {
     // height crosses each threshold; asserting the ordering above is the whole contract.
 
     // Both thresholds must sit at or above the exported compact floor: at MIN_COMPACT_H, both
-    // regions are still hidden (the minimum surface is titlebar + full scene + launcher row
+    // regions are still hidden (the minimum surface is titlebar + full scene + menu row
     // only), and neither threshold should ever let progressive extras reappear below the floor.
     expect(tickerThreshold).toBeGreaterThanOrEqual(MIN_COMPACT_H);
     expect(lootThreshold).toBeGreaterThan(tickerThreshold);
@@ -52,9 +52,9 @@ describe("compact minimum responsive stylesheet (#137)", () => {
     expect(css).toMatch(/#loot-strip\[hidden\]|\[hidden\]\s*{[^}]*display:\s*none/);
   });
 
-  it("never hides the launcher row at any height (the three-card launcher row from #136 never hides)", () => {
-    expect(css).not.toMatch(/@media\s*\([^)]*\)\s*{\s*[^}]*#card-launchers[^}]*display:\s*none/);
-    expect(css).not.toMatch(/@media\s*\([^)]*\)\s*{\s*[^}]*\.launcher-row[^}]*display:\s*none/);
+  it("never hides the menu row at any height (the always-available Character menu button from #136/#206 never hides)", () => {
+    expect(css).not.toMatch(/@media\s*\([^)]*\)\s*{\s*[^}]*#menu-row[^}]*display:\s*none/);
+    expect(css).not.toMatch(/@media\s*\([^)]*\)\s*{\s*[^}]*\.menu-row[^}]*display:\s*none/);
   });
 
   it("never force-closes management cards from a height media query (width capacity/LRU eviction is #136's job, not #137's)", () => {
@@ -88,8 +88,8 @@ describe("compact minimum responsive stylesheet (#137)", () => {
 });
 
 describe("compact minima agree with the Tauri window floor (#137)", () => {
-  it("exports a width floor that fits all three labeled launchers (never narrower than #136's row)", () => {
-    // #136 §2's doc comment on `.launcher-row` pins the contract: icon + label must fit at
+  it("exports a width floor that fits the labeled menu button (never narrower than #206's row)", () => {
+    // #206's doc comment on `.menu-row` pins the contract: icon + label must fit at
     // MIN_COMPACT_W. 320px is the value that comment already assumes.
     expect(MIN_COMPACT_W).toBeGreaterThanOrEqual(320);
   });

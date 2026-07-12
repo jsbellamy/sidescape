@@ -252,13 +252,16 @@ export function skillIcon(skill: SkillName): string {
   return url;
 }
 
-/** Workspace/navigation-tab icon registry (#131), keyed by tab id (`TabId` in `app.ts`, plus the
- * `"world"` launcher which isn't a right-panel tab). The four production views (smithing, cooking,
- * crafting, herblore) reuse the matching `skillIcon` rather than a duplicate `tab-*.png` — see the
- * issue's own "do not draw tab-*.png duplicates for them". */
+/** Workspace/navigation icon registry (#131, widened by #206's two-card redesign), keyed by
+ * destination/nav id. The four production views (smithing, cooking, crafting, herblore) reuse the
+ * matching `skillIcon` rather than a duplicate `tab-*.png` — see the issue's own "do not draw
+ * tab-*.png duplicates for them". `workshop` (the grouped Smithing/Cooking/Crafting/Herblore
+ * destination) and `activity` (the grouped Loot Zone/Loot Feed destination) are new #206
+ * destinations that reuse existing art — `tab-skills.png` and `tab-loot.png` respectively — rather
+ * than commissioning new pixel art in this presentation-only slice; a later asset issue may give
+ * them dedicated icons. */
 const tabIcons: Record<string, string> = {
   world: tabWorldUrl,
-  skills: tabSkillsUrl,
   character: tabCharacterUrl,
   bank: tabBankUrl,
   vendor: tabVendorUrl,
@@ -267,6 +270,8 @@ const tabIcons: Record<string, string> = {
   crafting: skillIcon("crafting"),
   herblore: skillIcon("herblore"),
   loot: tabLootUrl,
+  workshop: tabSkillsUrl,
+  activity: tabLootUrl,
 };
 
 /** Resolves a workspace/internal-tab id to its pixel-icon URL. Throws for an unknown key (same
