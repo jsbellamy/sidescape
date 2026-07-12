@@ -203,27 +203,8 @@ body {
 #chrome-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex: 0 0 auto;
-}
-
-#left-arrow {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  font-size: 12px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-#left-arrow:hover {
-  border-color: var(--accent);
-}
-
-#left-arrow.active {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 #gold {
@@ -1125,28 +1106,78 @@ body {
   border-color: var(--accent);
 }
 
-.tab-row {
+/* Three-card launcher row (#136 §2): replaces the old LEFT arrow + nine-tab RIGHT strip with one
+   always-available row of three equal buttons (World/Character/Resources) inside the compact
+   core. Icon + label must fit at MIN_COMPACT_W (320px); #137 later keeps this row visible even at
+   the compact widget's minimum height. */
+.launcher-row {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
 }
 
-.tab-row button {
+.launcher-row button {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.launcher-row button:hover {
+  border-color: var(--accent);
+}
+
+.launcher-row button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Character/Resources card internal tab strips (#136 §3, §5): icon + label buttons. Scrolls
+   horizontally inside its own card — never the card itself, which keeps #133/#138's own
+   scroll-shadow affordances — when the Resources card's seven tabs don't fit the 300px card
+   width; the Character card's two tabs always fit without scrolling. */
+.card-tab-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  margin-bottom: 6px;
+}
+
+.card-tab-strip button {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-dim);
   font-size: 11px;
-  padding: 4px 0;
+  padding: 3px 6px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.tab-row button:hover {
+.card-tab-strip button:hover {
   border-color: var(--accent);
 }
 
-.tab-row button.active {
+.card-tab-strip button.active {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 700;

@@ -301,6 +301,27 @@ describe("manual-check: narrow-monitor", () => {
     await chrome.settled();
     expect(last(port.calls.setSize)).toMatchObject({ width: 320 });
   });
+
+  it("resolves capacity 3 instead of rejecting when the native call fails (#136: browser-degraded getCapacity() caller)", async () => {
+    // Mirrors setCardCount's own `.catch(console.error)` resilience: `npm run dev`'s plain-browser
+    // fallback has no `__TAURI_INTERNALS__`, so every Tauri API call rejects there. #136's launcher
+    // click handler awaits getCapacity() directly (no try/catch of its own), so the adapter itself
+    // must not leave that promise rejecting uncaught.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rejectingPort: NativeWindowPort = {
+      scaleFactor: () => Promise.reject(new Error("no Tauri backend")),
+      outerPosition: () => Promise.reject(new Error("no Tauri backend")),
+      outerSize: () => Promise.reject(new Error("no Tauri backend")),
+      currentMonitor: () => Promise.reject(new Error("no Tauri backend")),
+      setSize: () => Promise.reject(new Error("no Tauri backend")),
+      setPosition: () => Promise.reject(new Error("no Tauri backend")),
+    };
+    const chrome = createTauriWindowChrome(root(), rejectingPort);
+
+    await expect(chrome.getCapacity()).resolves.toBe(3);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });
 
 describe("manual-check: resize", () => {

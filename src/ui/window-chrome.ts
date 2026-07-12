@@ -206,9 +206,19 @@ export function createTauriWindowChrome(
   }
 
   return {
+    // #136 is the first real caller of getCapacity() (a launcher click awaits it before opening a
+    // card): guarded the same way setCardCount already is below, so a rejected Tauri call in the
+    // browser-degraded `npm run dev` path (no `__TAURI_INTERNALS__`) degrades to the most
+    // permissive capacity instead of leaving the launcher's click handler's promise to reject
+    // uncaught.
     async getCapacity(): Promise<1 | 2 | 3> {
-      const monitor = await port.currentMonitor();
-      return monitor ? workspaceCapacity(monitor.size.toLogical(monitor.scaleFactor).width) : 3;
+      try {
+        const monitor = await port.currentMonitor();
+        return monitor ? workspaceCapacity(monitor.size.toLogical(monitor.scaleFactor).width) : 3;
+      } catch (error) {
+        console.error(error);
+        return 3;
+      }
     },
     setCardCount(nextCardCount: number): void {
       queue = queue.then(() => applyCards(nextCardCount)).catch(console.error);
