@@ -33,6 +33,31 @@ function fiercerDummyContent() {
   };
 }
 
+/**
+ * Fixture content plus a second "air" rune item (#182): the base fixture has exactly one rune per
+ * Element, so loadRunePouch's swap branch (a DIFFERENT rune already loaded under the same
+ * Element) is otherwise unreachable — this is the "future content set ships two rune items for
+ * the same Element" case its own code comment calls out. Only used by the loadRunePouch
+ * bank-full-swap test below.
+ */
+function withSecondAirRune() {
+  return {
+    ...fixtureContent,
+    items: [
+      ...fixtureContent.items,
+      {
+        kind: "ammo" as const,
+        id: "air-rune-2",
+        name: "Test Air Rune II",
+        icon: "sapphire",
+        ammoType: "rune" as const,
+        element: "air" as const,
+        value: 1,
+      },
+    ],
+  };
+}
+
 /** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
  * loot it all into the Bank — combat Drops land in the Loot Zone first, not the Bank directly
  * (#60), and most callers just want the item banked so they can equip/sell/eat it. */
@@ -5524,6 +5549,33 @@ describe("Ammo + Vendor (#119)", () => {
     it("throws when the player owns none", () => {
       const engine = freshEngine();
       expect(() => engine.loadRunePouch("air-rune")).toThrow(/own/i);
+    });
+
+    it('a bank-full Element swap throws "bank is full", mutating nothing (#182)', () => {
+      // Two rune items share the "air" Element (see withSecondAirRune) so this exercises the
+      // otherwise-unreachable swap branch, mirroring the food/potion/quiver bank-full-swap tests.
+      const engine = createEngine(
+        withSecondAirRune(),
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "bar", qty: 1 },
+              { itemId: "air-rune-2", qty: 10 },
+            ],
+            capacity: 1,
+          },
+          player: { runePouch: [{ itemId: "air-rune", qty: 7 }] },
+        }),
+      );
+      expect(() => engine.loadRunePouch("air-rune-2")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "air-rune", qty: 7 }]);
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bar", qty: 1 },
+          { itemId: "air-rune-2", qty: 10 },
+        ]),
+      );
     });
   });
 

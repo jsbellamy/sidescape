@@ -3,6 +3,7 @@ import { levelForXp, xpForLevel } from "./xp";
 import { validateContent } from "./validate-content";
 import { ATTACK_TYPES, AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
+  AmmoDef,
   AreaDef,
   AttackType,
   AutoEatThreshold,
@@ -18,6 +19,7 @@ import type {
   ItemDef,
   MonsterDef,
   PetDef,
+  PotionDef,
   PotionSlot,
   RecipeDef,
   SpellDef,
@@ -1026,6 +1028,76 @@ export function createEngine(
     return store.size - pulled < capacity;
   }
 
+  // --- Loadout Slot seam (#182): the resolve-item/assert-kind/assert-ownership/pull-then-check
+  // swap dance shared by the eight Food Slot / Potion Slot / Quiver / Rune Pouch commands below.
+  // Per-kind specifics (Food's slot bounds and "already assigned" check, Potion's charge
+  // top-up/waste rules, the Rune Pouch's per-Element keying) stay in their own commands; only the
+  // dance's shared pieces live here.
+
+  /** Resolves `itemId` to its ItemDef, throwing `kindError` unless it exists and `isKind`
+   * accepts it — the resolve-and-assert-kind half of the Loadout Slot dance. Kept separate from
+   * ownership (see `assertOwned`) so a per-kind check that must run BETWEEN the kind and
+   * ownership checks (Food's "already assigned to a Food Slot") can still slot in between,
+   * preserving each command's original error-precedence order exactly. */
+  function resolveItem<T extends ItemDef>(
+    itemId: string,
+    isKind: (def: ItemDef) => def is T,
+    kindError: string,
+  ): T {
+    const def = content.items.find((i) => i.id === itemId);
+    if (!def || !isKind(def)) throw new Error(kindError);
+    return def;
+  }
+
+  /** Asserts the player owns at least one of `itemId` (its ItemDef already resolved), returning
+   * the owned quantity, or throws `you do not own ${def.name}` — the ownership half of the
+   * Loadout Slot dance. */
+  function assertOwned(itemId: string, def: ItemDef): number {
+    const owned = state.bank.get(itemId) ?? 0;
+    if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+    return owned;
+  }
+
+  /** The combined resolve/assert-kind/assert-ownership dance (#182) for the Loadout Slot commands
+   * whose per-kind checks never need to run between the kind and ownership checks (Potion Slot).
+   * Food Slot's own "already assigned" check DOES run between the two, so `assignFoodSlot`
+   * composes `resolveItem`/`assertOwned` directly instead of this. */
+  function takeOwned<T extends ItemDef>(
+    itemId: string,
+    isKind: (def: ItemDef) => def is T,
+    kindError: string,
+  ): { def: T; owned: number } {
+    const def = resolveItem(itemId, isKind, kindError);
+    const owned = assertOwned(itemId, def);
+    return { def, owned };
+  }
+
+  /** Returns a displaced Loadout Slot occupant's stock to the Bank on a SWAP (#182) — the exact
+   * pull-then-check call that used to be copied at all four assign/load commands: the incoming
+   * Item's own Bank stack is about to fully clear elsewhere in the same command (its ENTIRE stock
+   * is about to move into the slot), which may itself free the Bank Slot this swap-back needs, so
+   * room is tested with that freed slot already counted (pulled=1) BEFORE the swap-back lands.
+   * No-op when there is nothing to return (`current` is null/undefined or already at qty 0).
+   * Throws "bank is full". */
+  function swapBackToBank(current: { itemId: string; qty: number } | null | undefined): void {
+    if (!current || current.qty <= 0) return;
+    if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
+      throw new Error("bank is full");
+    }
+    state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+  }
+
+  /** Returns a Loadout Slot's stock to the Bank on a plain unassign/unload (#182) — swapBackToBank's
+   * sibling: no incoming Item is being pulled in the same command, so room is tested with nothing
+   * yet freed (pulled=0). No-op when `qty` is <= 0. Throws "bank is full". */
+  function returnToBank(itemId: string, qty: number): void {
+    if (qty <= 0) return;
+    if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
+      throw new Error("bank is full");
+    }
+    state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+  }
+
   /** Adds `qty` of `itemId` to the Bank (#59): a top-up of an existing stack always fits (the
    * #25 rule). A brand-new stack needed while the Bank is already at capacity is instead
    * auto-sold (sellable) or discarded (unsellable) — the universal "passive flows auto-sell on
@@ -1864,27 +1936,25 @@ export function createEngine(
       if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
         throw new Error(`invalid food slot index: ${slotIndex}`);
       }
-      const def = content.items.find((i) => i.id === itemId);
-      if (!def || def.kind !== "food") throw new Error(`${itemId} is not Food`);
+      const def = resolveItem(
+        itemId,
+        (d): d is FoodDef => d.kind === "food",
+        `${itemId} is not Food`,
+      );
       const elsewhere = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
       if (elsewhere !== -1 && elsewhere !== slotIndex) {
         throw new Error(`${def.name} is already assigned to a Food Slot`);
       }
-      const owned = state.bank.get(itemId) ?? 0;
-      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+      const owned = assertOwned(itemId, def);
 
       const current = state.foodSlots[slotIndex];
       let homeQty = owned;
       if (current && current.itemId === itemId) {
         homeQty += current.qty; // topping up a slot that already holds this Food
-      } else if (current && current.qty > 0) {
-        // Swap: the old stock returns to the Bank first. itemId's own Bank stack is about to
-        // fully clear (its ENTIRE stock moves into the Slot below), which may itself free the
-        // Bank Slot the swap-back needs — mirrors equip's own pull-then-check ordering above.
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      } else {
+        // Swap (or a null/qty-0 slot, a harmless no-op): the old stock returns to the Bank
+        // first — mirrors equip's own pull-then-check ordering above.
+        swapBackToBank(current);
       }
 
       state.bank.delete(itemId);
@@ -1896,12 +1966,7 @@ export function createEngine(
       }
       const slot = state.foodSlots[slotIndex];
       if (!slot) return; // already unassigned — harmless no-op
-      if (slot.qty > 0) {
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, slot.itemId)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(slot.itemId, (state.bank.get(slot.itemId) ?? 0) + slot.qty);
-      }
+      returnToBank(slot.itemId, slot.qty);
       state.foodSlots[slotIndex] = null;
     },
     eatFromSlot(slotIndex) {
@@ -1915,10 +1980,11 @@ export function createEngine(
       eatFromSlotAt(slotIndex, def);
     },
     assignPotionSlot(itemId) {
-      const def = content.items.find((i) => i.id === itemId);
-      if (!def || def.kind !== "potion") throw new Error(`${itemId} is not a Potion`);
-      const owned = state.bank.get(itemId) ?? 0;
-      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+      const { def, owned } = takeOwned(
+        itemId,
+        (d): d is PotionDef => d.kind === "potion",
+        `${itemId} is not a Potion`,
+      );
 
       const current = state.potionSlot;
       if (current && current.itemId === itemId) {
@@ -1931,16 +1997,9 @@ export function createEngine(
       }
       if (current && current.charges > 0) {
         // Swap: the open potion is consumed/wasted (owner's rule); qty-1 of it returns to the
-        // Bank. itemId's own Bank stack is about to fully clear (its ENTIRE stock moves into the
-        // slot below), which may itself free the Bank Slot the swap-back needs — mirrors
-        // assignFoodSlot's own pull-then-check ordering.
+        // Bank via the same pull-then-check swap-back as the other three kinds.
         const remaining = current.qty - 1;
-        if (remaining > 0) {
-          if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
-            throw new Error("bank is full");
-          }
-          state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + remaining);
-        }
+        swapBackToBank(remaining > 0 ? { itemId: current.itemId, qty: remaining } : null);
       }
 
       state.bank.delete(itemId);
@@ -1951,36 +2010,24 @@ export function createEngine(
       if (!current) return; // already unassigned — harmless no-op
       // The open potion is consumed/wasted (same rule as a swap above; PotionSlot's invariant
       // guarantees charges > 0 whenever the slot is non-null, so this always applies).
-      const remaining = current.qty - 1;
-      if (remaining > 0) {
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + remaining);
-      }
+      returnToBank(current.itemId, current.qty - 1);
       state.potionSlot = null;
     },
     loadQuiver(arrowItemId) {
-      const def = content.items.find((i) => i.id === arrowItemId);
-      if (!def || def.kind !== "ammo" || def.ammoType !== "arrow") {
-        throw new Error(`${arrowItemId} is not an Arrow`);
-      }
-      const owned = state.bank.get(arrowItemId) ?? 0;
-      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+      const { owned } = takeOwned(
+        arrowItemId,
+        (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "arrow",
+        `${arrowItemId} is not an Arrow`,
+      );
 
       const current = state.quiver;
       let homeQty = owned;
       if (current && current.itemId === arrowItemId) {
         homeQty += current.qty; // topping up the Quiver's already-loaded arrow tier
-      } else if (current && current.qty > 0) {
-        // Swap: the previous arrow tier returns to the Bank first. arrowItemId's own Bank stack
-        // is about to fully clear (its ENTIRE stock moves into the Quiver below), which may itself
-        // free the Bank Slot the swap-back needs — mirrors assignFoodSlot's own pull-then-check
-        // ordering.
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+      } else {
+        // Swap (or a null/qty-0 Quiver, a harmless no-op): the previous arrow tier returns to
+        // the Bank first — mirrors assignFoodSlot's own pull-then-check ordering.
+        swapBackToBank(current);
       }
 
       state.bank.delete(arrowItemId);
@@ -1989,53 +2036,43 @@ export function createEngine(
     unloadQuiver() {
       const current = state.quiver;
       if (!current) return; // already empty — harmless no-op
-      if (current.qty > 0) {
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
-      }
+      returnToBank(current.itemId, current.qty);
       state.quiver = null;
     },
     loadRunePouch(runeItemId) {
-      const def = content.items.find((i) => i.id === runeItemId);
-      if (!def || def.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) {
-        throw new Error(`${runeItemId} is not a Rune`);
-      }
+      const { def, owned } = takeOwned(
+        runeItemId,
+        (d): d is AmmoDef & { element: Element } =>
+          d.kind === "ammo" && d.ammoType === "rune" && d.element !== undefined,
+        `${runeItemId} is not a Rune`,
+      );
       const element = def.element;
-      const owned = state.bank.get(runeItemId) ?? 0;
-      if (owned <= 0) throw new Error(`you do not own ${def.name}`);
 
       const current = state.runePouch.get(element);
       let homeQty = owned;
       if (current && current.itemId === runeItemId) {
         homeQty += current.qty; // topping up this Element's already-loaded rune
-      } else if (current && current.qty > 0) {
+      } else {
         // Swap (only reachable if a future content set ever ships two rune items for the same
-        // Element): the previously loaded rune returns to the Bank first — same pull-then-check
-        // ordering as loadQuiver's own swap above.
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
+        // Element; also a harmless no-op when nothing is loaded there yet): the previously
+        // loaded rune returns to the Bank first — same pull-then-check ordering as loadQuiver's
+        // own swap above.
+        swapBackToBank(current);
       }
 
       state.bank.delete(runeItemId);
       state.runePouch.set(element, { itemId: runeItemId, qty: homeQty });
     },
     unloadRunePouch(runeItemId) {
-      const def = content.items.find((i) => i.id === runeItemId);
-      if (!def || def.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) {
-        throw new Error(`${runeItemId} is not a Rune`);
-      }
+      const def = resolveItem(
+        runeItemId,
+        (d): d is AmmoDef & { element: Element } =>
+          d.kind === "ammo" && d.ammoType === "rune" && d.element !== undefined,
+        `${runeItemId} is not a Rune`,
+      );
       const current = state.runePouch.get(def.element);
       if (!current || current.itemId !== runeItemId) return; // that Element isn't loaded — no-op
-      if (current.qty > 0) {
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId)) {
-          throw new Error("bank is full");
-        }
-        state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
-      }
+      returnToBank(current.itemId, current.qty);
       state.runePouch.delete(def.element);
     },
     buy(itemId, qty = 1) {
