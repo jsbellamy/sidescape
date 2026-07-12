@@ -1,5 +1,15 @@
 import { SKILL_NAMES } from "./types";
-import type { Content } from "./types";
+import type {
+  AreaDef,
+  Content,
+  DungeonDef,
+  FishingSpotDef,
+  ItemDef,
+  MonsterDef,
+  PetDef,
+  RecipeDef,
+  SpellDef,
+} from "./types";
 
 /**
  * Validates Content once, at the construction seam (called by `createEngine`).
@@ -209,4 +219,50 @@ function duplicateIds(entries: { id: string }[], collectionName: string): string
     }
   }
   return messages;
+}
+
+/**
+ * Content plus a by-id `ReadonlyMap` for every collection except `vendor` — a `VendorEntry` has
+ * no `id` of its own (it's keyed by `itemId`, see VendorEntry's doc); its Item resolves through
+ * `itemsById` instead. Built once by `resolveContent` so every consumer (Engine, UI) looks up an
+ * id in O(1) instead of re-scanning a `Content` array on every read.
+ */
+export interface ResolvedContent extends Content {
+  areasById: ReadonlyMap<string, AreaDef>;
+  monstersById: ReadonlyMap<string, MonsterDef>;
+  itemsById: ReadonlyMap<string, ItemDef>;
+  fishingSpotsById: ReadonlyMap<string, FishingSpotDef>;
+  dungeonsById: ReadonlyMap<string, DungeonDef>;
+  recipesById: ReadonlyMap<string, RecipeDef>;
+  spellsById: ReadonlyMap<string, SpellDef>;
+  petsById: ReadonlyMap<string, PetDef>;
+}
+
+/**
+ * Validates `content` (same aggregate pass as `validateContent`, thrown with the byte-identical
+ * message `createEngine` used to build inline) and, once clean, builds the by-id maps once. The
+ * single construction seam for `ResolvedContent` — `createEngine` and `boot.ts` both call this
+ * instead of validating and indexing separately.
+ */
+export function resolveContent(content: Content): ResolvedContent {
+  const violations = validateContent(content);
+  if (violations.length > 0) {
+    throw new Error(`Invalid Content:\n${violations.map((v) => `  - ${v}`).join("\n")}`);
+  }
+
+  return {
+    ...content,
+    areasById: byId(content.areas),
+    monstersById: byId(content.monsters),
+    itemsById: byId(content.items),
+    fishingSpotsById: byId(content.fishingSpots),
+    dungeonsById: byId(content.dungeons),
+    recipesById: byId(content.recipes),
+    spellsById: byId(content.spells),
+    petsById: byId(content.pets),
+  };
+}
+
+function byId<T extends { id: string }>(entries: T[]): ReadonlyMap<string, T> {
+  return new Map(entries.map((entry) => [entry.id, entry]));
 }

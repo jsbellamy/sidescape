@@ -1,6 +1,7 @@
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit, weakSpot } from "./combat";
 import { levelForXp, xpForLevel } from "./xp";
-import { validateContent } from "./validate-content";
+import { resolveContent } from "./validate-content";
+import type { ResolvedContent } from "./validate-content";
 import { ATTACK_TYPES, AUTO_EAT_THRESHOLDS, SKILL_NAMES } from "./types";
 import type {
   AmmoDef,
@@ -294,9 +295,9 @@ function loadSpellId(saved: Snapshot, content: Content): string | null {
 /** Ticks between player attacks for `weaponId`; unarmed (or an unresolvable/non-equipment id)
  * falls back to UNARMED_SPEED. Pure so it can size a resumed fight's cooldown during load,
  * before the Engine's closures (which call this with `state.equipment.weapon`) exist yet. */
-function weaponSpeedFor(weaponId: string | null, content: Content): number {
+function weaponSpeedFor(weaponId: string | null, content: ResolvedContent): number {
   if (weaponId === null) return UNARMED_SPEED;
-  const def = content.items.find((i) => i.id === weaponId);
+  const def = content.itemsById.get(weaponId);
   return def?.kind === "equipment" ? (def.attackSpeed ?? UNARMED_SPEED) : UNARMED_SPEED;
 }
 
@@ -305,9 +306,9 @@ function weaponSpeedFor(weaponId: string | null, content: Content): number {
  * including being pure for the same load-before-closures reason. A resolvable weapon always
  * carries `attackType` (validateContent requires it), but the `?? "crush"` guards content that
  * hasn't been validated yet. */
-function weaponAttackTypeFor(weaponId: string | null, content: Content): AttackType {
+function weaponAttackTypeFor(weaponId: string | null, content: ResolvedContent): AttackType {
   if (weaponId === null) return "crush";
-  const def = content.items.find((i) => i.id === weaponId);
+  const def = content.itemsById.get(weaponId);
   return def?.kind === "equipment" ? (def.attackType ?? "crush") : "crush";
 }
 
@@ -315,7 +316,7 @@ function weaponAttackTypeFor(weaponId: string | null, content: Content): AttackT
  * a stored field: stab/slash/crush all train melee, ranged trains ranged, magic trains magic. One
  * source of truth (weaponAttackTypeFor above); this function only maps that type to its Combat
  * Mode family. */
-function weaponCombatModeFor(weaponId: string | null, content: Content): CombatMode {
+function weaponCombatModeFor(weaponId: string | null, content: ResolvedContent): CombatMode {
   const type = weaponAttackTypeFor(weaponId, content);
   if (type === "ranged") return "ranged";
   if (type === "magic") return "magic";
@@ -394,7 +395,7 @@ function loadHp(saved: Snapshot, maxHp: number): number {
  * matches that slot; otherwise the slot loads empty. Closes both dangling and wrong-slot refs.
  * Tolerant of a pre-#117 save whose `player.equipment` has no amulet/ring keys at all: they
  * simply fall through to this literal's own `null` defaults, same as any other missing key. */
-function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, string | null> {
+function loadEquipment(saved: Snapshot, content: ResolvedContent): Record<GearSlot, string | null> {
   const equipment: Record<GearSlot, string | null> = {
     weapon: null,
     shield: null,
@@ -409,7 +410,7 @@ function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, stri
   for (const slot of Object.keys(equipment) as GearSlot[]) {
     const itemId = savedEquipment[slot];
     if (typeof itemId !== "string") continue;
-    const def = content.items.find((i) => i.id === itemId);
+    const def = content.itemsById.get(itemId);
     if (def?.kind === "equipment" && def.slot === slot) equipment[slot] = itemId;
   }
   return equipment;
@@ -421,15 +422,14 @@ function loadEquipment(saved: Snapshot, content: Content): Record<GearSlot, stri
  * migrated to the Bank by #59's inventory removal) simply starts unassigned; qty is coerced to a
  * finite non-negative integer, falling back to 0 (a slot may legitimately sit at qty 0 while
  * still assigned — empty != unassigned, see FoodSlot's doc). */
-function loadFoodSlots(saved: Snapshot, content: Content): FoodSlot[] {
+function loadFoodSlots(saved: Snapshot, content: ResolvedContent): FoodSlot[] {
   const raw: unknown = saved.player?.foodSlots;
   const entries = Array.isArray(raw) ? raw : [];
   const slots: FoodSlot[] = [];
   for (let i = 0; i < FOOD_SLOT_COUNT; i++) {
     const entry = entries[i] as { itemId?: unknown; qty?: unknown } | null | undefined;
     const itemId: unknown = entry?.itemId;
-    const def =
-      typeof itemId === "string" ? content.items.find((it) => it.id === itemId) : undefined;
+    const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
     if (!entry || def?.kind !== "food") {
       slots.push(null);
       continue;
@@ -446,12 +446,12 @@ function loadFoodSlots(saved: Snapshot, content: Content): FoodSlot[] {
  * -> null. qty/charges are coerced to finite positive integers; unlike a Food Slot, a Potion Slot
  * is NEVER assigned-but-empty (see PotionSlot's own doc), so a non-positive qty OR charges both
  * collapse the whole slot to null rather than loading a partially-valid one. */
-function loadPotionSlot(saved: Snapshot, content: Content): PotionSlot {
+function loadPotionSlot(saved: Snapshot, content: ResolvedContent): PotionSlot {
   const raw = saved.player?.potionSlot as
     { itemId?: unknown; qty?: unknown; charges?: unknown } | null | undefined;
   if (!raw) return null;
   const itemId: unknown = raw.itemId;
-  const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+  const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
   if (def?.kind !== "potion") return null;
   if (!isPositiveIntQty(raw.qty) || !isPositiveIntQty(raw.charges)) return null;
   return { itemId: def.id, qty: raw.qty, charges: raw.charges };
@@ -476,11 +476,14 @@ function isNonNegativeIntQty(value: unknown): value is number {
  * `ammoType: "arrow"` AmmoDef -> null (dropped/renamed content, or a corrupted save). qty is
  * coerced to a finite non-negative integer, falling back to 0 (a depleted Quiver legitimately
  * sits at qty 0 while still loaded — see isNonNegativeIntQty above). */
-function loadQuiver(saved: Snapshot, content: Content): { itemId: string; qty: number } | null {
+function loadQuiver(
+  saved: Snapshot,
+  content: ResolvedContent,
+): { itemId: string; qty: number } | null {
   const raw = saved.player?.quiver as { itemId?: unknown; qty?: unknown } | null | undefined;
   if (!raw) return null;
   const itemId: unknown = raw.itemId;
-  const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+  const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
   if (def?.kind !== "ammo" || def.ammoType !== "arrow") return null;
   const qty = isNonNegativeIntQty(raw.qty) ? raw.qty : 0;
   return { itemId: def.id, qty };
@@ -495,14 +498,14 @@ function loadQuiver(saved: Snapshot, content: Content): { itemId: string; qty: n
  * quantities under the LATER entry's itemId, mirroring loadBank's own duplicate-summing shape. */
 function loadRunePouch(
   saved: Snapshot,
-  content: Content,
+  content: ResolvedContent,
 ): Map<Element, { itemId: string; qty: number }> {
   const pouch = new Map<Element, { itemId: string; qty: number }>();
   const raw: unknown = saved.player?.runePouch;
   if (!Array.isArray(raw)) return pouch;
   for (const entry of raw as { itemId?: unknown; qty?: unknown }[]) {
     const itemId: unknown = entry?.itemId;
-    const def = typeof itemId === "string" ? content.items.find((i) => i.id === itemId) : undefined;
+    const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
     if (def?.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) continue;
     const qty = isNonNegativeIntQty(entry?.qty) ? entry.qty : 0;
     const existing = pouch.get(def.element);
@@ -590,7 +593,7 @@ function loadBankCapacity(saved: Snapshot): number {
  * a post-#24 save that has already gone through migration once, so re-deriving from saved.areas
  * would be wrong (a player could have entered a still-locked Area's Dungeon and abandoned it,
  * which never sets areas[].unlocked but also must never re-migrate to "completed"). */
-function loadCompletedDungeonIds(saved: Snapshot, content: Content): Set<string> {
+function loadCompletedDungeonIds(saved: Snapshot, content: ResolvedContent): Set<string> {
   const dungeonIds = new Set(content.dungeons.map((d) => d.id));
   const raw: unknown = saved.player?.completedDungeonIds;
   if (Array.isArray(raw)) {
@@ -605,13 +608,16 @@ function loadCompletedDungeonIds(saved: Snapshot, content: Content): Set<string>
  * instead this derives completion from the old gate flags the save already persisted: Snapshot
  * doubles as save format, so `saved.areas[].unlocked` survives untouched from that old world.
  * Tolerant of unknown/missing/malformed area ids and a missing/malformed `areas` array. */
-function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Content): Set<string> {
+function migrateCompletedDungeonIdsFromAreaGates(
+  saved: Snapshot,
+  content: ResolvedContent,
+): Set<string> {
   const completed = new Set<string>();
   for (const savedArea of saved.areas ?? []) {
     if (savedArea?.unlocked !== true) continue;
     const areaId: unknown = savedArea?.id;
     if (typeof areaId !== "string") continue;
-    const area = content.areas.find((a) => a.id === areaId);
+    const area = content.areasById.get(areaId);
     if (area?.unlockedByDungeonId) completed.add(area.unlockedByDungeonId);
   }
   return completed;
@@ -622,7 +628,7 @@ function migrateCompletedDungeonIdsFromAreaGates(saved: Snapshot, content: Conte
  * filter-to-known-ids pattern. Unlike completedDungeonIds, there is no pre-#120 migration to
  * reconstruct: missing/non-array simply means "no pets yet" -> an empty Set (a fresh save-shape
  * slice, same tolerance as potionSlot/quiver before it). */
-function loadOwnedPets(saved: Snapshot, content: Content): Set<string> {
+function loadOwnedPets(saved: Snapshot, content: ResolvedContent): Set<string> {
   const petIds = new Set(content.pets.map((p) => p.id));
   const raw: unknown = saved.player?.ownedPets;
   if (!Array.isArray(raw)) return new Set();
@@ -646,7 +652,7 @@ function canCraftFromBank(recipe: RecipeDef, bank: Map<string, number>): boolean
  * `craftTicks` on resume, per #28. */
 function loadProduction(
   saved: Snapshot,
-  content: Content,
+  content: ResolvedContent,
   bank: Map<string, number>,
   xp: Record<SkillName, number>,
   blocked: boolean,
@@ -658,8 +664,7 @@ function loadProduction(
   const recipeId: unknown = blocked
     ? undefined
     : (saved.production?.recipeId ?? legacySmithing?.recipeId);
-  const recipe =
-    typeof recipeId === "string" ? content.recipes.find((r) => r.id === recipeId) : undefined;
+  const recipe = typeof recipeId === "string" ? content.recipesById.get(recipeId) : undefined;
   if (!recipe) return null;
   if (levelForXp(xp[recipe.skill]) < recipe.levelReq) return null;
   if (!canCraftFromBank(recipe, bank)) return null;
@@ -670,7 +675,7 @@ function loadProduction(
  * unlike malformed Content or invalid COMMANDS). A corrupted or schema-drifted save still loads
  * and keeps the player's progress; a bad field falls back to default or is dropped, never bricks
  * the save. A clean Snapshot round-trips through this unchanged. */
-function loadState(saved: Snapshot, content: Content): State {
+function loadState(saved: Snapshot, content: ResolvedContent): State {
   // Non-null: validateContent (run before loadState, see createEngine) guarantees exactly one.
   const currencyId = content.items.find((i) => i.kind === "currency")!.id;
   const xp = loadXp(saved);
@@ -686,11 +691,9 @@ function loadState(saved: Snapshot, content: Content): State {
 
   // Activity resume: an unknown saved monster/fishing id resumes idle instead of throwing.
   const monsterId: unknown = dungeonActive ? undefined : saved.monster?.id;
-  const monster =
-    typeof monsterId === "string" ? content.monsters.find((m) => m.id === monsterId) : undefined;
+  const monster = typeof monsterId === "string" ? content.monstersById.get(monsterId) : undefined;
   const spotId: unknown = !monster ? saved.fishing?.spotId : undefined;
-  const spot =
-    typeof spotId === "string" ? content.fishingSpots.find((s) => s.id === spotId) : undefined;
+  const spot = typeof spotId === "string" ? content.fishingSpotsById.get(spotId) : undefined;
   const savedMonsterHp: unknown = saved.monster?.hp;
   const production = loadProduction(
     saved,
@@ -810,12 +813,10 @@ export function createEngine(
   saved?: Snapshot,
   now: () => number = Date.now,
 ): Engine {
-  // Fail loud on malformed Content (ADR-0001 extended to construction): every
-  // violation is collected and reported together, not just the first.
-  const violations = validateContent(content);
-  if (violations.length > 0) {
-    throw new Error(`Invalid Content:\n${violations.map((v) => `  - ${v}`).join("\n")}`);
-  }
+  // Fail loud on malformed Content (ADR-0001 extended to construction): resolveContent runs
+  // validateContent and throws the same aggregate message on violations, then builds the by-id
+  // maps every lookup below reads from instead of re-scanning a Content array (#185).
+  const resolved: ResolvedContent = resolveContent(content);
 
   // Located once here, never by a hard-coded id: whichever Item Content declares as currency.
   // Non-null: validateContent guarantees exactly one currency item.
@@ -825,7 +826,7 @@ export function createEngine(
 
   // Loads are tolerant (ADR-0001, extended to a full field-by-field sweep by loadState): a
   // corrupted or schema-drifted save still loads and keeps the player's progress.
-  const state: State = saved ? loadState(saved, content) : freshState(content);
+  const state: State = saved ? loadState(saved, resolved) : freshState(content);
 
   const handlers = new Map<string, ((event: EngineEvent) => void)[]>();
 
@@ -838,31 +839,31 @@ export function createEngine(
   }
 
   function monsterDef(id: string): MonsterDef {
-    const def = content.monsters.find((m) => m.id === id);
+    const def = resolved.monstersById.get(id);
     if (!def) throw new Error(`unknown monster: ${id}`);
     return def;
   }
 
   function fishingSpotDef(id: string): FishingSpotDef {
-    const def = content.fishingSpots.find((s) => s.id === id);
+    const def = resolved.fishingSpotsById.get(id);
     if (!def) throw new Error(`unknown fishing spot: ${id}`);
     return def;
   }
 
   function dungeonDef(id: string): DungeonDef {
-    const def = content.dungeons.find((d) => d.id === id);
+    const def = resolved.dungeonsById.get(id);
     if (!def) throw new Error(`unknown dungeon: ${id}`);
     return def;
   }
 
   function recipeDef(id: string): RecipeDef {
-    const def = content.recipes.find((r) => r.id === id);
+    const def = resolved.recipesById.get(id);
     if (!def) throw new Error(`unknown recipe: ${id}`);
     return def;
   }
 
   function spellDef(id: string): SpellDef {
-    const def = content.spells.find((s) => s.id === id);
+    const def = resolved.spellsById.get(id);
     if (!def) throw new Error(`unknown spell: ${id}`);
     return def;
   }
@@ -871,7 +872,7 @@ export function createEngine(
    * lowest-levelReq spell — validateContent guarantees one at levelReq 1, so this always succeeds
    * even on a fresh save (`spellId: null`) or after content dropped a previously-selected spell. */
   function resolvedSpell(): SpellDef {
-    const selected = state.spellId ? content.spells.find((s) => s.id === state.spellId) : undefined;
+    const selected = state.spellId ? resolved.spellsById.get(state.spellId) : undefined;
     if (selected) return selected;
     return content.spells.reduce((lowest, s) => (s.levelReq < lowest.levelReq ? s : lowest));
   }
@@ -900,7 +901,7 @@ export function createEngine(
     const defs: EquipmentDef[] = [];
     for (const itemId of Object.values(state.equipment)) {
       if (itemId === null) continue;
-      const def = content.items.find((i) => i.id === itemId);
+      const def = resolved.itemsById.get(itemId);
       if (def?.kind === "equipment") defs.push(def);
     }
     return defs;
@@ -926,7 +927,7 @@ export function createEngine(
   }
 
   function weaponSpeed(): number {
-    return weaponSpeedFor(state.equipment.weapon, content);
+    return weaponSpeedFor(state.equipment.weapon, resolved);
   }
 
   /** Every currently-active modifier source (#114): every owned pet (#120 — unconditional, no
@@ -938,12 +939,12 @@ export function createEngine(
   function activeModifierSources(): ModifierSource[] {
     const sources = [...modifierSources];
     for (const petId of state.ownedPets) {
-      const pet = content.pets.find((p) => p.id === petId);
+      const pet = resolved.petsById.get(petId);
       if (pet) sources.push({ target: pet.target, pct: pet.boostPct });
     }
     const slot = state.potionSlot;
     if (slot && slot.charges > 0) {
-      const def = content.items.find((i) => i.id === slot.itemId);
+      const def = resolved.itemsById.get(slot.itemId);
       if (def?.kind === "potion") sources.push({ target: def.target, pct: def.boostPct });
     }
     return sources;
@@ -996,7 +997,7 @@ export function createEngine(
   function decrementPotionCharge(matchesTarget: (target: ModifierTarget) => boolean): void {
     const slot = state.potionSlot;
     if (!slot) return;
-    const def = content.items.find((i) => i.id === slot.itemId);
+    const def = resolved.itemsById.get(slot.itemId);
     if (def?.kind !== "potion" || !matchesTarget(def.target)) return;
     slot.charges -= 1;
     if (slot.charges > 0) return;
@@ -1044,7 +1045,7 @@ export function createEngine(
     isKind: (def: ItemDef) => def is T,
     kindError: string,
   ): T {
-    const def = content.items.find((i) => i.id === itemId);
+    const def = resolved.itemsById.get(itemId);
     if (!def || !isKind(def)) throw new Error(kindError);
     return def;
   }
@@ -1105,7 +1106,7 @@ export function createEngine(
    * passive arrival (drop, Catch, craft output), never a player command. */
   function addToBank(itemId: string, qty: number): void {
     if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
-      const def = content.items.find((i) => i.id === itemId);
+      const def = resolved.itemsById.get(itemId);
       const value = def ? sellValue(def) : undefined;
       if (value !== undefined) {
         const gold = value * qty;
@@ -1126,7 +1127,7 @@ export function createEngine(
    * from a combat arrival (kill Drop or Dungeon Chest item), never a player command. */
   function addToLootZone(itemId: string, qty: number): void {
     if (!hasRoomForNewStack(state.lootZone, LOOT_ZONE_CAPACITY, itemId)) {
-      const def = content.items.find((i) => i.id === itemId);
+      const def = resolved.itemsById.get(itemId);
       const value = def ? sellValue(def) : undefined;
       if (value !== undefined) {
         const gold = value * qty;
@@ -1177,7 +1178,7 @@ export function createEngine(
       state.gold += qty;
       return;
     }
-    const def = content.items.find((i) => i.id === itemId);
+    const def = resolved.itemsById.get(itemId);
     if (state.autoSellDuplicates && def?.kind === "equipment" && isDuplicateEquipment(def)) {
       sellDuplicate(def, qty);
       return;
@@ -1327,7 +1328,7 @@ export function createEngine(
    * regardless of weapon mode — issue #7 scopes only XP routing and combat level's display
    * formula, not a ranged/magic-specific hit/damage model. */
   function combatXpSkill(): SkillName {
-    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     if (mode === "ranged") return "ranged";
     if (mode === "magic") return "magic";
     return STYLE_SKILL[state.combatStyle];
@@ -1349,7 +1350,7 @@ export function createEngine(
    * interim level-driven magic max hit) — Magic level gates WHICH spell, the spell decides the
    * damage; magic weapons ignore strBonus entirely. */
   function playerAccuracyAndMaxHit(): { atkRoll: number; max: number } {
-    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     if (mode === "ranged") {
       const eff = Math.floor(
         effectiveLevel(level("ranged"), "ranged", state.combatStyle) *
@@ -1360,7 +1361,7 @@ export function createEngine(
       // Caller (playerAttack) has already gated on quiver.qty > 0, so this only ever runs with a
       // real loaded arrow; the `?? 0` guards a corrupted/missing content lookup defensively.
       const arrowDef = state.quiver
-        ? content.items.find((i) => i.id === (state.quiver as { itemId: string }).itemId)
+        ? resolved.itemsById.get((state.quiver as { itemId: string }).itemId)
         : undefined;
       const rangedStr = arrowDef?.kind === "ammo" ? (arrowDef.rangedStr ?? 0) : 0;
       return {
@@ -1449,10 +1450,10 @@ export function createEngine(
   }
 
   function playerAttack(monster: MonsterDef, activity: CombatActivity | DungeonActivity): void {
-    const mode = weaponCombatModeFor(state.equipment.weapon, content);
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     const ammo = checkAmmo(mode);
     if (!ammo.ok) return; // swing doesn't resolve this Tick: no damage, no XP, monster still acts
-    const weaponType = weaponAttackTypeFor(state.equipment.weapon, content);
+    const weaponType = weaponAttackTypeFor(state.equipment.weapon, resolved);
     const { atkRoll, max } = playerAccuracyAndMaxHit();
     // Routed lookup (#99): the monster's weak spot is simply the type it defends worst.
     const defRoll = defenceRoll(monster.defenceLevel + 8, monster.def[weaponType]);
@@ -1536,9 +1537,9 @@ export function createEngine(
     const dungeonRun = state.activity?.kind === "dungeon" ? state.activity : undefined;
     const fishingSpotActivity = state.activity?.kind === "fishing" ? state.activity : undefined;
     const productionActivity = state.activity?.kind === "production" ? state.activity : undefined;
-    const monsterDef = fight ? content.monsters.find((m) => m.id === fight.monsterId) : undefined;
+    const monsterDef = fight ? resolved.monstersById.get(fight.monsterId) : undefined;
     const spotDef = fishingSpotActivity
-      ? content.fishingSpots.find((s) => s.id === fishingSpotActivity.spotId)
+      ? resolved.fishingSpotsById.get(fishingSpotActivity.spotId)
       : undefined;
     const dungeonRunDef = dungeonRun ? dungeonDef(dungeonRun.dungeonId) : undefined;
     const productionRecipeDef = productionActivity
@@ -1564,7 +1565,7 @@ export function createEngine(
         skills,
         equipment: { ...state.equipment },
         bonuses: {
-          attackType: weaponAttackTypeFor(state.equipment.weapon, content),
+          attackType: weaponAttackTypeFor(state.equipment.weapon, resolved),
           atkBonus: gearBonus("atkBonus"),
           strBonus: gearBonus("strBonus"),
           def: Object.fromEntries(ATTACK_TYPES.map((t) => [t, gearDef(t)])) as Record<
@@ -1676,7 +1677,7 @@ export function createEngine(
       const slotIndex = state.foodSlots.findIndex((slot) => slot && slot.qty > 0);
       if (slotIndex === -1) return;
       const slot = state.foodSlots[slotIndex] as { itemId: string; qty: number };
-      const def = content.items.find((i) => i.id === slot.itemId);
+      const def = resolved.itemsById.get(slot.itemId);
       if (!def || def.kind !== "food") return; // guards against a corrupted slot; not reachable via commands
       eatFromSlotAt(slotIndex, def);
     }
@@ -1866,7 +1867,7 @@ export function createEngine(
     },
     enterDungeon(dungeonId) {
       const dungeon = dungeonDef(dungeonId); // throws on unknown id
-      const area = content.areas.find((a) => a.id === dungeon.areaId);
+      const area = resolved.areasById.get(dungeon.areaId);
       assertAreaUnlocked(area);
       state.respawnTicksLeft = 0; // clears Respawn
       state.hp = Math.max(state.hp, 1); // mirrors selectMonster's respawn-cancel semantics
@@ -1922,7 +1923,7 @@ export function createEngine(
       state.autoSellDuplicates = on;
     },
     equip(itemId) {
-      const def = content.items.find((i) => i.id === itemId);
+      const def = resolved.itemsById.get(itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
       if (def.kind !== "equipment") throw new Error(`${def.name} cannot be equipped`);
       const owned = state.bank.get(itemId) ?? 0;
@@ -1991,7 +1992,7 @@ export function createEngine(
       }
       const slot = state.foodSlots[slotIndex];
       if (!slot || slot.qty <= 0) throw new Error(`food slot ${slotIndex} is empty`);
-      const def = content.items.find((i) => i.id === slot.itemId);
+      const def = resolved.itemsById.get(slot.itemId);
       if (!def || def.kind !== "food") throw new Error(`food slot ${slotIndex} is empty`);
       eatFromSlotAt(slotIndex, def);
     },
@@ -2107,7 +2108,7 @@ export function createEngine(
     },
     sell(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
-      const def = content.items.find((i) => i.id === itemId);
+      const def = resolved.itemsById.get(itemId);
       if (!def) throw new Error(`unknown item: ${itemId}`);
       const value = sellValue(def);
       if (value === undefined) throw new Error(`${def.name} cannot be sold`);

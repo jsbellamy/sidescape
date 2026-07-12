@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateContent } from "./validate-content";
+import { resolveContent, validateContent } from "./validate-content";
 import { fixtureContent } from "./fixture-content";
 import { content as realContent } from "../data";
 import type { Content } from "./types";
@@ -523,5 +523,82 @@ describe("validateContent", () => {
     it("a valid pet roster (one per source plus a boss pet) reports nothing", () => {
       expect(validateContent(fixtureContent)).toEqual([]);
     });
+  });
+});
+
+describe("resolveContent (#185)", () => {
+  it("every collection entry is reachable through its own by-id map", () => {
+    const resolved = resolveContent(fixtureContent);
+    for (const area of fixtureContent.areas) {
+      expect(resolved.areasById.get(area.id)).toBe(area);
+    }
+    for (const monster of fixtureContent.monsters) {
+      expect(resolved.monstersById.get(monster.id)).toBe(monster);
+    }
+    for (const item of fixtureContent.items) {
+      expect(resolved.itemsById.get(item.id)).toBe(item);
+    }
+    for (const spot of fixtureContent.fishingSpots) {
+      expect(resolved.fishingSpotsById.get(spot.id)).toBe(spot);
+    }
+    for (const dungeon of fixtureContent.dungeons) {
+      expect(resolved.dungeonsById.get(dungeon.id)).toBe(dungeon);
+    }
+    for (const recipe of fixtureContent.recipes) {
+      expect(resolved.recipesById.get(recipe.id)).toBe(recipe);
+    }
+    for (const spell of fixtureContent.spells) {
+      expect(resolved.spellsById.get(spell.id)).toBe(spell);
+    }
+    for (const pet of fixtureContent.pets) {
+      expect(resolved.petsById.get(pet.id)).toBe(pet);
+    }
+  });
+
+  it("every map's size matches its collection's length (no dropped/duplicated entries)", () => {
+    const resolved = resolveContent(fixtureContent);
+    expect(resolved.areasById.size).toBe(fixtureContent.areas.length);
+    expect(resolved.monstersById.size).toBe(fixtureContent.monsters.length);
+    expect(resolved.itemsById.size).toBe(fixtureContent.items.length);
+    expect(resolved.fishingSpotsById.size).toBe(fixtureContent.fishingSpots.length);
+    expect(resolved.dungeonsById.size).toBe(fixtureContent.dungeons.length);
+    expect(resolved.recipesById.size).toBe(fixtureContent.recipes.length);
+    expect(resolved.spellsById.size).toBe(fixtureContent.spells.length);
+    expect(resolved.petsById.size).toBe(fixtureContent.pets.length);
+  });
+
+  it("resolves the real v1 Content too (generic over Content, not fixture-specific)", () => {
+    const resolved = resolveContent(realContent);
+    for (const area of realContent.areas) {
+      expect(resolved.areasById.get(area.id)).toBe(area);
+    }
+    expect(resolved.itemsById.size).toBe(realContent.items.length);
+  });
+
+  it("still carries every original Content array unchanged (ResolvedContent extends Content)", () => {
+    const resolved = resolveContent(fixtureContent);
+    expect(resolved.items).toBe(fixtureContent.items);
+    expect(resolved.vendor).toBe(fixtureContent.vendor);
+  });
+
+  it("throws the byte-identical Invalid-Content message validateContent's violations would produce", () => {
+    const broken: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.filter((i) => i.kind !== "currency"),
+    };
+    const violations = validateContent(broken);
+    const expectedMessage = `Invalid Content:\n${violations.map((v) => `  - ${v}`).join("\n")}`;
+    expect(() => resolveContent(broken)).toThrowError(expectedMessage);
+  });
+
+  it("aggregates every violation in the thrown message, not just the first", () => {
+    const broken: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.filter((i) => i.kind !== "currency"),
+      spells: [],
+    };
+    expect(() => resolveContent(broken)).toThrowError(
+      /Content defines no currency item[\s\S]*Content defines no spells/,
+    );
   });
 });

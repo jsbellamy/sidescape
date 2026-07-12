@@ -1,4 +1,5 @@
-import type { Content, ItemDef } from "../core/types";
+import type { ItemDef } from "../core/types";
+import type { ResolvedContent } from "../core/validate-content";
 
 /**
  * Presentation-only sort choice for the Inventory and Bank lists (#26). Kept out of the
@@ -22,21 +23,21 @@ const SORT_STORAGE_KEY = "sidescape-ui-sort";
  * Any kind not listed sorts last. */
 const KIND_ORDER: Record<string, number> = { equipment: 0, food: 1, material: 2, currency: 3 };
 
-function itemDef(itemId: string, content: Content): ItemDef | undefined {
-  return content.items.find((i) => i.id === itemId);
+function itemDef(itemId: string, content: ResolvedContent): ItemDef | undefined {
+  return content.itemsById.get(itemId);
 }
 
-function itemName(itemId: string, content: Content): string {
+function itemName(itemId: string, content: ResolvedContent): string {
   return itemDef(itemId, content)?.name ?? itemId;
 }
 
 /** `def.value ?? 0`; currency has no `value` field at all, so it sorts as 0. */
-function itemValue(itemId: string, content: Content): number {
+function itemValue(itemId: string, content: ResolvedContent): number {
   const def = itemDef(itemId, content);
   return def && def.kind !== "currency" ? (def.value ?? 0) : 0;
 }
 
-function kindRank(itemId: string, content: Content): number {
+function kindRank(itemId: string, content: ResolvedContent): number {
   const kind = itemDef(itemId, content)?.kind;
   return kind !== undefined
     ? (KIND_ORDER[kind] ?? Number.MAX_SAFE_INTEGER)
@@ -49,7 +50,10 @@ function kindRank(itemId: string, content: Content): number {
  * ties by name; name is already name. Callers sort by itemId/qty stacks only — never row position,
  * so click handlers keep dispatching by data attribute regardless of sort order.
  */
-export function compareStacks(key: SortKey, content: Content): (a: Stack, b: Stack) => number {
+export function compareStacks(
+  key: SortKey,
+  content: ResolvedContent,
+): (a: Stack, b: Stack) => number {
   return (a, b) => {
     const nameCompare = itemName(a.itemId, content).localeCompare(itemName(b.itemId, content));
     switch (key) {
@@ -65,7 +69,11 @@ export function compareStacks(key: SortKey, content: Content): (a: Stack, b: Sta
 }
 
 /** Sorts a copy of `stacks` (never mutates the input) by `key` using `compareStacks`. */
-export function sortStacks<T extends Stack>(stacks: T[], key: SortKey, content: Content): T[] {
+export function sortStacks<T extends Stack>(
+  stacks: T[],
+  key: SortKey,
+  content: ResolvedContent,
+): T[] {
   return [...stacks].sort(compareStacks(key, content));
 }
 

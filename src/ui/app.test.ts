@@ -5,6 +5,7 @@ import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -61,7 +62,7 @@ function stubLocalStorage(): Storage {
 function mount(seed: number) {
   const engine = createEngine(fixtureContent, seededRng(seed));
   const root = document.createElement("main");
-  const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+  const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
   return { engine, root, app };
 }
 
@@ -178,7 +179,7 @@ describe("mountApp", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, noValueContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(noValueContent), noopWindowChrome);
 
     selectBankTile(root, "meat");
     expect(root.querySelector('#bank-detail [data-sell="meat"]')?.textContent).toBe("Sell 3g");
@@ -265,7 +266,7 @@ describe("Monster stats line", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
 
     // "brute"'s attackType is "crush" too (fixture-content.ts); same uniform-zero def vector.
@@ -289,7 +290,7 @@ describe("Monster stats line", () => {
     };
     const engine = createEngine(weakToSlashWithFire, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, weakToSlashWithFire, noopWindowChrome);
+    mountApp(engine, root, resolveContent(weakToSlashWithFire), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     expect(root.querySelector("#monster-stats")?.textContent).toBe(
@@ -373,7 +374,7 @@ describe("Combat Style selector", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const active = styleButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
@@ -438,7 +439,7 @@ describe("Auto-eat threshold selector", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
     expect(active).toHaveLength(1);
@@ -480,7 +481,7 @@ describe("Auto-sell duplicates toggle (#63)", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     expect(toggle(root)?.checked).toBe(false);
   });
@@ -520,7 +521,7 @@ describe("XP progress bars", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
     expect(fill?.style.width).toBe("0%");
@@ -540,7 +541,7 @@ describe("XP progress bars", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
     expect(fill?.style.width).toBe("99%");
@@ -682,7 +683,7 @@ describe("Workspace cards (#138: LEFT Areas arrow + RIGHT tab strip open floatin
   function mountWithChrome(chrome: WorkspaceChrome) {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, chrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), chrome);
     return { engine, root, app };
   }
 
@@ -774,7 +775,7 @@ describe("Workspace cards (#138: LEFT Areas arrow + RIGHT tab strip open floatin
 
       const { chrome: chrome2, calls: calls2 } = spyWindowChrome();
       const root2 = document.createElement("main");
-      mountApp(engine, root2, fixtureContent, chrome2);
+      mountApp(engine, root2, resolveContent(fixtureContent), chrome2);
 
       expect(root2.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(true);
       expect(root2.querySelector<HTMLElement>("#right-panel")?.hidden).toBe(true);
@@ -829,7 +830,7 @@ describe("Cards on glass — close interactions and drag regions (#138 §4/§5, 
     const root = document.createElement("main");
     document.body.appendChild(root);
     try {
-      mountApp(engine, root, fixtureContent, noopWindowChrome);
+      mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
       root.querySelector<HTMLButtonElement>("#left-arrow")?.click();
       root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
       expect(root.querySelector<HTMLElement>("#left-panel")?.hidden).toBe(false);
@@ -932,7 +933,7 @@ describe("Event ticker (#62 amendment): a one-line heartbeat of the most recent 
     };
     const engine = createEngine(rareDropContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, rareDropContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(rareDropContent), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     for (let i = 0; i < 2000 && engine.snapshot().lootZone.length === 0; i++) engine.tick();
@@ -946,7 +947,7 @@ describe("Bank", () => {
   function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-tab="bank"]')?.click();
     return { engine, root, app };
   }
@@ -1059,7 +1060,7 @@ describe("Bank", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, content, noopWindowChrome);
+    mountApp(engine, root, resolveContent(content), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let sold = false;
@@ -1090,7 +1091,7 @@ describe("Bank", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, noValueContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(noValueContent), noopWindowChrome);
     engine.selectFishingSpot("pond"); // catchChance 1, always catches "raw-fish"
 
     for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
@@ -1116,7 +1117,7 @@ describe("Bank", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, guaranteedSwordDropContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(guaranteedSwordDropContent), noopWindowChrome);
     engine.selectMonster("dummy");
 
     let killed = false;
@@ -1136,7 +1137,7 @@ describe("Food Slot bar (#61)", () => {
   function foodMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -1264,7 +1265,7 @@ describe("Loot strip (#60)", () => {
       makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
 
     root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
@@ -1285,7 +1286,7 @@ describe("Loot strip (#60)", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
 
@@ -1307,7 +1308,7 @@ describe("Loot strip (#60)", () => {
       makeSnapshot({ lootZone: [{ itemId: "meat", qty: 2 }] }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, lethalDungeonContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(lethalDungeonContent), noopWindowChrome);
     // enterDungeon sweeps first (#60), banking the seeded stack, so the run itself starts empty —
     // this only needs to prove the dungeon-failed feed line fires, not that it carries real loot
     // (that's covered at the Engine level in core/engine.test.ts).
@@ -1396,7 +1397,7 @@ describe("Fishing", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const deepPondBefore = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(deepPondBefore?.disabled).toBe(true); // Area open, but Fishing level 19 < levelReq 20
@@ -1474,7 +1475,7 @@ describe("Character panel (#26)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "lucky-amulet", qty: 1 }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     engine.equip("lucky-amulet");
     app.render();
 
@@ -1556,7 +1557,7 @@ describe("Spell picker (#101)", () => {
       makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     // The button's child <span> is the actual click target (closest("[data-spell]") walks up to
     // the button) — proves the handler doesn't require clicking the bare button element.
@@ -1584,14 +1585,14 @@ describe("Spell picker (#101)", () => {
       makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
     );
     const root1 = document.createElement("main");
-    mountApp(engine1, root1, fixtureContent, noopWindowChrome);
+    mountApp(engine1, root1, resolveContent(fixtureContent), noopWindowChrome);
     root1.querySelector<HTMLButtonElement>('[data-spell="test-blast"]')?.click();
     expect(engine1.snapshot().player.spell?.id).toBe("test-blast");
 
     const saved = JSON.parse(JSON.stringify(engine1.snapshot()));
     const engine2 = createEngine(fixtureContent, seededRng(2), saved);
     const root2 = document.createElement("main");
-    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
+    mountApp(engine2, root2, resolveContent(fixtureContent), noopWindowChrome);
 
     expect(engine2.snapshot().player.spell?.id).toBe("test-blast");
     const blast = root2.querySelector<HTMLButtonElement>('[data-spell="test-blast"]');
@@ -1690,7 +1691,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("renders a Kind | Value | Name control row above the Bank list", () => {
     const engine = createEngine(fixtureContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const buttons = [...root.querySelectorAll<HTMLButtonElement>("#sort-row button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["Kind", "Value", "Name"]);
@@ -1699,7 +1700,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Value orders the Bank by def.value descending, ties broken by name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
 
@@ -1710,7 +1711,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Kind groups equipment before food, ties broken by name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="kind"]')?.click();
 
@@ -1721,7 +1722,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sorting by Name orders the Bank alphabetically by display name", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="name"]')?.click();
 
@@ -1732,14 +1733,14 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("the sort choice survives a remount via localStorage and is never written into the save", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
     expect(localStorage.getItem("sidescape-ui-sort")).toBe("value");
 
     // Simulate an app restart: a fresh mount against the same Engine reads the persisted choice.
     const root2 = document.createElement("main");
-    mountApp(engine, root2, fixtureContent, noopWindowChrome);
+    mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
     expect(bankIds(root2)).toEqual(["lucky-charm", "bronze-sword", "meat"]);
 
     // Presentation-only: never part of the Snapshot/save (same boundary as the SFX mute, #20).
@@ -1749,7 +1750,7 @@ describe("Sorting the Bank list (#26, #59 — its only remaining consumer)", () 
   it("sell/equip click handling still targets the right item after sorting (data attributes, not row index)", () => {
     const engine = createEngine(fixtureContent, seededRng(1), seededBank());
     const root = document.createElement("main");
-    mountApp(engine, root, fixtureContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     root.querySelector<HTMLButtonElement>('[data-sort="value"]')?.click();
     // sorted order is now: lucky-charm, bronze-sword, meat — bronze-sword sits in the middle row.
@@ -1784,7 +1785,7 @@ describe("Dungeons", () => {
     };
     const engine = createEngine(lockedDungeonContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, lockedDungeonContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(lockedDungeonContent), noopWindowChrome);
 
     const gauntletBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]');
     expect(gauntletBtn?.textContent).toBe("⚔ The Gauntlet");
@@ -1881,7 +1882,7 @@ describe("Smithing (#28)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "bar", qty: barQty }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -1982,7 +1983,7 @@ describe("Cooking (#115)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -2039,7 +2040,7 @@ describe("Crafting (#116)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "hide", qty }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -2096,7 +2097,7 @@ describe("Herblore (#118)", () => {
       makeSnapshot({ bank: { items: [{ itemId: "herb", qty }] } }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     return { engine, root, app };
   }
 
@@ -2159,7 +2160,7 @@ describe("Potion Slot tile (#118)", () => {
   function potionMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     // The Potion Slot lives on the Character tab panel (#118) — open it, mirroring how a real
     // user would reach it (the panel is hidden by default, #62).
     root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
@@ -2250,7 +2251,7 @@ function ammoMount(
 ) {
   const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
   const root = document.createElement("main");
-  const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+  const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
   root.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
   return { engine, root, app };
 }
@@ -2544,7 +2545,7 @@ describe("Combat feedback (#4)", () => {
       }),
     );
     const root = document.createElement("main");
-    const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     for (let i = 0; i < 20; i++) engine.tick();
@@ -2572,7 +2573,7 @@ describe("Combat feedback (#4)", () => {
     };
     const engine = createEngine(rareDropContent, seededRng(1));
     const root = document.createElement("main");
-    const app = mountApp(engine, root, rareDropContent, noopWindowChrome);
+    const app = mountApp(engine, root, resolveContent(rareDropContent), noopWindowChrome);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     let i = 0;
@@ -2606,7 +2607,7 @@ describe("Loot Feed band styling (#9)", () => {
     };
     const engine = createEngine(allBandsContent, seededRng(1));
     const root = document.createElement("main");
-    mountApp(engine, root, allBandsContent, noopWindowChrome);
+    mountApp(engine, root, resolveContent(allBandsContent), noopWindowChrome);
     engine.selectMonster("dummy");
 
     grindFor(engine, "lucky-charm"); // the rarest of the four — waiting for it waits for all four
@@ -2648,7 +2649,7 @@ describe("Save → remount round-trip (#9)", () => {
   it("mount, act, save to localStorage, and remount restores Skills, gold, the Bank, Equipment, and the selected Monster", () => {
     const engine1 = createEngine(fixtureContent, seededRng(1));
     const root1 = document.createElement("main");
-    const app1 = mountApp(engine1, root1, fixtureContent, noopWindowChrome);
+    const app1 = mountApp(engine1, root1, resolveContent(fixtureContent), noopWindowChrome);
 
     engine1.selectMonster("dummy");
     grindFor(engine1, "bronze-sword");
@@ -2675,7 +2676,7 @@ describe("Save → remount round-trip (#9)", () => {
     const saved = JSON.parse(raw as string);
     const engine2 = createEngine(fixtureContent, seededRng(2), saved);
     const root2 = document.createElement("main");
-    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
+    mountApp(engine2, root2, resolveContent(fixtureContent), noopWindowChrome);
 
     const after = engine2.snapshot();
     expect(after.player.skills).toEqual(before.player.skills);
@@ -2708,7 +2709,7 @@ describe("Save → remount round-trip (#9)", () => {
       }),
     );
     const root1 = document.createElement("main");
-    const app1 = mountApp(engine1, root1, fixtureContent, noopWindowChrome);
+    const app1 = mountApp(engine1, root1, resolveContent(fixtureContent), noopWindowChrome);
     app1.render();
 
     const before = engine1.snapshot();
@@ -2722,7 +2723,7 @@ describe("Save → remount round-trip (#9)", () => {
     const saved = JSON.parse(raw as string);
     const engine2 = createEngine(fixtureContent, seededRng(2), saved);
     const root2 = document.createElement("main");
-    mountApp(engine2, root2, fixtureContent, noopWindowChrome);
+    mountApp(engine2, root2, resolveContent(fixtureContent), noopWindowChrome);
 
     const after = engine2.snapshot();
     expect(after.player.foodSlots).toEqual(before.player.foodSlots);

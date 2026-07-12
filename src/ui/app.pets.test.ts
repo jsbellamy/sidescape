@@ -4,8 +4,11 @@ import { __setPetDropChanceForTest, createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
+
+const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(3),
@@ -15,7 +18,7 @@ const noopWindowChrome: WorkspaceChrome = {
 function mountWith(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
   const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
   const root = document.createElement("main");
-  const app = mountApp(engine, root, fixtureContent, noopWindowChrome);
+  const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
   root.querySelector<HTMLButtonElement>('[data-tab="character"]')?.click();
   return { engine, root, app };
 }

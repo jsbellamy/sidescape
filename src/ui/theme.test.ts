@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { content } from "../data";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
+import { resolveContent } from "../core/validate-content";
 import { resolveTheme } from "./theme";
+
+const resolvedContent = resolveContent(content);
+const resolvedFixtureContent = resolveContent(fixtureContent);
 
 describe("resolveTheme (#80)", () => {
   it("resolves each real Area's own theme while fighting its Monsters", () => {
@@ -14,13 +18,13 @@ describe("resolveTheme (#80)", () => {
     ];
     for (const { monsterId, areaId, theme } of cases) {
       const snap = makeSnapshot({ monster: { id: monsterId, name: "?", hp: 1, maxHp: 1 } });
-      expect(resolveTheme(snap, content, null)).toEqual({ theme, areaId });
+      expect(resolveTheme(snap, resolvedContent, null)).toEqual({ theme, areaId });
     }
   });
 
   it("resolves the host Area's theme while fishing", () => {
     const snap = makeSnapshot({ fishing: { spotId: "trout-run", name: "Trout Run" } });
-    expect(resolveTheme(snap, content, null)).toEqual({
+    expect(resolveTheme(snap, resolvedContent, null)).toEqual({
       theme: "forest",
       areaId: "darkroot-forest",
     });
@@ -34,7 +38,7 @@ describe("resolveTheme (#80)", () => {
       dungeon: { id: "meadow-depths", name: "Meadow Depths", wave: 2, totalWaves: 3 },
       monster: { id: "goblin-brute", name: "Goblin Brute", hp: 15, maxHp: 15 },
     });
-    expect(resolveTheme(snap, content, null)).toEqual({
+    expect(resolveTheme(snap, resolvedContent, null)).toEqual({
       theme: "meadow",
       areaId: "lumbry-meadows",
     });
@@ -44,7 +48,7 @@ describe("resolveTheme (#80)", () => {
     const snap = makeSnapshot({
       production: { recipeId: "bronze-dagger", name: "Bronze Dagger", skill: "smithing" },
     });
-    expect(resolveTheme(snap, content, null)).toEqual({ theme: "town", areaId: null });
+    expect(resolveTheme(snap, resolvedContent, null)).toEqual({ theme: "town", areaId: null });
   });
 
   // makeSnapshot()'s default `areas` array is shaped from fixtureContent (2 Areas), not the real
@@ -65,7 +69,7 @@ describe("resolveTheme (#80)", () => {
 
   it("falls back to the first unlocked Area's theme when idle with no last-used Area", () => {
     const snap = realAreasSnapshot(); // monster/fishing/dungeon/production all null: idle
-    expect(resolveTheme(snap, content, null)).toEqual({
+    expect(resolveTheme(snap, resolvedContent, null)).toEqual({
       theme: "meadow",
       areaId: "lumbry-meadows",
     });
@@ -73,7 +77,7 @@ describe("resolveTheme (#80)", () => {
 
   it("prefers the last-used Area's theme over the first-unlocked Area's when idle", () => {
     const snap = realAreasSnapshot();
-    expect(resolveTheme(snap, content, "bone-crypt")).toEqual({
+    expect(resolveTheme(snap, resolvedContent, "bone-crypt")).toEqual({
       theme: "crypt",
       areaId: "bone-crypt",
     });
@@ -81,7 +85,7 @@ describe("resolveTheme (#80)", () => {
 
   it("ignores a stale/unknown last-used Area id and falls back to first-unlocked", () => {
     const snap = realAreasSnapshot();
-    expect(resolveTheme(snap, content, "not-a-real-area")).toEqual({
+    expect(resolveTheme(snap, resolvedContent, "not-a-real-area")).toEqual({
       theme: "meadow",
       areaId: "lumbry-meadows",
     });
@@ -89,6 +93,9 @@ describe("resolveTheme (#80)", () => {
 
   it("works against fixtureContent too (theme resolution is generic over Content, not real-data-specific)", () => {
     const snap = makeSnapshot({ monster: { id: "brute", name: "Crypt Brute", hp: 40, maxHp: 40 } });
-    expect(resolveTheme(snap, fixtureContent, null)).toEqual({ theme: "crypt", areaId: "crypt" });
+    expect(resolveTheme(snap, resolvedFixtureContent, null)).toEqual({
+      theme: "crypt",
+      areaId: "crypt",
+    });
   });
 });
