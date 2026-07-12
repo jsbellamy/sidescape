@@ -19,6 +19,8 @@ type Grid = (RGB | null)[][];
 const INK: RGB = [0x11, 0x0d, 0x0a]; // P.ink
 const TOWN3: RGB = [0xc5, 0x82, 0x3b]; // town[3], a mid-light body brown
 const TOWN4: RGB = [0xe2, 0xad, 0x57]; // town[4], a highlight brown
+const BLOOD_BASE: RGB = [0xa5, 0x30, 0x26]; // blood.base
+const WATER_BASE: RGB = [0x72, 0xa7, 0xcc]; // water.base
 
 /** Renders a source grid to the 34×34 canvas and returns a pixel reader + the set of opaque colors,
  * exactly as `writeIcons` would ship it. */
@@ -99,6 +101,23 @@ describe("paintSourceIcon", () => {
   it("honors an explicit x0/y0 origin", () => {
     const { fn } = render(block(4, 4, TOWN4), { x0: 3, y0: 3 });
     expect(fn(4, 4).slice(0, 3)).toEqual(TOWN4); // body placed at the given origin
+  });
+
+  it("recolors named source regions without changing the family silhouette", () => {
+    const source = render(block(4, 4, BLOOD_BASE));
+    const recolored = render(block(4, 4, BLOOD_BASE), {
+      recolor: { "blood.base": "water.base" },
+    });
+    expect(recolored.fn(16, 16).slice(0, 3)).toEqual(WATER_BASE);
+    expect(recolored.fn(14, 16).slice(0, 3)).toEqual(INK);
+    for (let y = 0; y < 34; y++)
+      for (let x = 0; x < 34; x++) expect(recolored.fn(x, y)[3]).toBe(source.fn(x, y)[3]);
+  });
+
+  it("rejects recolor mappings that are not named palette references", () => {
+    expect(() =>
+      render(block(4, 4, BLOOD_BASE), { recolor: { "blood.base": "water.neon" } }),
+    ).toThrow(/unknown named palette ref/);
   });
 });
 

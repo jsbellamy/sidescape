@@ -59,10 +59,23 @@ export function loadSourceGrid(pngPath) {
  *
  * @param {ReturnType<typeof import("./icon-canvas.mjs").createCanvas>} canvas
  * @param {(null | [number, number, number])[][]} grid
- * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette> }} [opts]
+ * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, recolor?: Record<string, string> }} [opts]
  */
-export function paintSourceIcon(canvas, grid, { x0, y0, outline = P.ink, named } = {}) {
+export function paintSourceIcon(
+  canvas,
+  grid,
+  { x0, y0, outline = P.ink, named, recolor = {} } = {},
+) {
   const palette = named ?? buildNamedPalette();
+  const paletteByRef = new Map(palette.map((entry) => [entry.ref, entry]));
+  for (const [from, to] of Object.entries(recolor)) {
+    if (!paletteByRef.has(from)) {
+      throw new Error(`paintSourceIcon: unknown named palette ref ${JSON.stringify(from)}`);
+    }
+    if (!paletteByRef.has(to)) {
+      throw new Error(`paintSourceIcon: unknown named palette ref ${JSON.stringify(to)}`);
+    }
+  }
   const { cells } = quantizeGrid(grid, palette);
   // Strip the traced exterior ink first (it is re-derived as one clean ring), THEN reduce the
   // remaining body fills to the color budget, so a budget slot is never spent on ink that is
@@ -70,9 +83,19 @@ export function paintSourceIcon(canvas, grid, { x0, y0, outline = P.ink, named }
   const { cells: peeled } = stripExteriorInk(cells, OUTLINE_INK_REFS);
   const { cells: reduced } = reducePalette(peeled, MAX_BODY_COLORS);
   const { cells: stripped } = despeckle(reduced);
+  // Family variants share one approved compact silhouette. Recolor only named material regions
+  // after cleanup so geometry, outline stripping, and despeckling remain byte-identical across the
+  // family; the mapping can never introduce an off-palette color.
+  const recolored = stripped.map((row) =>
+    row.map((cell) => {
+      if (!cell) return null;
+      const targetRef = recolor[cell.ref];
+      return targetRef ? paletteByRef.get(targetRef) : cell;
+    }),
+  );
 
-  const height = stripped.length;
-  const width = height > 0 ? stripped[0].length : 0;
+  const height = recolored.length;
+  const width = height > 0 ? recolored[0].length : 0;
   // The derived outline ring adds 1px on every side, so the body must leave room for it inside the
   // drawable 1..32 area (a 34-wide canvas with a 1px transparent margin each side).
   if (width + 2 > 32 || height + 2 > 32) {
@@ -85,7 +108,7 @@ export function paintSourceIcon(canvas, grid, { x0, y0, outline = P.ink, named }
   // expressions (e.g. `steel.base`), so assign each distinct ref its own legend char.
   const charOf = new Map();
   const legend = {};
-  const rows = stripped.map((row) =>
+  const rows = recolored.map((row) =>
     row
       .map((cell) => {
         if (!cell) return ".";

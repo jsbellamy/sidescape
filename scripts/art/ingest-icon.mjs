@@ -84,7 +84,10 @@ const [cx0, cy0, cx1, cy1] = crop;
 const tile = cropImage(image, { x0: cx0, y0: cy0, x1: cx1, y1: cy1 });
 
 const bg = sampleBackground(tile);
-const { fg, bbox, enclosedBgCount } = keyBackground(tile, bg, tolerance);
+// keyEnclosed: the prompt-kit bg is a saturated key color no subject legitimately uses, so
+// key-colored (or transparent) pixels enclosed by the subject — a bow's window, a ring's center —
+// are background too, not foreground that would quantize into a body color.
+const { fg, bbox, enclosedBgCount } = keyBackground(tile, bg, tolerance, { keyEnclosed: true });
 if (!bbox) fail("no foreground found after keying — check --crop / --tolerance and the key color");
 
 // Prompt-kit generations render each logical pixel as a large block (~30px), far above the tracer's
@@ -198,6 +201,21 @@ if (preview && renderedLong < 26) {
 if (budget > 12) {
   errors.push(`projected color budget ${budget} exceeds the 12-color limit after quantization.`);
 }
+
+// A few anti-aliased edge pixels landing far from every ramp is normal; a large share means the
+// subject's dominant hue has no vocabulary (like red before the `blood` ramp existed) and the
+// whole body would silently ship recolored. Reject loudly instead.
+const OFF_RAMP_LIMIT = 0.15;
+const totalCells = quant.report.reduce((n, r) => n + r.count, 0);
+const warnCells = quant.report.reduce((n, r) => n + (r.warn ? r.count : 0), 0);
+if (totalCells > 0 && warnCells / totalCells > OFF_RAMP_LIMIT) {
+  const worst = quant.report.filter((r) => r.warn).sort((a, b) => b.count - a.count)[0];
+  errors.push(
+    `${((warnCells / totalCells) * 100).toFixed(0)}% of subject cells have no faithful ramp ` +
+      `(limit ${OFF_RAMP_LIMIT * 100}%; worst: ${worst.hex} ×${worst.count}, nearest ${worst.ref} at dist ${worst.distance.toFixed(0)}). ` +
+      `Add a material ramp to scripts/art/palettes.mjs or recolor the generation.`,
+  );
+}
 const touchesEdge =
   bbox.x0 === 0 || bbox.y0 === 0 || bbox.x1 === tile.width - 1 || bbox.y1 === tile.height - 1;
 if (touchesEdge) {
@@ -210,7 +228,9 @@ if (touchesEdge) {
 
 console.log(`\ningest-icon: ${name}  (from ${inPath})`);
 console.log(`  crop ${crop.join(",")}  →  keyed bbox ${bbox.x0},${bbox.y0}..${bbox.x1},${bbox.y1}`);
-console.log(`  background ${bg.join(",")}   enclosed bg cells (holes): ${enclosedBgCount}`);
+console.log(
+  `  background ${bg.join(",")}   enclosed bg pixels keyed to transparent: ${enclosedBgCount}`,
+);
 console.log(
   `  pitch x ${px.pitch.toFixed(2)} score ${Number.isNaN(px.score) ? "(manual)" : px.score.toFixed(3)}` +
     `   pitch y ${py.pitch.toFixed(2)} score ${Number.isNaN(py.score) ? "(manual)" : py.score.toFixed(3)}`,

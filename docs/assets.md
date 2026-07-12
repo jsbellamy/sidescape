@@ -177,106 +177,65 @@ materials, currency, the goblin charm accessory):
 
 ## Gap-fill mace/sword icons (Combat Depth #102)
 
-`bronze-mace`, `iron-mace`, `steel-mace`, `mithril-mace`, `iron-sword`, `steel-sword`, and
-`mithril-sword` (`src/assets/icons/*.png`) are **hand-drawn placeholder pixel art**, generated for
-this wave (a simple flanged-mace-head / crossguard-blade silhouette, 34×34, tier-tinted to match
-the existing bronze/iron/steel/mithril palette) — not sourced from a third-party pack, so no
-license/provenance entry is needed. They intentionally do not match the "496 pixel art icons"
-pack's style used above; swapping them for real `W_Mace0NN.png` / `W_Sword0NN.png` crops from that
-same CC0 pack (already licensed for this repo) is a follow-up, not a blocker for this wave's
-content pass.
+The dagger, sword, and mace tiers are source-driven production families. Daggers share
+`golden-item-bronze-dagger.png`, swords share `golden-weapon-iron-sword.png`, and maces share
+`golden-item-bronze-mace.png`. Within each family, bronze, iron, steel, and mithril preserve one
+canonical silhouette while deterministic named-ramp remaps communicate the metal tier. The mace's
+oversized flanged head and dark central notches remain unchanged so its weapon read survives at
+34×34.
 
 ## Raw catch icons (Cooking wave, #115)
 
-`raw-beef`, `raw-shrimp`, `raw-trout`, and `raw-pike` (`src/assets/icons/*.png`) are **hand-drawn
-placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art icons"
-pack's on-screen size) — same escape hatch as the gap-fill mace/sword icons above, not sourced from
-a third-party pack, so no license/provenance entry is needed. Each is a simple silhouette read at a
-glance as "raw": a marbled pink-red meat slab for `raw-beef`, a pale curled shrimp for
-`raw-shrimp`, and pale-toned fish outlines (grey-silver, speckled) for `raw-trout`/`raw-pike`,
-distinct from their cooked counterparts' existing icons (`I_C_Meat.png`-derived `cooked-meat`,
-etc.) without matching the source pack's own style. Swapping these for real raw-fish/raw-meat crops
-from a sourced CC0 pack is a follow-up, not a blocker for this wave's content pass — same note as
-the mace/sword icons above.
+`raw-beef`, `raw-shrimp`, `raw-trout`, and `raw-pike` are source-driven production icons using the
+approved compact sources `golden-item-raw-beef.png`, `golden-base-raw-shrimp.png`,
+`golden-base-raw-trout.png`, and `golden-base-raw-pike.png`. Each species keeps its own canonical
+silhouette. `cooked-meat`, `cooked-shrimp`, `cooked-trout`, and `cooked-pike` reuse the corresponding
+raw compact source and deterministically remap only its material colors to a cooked brown/orange
+ramp. Cooked states are never separately generated, so raw and cooked geometry remains identical.
 
 ## Gem and jewelry icons (Crafting wave, #117)
 
-`sapphire`, `emerald`, `ruby`, `sapphire-amulet`, `sapphire-ring`, `emerald-amulet`,
-`emerald-ring`, `ruby-amulet`, and `ruby-ring` (`src/assets/icons/*.png`) are **hand-drawn
-placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art
-icons" pack's on-screen size) — same escape hatch as the gap-fill mace/sword, raw-catch, and
-hide/leather icons above, not sourced from a third-party pack, so no license/provenance entry is
-needed. Each gem Material is a simple faceted-diamond silhouette (sapphire blue, emerald green,
-ruby red, each with a lighter facet highlight and a darker shadow facet); the ring icons reuse the
-same faceted gem set atop a small gold band, and the amulet icons reuse it hanging below a thin
-chain arc — one shared gem shape per tier keeps the Material and its two jewelry pieces reading as
-the same gem at a glance. Swapping these for sourced CC0 crops is a follow-up, not a blocker for
-this wave's content pass — same note as the mace/sword, raw-catch, and hide/leather icons above.
+Loose gems, amulets, and rings are three source-driven silhouette families using
+`golden-base-sapphire.png`, `golden-base-sapphire-amulet.png`, and
+`golden-base-sapphire-ring.png`. Sapphire is canonical; emerald and ruby remap only the large gem
+facets while preserving the gold setting, chain, or band. The same sharp four-point gem identity
+therefore remains consistent across the Material and both jewelry slots.
 
 ## Hide and leather/ranged-armour icons (Crafting wave, #116)
 
-`cowhide`, `wolf-hide`, `thick-hide`, `leather-chaps`, `leather-coif`, `hard-leather-body`,
-`hard-leather-chaps`, and `hard-leather-coif` (`src/assets/icons/*.png`) are **hand-drawn
-placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496 pixel art icons"
-pack's on-screen size) — same escape hatch as the gap-fill mace/sword and raw-catch icons above,
-not sourced from a third-party pack, so no license/provenance entry is needed. The three hides are
-irregular pelt-silhouettes, tinted to their source beast (`cowhide` tan, `wolf-hide` cool grey with
-a fur-tuft edge, `thick-hide` a darker, bulkier brown). `leather-chaps`/`leather-coif` reuse
-`leather-body`'s existing light-tan palette in a legs/hood silhouette; the `hard-leather-*` tier
-uses a darker, studded variant of the same shapes to read as a visibly tougher tier. Swapping these
-for sourced CC0 crops is a follow-up, not a blocker for this wave's content pass — same note as the
-mace/sword and raw-catch icons above.
+The three hides are source-driven variants of `golden-base-cowhide.png`: cowhide remains tan,
+wolf hide uses a cool-gray material ramp, and thick hide uses a darker brown ramp. Leather body,
+chaps, and coif use `golden-item-leather-body.png`, `golden-base-leather-chaps.png`, and
+`golden-base-leather-coif.png`. Each hard-leather item reuses its corresponding normal-leather
+silhouette with a deterministic darker material remap, keeping equipment-slot recognition stable.
 
 ## Herb and potion icons (Herblore wave, #118)
 
-`guam-herb`, `marrentill-herb`, `tarromin-herb`, `harralander-herb`, `strength-potion`,
-`attack-potion`, `fishing-potion`, and `production-potion` (`src/assets/icons/*.png`) are
-**hand-drawn placeholder pixel art**, generated for this wave (34×34 canvas, matching the "496
-pixel art icons" pack's on-screen size) — same escape hatch as the gap-fill mace/sword, raw-catch,
-hide/leather, and gem/jewelry icons above, not sourced from a third-party pack, so no
-license/provenance entry is needed. Each herb Material is a simple stem-and-leaves sprig,
-tier-tinted (`guam-herb` bright green, `marrentill-herb` teal, `tarromin-herb` olive-yellow,
-`harralander-herb` deep green) so the four read as a progression at a glance, mirroring the gem
-icons' one-shape-per-tier approach. Each potion Item is a round-bottomed corked flask, the liquid
-fill colored to its target (`strength-potion` red, `attack-potion` orange, `fishing-potion` blue,
-`production-potion` purple) with a small highlight ellipse for a glass-shine cue. Swapping these
-for sourced CC0 crops is a follow-up, not a blocker for this wave's content pass — same note as the
-mace/sword, raw-catch, hide/leather, and gem/jewelry icons above.
+The four herb Materials are source-driven production icons sharing the approved compact source
+`scripts/art/icon-sources/golden-base-guam-herb.png`. Its tied five-leaf sprig stays geometrically
+identical while named-ramp remaps communicate progression: `guam-herb` bright green,
+`marrentill-herb` teal, `tarromin-herb` olive-yellow, and `harralander-herb` deep green.
+
+The four potion Items are source-driven production icons. They share the approved compact source
+`scripts/art/icon-sources/golden-consumable-red-potion.png`; `scripts/art/icons.mjs` preserves its
+bottle, cork, glass, lighting, and outline while deterministically remapping only the liquid ramp:
+`strength-potion` red, `attack-potion` orange, `fishing-potion` blue, and `production-potion`
+purple. `npm run art` renders all four at the final 34×34 size with binary alpha.
 
 ## Arrow and rune icons (Ammo wave, #119)
 
-`bronze-arrow`, `steel-arrow`, `mithril-arrow`, `air-rune`, `water-rune`, `earth-rune`, and
-`fire-rune` (`src/assets/icons/*.png`) are **hand-drawn placeholder pixel art**, generated for this
-wave (34×34 canvas, matching the "496 pixel art icons" pack's on-screen size) — same escape hatch
-as the gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, and herb/potion icons above, not
-sourced from a third-party pack, so no license/provenance entry is needed. Each arrow is a simple
-diagonal shaft-and-fletching silhouette with a triangular metal head, tier-tinted to the SAME
-bronze/steel/mithril palette the gap-fill mace/sword icons already use (a shared wood-brown shaft
-and pale fletching across all three tiers, only the arrowhead's metal tint changes) so the arrow
-ladder reads as the same tier progression as the rest of the weapon ladder. Each rune is a rounded
-stone tablet carved with a simple glyph, tinted to its Element (`air-rune` pale cyan-white,
-`water-rune` blue — reusing the sapphire gem icon's own blue, `earth-rune` mossy brown-green,
-`fire-rune` warm red-orange — reusing the ruby gem icon's own red) so the four read as a set at a
-glance, mirroring the gem icons' one-shape-per-tier approach. Swapping these for sourced CC0 crops
-is a follow-up, not a blocker for this wave's content pass — same note as every hand-drawn
-placeholder set above.
+Arrow tiers share `golden-base-bronze-arrow.png`; only the triangular arrowhead changes from bronze
+to steel or mithril, while the wood shaft and pale fletching remain fixed. Elemental runes share
+`golden-base-air-rune.png`, preserving one rounded carved-tablet silhouette while named-ramp remaps
+produce pale air, blue water, green earth, and orange fire variants.
 
 ## Pet icons (Pets wave, #120)
 
-`rock-golem`, `fishing-frog`, `kiln-cat`, and `shade-wisp` (`src/assets/icons/*.png`) are
-**hand-drawn placeholder pixel art**, generated for this wave (17×17 working grid, upscaled 2× with
-nearest-neighbour resampling to the same 34×34 canvas the "496 pixel art icons" pack's on-screen
-size uses) — same escape hatch as every hand-drawn placeholder set above, not sourced from a
-third-party pack, so no license/provenance entry is needed. `PetDef.icon` is resolved through the
-SAME `src/ui/icons.ts` registry as every `ItemDef.icon` (a pet isn't an Item, but its icon key is
-required/validated/rendered under the identical discipline — see `PetDef`'s own doc, core/types.ts).
-Each pet is a simple silhouette reading at a glance as its source: `rock-golem` (the "combat" pet) a
-squat blocky grey-brown golem with a moss-green facet accent and glowing eyes; `fishing-frog` (the
-"fishing" pet) a sitting green frog with pale belly and a blue water-droplet accent; `kiln-cat`
-(the "production" pet) a sitting orange tabby cat with a small ember accent; `shade-wisp` (the boss
-pet, tied to Bone Crypt's `crypt-shade`) a small translucent-lavender ghost wisp with a glowing
-core, echoing the wraith it's tied to. Swapping these for sourced CC0 crops is a follow-up, not a
-blocker for this wave's content pass — same note as every hand-drawn placeholder set above.
+The four pets are source-driven production icons using their approved compact sources:
+`golden-base-rock-golem.png`, `golden-base-fishing-frog.png`, `golden-base-kiln-cat.png`, and
+`golden-base-shade-wisp.png`. `PetDef.icon` remains resolved through the same `src/ui/icons.ts`
+registry as every `ItemDef.icon`. Each pet keeps one large native-scale category silhouette rather
+than relying on small texture detail.
 
 ## Skill and workspace/navigation icons (UI & Assets wave 1/8, #131)
 
@@ -291,20 +250,23 @@ agents must compare new icons against it alongside the generated 1× contact she
 `skill-herblore` (one per `SKILL_NAMES` entry, `src/core/types.ts`) and `tab-world`, `tab-skills`,
 `tab-character`, `tab-bank`, `tab-vendor`, `tab-loot` (`src/assets/icons/*.png`) are the first
 assets built entirely through the original-art pipeline `#139` committed (`scripts/art/`,
-`npm run art`), not third-party crops, so no license/provenance entry is needed. Their sources
-live in `scripts/art/icons.mjs` and are regenerated byte-stably by `npm run art`, which now also writes
+`npm run art`), not third-party crops, so no license/provenance entry is needed. Their source-driven
+and native-canvas definitions live in `scripts/art/icons.mjs` and regenerate byte-stably. The
+approved compact sources now drive hitpoints, smithing, cooking, herblore, and all six workspace
+tabs; attack, strength, and fishing retain their previously approved source/native definitions,
+while defence, ranged, magic, and crafting retain the clearer native-canvas versions. The build writes
 `src/assets/icons/*.png` for this set alongside the pre-existing `docs/art-style-preview.png` swatch
 sheet. Every color used is drawn from the pinned master ramp, a zone sub-palette, or a named
 material ramp in `docs/art-style.md` / `scripts/art/palettes.mjs`; the July 2026 style pass added
 the steel, water/scale, and gold ramps for readable close-up material planes. Following the
-approved icon reference, `skill-attack`, `skill-fishing`, and `tab-bank` are canonical native-34×34
+approved icon reference, `skill-attack`, `skill-fishing`, and `tab-bank` are canonical 34×34
 examples for irregular contours, selective outlines, and clustered material ramps.
 Each icon is a
 simple, silhouette-first shape read at a glance as its Skill/tab: `skill-attack` a sword,
 `skill-strength` a flexed arm, `skill-defence` a heater shield, `skill-hitpoints` a heart,
-`skill-fishing` a fish, `skill-smithing` a hammer, `skill-ranged` a drawn bow, `skill-magic` a
-glinting staff, `skill-cooking` a flame, `skill-crafting` a needle and thread, `skill-herblore` a
-herb sprig; `tab-world` a compass, `tab-skills` an open book, `tab-character` a person silhouette,
+`skill-fishing` a fish, `skill-smithing` a hammer and anvil, `skill-ranged` a drawn bow, `skill-magic` a
+glinting staff, `skill-cooking` a roast drumstick, `skill-crafting` a needle and thread,
+`skill-herblore` a herb sprig; `tab-world` a compass, `tab-skills` an open book, `tab-character` an adventurer hood,
 `tab-bank` a reinforced resource chest, `tab-vendor` a coin purse, `tab-loot` a scroll. The four production views
 (`smithing`, `cooking`, `crafting`, `herblore`) intentionally have no separate `tab-*.png`: their
 workspace-tab icon is the matching `skill-*.png`, resolved through `tabIcon` in `src/ui/icons.ts`

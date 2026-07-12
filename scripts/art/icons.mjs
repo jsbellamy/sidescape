@@ -25,16 +25,30 @@ function disc(canvas, cx, cy, r, fill, outline = P.ink) {
 
 const meadow = zonePalettes.meadow; // [sky, spring-green, mid-green, deep-green, forest-green, gold]
 const crypt = zonePalettes.crypt; // [violet-lt, violet, violet-mid, violet-dk, bone, ink-violet]
-const town = zonePalettes.town; // [dk-brown, brown, tan-brown, orange, lt-orange, blackish-brown]
 const sewer = zonePalettes.sewer;
 const water = materialPalettes.water;
-const gold = materialPalettes.gold;
+
+const sapphireToEmerald = {
+  "forest[1]": "meadow[4]",
+  "water.shadow": "meadow[4]",
+  "water.base": "meadow[3]",
+  "water.light": "meadow[2]",
+  "water.glint": "forest[5]",
+  "meadow[0]": "forest[3]",
+};
+const sapphireToRuby = {
+  "forest[1]": "blood.shadow",
+  "water.shadow": "blood.shadow",
+  "water.base": "blood.base",
+  "water.light": "blood.light",
+  "water.glint": "blood.glint",
+  "meadow[0]": "blood.light",
+};
 
 /**
- * The eleven Skill icons (one per `SKILL_NAMES` entry, #131) plus the six workspace/navigation
- * icons. Each entry's `paint` draws on the shared 34×34 icon canvas (`icon-canvas.mjs`) using only
- * colors already pinned by `docs/art-style.md` (master, zone, and material ramps) — no ad-hoc hex
- * values are introduced here, matching the palette discipline the style guide pins.
+ * Complete production registry for Skill, workspace/navigation, item, and pet icons. Each entry
+ * either paints on the shared 34×34 canvas or renders an approved compact source, using only the
+ * master, zone, and material ramps pinned by `docs/art-style.md`.
  */
 export const icons = [
   // --- Skill icons (SKILL_NAMES order) ---
@@ -72,19 +86,7 @@ export const icons = [
   },
   {
     name: "skill-hitpoints",
-    paint(c) {
-      // Heart: two lobes + a point, warm-dark tones (no true red in the pinned palette). Outline
-      // and fill are drawn as separate passes (not per-row block()) to avoid stacking outline
-      // ink into a near-solid dark point at the base (#164 sheet sweep, same fix as the shield).
-      disc(c, 12, 12, 6, town[3]);
-      disc(c, 21, 12, 6, town[3]);
-      for (let y = 13; y <= 30; y++) {
-        const half = Math.round((30 - y) * 0.55) + 2;
-        c.rect(17 - half - 1, y, 16 + half + 1, y, P.ink);
-        c.rect(17 - half, y, 16 + half, y, town[3]);
-      }
-      c.line(9, 9, 13, 6, town[4]);
-    },
+    source: "golden-skill-hitpoints.png",
   },
   {
     name: "skill-fishing",
@@ -118,20 +120,7 @@ export const icons = [
   },
   {
     name: "skill-smithing",
-    paint(c) {
-      // Anvil: flat working face tapering into a horn, on a waist + base — mid-value town fills
-      // with the dark ramp reserved for the outline only (#164: the prior anvil used ink/outline
-      // fills that sank into the panel). Hammer rests directly on the face, touching it.
-      block(c, 13, 16, 26, 21, town[2]); // body / working face
-      for (let x = 6; x <= 13; x++) {
-        const half = Math.max(1, Math.round(((x - 6) / 7) * 3) + 1);
-        c.rect(x, 19 - half, x, 19 + half, town[2]);
-      }
-      block(c, 17, 22, 22, 24, town[1]); // waist
-      block(c, 11, 25, 27, 29, town[1]); // base
-      block(c, 21, 6, 29, 10, P.sand); // hammer head
-      c.thickLine(22, 11, 17, 16, 2, P.umber); // haft, touching the anvil face
-    },
+    source: "golden-skill-smithing.png",
   },
   {
     name: "skill-ranged",
@@ -161,25 +150,7 @@ export const icons = [
   },
   {
     name: "skill-cooking",
-    paint(c) {
-      // Roast drumstick over an attached campfire — one connected silhouette with mid-value
-      // fills that read on the panel (#164: the prior icon was a bare flame with no roast).
-      disc(c, 16, 12, 7, town[2]);
-      block(c, 13, 17, 19, 21, P.cream); // bone
-      // Flame: narrow where it meets the bone, widening toward the base — tapers UP to a point,
-      // unlike the roast above it (which tapers down), so the two silhouettes read as distinct
-      // attached shapes rather than one blob.
-      for (let y = 20; y <= 30; y++) {
-        const t = (y - 20) / 10;
-        const width = Math.max(2, Math.round(8 * t) + 1);
-        c.rect(16 - width, y, 16 + width, y, town[3]);
-      }
-      for (let y = 22; y <= 30; y++) {
-        const t = (y - 22) / 8;
-        const width = Math.max(1, Math.round(4 * t));
-        c.rect(16 - width, y, 16 + width, y, town[4]);
-      }
-    },
+    source: "golden-skill-cooking.png",
   },
   {
     name: "skill-crafting",
@@ -196,111 +167,697 @@ export const icons = [
   },
   {
     name: "skill-herblore",
-    paint(c) {
-      // Herb sprig: stem + leaves, meadow-green tier — leaves are now thickLine strokes (#164
-      // sheet sweep: the prior 1px diagonals read as dashed noise).
-      c.thickLine(17, 29, 17, 10, 2, P.umber);
-      c.thickLine(17, 22, 9, 14, 2, meadow[2]);
-      c.thickLine(17, 16, 25, 8, 2, meadow[2]);
-      c.circle(17, 8, 4, meadow[1]);
-      block(c, 12, 27, 22, 30, P.outline);
-    },
+    source: "golden-skill-herblore.png",
   },
   // --- Workspace/navigation icons ---
+  { name: "tab-world", source: "golden-tab-world.png" },
+  { name: "tab-skills", source: "golden-tab-skills.png" },
+  { name: "tab-character", source: "golden-tab-character.png" },
+  { name: "tab-bank", source: "golden-tab-bank.png" },
+  { name: "tab-vendor", source: "golden-tab-vendor.png" },
+  { name: "tab-loot", source: "golden-tab-loot.png" },
+  // --- Potion family ---
+  // One approved bottle silhouette, with only its three liquid planes remapped per target. Glass,
+  // cork, lighting, scale, and outline remain identical across the family.
   {
-    name: "tab-world",
-    paint(c) {
-      // Compass: circle rim + N/S/E/W needle diamond.
-      c.circle(16.5, 16.5, 13, P.ink);
-      c.circle(16.5, 16.5, 12, meadow[4]);
-      c.circle(16.5, 16.5, 9, P.outline);
-      c.thickLine(16, 5, 16, 28, 2, meadow[5]);
-      c.thickLine(5, 16, 28, 16, 2, meadow[5]);
-      disc(c, 16.5, 16.5, 3, town[3]);
+    name: "strength-potion",
+    source: "golden-consumable-red-potion.png",
+  },
+  {
+    name: "attack-potion",
+    source: "golden-consumable-red-potion.png",
+    opts: {
+      recolor: {
+        "blood.shadow": "ember.shadow",
+        "blood.base": "ember.base",
+        "blood.light": "ember.light",
+      },
     },
   },
   {
-    name: "tab-skills",
-    paint(c) {
-      // Open-book silhouette (Skills panel).
-      block(c, 5, 9, 16, 27, P.cream);
-      block(c, 17, 9, 28, 27, P.cream);
-      c.line(16, 9, 16, 27, P.sand);
-      c.line(17, 9, 17, 27, P.sand);
-      c.line(8, 14, 14, 14, P.outline);
-      c.line(8, 19, 14, 19, P.outline);
-      c.line(19, 14, 25, 14, P.outline);
-      c.line(19, 19, 25, 19, P.outline);
+    name: "fishing-potion",
+    source: "golden-consumable-red-potion.png",
+    opts: {
+      recolor: {
+        "blood.shadow": "water.shadow",
+        "blood.base": "water.base",
+        "blood.light": "water.light",
+      },
     },
   },
   {
-    name: "tab-character",
-    paint(c) {
-      // Person silhouette: head + shoulders.
-      disc(c, 16.5, 10, 6, P.cream);
-      block(c, 7, 18, 26, 30, P.cream);
-      for (let x = 7; x <= 26; x++) {
-        const y0 = 18 + Math.round(4 * Math.abs(Math.sin(((x - 7) / 19) * Math.PI)));
-        c.plot(x, y0 - 1, P.ink);
-      }
+    name: "production-potion",
+    source: "golden-consumable-red-potion.png",
+    opts: {
+      recolor: {
+        "blood.shadow": "crypt[1]",
+        "blood.base": "crypt[2]",
+        "blood.light": "crypt[3]",
+      },
+    },
+  },
+  // --- Herb family ---
+  // The tied five-leaf sprig is canonical; progression is communicated by leaf ramp only.
+  {
+    name: "guam-herb",
+    source: "golden-base-guam-herb.png",
+  },
+  {
+    name: "marrentill-herb",
+    source: "golden-base-guam-herb.png",
+    opts: {
+      recolor: {
+        "sewer[4]": "forest[4]",
+        "meadow[4]": "forest[0]",
+        "meadow[2]": "forest[1]",
+        "sewer[3]": "forest[2]",
+        "sewer[5]": "forest[3]",
+      },
     },
   },
   {
-    name: "tab-bank",
-    paint(c) {
-      // Canonical native-grid sample: closed chest with wood planes, gold frame, and large lock.
-      c.rect(2, 5, 31, 30, P.ink);
-      c.rect(4, 7, 29, 28, town[0]);
-      c.rect(5, 8, 28, 14, town[2]);
-      c.rect(6, 9, 27, 11, town[3]);
-      c.rect(5, 17, 28, 27, town[1]);
-      c.rect(6, 18, 27, 23, town[2]);
-      c.rect(3, 14, 30, 17, P.ink);
-
-      // Thin metal bands and corner brackets; wood remains the dominant surface.
-      c.rect(4, 7, 5, 28, gold.shadow);
-      c.rect(5, 8, 5, 27, gold.light);
-      c.rect(28, 7, 29, 28, gold.shadow);
-      c.rect(28, 8, 28, 27, gold.light);
-      c.rect(5, 7, 28, 8, gold.shadow);
-      c.rect(6, 8, 27, 8, gold.light);
-      c.rect(4, 7, 5, 11, gold.glint);
-      c.rect(28, 7, 29, 11, gold.glint);
-      c.rect(4, 25, 6, 28, gold.base);
-      c.rect(27, 25, 29, 28, gold.base);
-
-      c.rect(13, 13, 21, 25, P.ink);
-      c.rect(14, 14, 20, 23, gold.base);
-      c.rect(15, 14, 19, 17, gold.glint);
-      c.rect(16, 17, 18, 22, P.ink);
-      c.rect(17, 17, 17, 19, gold.shadow);
+    name: "tarromin-herb",
+    source: "golden-base-guam-herb.png",
+    opts: {
+      recolor: {
+        "meadow[4]": "sewer[0]",
+        "meadow[2]": "sewer[1]",
+        "sewer[3]": "sewer[2]",
+      },
     },
   },
   {
-    name: "tab-vendor",
-    paint(c) {
-      // Coin purse: rounded sack + drawstring tie.
-      c.circle(16.5, 21, 11, P.ink);
-      c.circle(16.5, 21, 10, P.umber);
-      block(c, 12, 7, 21, 11, P.outline);
-      disc(c, 16.5, 7, 2, town[3]);
-      c.line(10, 21, 23, 21, town[4]);
+    name: "harralander-herb",
+    source: "golden-base-guam-herb.png",
+    opts: {
+      recolor: {
+        "sewer[4]": "forest[4]",
+        "meadow[2]": "meadow[3]",
+        "sewer[3]": "meadow[2]",
+        "sewer[5]": "forest[2]",
+      },
+    },
+  },
+  // --- Raw/cooked food family ---
+  // Cooked foods are palette-state variants of their raw species source; no cooked silhouette is
+  // generated independently.
+  {
+    name: "raw-beef",
+    source: "golden-item-raw-beef.png",
+  },
+  {
+    name: "cooked-meat",
+    source: "golden-item-raw-beef.png",
+    opts: {
+      recolor: {
+        "blood.shadow": "town[0]",
+        "blood.base": "town[1]",
+        "blood.glint": "town[4]",
+      },
     },
   },
   {
-    name: "tab-loot",
-    paint(c) {
-      // Scroll: rolled ends + ruled lines.
-      block(c, 7, 7, 26, 26, P.parchment);
-      disc(c, 7, 7, 3, P.sand);
-      disc(c, 7, 26, 3, P.sand);
-      disc(c, 26, 7, 3, P.sand);
-      disc(c, 26, 26, 3, P.sand);
-      c.line(11, 12, 22, 12, sewer[1]);
-      c.line(11, 16, 22, 16, sewer[1]);
-      c.line(11, 20, 22, 20, sewer[1]);
+    name: "raw-shrimp",
+    source: "golden-base-raw-shrimp.png",
+  },
+  {
+    name: "cooked-shrimp",
+    source: "golden-base-raw-shrimp.png",
+    opts: {
+      recolor: {
+        "blood.shadow": "ember.shadow",
+        "blood.base": "ember.base",
+        "blood.light": "ember.light",
+        "blood.glint": "ember.glint",
+      },
     },
   },
+  {
+    name: "raw-trout",
+    source: "golden-base-raw-trout.png",
+  },
+  {
+    name: "cooked-trout",
+    source: "golden-base-raw-trout.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "town[0]",
+        "water.shadow": "ember.shadow",
+        "meadow[0]": "ember.base",
+        "water.light": "ember.light",
+        "water.glint": "ember.glint",
+      },
+    },
+  },
+  {
+    name: "raw-pike",
+    source: "golden-base-raw-pike.png",
+  },
+  {
+    name: "cooked-pike",
+    source: "golden-base-raw-pike.png",
+    opts: {
+      recolor: {
+        "forest[4]": "town[5]",
+        "forest[0]": "town[0]",
+        "meadow[4]": "town[0]",
+        "meadow[3]": "town[1]",
+        "meadow[2]": "ember.base",
+        "forest[3]": "ember.light",
+        "forest[5]": "ember.glint",
+      },
+    },
+  },
+  // --- Dagger family ---
+  {
+    name: "bronze-dagger",
+    source: "golden-item-bronze-dagger.png",
+  },
+  {
+    name: "iron-dagger",
+    source: "golden-item-bronze-dagger.png",
+    opts: {
+      recolor: {
+        "town[2]": "steel.shadow",
+        "town[3]": "steel.base",
+        "P.cream": "steel.light",
+        "ember.glint": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "steel-dagger",
+    source: "golden-item-bronze-dagger.png",
+    opts: {
+      recolor: {
+        "town[2]": "P.outline",
+        "town[3]": "steel.shadow",
+        "P.cream": "steel.base",
+        "ember.glint": "steel.light",
+      },
+    },
+  },
+  {
+    name: "mithril-dagger",
+    source: "golden-item-bronze-dagger.png",
+    opts: {
+      recolor: {
+        "town[2]": "water.shadow",
+        "town[3]": "water.base",
+        "P.cream": "water.light",
+        "ember.glint": "water.glint",
+      },
+    },
+  },
+  // --- Sword family ---
+  {
+    name: "iron-sword",
+    source: "golden-weapon-iron-sword.png",
+  },
+  {
+    name: "bronze-sword",
+    source: "golden-weapon-iron-sword.png",
+    opts: { recolor: { "steel.base": "town[2]", "P.text": "town[4]" } },
+  },
+  {
+    name: "steel-sword",
+    source: "golden-weapon-iron-sword.png",
+    opts: { recolor: { "steel.base": "steel.shadow", "P.text": "steel.base" } },
+  },
+  {
+    name: "mithril-sword",
+    source: "golden-weapon-iron-sword.png",
+    opts: { recolor: { "steel.base": "water.shadow", "P.text": "water.light" } },
+  },
+  // --- Mace family ---
+  {
+    name: "bronze-mace",
+    source: "golden-item-bronze-mace.png",
+  },
+  {
+    name: "iron-mace",
+    source: "golden-item-bronze-mace.png",
+    opts: {
+      recolor: {
+        "ember.shadow": "P.outline",
+        "town[0]": "steel.shadow",
+        "town[1]": "steel.shadow",
+        "town[2]": "steel.base",
+        "town[3]": "steel.light",
+        "town[4]": "steel.glint",
+        "ember.light": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "steel-mace",
+    source: "golden-item-bronze-mace.png",
+    opts: {
+      recolor: {
+        "ember.shadow": "P.ink",
+        "town[0]": "P.outline",
+        "town[1]": "steel.shadow",
+        "town[2]": "steel.shadow",
+        "town[3]": "steel.base",
+        "town[4]": "steel.light",
+        "ember.light": "steel.light",
+      },
+    },
+  },
+  {
+    name: "mithril-mace",
+    source: "golden-item-bronze-mace.png",
+    opts: {
+      recolor: {
+        "ember.shadow": "P.outline",
+        "town[0]": "water.shadow",
+        "town[1]": "water.shadow",
+        "town[2]": "water.base",
+        "town[3]": "water.light",
+        "town[4]": "water.glint",
+        "ember.light": "water.glint",
+      },
+    },
+  },
+  // --- Shield families ---
+  {
+    name: "bronze-shield",
+    source: "golden-base-bronze-shield.png",
+  },
+  {
+    name: "iron-kiteshield",
+    source: "golden-armor-kiteshield.png",
+  },
+  {
+    name: "steel-kiteshield",
+    source: "golden-armor-kiteshield.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "P.outline",
+        "steel.base": "steel.shadow",
+        "steel.light": "steel.base",
+      },
+    },
+  },
+  {
+    name: "mithril-kiteshield",
+    source: "golden-armor-kiteshield.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "water.shadow",
+        "steel.base": "water.base",
+        "steel.light": "water.light",
+      },
+    },
+  },
+  // --- Chainbody family ---
+  {
+    name: "iron-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "steel.shadow",
+        "sewer[1]": "steel.shadow",
+        "sewer[0]": "P.outline",
+        'P["text-dim"]': "steel.base",
+        "P.text": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "steel-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "P.outline",
+        "sewer[1]": "P.outline",
+        "sewer[0]": "P.ink",
+        "steel.shadow": "P.outline",
+        "steel.base": "steel.shadow",
+        "steel.light": "steel.base",
+        'P["text-dim"]': "steel.shadow",
+        "P.text": "steel.light",
+      },
+    },
+  },
+  {
+    name: "mithril-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "water.shadow",
+        "sewer[1]": "water.shadow",
+        "sewer[0]": "P.outline",
+        "steel.shadow": "water.shadow",
+        "steel.base": "water.base",
+        "steel.light": "water.light",
+        'P["text-dim"]': "water.base",
+        "P.text": "water.glint",
+      },
+    },
+  },
+  // --- Full-helm family ---
+  {
+    name: "iron-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: { recolor: { 'P["text-dim"]': "steel.base" } },
+  },
+  {
+    name: "steel-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: {
+      recolor: {
+        'P["text-dim"]': "steel.shadow",
+        "steel.shadow": "P.outline",
+        "steel.base": "steel.shadow",
+        "steel.light": "steel.base",
+        "steel.glint": "steel.light",
+      },
+    },
+  },
+  {
+    name: "mithril-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: {
+      recolor: {
+        'P["text-dim"]': "water.base",
+        "steel.shadow": "water.shadow",
+        "steel.base": "water.base",
+        "steel.light": "water.light",
+        "steel.glint": "water.glint",
+      },
+    },
+  },
+  // --- Shortbow family ---
+  {
+    name: "shortbow",
+    source: "golden-base-shortbow.png",
+  },
+  {
+    name: "iron-shortbow",
+    source: "golden-base-shortbow.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "steel.shadow",
+        "town[2]": "steel.base",
+        "town[3]": "steel.light",
+      },
+    },
+  },
+  {
+    name: "steel-shortbow",
+    source: "golden-base-shortbow.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.ink",
+        "town[1]": "P.outline",
+        "town[2]": "steel.shadow",
+        "town[3]": "steel.base",
+      },
+    },
+  },
+  {
+    name: "mithril-shortbow",
+    source: "golden-base-shortbow.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "water.shadow",
+        "town[2]": "water.base",
+        "town[3]": "water.light",
+      },
+    },
+  },
+  // --- Neutral staff family ---
+  {
+    name: "apprentice-staff",
+    source: "golden-base-apprentice-staff.png",
+  },
+  {
+    name: "iron-staff",
+    source: "golden-base-apprentice-staff.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "steel.shadow",
+        "town[2]": "steel.base",
+        "ember.light": "steel.light",
+      },
+    },
+  },
+  {
+    name: "steel-staff",
+    source: "golden-base-apprentice-staff.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.ink",
+        "town[1]": "P.outline",
+        "town[2]": "steel.shadow",
+        "ember.light": "steel.base",
+      },
+    },
+  },
+  {
+    name: "mithril-staff",
+    source: "golden-base-apprentice-staff.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "water.shadow",
+        "town[2]": "water.base",
+        "ember.light": "water.light",
+      },
+    },
+  },
+  // --- Metal bar family ---
+  {
+    name: "iron-bar",
+    source: "golden-resource-iron-bar.png",
+  },
+  {
+    name: "bronze-bar",
+    source: "golden-resource-iron-bar.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "town[0]",
+        "steel.base": "town[2]",
+        "steel.light": "town[3]",
+        "steel.glint": "town[4]",
+      },
+    },
+  },
+  // --- Hide family ---
+  {
+    name: "cowhide",
+    source: "golden-base-cowhide.png",
+  },
+  {
+    name: "wolf-hide",
+    source: "golden-base-cowhide.png",
+    opts: {
+      recolor: {
+        "town[1]": "steel.shadow",
+        "town[2]": "steel.base",
+        "town[3]": "steel.light",
+        "town[4]": "steel.glint",
+        "blood.glint": "steel.light",
+        "P.sand": "steel.base",
+      },
+    },
+  },
+  {
+    name: "thick-hide",
+    source: "golden-base-cowhide.png",
+    opts: {
+      recolor: {
+        "town[1]": "town[5]",
+        "town[2]": "town[0]",
+        "town[3]": "town[1]",
+        "town[4]": "town[2]",
+        "blood.glint": "town[3]",
+        "P.sand": "town[2]",
+      },
+    },
+  },
+  // --- Leather armour families ---
+  {
+    name: "leather-body",
+    source: "golden-item-leather-body.png",
+  },
+  {
+    name: "hard-leather-body",
+    source: "golden-item-leather-body.png",
+    opts: {
+      recolor: {
+        "P.shadow": "town[5]",
+        "P.umber": "town[0]",
+        "town[1]": "town[0]",
+        "town[2]": "town[1]",
+        "town[3]": "town[2]",
+        "town[4]": "town[3]",
+      },
+    },
+  },
+  {
+    name: "leather-chaps",
+    source: "golden-base-leather-chaps.png",
+  },
+  {
+    name: "hard-leather-chaps",
+    source: "golden-base-leather-chaps.png",
+    opts: {
+      recolor: {
+        "P.shadow": "town[5]",
+        "P.umber": "town[0]",
+        "town[0]": "town[5]",
+        "town[1]": "town[0]",
+        "town[2]": "town[1]",
+        "town[3]": "town[2]",
+      },
+    },
+  },
+  {
+    name: "leather-coif",
+    source: "golden-base-leather-coif.png",
+  },
+  {
+    name: "hard-leather-coif",
+    source: "golden-base-leather-coif.png",
+    opts: {
+      recolor: {
+        "P.umber": "town[0]",
+        "town[0]": "town[5]",
+        "town[1]": "town[0]",
+        "town[3]": "town[1]",
+      },
+    },
+  },
+  // --- Gem and jewelry families ---
+  {
+    name: "sapphire",
+    source: "golden-base-sapphire.png",
+  },
+  {
+    name: "emerald",
+    source: "golden-base-sapphire.png",
+    opts: { recolor: sapphireToEmerald },
+  },
+  {
+    name: "ruby",
+    source: "golden-base-sapphire.png",
+    opts: { recolor: sapphireToRuby },
+  },
+  {
+    name: "sapphire-amulet",
+    source: "golden-base-sapphire-amulet.png",
+  },
+  {
+    name: "emerald-amulet",
+    source: "golden-base-sapphire-amulet.png",
+    opts: { recolor: sapphireToEmerald },
+  },
+  {
+    name: "ruby-amulet",
+    source: "golden-base-sapphire-amulet.png",
+    opts: { recolor: sapphireToRuby },
+  },
+  {
+    name: "sapphire-ring",
+    source: "golden-base-sapphire-ring.png",
+    opts: { recolor: { "forest[1]": "water.shadow" } },
+  },
+  {
+    name: "emerald-ring",
+    source: "golden-base-sapphire-ring.png",
+    opts: { recolor: sapphireToEmerald },
+  },
+  {
+    name: "ruby-ring",
+    source: "golden-base-sapphire-ring.png",
+    opts: { recolor: sapphireToRuby },
+  },
+  // --- Arrow family ---
+  {
+    name: "bronze-arrow",
+    source: "golden-base-bronze-arrow.png",
+  },
+  {
+    name: "steel-arrow",
+    source: "golden-base-bronze-arrow.png",
+    opts: {
+      recolor: {
+        "town[2]": "steel.shadow",
+        "town[3]": "steel.base",
+        "town[4]": "steel.light",
+        "ember.base": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "mithril-arrow",
+    source: "golden-base-bronze-arrow.png",
+    opts: {
+      recolor: {
+        "town[2]": "water.shadow",
+        "town[3]": "water.base",
+        "town[4]": "water.light",
+        "ember.base": "water.glint",
+      },
+    },
+  },
+  // --- Elemental rune family ---
+  {
+    name: "air-rune",
+    source: "golden-base-air-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "steel.shadow",
+        "water.base": "steel.base",
+        "meadow[0]": "steel.base",
+        "water.light": "steel.light",
+        "water.glint": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "water-rune",
+    source: "golden-base-air-rune.png",
+  },
+  {
+    name: "earth-rune",
+    source: "golden-base-air-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "meadow[4]",
+        "water.base": "meadow[3]",
+        "meadow[0]": "meadow[2]",
+        "water.light": "forest[3]",
+        "water.glint": "forest[5]",
+      },
+    },
+  },
+  {
+    name: "fire-rune",
+    source: "golden-base-air-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "ember.shadow",
+        "water.base": "ember.base",
+        "meadow[0]": "ember.base",
+        "water.light": "ember.light",
+        "water.glint": "ember.glint",
+      },
+    },
+  },
+  // --- Approved singleton drops and pets ---
+  { name: "gold", source: "golden-item-gold.png" },
+  { name: "goblin-charm", source: "golden-item-goblin-charm.png" },
+  { name: "shade-blade", source: "golden-base-shade-blade.png" },
+  { name: "rock-golem", source: "golden-base-rock-golem.png" },
+  { name: "fishing-frog", source: "golden-base-fishing-frog.png" },
+  { name: "kiln-cat", source: "golden-base-kiln-cat.png" },
+  { name: "shade-wisp", source: "golden-base-shade-wisp.png" },
 ];
 
 /** Writes every icon in `icons` to `src/assets/icons/<name>.png` on the shared 34×34 canvas.

@@ -44,6 +44,56 @@ Attach [icon-style-golden-master.png](icon-style-golden-master.png) as a style r
 Fill `<SUBJECT>` with a concrete noun (e.g. "an iron short sword, blade pointing up-right"). Keep the
 grid-size and background lines verbatim — they are what makes ingest reliable.
 
+## Generate base families, not every variant
+
+Generate one canonical shape for an item family, then derive variants deterministically where only
+material, tier, or state changes:
+
+- Generate the lowest useful equipment tier (for example a bronze dagger or iron full helm), then
+  recolor that compact source for higher metal tiers instead of asking the model to redraw it.
+- Generate raw food only. Cooked meat and fish reuse the raw silhouette with a cooked color ramp;
+  they are not separate image-generation subjects.
+- Generate one representative bar, gem, hide, arrow, bow, rune, potion bottle, and staff shape;
+  derive sibling tiers or elements from that approved base when their silhouette is unchanged.
+
+This keeps related items visibly related and reserves image generation for a new silhouette rather
+than a palette swap. Current strong base references include the iron bar, fish, kiteshield, iron
+sword, water staff, bank chest, cooking drumstick, herblore plant, and smithing anvil.
+
+## Design for the compact result
+
+The large generation is an intermediate, not the approval target. Always compare the generated
+subject with `icon-gen-inbox/preview/<name>@8x.png`, which is the exact 34×34 build result. Approve
+only when the compact preview preserves the large image's subject, dominant silhouette, defining
+feature, and material read. If any of those become ambiguous, regenerate; a successful ingest is
+necessary but not sufficient.
+
+Simple subjects work best: one connected silhouette, two to four broad material planes, structural
+features at least 3 logical pixels thick, and no decorative detail. For a weapon, make the
+identity-defining head or blade roughly 35–45% of the icon and separate its parts by **value**, not
+subtle hue. The accepted bronze-mace retry follows the fire-staff pattern: an oversized head, broad
+light flanges, a dark central core and shadow notches, plus a simpler shaft. Earlier small,
+same-value mace heads passed ingest but collapsed into a generic club at 34×34 and were rejected.
+Apply the same rule to materials: a rounded sapphire became a blue egg after ingest, while a retry
+with four sharp outer points and four large value-separated facets remained an unmistakable cut gem.
+When material and subject share a color ramp (blue fish, water, sapphire), silhouette must carry the
+category distinction.
+
+Also compare a candidate against other icons with the same outer shape. The first round bronze
+shield passed ingest but read as a second coin; the accepted retry added a large contrasting steel
+boss, broad X bracing, and visible side depth. Similar silhouettes need one oversized category cue
+that survives independently of color.
+
+When retrying, state the compact failure explicitly in the next prompt (for example "head became a
+featureless blob"), attach the failed compact preview as a negative reference, and exaggerate only
+the lost defining feature. Carry the successful correction forward as the new prompt standard for
+that family.
+
+If geometry already reads correctly and ingest rejects only off-ramp coverage, keep the composition
+fixed and retry with the exact named ramp hex values. The kiln cat and shade wisp used this
+color-only retry: redesigning their already-clear silhouettes would have introduced unnecessary
+variation.
+
 ## Ingesting
 
 ```
@@ -69,6 +119,10 @@ repo:
 - **Grid too big for the drawable area** (build preview fails). The subject fills too much of the
   frame; regenerate smaller, or pass `--pitch N` if the grid was mis-detected too fine.
 - **Over 12 colors** after quantization + reduction. Regenerate with a simpler palette.
+- **Over 15% of subject cells off-ramp** — the subject's dominant hue has no faithful named ramp,
+  so the whole body would silently ship recolored (a red potion shipped brown before the `blood`
+  ramp existed). Add a material ramp to `scripts/art/palettes.mjs` or recolor the generation; a few
+  anti-aliased edge pixels warning is normal and does not trip this.
 - **Keyed subject touches the crop edge** — a neighbour or label bled in; pass a tighter `--crop
 x0,y0,x1,y1`.
 
@@ -84,10 +138,15 @@ subject).
   content, only conform style.
 - **Off-ramp colors.** Pure black outlines and pure white highlights are normal in generations; the
   build quantization pulls them to `P.ink` and the parchment/steel ramps. The ingest report's
-  distance warnings flag any color with no faithful ramp before you commit.
-- **Interior holes vs. enclosed detail.** Ingest reports enclosed background cells (holes). For a
-  solid subject that number should be ~0; a nonzero count on a subject with no real hole means the
-  key leaked and the crop/tolerance needs tightening.
+  distance warnings flag any color with no faithful ramp before you commit, and ingest rejects
+  outright when off-ramp colors cover more than 15% of the subject — that means a whole hue family
+  is missing from `scripts/art/palettes.mjs` (the red potion quantized entirely to brown before the
+  `blood` ramp existed), not an edge-pixel artifact.
+- **Enclosed background.** Magenta (or transparent) regions the subject fully encloses — a bow's
+  window, a ring's center — are keyed to transparency along with the outer background and reported
+  as a count. Open-frame subjects still ingest best when their members are ≥3 logical pixels thick;
+  1px strings and threads tend to fall to despeckling. A large enclosed count on a subject with no
+  real hole means the key leaked and the crop/tolerance needs tightening.
 
 ## What is and isn't committed
 

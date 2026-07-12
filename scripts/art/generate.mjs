@@ -32,7 +32,7 @@ await writePng(
   },
 );
 
-// UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons.
+// Complete deterministic production icon registry: Skills, navigation, items, and pets.
 await writeIcons(resolve("src/assets/icons"));
 
 // Icon legibility rails (#166): regenerate the committed contact sheets so every icon PR shows
