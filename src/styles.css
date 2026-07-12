@@ -1001,16 +1001,22 @@ body {
   cursor: pointer;
 }
 
-/* 8 Skill chips (#7 added Ranged/Magic, on top of #36's original 6): a single flex row at 320px
-   squeezed each chip below its readable minimum, so this wraps into a 4-column grid (2 rows of 4)
-   instead of shrinking every chip further. */
+/* RuneScape-style icon stat grid (#135, replacing the old abbreviation chips): 11 SKILL_NAMES
+   cells + 1 Total cell = 12 cells, a clean 3-column x 4-row grid. Each cell gets ~92px of the
+   panel's 300px width — headroom enough for a 16-18px icon plus a 2-digit level, which is why
+   3 columns is pinned over 4. */
 #xp-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 
 .skill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 4px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -1019,9 +1025,9 @@ body {
   font-size: 11px;
 }
 
-.skill-abbr {
-  color: var(--text-dim);
-  margin-right: 3px;
+.skill-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .skill-level {
@@ -1029,7 +1035,12 @@ body {
   font-weight: 700;
 }
 
+.skill-total-label {
+  color: var(--text-dim);
+}
+
 .skill-bar {
+  flex-basis: 100%;
   margin-top: 3px;
   height: 4px;
   background: #111;

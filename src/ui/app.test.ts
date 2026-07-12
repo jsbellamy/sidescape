@@ -4,6 +4,7 @@ import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
+import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
@@ -562,12 +563,78 @@ describe("XP progress bars", () => {
     expect(after).not.toBe(before);
   });
 
-  it("shows exact XP in a tooltip on the Skill chip", () => {
-    const { engine, root } = mount(1);
-    const xp = Math.floor(engine.snapshot().player.skills.attack.xp);
+  it("shows capitalized name, level, exact XP, and percent-to-next in a tooltip on the Skill cell (#135)", () => {
+    // Boundary xp (exactly at level 10's floor) is an independent worked example for 0% — same
+    // pattern the bar-fill tests above use — so the expected tooltip string needs no re-derivation
+    // of skillProgress's own math.
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { attack: { level: 10, xp: xpForLevel(10) } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
     const attackSkill = root.querySelector<HTMLElement>('[data-skill="attack"]');
-    expect(attackSkill?.title).toBe(`attack: ${xp} xp`);
+    expect(attackSkill?.title).toBe(`Attack: level 10 · ${xpForLevel(10)} xp · 0% to 11`);
+  });
+});
+
+describe("Skills panel icon grid (#135: replaces the abbreviation-chip xp-row)", () => {
+  it("renders 12 cells: all 11 SKILL_NAMES in order via data-skill, then the Total cell last", () => {
+    const { root } = mount(1);
+    const cells = [...root.querySelectorAll<HTMLElement>("#xp-row .skill")];
+    expect(cells).toHaveLength(12);
+    expect(cells.map((c) => c.dataset["skill"])).toEqual([...SKILL_NAMES, undefined]);
+    expect(cells[11]?.classList.contains("skill-total")).toBe(true);
+  });
+
+  it("gives every Skill cell's icon a non-empty src", () => {
+    const { root } = mount(1);
+    const imgs = [...root.querySelectorAll<HTMLImageElement>("#xp-row .skill[data-skill] img")];
+    expect(imgs).toHaveLength(11);
+    for (const img of imgs) {
+      expect(img.getAttribute("src")).toBeTruthy();
+    }
+  });
+
+  it("shows the Total cell as the sum of all 11 Skill levels, and updates it after a level-up Tick", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { attack: { level: 1, xp: xpForLevel(2) - 1 } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    const before = engine.snapshot().player.skills;
+    const expectedBefore = SKILL_NAMES.reduce((sum, s) => sum + before[s].level, 0);
+    const totalCell = root.querySelector<HTMLElement>("#xp-row .skill-total .skill-level");
+    expect(totalCell?.textContent).toBe(String(expectedBefore));
+
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    const after = engine.snapshot().player.skills;
+    const expectedAfter = SKILL_NAMES.reduce((sum, s) => sum + after[s].level, 0);
+    expect(after.attack.level).toBeGreaterThan(before.attack.level); // sanity: a level-up did occur
+    expect(root.querySelector<HTMLElement>("#xp-row .skill-total .skill-level")?.textContent).toBe(
+      String(expectedAfter),
+    );
+    expect(expectedAfter).toBeGreaterThan(expectedBefore);
   });
 });
 
@@ -1336,21 +1403,23 @@ describe("Fishing", () => {
     expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
-  it("XP row shows all 11 chips, including a FIS chip for Fishing", () => {
+  it("XP row shows all 11 Skill cells in order, including one for Fishing (#135)", () => {
     const { root } = mount(1);
-    const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
-    expect(abbrs).toEqual([
-      "ATT",
-      "STR",
-      "DEF",
-      "HIT",
-      "FIS",
-      "SMI",
-      "RAN",
-      "MAG",
-      "COO",
-      "CRA",
-      "HER",
+    const skills = [...root.querySelectorAll<HTMLElement>("#xp-row .skill[data-skill]")].map(
+      (el) => el.dataset["skill"],
+    );
+    expect(skills).toEqual([
+      "attack",
+      "strength",
+      "defence",
+      "hitpoints",
+      "fishing",
+      "smithing",
+      "ranged",
+      "magic",
+      "cooking",
+      "crafting",
+      "herblore",
     ]);
   });
 
@@ -2024,11 +2093,13 @@ describe("Smithing (#28)", () => {
     return { engine, root, app };
   }
 
-  it("XP row shows a SMI chip for Smithing, alongside the other ten (11 chips at 320px)", () => {
+  it("XP row shows a cell for Smithing, alongside the other ten (#135)", () => {
     const { root } = mount(1);
-    const abbrs = [...root.querySelectorAll(".skill-abbr")].map((el) => el.textContent);
-    expect(abbrs).toHaveLength(11);
-    expect(abbrs).toContain("SMI");
+    const skills = [...root.querySelectorAll<HTMLElement>("#xp-row .skill[data-skill]")].map(
+      (el) => el.dataset["skill"],
+    );
+    expect(skills).toHaveLength(11);
+    expect(skills).toContain("smithing");
   });
 
   it("renders one recipe row per Content.recipes, with level req and owned counts for each input", () => {
@@ -2828,9 +2899,12 @@ describe("Save → remount round-trip (#9)", () => {
     const weaponTile = root2.querySelector<HTMLElement>('[data-slot="weapon"]');
     expect(weaponTile?.dataset["item"]).toBe("bronze-sword");
     expect(root2.querySelector('#bank .tile[data-item="bronze-sword"]')).toBeNull();
-    const attackXp = Math.floor(after.player.skills.attack.xp);
-    expect(root2.querySelector<HTMLElement>('[data-skill="attack"]')?.title).toBe(
-      `attack: ${attackXp} xp`,
+    // Persistence-focused: proves the restored level/xp feed the new tooltip format, not a
+    // re-derivation of skillProgress's own percent math (covered independently above).
+    const attack = after.player.skills.attack;
+    const attackXp = Math.floor(attack.xp);
+    expect(root2.querySelector<HTMLElement>('[data-skill="attack"]')?.title).toMatch(
+      new RegExp(`^Attack: level ${attack.level} · ${attackXp} xp · \\d+% to ${attack.level + 1}$`),
     );
   });
 
