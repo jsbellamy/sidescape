@@ -105,7 +105,8 @@ test("a full Loot Zone (10 stacks) scrolls horizontally within 320px without wid
     };
   });
 
-  // Ten 28px chips plus gaps overflow 320px, so the strip must scroll rather than grow.
+  // Ten 34px chips (#168: was 28px) plus gaps overflow 320px, so the strip must scroll rather
+  // than grow.
   expect(geometry.scrollWidth).toBeGreaterThan(geometry.clientWidth);
   // The widget itself never widens to accommodate them.
   expect(Math.round(geometry.widgetWidth)).toBe(320);

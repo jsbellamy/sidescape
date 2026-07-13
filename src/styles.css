@@ -1229,9 +1229,17 @@ body {
   font-size: 11px;
 }
 
+/* #168: was a 2x fluid-feeling downscale of the 34×34 pixel-art source (17px = 0.5x, neither
+   34px nor an integer multiple). Named explicitly in #168's own audit list ("#xp-row skill
+   chips") and in the issue's sequencing comment; #222 (Skills destination) is expected to
+   eventually replace this whole `#xp-row` grid with its own 34px-native layout, but until #222
+   lands this is still a live consumer of the shared `.icon` chassis, so it gets fixed here too
+   rather than left to bit-rot at a non-compliant size. `#xp-row`'s 3-column grid has ~92px per
+   cell in the 300px management card, comfortable headroom for a 34px icon plus the level badge
+   and bar underneath. */
 .skill-icon {
-  width: 17px;
-  height: 17px;
+  width: 34px;
+  height: 34px;
 }
 
 .skill-level {
@@ -1469,14 +1477,18 @@ body {
 }
 
 /* .loot-chip also carries .tile (#78 — icon + qty badge instead of a text chip); this rule just
-   caps its size so a row of chips stays compact rather than stretching to the grid's usual tile
-   size. Compact-widget chips are `<button>` elements (#220: `#compact-widget` carries a deep Tauri
-   drag region, and only natively-clickable tags are exempt from it — see app.test.ts's
-   natively-clickable guard), so this also resets button chrome to keep them visually identical to
-   the Activity page's `<li class="loot-chip">`. */
+   sizes it to the bare icon (no padding/border, unlike a `.tile-grid` tile) so a row of chips
+   stays compact rather than stretching to the grid's usual 40px tile size. #168: was 28px, which
+   clipped/downscaled the now-fixed 34px `.tile .icon` inside it — the chip box must be at least
+   34px since it has zero padding/border of its own to absorb the difference, so this is 34px
+   exactly, the audit fix for one of the issue's own named consumers. Compact-widget chips are
+   `<button>` elements (#220: `#compact-widget` carries a deep Tauri drag region, and only
+   natively-clickable tags are exempt from it — see app.test.ts's natively-clickable guard), so
+   this also resets button chrome to keep them visually identical to the Activity page's
+   `<li class="loot-chip">`. */
 .loot-chip {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   border: none;
   background: none;
@@ -1684,10 +1696,19 @@ body {
 /* Icon-tile grid (#78): shared by the Bank, Character Gear Slots, and (via #loot-strip-items'
    own flex-row, not this grid — see below) Loot chips. A tile carries only an icon + qty badge;
    Bank tiles are clickable (select → detail strip), Character tiles are hover-only (no click
-   action exists for worn gear). */
+   action exists for worn gear).
+
+   #168: tracks are a fixed 40px, not a fluid `minmax(..., 1fr)` — derived from `.tile`'s own
+   box (below), not the "e.g. 44px" the issue floated: 34px icon + 2×2px padding + 2×1px border =
+   40px exactly (box-sizing: border-box, so that 40px IS `.tile`'s content+padding+border box,
+   with zero slack). Grid items stretch to fill their track by default, so `.tile` needs no
+   explicit width of its own — the track dictates it, and `aspect-ratio: 1` makes the row match.
+   At the 280px compact minimum this fits 5 tiles + 4 gaps = 5×40 + 4×4 = 216px, comfortably under
+   280px (room for a 6th: 6×40 + 5×4 = 260px), so auto-fill keeps packing rows as width allows
+   without ever squeezing a tile below the icon's 34px. */
 .tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  grid-template-columns: repeat(auto-fill, 40px);
   gap: 4px;
 }
 
@@ -1717,9 +1738,13 @@ button.tile:hover {
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
+/* #168: exact 34 CSS px, never fluid — icons are 1:1 device-independent pixels against the
+   34×34 pixel-art source (scripts/art/icons.mjs), so `image-rendering: pixelated` never has to
+   drop or smear a source pixel row/column. Tiles/chips/slots fit the icon; the icon never fits
+   the tile. */
 .tile .icon {
-  max-width: 100%;
-  max-height: 100%;
+  width: 34px;
+  height: 34px;
 }
 
 .tile-qty {
