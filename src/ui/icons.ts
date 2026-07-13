@@ -140,9 +140,8 @@ const icons: Record<string, string> = {
   "steel-kiteshield": steelKiteshieldUrl,
   "steel-shortbow": steelShortbowUrl,
   "steel-staff": steelStaffUrl,
-  // Gap-fill maces/swords (Combat Depth #102): placeholder pixel-art icons hand-drawn for this
-  // wave (not third-party — see docs/assets.md), tier-tinted to match the existing bronze/iron/
-  // steel/mithril palette.
+  // Gap-fill maces/swords (Combat Depth #102): source-driven icons conformed from committed
+  // golden-* sources via scripts/art/icons.mjs (see docs/assets.md), with deterministic tier ramps.
   "bronze-mace": bronzeMaceUrl,
   "iron-mace": ironMaceUrl,
   "iron-sword": ironSwordUrl,
@@ -150,14 +149,14 @@ const icons: Record<string, string> = {
   "steel-sword": steelSwordUrl,
   "mithril-mace": mithrilMaceUrl,
   "mithril-sword": mithrilSwordUrl,
-  // Cooking wave (#115) raw catches: hand-drawn placeholder pixel art (same escape hatch as the
-  // gap-fill maces/swords above — see docs/assets.md).
+  // Cooking wave (#115) raw catches: source-driven icons conformed from committed golden-* sources
+  // via scripts/art/icons.mjs (see docs/assets.md).
   "raw-beef": rawBeefUrl,
   "raw-shrimp": rawShrimpUrl,
   "raw-trout": rawTroutUrl,
   "raw-pike": rawPikeUrl,
-  // Crafting wave (#116) hides + leather/ranged armour: hand-drawn placeholder pixel art (same
-  // escape hatch as the gap-fill maces/swords and raw catches above — see docs/assets.md).
+  // Crafting wave (#116) hides + leather/ranged armour: source-driven icons conformed from
+  // committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   cowhide: cowhideUrl,
   "wolf-hide": wolfHideUrl,
   "thick-hide": thickHideUrl,
@@ -166,9 +165,8 @@ const icons: Record<string, string> = {
   "hard-leather-body": hardLeatherBodyUrl,
   "hard-leather-chaps": hardLeatherChapsUrl,
   "hard-leather-coif": hardLeatherCoifUrl,
-  // Crafting wave (#117) jewelry line: gems + amulet/ring Equipment, hand-drawn placeholder pixel
-  // art (same escape hatch as the gap-fill maces/swords, raw catches, and hides/leather above —
-  // see docs/assets.md).
+  // Crafting wave (#117) jewelry line: gems + amulet/ring Equipment, source-driven icons conformed
+  // from committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   sapphire: sapphireUrl,
   emerald: emeraldUrl,
   ruby: rubyUrl,
@@ -178,9 +176,8 @@ const icons: Record<string, string> = {
   "emerald-ring": emeraldRingUrl,
   "ruby-amulet": rubyAmuletUrl,
   "ruby-ring": rubyRingUrl,
-  // Herblore wave (#118): herb Materials + charge potions, hand-drawn placeholder pixel art (same
-  // escape hatch as the gap-fill mace/sword, raw-catch, hide/leather, and gem/jewelry icons above
-  // — see docs/assets.md).
+  // Herblore wave (#118): herb Materials + charge potions, source-driven icons conformed from
+  // committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   "guam-herb": guamHerbUrl,
   "marrentill-herb": marrentillHerbUrl,
   "tarromin-herb": tarrominHerbUrl,
@@ -189,9 +186,8 @@ const icons: Record<string, string> = {
   "attack-potion": attackPotionUrl,
   "fishing-potion": fishingPotionUrl,
   "production-potion": productionPotionUrl,
-  // Ammo wave (#119) arrow tiers + element runes: hand-drawn placeholder pixel art (same escape
-  // hatch as the gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, and herb/potion icons
-  // above — see docs/assets.md).
+  // Ammo wave (#119) arrow tiers + element runes: source-driven icons conformed from committed
+  // golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   "bronze-arrow": bronzeArrowUrl,
   "steel-arrow": steelArrowUrl,
   "mithril-arrow": mithrilArrowUrl,
@@ -199,11 +195,10 @@ const icons: Record<string, string> = {
   "water-rune": waterRuneUrl,
   "earth-rune": earthRuneUrl,
   "fire-rune": fireRuneUrl,
-  // Pets wave (#120) starter roster: hand-drawn placeholder pixel art (same escape hatch as the
-  // gap-fill mace/sword, raw-catch, hide/leather, gem/jewelry, herb/potion, and arrow/rune icons
-  // above — see docs/assets.md). Keyed by `PetDef.icon`, resolved through this SAME registry as
-  // every `ItemDef.icon` — a pet isn't an Item, but its icon key is validated/rendered exactly
-  // the same way.
+  // Pets wave (#120) starter roster: source-driven icons conformed from committed golden-* sources
+  // via scripts/art/icons.mjs (see docs/assets.md). Keyed by `PetDef.icon`, resolved through this
+  // SAME registry as every `ItemDef.icon` — a pet isn't an Item, but its icon key is
+  // validated/rendered exactly the same way.
   "rock-golem": rockGolemUrl,
   "fishing-frog": fishingFrogUrl,
   "kiln-cat": kilnCatUrl,
