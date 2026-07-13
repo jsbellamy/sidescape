@@ -32,6 +32,7 @@ import type { ProductionSkill } from "./production";
 import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
+import { resolveActiveAreaId } from "./area-context";
 import { itemIcon, skillIcon, tabIcon } from "./icons";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
@@ -1104,65 +1105,21 @@ export function mountApp(
    * closed-over state), mirroring `resolveTheme`'s own shape and rationale. Priority, matching the
    * issue's owner-decided rules:
    * 1. `selectedAreaId`, if it still names a Snapshot Area (stale/never-set falls through);
-   * 2. the HOST Area of a Dungeon run in progress — checked before the Monster branch because a
-   *    Dungeon's later Waves/Boss are often dungeon-only Monsters absent from every Area's
-   *    `monsterIds` (the monster branch alone couldn't resolve those, same reasoning as
-   *    resolveTheme's own dungeon-first check);
-   * 3. the Area containing the active Monster;
-   * 4. the Area containing the active Fishing Spot;
-   * 5. the first Snapshot Area reporting `unlocked`;
-   * 6. the first Snapshot Area outright (undefined only if `snap.areas` is itself empty).
+   * 2. the shared `resolveActiveAreaId` (#236) resolver's host Area id, if it names a Snapshot
+   *    Area — see that module's doc for its own Dungeon → Monster → Fishing Spot order and why
+   *    Dungeon must be checked first;
+   * 3. the first Snapshot Area reporting `unlocked`;
+   * 4. the first Snapshot Area outright (undefined only if `snap.areas` is itself empty).
    */
   function resolveSelectedArea(snap: Snapshot): Snapshot["areas"][number] | undefined {
     const selected = snap.areas.find((a) => a.id === selectedAreaId);
     if (selected) return selected;
 
-    const dungeon = snap.dungeon;
-    if (dungeon) {
-      const dungeonDef = content.dungeonsById.get(dungeon.id);
-      const hostArea = dungeonDef && snap.areas.find((a) => a.id === dungeonDef.areaId);
-      if (hostArea) return hostArea;
-    }
-
-    const monster = snap.monster;
-    if (monster) {
-      const area = snap.areas.find((a) => a.monsterIds.includes(monster.id));
-      if (area) return area;
-    }
-
-    const fishing = snap.fishing;
-    if (fishing) {
-      const area = snap.areas.find((a) => a.fishingSpots.some((s) => s.id === fishing.spotId));
-      if (area) return area;
-    }
+    const activeAreaId = resolveActiveAreaId(snap, content);
+    const activeArea = activeAreaId ? snap.areas.find((a) => a.id === activeAreaId) : undefined;
+    if (activeArea) return activeArea;
 
     return snap.areas.find((a) => a.unlocked) ?? snap.areas[0];
-  }
-
-  /** The host Area id of whatever activity (Monster/Fishing Spot/Dungeon) is currently active
-   * (#208) — steps 2-4 of `resolveSelectedArea` above, without the `selectedAreaId`/fallback
-   * steps: null while idle. Drives the rail's own "current" accent, independent of which Area is
-   * merely being inspected via `selectedAreaId`. */
-  function currentActivityAreaId(snap: Snapshot): string | null {
-    const dungeon = snap.dungeon;
-    if (dungeon) {
-      const dungeonDef = content.dungeonsById.get(dungeon.id);
-      const hostId = dungeonDef && snap.areas.find((a) => a.id === dungeonDef.areaId)?.id;
-      if (hostId) return hostId;
-    }
-    const monster = snap.monster;
-    if (monster) {
-      const areaId = snap.areas.find((a) => a.monsterIds.includes(monster.id))?.id;
-      if (areaId) return areaId;
-    }
-    const fishing = snap.fishing;
-    if (fishing) {
-      const areaId = snap.areas.find((a) =>
-        a.fishingSpots.some((s) => s.id === fishing.spotId),
-      )?.id;
-      if (areaId) return areaId;
-    }
-    return null;
   }
 
   /** Renders the World page's progression rail (#208): one row per Snapshot Area, in Snapshot
@@ -1235,7 +1192,7 @@ export function mountApp(
   function renderWorldPage(): void {
     const snap = engine.snapshot();
     const selectedArea = resolveSelectedArea(snap);
-    const activeAreaId = currentActivityAreaId(snap);
+    const activeAreaId = resolveActiveAreaId(snap, content);
     renderAreaRail(snap, selectedArea?.id, activeAreaId);
     renderAreaDetail(snap, selectedArea);
   }
