@@ -45,6 +45,14 @@ export interface NativeWindowPort {
   setPosition(position: LogicalPosition): Promise<void>;
 }
 
+/** The webview-side half of a native resize. Tauri's window mutation Promise confirms that the
+ * IPC command finished, but the webview can receive its new viewport and perform layout later.
+ * Keeping this as a port makes that second boundary deterministic in tests. */
+export interface WebviewLayoutPort {
+  viewportSize(): { width: number; height: number };
+  nextFrame(): Promise<void>;
+}
+
 export function tauriNativeWindowPort(): NativeWindowPort {
   return {
     scaleFactor: () => getCurrentWindow().scaleFactor(),
@@ -56,6 +64,16 @@ export function tauriNativeWindowPort(): NativeWindowPort {
   };
 }
 
+export function browserWebviewLayoutPort(): WebviewLayoutPort {
+  return {
+    viewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
+    nextFrame: () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      }),
+  };
+}
+
 export interface TauriWindowChrome extends WorkspaceChrome {
   settled(): Promise<void>;
 }
@@ -63,11 +81,30 @@ export interface TauriWindowChrome extends WorkspaceChrome {
 export function createTauriWindowChrome(
   root: HTMLElement,
   port: NativeWindowPort = tauriNativeWindowPort(),
+  layoutPort: WebviewLayoutPort = browserWebviewLayoutPort(),
 ): TauriWindowChrome {
   let cardCount = 0;
   let anchor: "top" | "bottom" | null = null;
   let scale = loadUiScale();
   let queue: Promise<void> = Promise.resolve();
+
+  /** Wait until the webview reports the target logical viewport on two consecutive animation
+   * frames. The first matching frame proves the resize reached the webview; the second gives CSS
+   * layout one complete frame before callers reveal staged cards. A bounded fallback prevents an
+   * unexpected platform metric mismatch from leaving the Management Row invisible forever. */
+  async function waitForWebviewLayout(width: number, height: number): Promise<void> {
+    const matches = () => {
+      const viewport = layoutPort.viewportSize();
+      return Math.abs(viewport.width - width) <= 1 && Math.abs(viewport.height - height) <= 1;
+    };
+    let consecutiveMatches = 0;
+    for (let frame = 0; frame < 60; frame++) {
+      await layoutPort.nextFrame();
+      consecutiveMatches = matches() ? consecutiveMatches + 1 : 0;
+      if (consecutiveMatches >= 2) return;
+    }
+    console.warn(`[window-chrome] webview did not settle at ${width}x${height} within 60 frames`);
+  }
 
   const monitorRect = async () => {
     const monitor = await port.currentMonitor();
@@ -130,6 +167,7 @@ export function createTauriWindowChrome(
     root.style.setProperty("--compact-h", `${COMPACT_H}px`);
     root.style.setProperty("--card-h", `${CARD_H}px`);
     root.style.setProperty("--workspace-w", `${result.width / scale}px`);
+    await waitForWebviewLayout(result.width, result.height);
   }
 
   return {

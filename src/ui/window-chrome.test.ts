@@ -7,6 +7,7 @@ import {
   loadUiScale,
   saveUiScale,
   type NativeWindowPort,
+  type WebviewLayoutPort,
 } from "./window-chrome";
 import { UI_SCALE_KEY } from "./window-geometry";
 
@@ -24,12 +25,18 @@ const storage = () => {
   } as Storage;
 };
 
+type FakeWindowPort = NativeWindowPort & {
+  sizes: LogicalSize[];
+  writes: string[];
+  layout: WebviewLayoutPort;
+};
+
 function fakePort(
   width = 320,
   height = 220,
   monitorWidth = 1920,
   monitorHeight = 1800,
-): NativeWindowPort & { sizes: LogicalSize[]; writes: string[] } {
+): FakeWindowPort {
   let rect = { x: 100, y: 100, width, height };
   const sizes: LogicalSize[] = [];
   const writes: string[] = [];
@@ -43,9 +50,14 @@ function fakePort(
     },
     scaleFactor: 1,
   };
+  const layout: WebviewLayoutPort = {
+    viewportSize: () => ({ width: rect.width, height: rect.height }),
+    nextFrame: () => Promise.resolve(),
+  };
   return {
     sizes,
     writes,
+    layout,
     scaleFactor: async () => 1,
     outerPosition: async () => new PhysicalPosition(rect.x, rect.y),
     outerSize: async () => new PhysicalSize(rect.width, rect.height),
@@ -87,7 +99,7 @@ describe("WorkspaceChrome fixed scale", () => {
   it("boot overrides a restored expanded rect with the scaled compact rect", async () => {
     saveUiScale(1.5);
     const port = fakePort(912, 1242);
-    const chrome = createTauriWindowChrome(document.createElement("main"), port);
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
     chrome.setCardCount(0);
     await chrome.settled();
     expect(port.sizes[port.sizes.length - 1]).toMatchObject({ width: 480, height: 330 });
@@ -95,14 +107,15 @@ describe("WorkspaceChrome fixed scale", () => {
   it("applies a supported scale to the full workspace", async () => {
     const root = document.createElement("main");
     const port = fakePort();
-    const chrome = createTauriWindowChrome(root, port);
+    const chrome = createTauriWindowChrome(root, port, port.layout);
     chrome.setScale?.(2);
     await chrome.settled();
     expect(port.sizes[port.sizes.length - 1]).toMatchObject({ width: 640, height: 440 });
     expect(root.style.getPropertyValue("--ui-scale")).toBe("2");
   });
   it("returns a completion promise so Settings can update after scale application", async () => {
-    const chrome = createTauriWindowChrome(document.createElement("main"), fakePort());
+    const port = fakePort();
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
     const completion = chrome.setScale?.(1.5);
     expect(completion).toBeInstanceOf(Promise);
     await completion;
@@ -110,7 +123,7 @@ describe("WorkspaceChrome fixed scale", () => {
   });
   it("moves before expanding so an open card never overlays the compact position", async () => {
     const port = fakePort();
-    const chrome = createTauriWindowChrome(document.createElement("main"), port);
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
     void chrome.setCardCount(1);
     await chrome.settled();
     expect(port.writes.slice(-2)).toEqual(["position", "size"]);
@@ -142,7 +155,7 @@ describe("WorkspaceChrome fixed scale", () => {
         calls.push("size-end");
       },
     };
-    const chrome = createTauriWindowChrome(document.createElement("main"), port);
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, base.layout);
     const completion = chrome.setCardCount(1); // expansion: position requested, then size
 
     // setSize must get dispatched — and, since its own round trip is short, even finish — while
@@ -155,23 +168,64 @@ describe("WorkspaceChrome fixed scale", () => {
     await completion;
     expect(calls).toEqual(["position-start", "size-start", "size-end", "position-end"]);
   });
-  it("setCardCount's returned Promise resolves only after the queued native writes and data-anchor application finish", async () => {
+  it("setCardCount's returned Promise resolves only after native writes, data-anchor, and webview layout finish", async () => {
     const root = document.createElement("main");
     const port = fakePort();
-    const chrome = createTauriWindowChrome(root, port);
+    const chrome = createTauriWindowChrome(root, port, port.layout);
     const completion = chrome.setCardCount(1);
     expect(completion).toBeInstanceOf(Promise);
     // Immediately after calling setCardCount, the queued native work has not run yet.
     expect(port.writes).toEqual([]);
     expect(root.dataset["anchor"]).toBeUndefined();
     await completion;
-    // By the time the Promise resolves, both native writes and data-anchor have landed.
+    // By the time the Promise resolves, both native writes, data-anchor, and the fake webview's
+    // two consecutive matching layout frames have landed.
     expect(port.writes.slice(-2)).toEqual(["position", "size"]);
     expect(root.dataset["anchor"]).toBeDefined();
   });
+  it("keeps 1->2 completion pending until the webview reaches the two-card viewport and lays it out for one more frame", async () => {
+    let viewport = { width: 320, height: 828 };
+    const frameResolvers: Array<() => void> = [];
+    const layout: WebviewLayoutPort = {
+      viewportSize: () => viewport,
+      nextFrame: () =>
+        new Promise<void>((resolve) => {
+          frameResolvers.push(resolve);
+        }),
+    };
+    const advanceFrame = async (next = viewport) => {
+      viewport = next;
+      await vi.waitFor(() => expect(frameResolvers.length).toBeGreaterThan(0));
+      frameResolvers.shift()?.();
+      await Promise.resolve();
+    };
+    const chrome = createTauriWindowChrome(
+      document.createElement("main"),
+      fakePort(320, 828),
+      layout,
+    );
+
+    const oneCard = chrome.setCardCount(1);
+    await advanceFrame();
+    await advanceFrame();
+    await oneCard;
+
+    let resolved = false;
+    const twoCards = chrome.setCardCount(2).then(() => {
+      resolved = true;
+    });
+    await advanceFrame(); // native IPC may be done, but the webview is still 320px wide
+    expect(resolved).toBe(false);
+
+    await advanceFrame({ width: 608, height: 828 }); // target width observed
+    expect(resolved).toBe(false); // one final layout frame is still required
+    await advanceFrame();
+    await twoCards;
+    expect(resolved).toBe(true);
+  });
   it("disables unsupported stops and never silently reduces the selected scale", async () => {
     const port = fakePort(320, 220, 1920, 1000);
-    const chrome = createTauriWindowChrome(document.createElement("main"), port);
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
     await expect(chrome.getScaleOptions?.()).resolves.toEqual([
       { value: 1, supported: true },
       { value: 1.5, supported: false },

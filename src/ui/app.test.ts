@@ -1185,7 +1185,7 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
   });
 
-  it("1->2: Character stays visible but Management stays hidden until completion resolves, then Management appears in canonical order", async () => {
+  it("1->2: the row stays non-painting and Management stays hidden until settled completion, then both appear in canonical order", async () => {
     const { chrome, calls, resolveCall } = deferredWindowChrome();
     const { root } = mountWithChrome(chrome);
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
@@ -1195,11 +1195,13 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     destinationBtn(root, "world")?.click();
     await waitForCallCount(calls, 3); // [0, 1, 2]
     expect(calls[2]).toBe(2);
-    expect(cardHidden(root, "card-character")).toBe(false); // Character: still visible, untouched
+    expect(cardHidden(root, "card-character")).toBe(false); // still mounted; row visibility gates paint
     expect(cardHidden(root, "card-management")).toBe(true); // Management: not yet, native still moving
+    expect(root.querySelector<HTMLElement>("#management-row")?.style.visibility).toBe("hidden");
 
     resolveCall();
     await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(root.querySelector<HTMLElement>("#management-row")?.style.visibility).toBe("");
     // Canonical Character -> Management DOM order is preserved regardless of paint timing.
     const domOrder = [...root.querySelectorAll<HTMLElement>(".management-card")].map((c) => c.id);
     expect(domOrder).toEqual(["card-character", "card-management"]);
