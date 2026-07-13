@@ -1499,8 +1499,10 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(root.querySelector("#casting-readout")).not.toBeNull();
     expect(root.querySelector("#character-levels-summary")).not.toBeNull(); // #222: replaces #xp-row
     expect(root.querySelector("#style-row")).not.toBeNull();
-    expect(root.querySelector("#autoeat-row")).not.toBeNull();
-    expect(root.querySelector("#autosell-duplicates-row")).not.toBeNull();
+    // #223: auto-eat threshold and auto-sell-duplicates are set-once preferences — they moved off
+    // the always-visible card body into the Settings popover, not deleted.
+    expect(root.querySelector(".card-fixed #autoeat-row")).toBeNull();
+    expect(root.querySelector(".card-fixed #autosell-duplicates-row")).toBeNull();
     // #222: Pets moved to the Skills page — still present in the DOM (see the Skills page describe
     // block below), just no longer inside `#card-character`.
     expect(root.querySelector("#card-character #pets-summary")).toBeNull();
@@ -1636,9 +1638,50 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(popover?.querySelector("#mute-toggle")).not.toBeNull();
     expect(popover?.querySelector("#export-save")).not.toBeNull();
     expect(popover?.querySelector("#import-save")).not.toBeNull();
+    // #223: the auto-eat threshold selector and auto-sell-duplicates checkbox — set-once
+    // preferences — now live inside the Settings popover, following the fieldset+legend idiom
+    // #ui-scale-selector already used.
+    expect(popover?.querySelector("#autoeat-row")).not.toBeNull();
+    expect(popover?.querySelector("#autosell-duplicates-row")).not.toBeNull();
 
     root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
     expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
+  });
+});
+
+describe("Auto-eat compact indicator (#223: stays legible without opening Settings)", () => {
+  it("shows the current auto-eat threshold on the Character card without opening the Settings popover", () => {
+    const { root } = mount(1);
+    expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
+    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("50%");
+  });
+
+  it("updates immediately when a new threshold is picked from the popover", () => {
+    const { engine, root } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
+
+    expect(engine.snapshot().player.autoEatThreshold).toBe(0);
+    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("Off");
+  });
+
+  it("reflects a non-default threshold restored from a saved Snapshot", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          autoEatThreshold: 0.25,
+          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("25%");
   });
 });
 
