@@ -98,27 +98,42 @@ function hoverTile(root: HTMLElement, el: Element): HTMLElement | null {
   return root.querySelector<HTMLElement>("#item-tooltip");
 }
 
+/** Clicks an Area's row in the World page's progression rail (#208) — session-only presentation
+ * selection, never an Engine command, mirroring `selectBankTile`'s own "click and return the
+ * element" shape. */
+function selectAreaRow(root: HTMLElement, areaId: string): HTMLElement | null {
+  const row = root.querySelector<HTMLElement>(`[data-area-select="${areaId}"]`);
+  row?.click();
+  return row;
+}
+
 describe("mountApp", () => {
-  it("renders the Monster picker for every unlocked Area, gating locked ones", () => {
+  it("renders the Monster picker for the selected (default-idle: first-unlocked) Area only, its Monster buttons enabled", () => {
     const { root } = mount(1);
     const dummyBtn = root.querySelector<HTMLButtonElement>('[data-monster="dummy"]');
-    const bruteBtn = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
     expect(dummyBtn?.textContent).toBe("Training Dummy");
     expect(dummyBtn?.disabled).toBe(false);
+    // "brute" lives in the locked Test Crypt, not the default-selected (first-unlocked) Test
+    // Meadow — its detail isn't rendered until that Area's own rail row is selected (#208).
+    expect(root.querySelector('[data-monster="brute"]')).toBeNull();
+  });
+
+  it("a locked Area can still be inspected from the rail: its Monster buttons render, dimmed/disabled, once selected", () => {
+    const { root } = mount(1);
+    selectAreaRow(root, "crypt");
+    const bruteBtn = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
+    expect(bruteBtn?.textContent).toBe("Crypt Brute");
     expect(bruteBtn?.disabled).toBe(true); // Test Crypt is locked until "gauntlet" is cleared
   });
 
-  it("shows a locked Area's picker label as '🔒 Clear <dungeon name>'", () => {
+  it("shows a locked Area's selected-detail label as '🔒 Clear <dungeon name>'", () => {
     const { root } = mount(1);
-    const cryptLabel = [...root.querySelectorAll(".area-name")].find((p) =>
-      p.textContent?.startsWith("Test Crypt"),
-    );
-    expect(cryptLabel?.textContent).toBe("Test Crypt 🔒 Clear The Gauntlet");
-
-    const meadowLabel = [...root.querySelectorAll(".area-name")].find((p) =>
-      p.textContent?.startsWith("Test Meadow"),
-    );
+    const meadowLabel = root.querySelector(".area-name");
     expect(meadowLabel?.textContent).toBe("Test Meadow"); // unlocked from the start, no lock suffix
+
+    selectAreaRow(root, "crypt");
+    const cryptLabel = root.querySelector(".area-name");
+    expect(cryptLabel?.textContent).toBe("Test Crypt 🔒 Clear The Gauntlet");
   });
 
   it("selecting a Monster renders its name and a full HP bar", () => {
@@ -259,6 +274,180 @@ describe("mountApp", () => {
   });
 });
 
+/**
+ * A 3-Area fixture (#208) built specifically to differentiate `resolveSelectedArea`'s priority
+ * steps, which fixtureContent's own 2-Area meadow/crypt shape can't cleanly separate:
+ * - "alpha": unlocked, first in Snapshot order, hosts "dummy" — the step-5 (first-unlocked)
+ *   fallback target.
+ * - "beta": unlocked, hosts "brute" and the (reused) "pond" Fishing Spot, AND hosts "gauntlet" — a
+ *   single-Wave Dungeon whose one Wave/Boss ("boss-dummy") is NOT a member of any Area's
+ *   `monsterIds`. That absence is deliberate: it's what makes the dungeon-host priority step
+ *   (step 2) load-bearing rather than redundant with the monster-containment step (step 3), the
+ *   same reasoning `resolveTheme` documents for its own identical dungeon-first check.
+ * - "gamma": locked (gated by "gauntlet", hosted in "beta" — not itself), no Monsters, so it only
+ *   exercises rail inspection/gate-copy, never activity dispatch.
+ */
+const priorityContent = {
+  ...fixtureContent,
+  areas: [
+    { id: "alpha", name: "Alpha", monsterIds: ["dummy"], theme: "meadow" as const },
+    {
+      id: "beta",
+      name: "Beta",
+      monsterIds: ["brute"],
+      fishingSpotIds: ["pond"],
+      theme: "forest" as const,
+    },
+    {
+      id: "gamma",
+      name: "Gamma",
+      unlockedByDungeonId: "gauntlet",
+      monsterIds: [],
+      theme: "crypt" as const,
+    },
+  ],
+  dungeons: [
+    {
+      id: "gauntlet",
+      name: "The Gauntlet",
+      areaId: "beta",
+      waves: ["boss-dummy"],
+      chest: [{ itemId: "gold", qty: 1, chance: 1, band: "guaranteed" as const }],
+    },
+  ],
+};
+
+function mountPriority(seed = 1) {
+  const engine = createEngine(priorityContent, seededRng(seed));
+  const root = document.createElement("main");
+  const app = mountApp(engine, root, resolveContent(priorityContent), noopWindowChrome);
+  return { engine, root, app };
+}
+
+describe("World page — selected-Area progression rail (#208)", () => {
+  it("renders all Areas in the rail, in Snapshot order, with the locked one dimmed", () => {
+    const { root } = mountPriority();
+    const rows = [...root.querySelectorAll<HTMLButtonElement>("[data-area-select]")];
+    expect(rows.map((r) => r.dataset["areaSelect"])).toEqual(["alpha", "beta", "gamma"]);
+    expect(rows.map((r) => r.textContent?.trim().startsWith("Gamma"))).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(rows[2]?.classList.contains("locked")).toBe(true);
+    expect(rows[0]?.classList.contains("locked")).toBe(false);
+    expect(rows[1]?.classList.contains("locked")).toBe(false);
+  });
+
+  it("resolves the idle default to the first-unlocked Area (priority step 5)", () => {
+    const { root } = mountPriority();
+    expect(root.querySelector(".area-name")?.textContent).toBe("Alpha");
+    expect(root.querySelector('[data-monster="dummy"]')).not.toBeNull();
+  });
+
+  it("an active Fishing Spot resolves its own Area over the first-unlocked fallback (priority step 4)", () => {
+    const { engine, root, app } = mountPriority();
+    engine.selectFishingSpot("pond"); // hosted in "beta", not the first-unlocked "alpha"
+    app.render();
+
+    expect(root.querySelector(".area-name")?.textContent).toBe("Beta");
+    const pondBtn = root.querySelector<HTMLButtonElement>('[data-spot="pond"]');
+    expect(pondBtn?.classList.contains("active")).toBe(true);
+  });
+
+  it("an active Dungeon resolves its HOST Area even when the current Wave's Monster belongs to no Area (priority step 2 over step 3)", () => {
+    const { engine, root, app } = mountPriority();
+    engine.enterDungeon("gauntlet"); // hosted in "beta"; its only Wave is "boss-dummy"
+    app.render();
+
+    // "boss-dummy" is a member of no Area's monsterIds — the monster-containment step (3) alone
+    // would fail to resolve any Area here, falling through to "alpha" (first-unlocked). The
+    // dungeon-host step (2) must run first for this to show "beta" instead.
+    expect(root.querySelector(".area-name")?.textContent).toBe("Beta");
+    expect(engine.snapshot().monster?.id).toBe("boss-dummy");
+
+    const betaRow = root.querySelector<HTMLElement>('[data-area-select="beta"]');
+    expect(betaRow?.classList.contains("current")).toBe(true); // active-Dungeon accent
+    expect(betaRow?.classList.contains("selected")).toBe(true); // also the shown detail
+  });
+
+  it("selectedAreaId (priority step 1) outranks every Snapshot-driven step, including the active Dungeon's own host Area", () => {
+    const { engine, root, app } = mountPriority();
+    engine.enterDungeon("gauntlet"); // host: "beta"
+    app.render();
+    expect(root.querySelector(".area-name")?.textContent).toBe("Beta");
+
+    selectAreaRow(root, "gamma"); // locked, hosts no activity — pure inspection
+    expect(root.querySelector(".area-name")?.textContent).toBe("Gamma 🔒 Clear The Gauntlet");
+
+    // The active Dungeon's host keeps its own accent even while a different Area is selected —
+    // "current" (activity) and "selected" (inspected) are independent concepts (#208).
+    const betaRow = root.querySelector<HTMLElement>('[data-area-select="beta"]');
+    const gammaRow = root.querySelector<HTMLElement>('[data-area-select="gamma"]');
+    expect(betaRow?.classList.contains("current")).toBe(true);
+    expect(betaRow?.classList.contains("selected")).toBe(false);
+    expect(gammaRow?.classList.contains("selected")).toBe(true);
+    expect(gammaRow?.classList.contains("current")).toBe(false);
+
+    // Locked Gamma has no Monsters/Fishing Spots/Dungeon of its own — nothing to dispatch, but the
+    // Snapshot proves the Dungeon run kept going untouched by merely inspecting it.
+    expect(engine.snapshot().dungeon?.id).toBe("gauntlet");
+  });
+
+  it("selecting a different Area replaces the previously-shown selected-detail markup", () => {
+    const { root } = mountPriority();
+    expect(root.querySelector(".area-name")?.textContent).toBe("Alpha");
+    expect(root.querySelector('[data-monster="dummy"]')).not.toBeNull();
+
+    selectAreaRow(root, "beta");
+    expect(root.querySelector(".area-name")?.textContent).toBe("Beta");
+    expect(root.querySelector('[data-monster="dummy"]')).toBeNull(); // Alpha's detail is gone
+    expect(root.querySelector('[data-monster="brute"]')).not.toBeNull();
+  });
+
+  it("a locked Area's row is selectable for inspection, but dispatches no command even if its (disabled) button is clicked", () => {
+    const { engine, root } = mountPriority();
+    // `savedAt` is re-stamped on every snapshot() call (#134), so drop it before comparing state.
+    const stateOf = () => {
+      const { savedAt: _savedAt, ...rest } = engine.snapshot();
+      return rest;
+    };
+    const before = stateOf();
+
+    selectAreaRow(root, "gamma");
+    expect(root.querySelector(".area-name")?.textContent).toBe("Gamma 🔒 Clear The Gauntlet");
+    // Gamma has no Monsters, but Beta (still locked-irrelevant here) demonstrates the general
+    // disabled-button-never-fires-click rule already covered by the fixtureContent-based tests
+    // above (e.g. "a locked Area can still be inspected..."); this test's own job is proving the
+    // rail selection itself is inert on the Snapshot.
+    expect(stateOf()).toEqual(before);
+  });
+
+  it("Area-row selection alone never changes the Snapshot (no command dispatch from the rail)", () => {
+    const { engine, root } = mountPriority();
+    const stateOf = () => {
+      const { savedAt: _savedAt, ...rest } = engine.snapshot();
+      return JSON.stringify(rest);
+    };
+    const before = stateOf();
+
+    selectAreaRow(root, "beta");
+    selectAreaRow(root, "gamma");
+    selectAreaRow(root, "alpha");
+
+    expect(stateOf()).toBe(before);
+  });
+
+  it("the active Monster/Fishing Spot/Dungeon button gets the active accent class, scoped to whichever is actually running", () => {
+    const { engine, root, app } = mountPriority();
+    engine.selectMonster("dummy");
+    app.render();
+
+    const dummyBtn = root.querySelector<HTMLButtonElement>('[data-monster="dummy"]');
+    expect(dummyBtn?.classList.contains("active")).toBe(true);
+  });
+});
+
 describe("Monster stats line", () => {
   it("shows attack type, attack level, defence level, max hit, and attack speed for the selected Monster", () => {
     const { root } = mount(1);
@@ -282,6 +471,7 @@ describe("Monster stats line", () => {
     );
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    selectAreaRow(root, "crypt"); // #208: brute's detail only renders once Test Crypt is selected
     root.querySelector<HTMLButtonElement>('[data-monster="brute"]')?.click();
 
     // "brute"'s attackType is "crush" too (fixture-content.ts); same uniform-zero def vector.
@@ -346,8 +536,9 @@ describe("Monster picker Drop Table tooltip", () => {
     );
   });
 
-  it("gives each Monster its own tooltip, keyed off its Drop Table", () => {
+  it("gives each Monster its own tooltip, keyed off its Drop Table — even a locked Area's, once inspected", () => {
     const { root } = mount(1);
+    selectAreaRow(root, "crypt"); // #208: locked Areas stay inspectable, tooltip included
     const bruteBtn = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
 
     expect(bruteBtn?.title).toBe("Gold ×200 — always");
@@ -1953,12 +2144,14 @@ describe("Loot strip (#60)", () => {
 });
 
 describe("Fishing", () => {
-  it("renders a 🎣 Fishing Spot button under each Area, disabled when locked", () => {
+  it("renders a 🎣 Fishing Spot button for the selected Area, disabled when that Area is locked", () => {
     const { root } = mount(1);
     const pondBtn = root.querySelector<HTMLButtonElement>('[data-spot="pond"]');
-    const deepPondBtn = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(pondBtn?.textContent).toBe("🎣 Test Pond");
     expect(pondBtn?.disabled).toBe(false);
+
+    selectAreaRow(root, "crypt"); // #208: deep-pond's detail only renders once Test Crypt is selected
+    const deepPondBtn = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
@@ -2013,7 +2206,7 @@ describe("Fishing", () => {
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "raw-fish")?.qty).toBe(1);
   });
 
-  it("picker still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
+  it("World page still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -2026,6 +2219,7 @@ describe("Fishing", () => {
     );
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    selectAreaRow(root, "crypt"); // #208: deep-pond's detail only renders once Test Crypt is selected
 
     const deepPondBefore = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(deepPondBefore?.disabled).toBe(true); // Area open, but Fishing level 19 < levelReq 20
@@ -2034,7 +2228,7 @@ describe("Fishing", () => {
     for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3: exactly one Catch lands
     expect(engine.snapshot().player.skills.fishing.level).toBe(20);
 
-    // buildPicker runs off the levelup event itself — no explicit render() call here.
+    // renderWorldPage runs off the levelup event itself — no explicit render() call here.
     const deepPondAfter = root.querySelector<HTMLButtonElement>('[data-spot="deep-pond"]');
     expect(deepPondAfter?.disabled).toBe(false);
   });
@@ -2432,6 +2626,7 @@ describe("Dungeons", () => {
     expect(gauntletBtn?.textContent).toBe("⚔ The Gauntlet");
     expect(gauntletBtn?.disabled).toBe(false); // meadow is unlocked
 
+    selectAreaRow(root, "crypt"); // #208: crypt-dungeon's detail only renders once Test Crypt is selected
     const cryptBtn = root.querySelector<HTMLButtonElement>('[data-dungeon="crypt-dungeon"]');
     expect(cryptBtn?.textContent).toBe("⚔ Crypt Dungeon");
     expect(cryptBtn?.disabled).toBe(true); // Test Crypt is locked until "gauntlet" is cleared
@@ -2490,27 +2685,30 @@ describe("Dungeons", () => {
     expect(root.querySelector("#monster-name")?.textContent).toBe("Pick a monster ↓");
   });
 
-  it("picker rebuilds on dungeon-completed, unlocking the Crypt gate immediately with no levelup involved", () => {
+  it("World page rebuilds on dungeon-completed, unlocking the Crypt gate immediately with no levelup involved — while Test Crypt stays the selected Area throughout (#208: selectedAreaId outranks the dungeon-host priority step)", () => {
     const { engine, root } = mount(5); // seed 5 completes "gauntlet" within 5000 Ticks (see core/engine.test.ts)
+    selectAreaRow(root, "crypt");
     const bruteBefore = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
     expect(bruteBefore?.disabled).toBe(true);
-    const cryptLabelBefore = [...root.querySelectorAll(".area-name")].find((p) =>
-      p.textContent?.startsWith("Test Crypt"),
-    );
+    const cryptLabelBefore = root.querySelector(".area-name");
     expect(cryptLabelBefore?.textContent).toBe("Test Crypt 🔒 Clear The Gauntlet");
 
-    root.querySelector<HTMLButtonElement>('[data-dungeon="gauntlet"]')?.click();
+    // Dispatched directly on the Engine (mirrors other tests' `engine.enterDungeon` calls) since
+    // "gauntlet" is hosted in Test Meadow, not the currently-selected Test Crypt — its own detail
+    // button isn't even rendered right now, but selectedAreaId is independent of which Area hosts
+    // whatever Dungeon happens to be running.
+    engine.enterDungeon("gauntlet");
     for (let i = 0; i < 5000 && engine.snapshot().player.completedDungeonIds.length === 0; i++) {
       engine.tick();
     }
     expect(engine.snapshot().player.completedDungeonIds).toEqual(["gauntlet"]);
 
-    // buildPicker runs off the dungeon-completed event itself — no explicit render() call here.
+    // renderWorldPage runs off the dungeon-completed event itself — no explicit render() call
+    // here. Test Crypt is still the selected Area (selectedAreaId persists across the unrelated
+    // Engine command), so it's still Test Crypt's own gate label/brute button that update.
     const bruteAfter = root.querySelector<HTMLButtonElement>('[data-monster="brute"]');
     expect(bruteAfter?.disabled).toBe(false);
-    const cryptLabelAfter = [...root.querySelectorAll(".area-name")].find((p) =>
-      p.textContent?.startsWith("Test Crypt"),
-    );
+    const cryptLabelAfter = root.querySelector(".area-name");
     expect(cryptLabelAfter?.textContent).toBe("Test Crypt");
   });
 });

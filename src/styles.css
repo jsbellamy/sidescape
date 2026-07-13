@@ -1220,6 +1220,79 @@ body {
   cursor: not-allowed;
 }
 
+/* The currently active Monster/Fishing Spot/Dungeon (#208) — Snapshot-driven, independent of
+   which Area is merely selected for inspection in the rail below. */
+.monster-buttons button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* The World page's own fixed shell (#208): mirrors `.bank-page-body` (#207) — the progression
+   rail (`.area-rail`, a `card-fixed`-equivalent non-scrolling strip) never scrolls away, only the
+   selected-Area detail (`.area-detail`, reuses `.card-scroll`) does. Sits alongside
+   `#management-scroll` as a direct flex child of `.management-card`, toggled by the same
+   `[data-management-page]` sync as every other destination. */
+.world-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Same cascade-order gotcha as `.management-card[hidden]`/`.bank-page-body[hidden]` above: an
+   author `display` rule otherwise beats the UA `[hidden]` default. */
+.world-page-body[hidden] {
+  display: none;
+}
+
+/* The progression rail (#208): one row per Snapshot Area, in Snapshot order, always all visible —
+   including locked ones, selectable for inspection. Vertical list (not a horizontal strip) so
+   full Area names never truncate at the 300px card width. */
+.area-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.area-rail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.area-rail-item:hover {
+  border-color: var(--accent);
+}
+/* The selected Area (whose detail is showing below) — a distinct concept from `.current` below:
+   inspecting a locked Area selects it here without touching the active Monster/Fishing
+   Spot/Dungeon. */
+.area-rail-item.selected {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+/* The host Area of the active Monster/Fishing Spot/Dungeon (#208) — an accent independent of
+   `.selected`: the row currently being fought in stays marked even while a different (locked)
+   Area is selected for inspection. */
+.area-rail-item.current .area-rail-name {
+  color: var(--accent);
+}
+.area-rail-item.locked {
+  opacity: 0.55;
+}
+.area-rail-lock {
+  font-size: 10px;
+}
+
 #loot-strip {
   display: flex;
   align-items: center;

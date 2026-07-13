@@ -337,6 +337,12 @@ export function mountApp(
   // Presentation-only, in-memory (never the Snapshot/save), same boundary as sortKey/panelState.
   let lastAreaId: string | null = null;
 
+  // World page's own selected-Area progression rail (#208): which Area's Monsters/Fishing
+  // Spots/Dungeon show in the selected-detail section. Session-only presentation state, like
+  // `lastAreaId` above — selecting a rail row never starts/cancels an activity and never touches
+  // the Snapshot/save. See `resolveSelectedArea`'s own doc for the priority order.
+  let selectedAreaId: string | null = null;
+
   /** Shows/hides the two Management Row cards and the Management card's four destination page
    * bodies, and mirrors the Bank|Vendor toggle and Settings/Pets popovers onto the DOM (#206). DOM
    * order is always Character -> Management, stable regardless of which is open — only `hidden`
@@ -349,11 +355,13 @@ export function mountApp(
     root.querySelectorAll<HTMLElement>("[data-management-page]").forEach((page) => {
       page.hidden = page.dataset["managementPage"] !== workspace.management;
     });
-    // The "bank" destination owns its own fixed shell (`.bank-page-body`, #207) rather than
-    // sharing the World/Workshop/Activity pages' single scrolling wrapper — hide that wrapper
-    // outright while Bank is showing so it doesn't sit alongside `.bank-page-body` as an empty
-    // flex sibling stealing half the card's height (both are `flex: 1 1 auto`).
-    el<HTMLElement>("#management-scroll").hidden = workspace.management === "bank";
+    // The "bank" and "world" destinations each own their own fixed shell (`.bank-page-body`
+    // #207, `.world-page-body` #208) rather than sharing the Workshop/Activity pages' single
+    // scrolling wrapper — hide that wrapper outright while either is showing so it doesn't sit
+    // alongside them as an empty flex sibling stealing half the card's height (both are
+    // `flex: 1 1 auto`).
+    el<HTMLElement>("#management-scroll").hidden =
+      workspace.management === "bank" || workspace.management === "world";
     if (workspace.management) {
       el<HTMLElement>("#management-title").textContent =
         MANAGEMENT_DESTINATION_LABELS[workspace.management];
@@ -1217,6 +1225,7 @@ export function mountApp(
 
     renderBackdrop(snap);
     renderScene(dungeon, player, monster, fishing, production);
+    renderWorldPage();
     renderFoodSlots(player.foodSlots, bank.items);
     renderPotionSlot(player.potionSlot, bank.items);
     renderQuiver(player.quiver, bank.items);
@@ -1239,36 +1248,146 @@ export function mountApp(
     }
   }
 
-  function buildPicker(): void {
-    const snap = engine.snapshot();
-    el("#picker").innerHTML = snap.areas
+  /**
+   * Resolves which Snapshot Area's detail the World page's progression rail shows selected right
+   * now (#208) — a pure function over the Snapshot (plus the session-only `selectedAreaId`
+   * closed-over state), mirroring `resolveTheme`'s own shape and rationale. Priority, matching the
+   * issue's owner-decided rules:
+   * 1. `selectedAreaId`, if it still names a Snapshot Area (stale/never-set falls through);
+   * 2. the HOST Area of a Dungeon run in progress — checked before the Monster branch because a
+   *    Dungeon's later Waves/Boss are often dungeon-only Monsters absent from every Area's
+   *    `monsterIds` (the monster branch alone couldn't resolve those, same reasoning as
+   *    resolveTheme's own dungeon-first check);
+   * 3. the Area containing the active Monster;
+   * 4. the Area containing the active Fishing Spot;
+   * 5. the first Snapshot Area reporting `unlocked`;
+   * 6. the first Snapshot Area outright (undefined only if `snap.areas` is itself empty).
+   */
+  function resolveSelectedArea(snap: Snapshot): Snapshot["areas"][number] | undefined {
+    const selected = snap.areas.find((a) => a.id === selectedAreaId);
+    if (selected) return selected;
+
+    const dungeon = snap.dungeon;
+    if (dungeon) {
+      const dungeonDef = content.dungeonsById.get(dungeon.id);
+      const hostArea = dungeonDef && snap.areas.find((a) => a.id === dungeonDef.areaId);
+      if (hostArea) return hostArea;
+    }
+
+    const monster = snap.monster;
+    if (monster) {
+      const area = snap.areas.find((a) => a.monsterIds.includes(monster.id));
+      if (area) return area;
+    }
+
+    const fishing = snap.fishing;
+    if (fishing) {
+      const area = snap.areas.find((a) => a.fishingSpots.some((s) => s.id === fishing.spotId));
+      if (area) return area;
+    }
+
+    return snap.areas.find((a) => a.unlocked) ?? snap.areas[0];
+  }
+
+  /** The host Area id of whatever activity (Monster/Fishing Spot/Dungeon) is currently active
+   * (#208) — steps 2-4 of `resolveSelectedArea` above, without the `selectedAreaId`/fallback
+   * steps: null while idle. Drives the rail's own "current" accent, independent of which Area is
+   * merely being inspected via `selectedAreaId`. */
+  function currentActivityAreaId(snap: Snapshot): string | null {
+    const dungeon = snap.dungeon;
+    if (dungeon) {
+      const dungeonDef = content.dungeonsById.get(dungeon.id);
+      const hostId = dungeonDef && snap.areas.find((a) => a.id === dungeonDef.areaId)?.id;
+      if (hostId) return hostId;
+    }
+    const monster = snap.monster;
+    if (monster) {
+      const areaId = snap.areas.find((a) => a.monsterIds.includes(monster.id))?.id;
+      if (areaId) return areaId;
+    }
+    const fishing = snap.fishing;
+    if (fishing) {
+      const areaId = snap.areas.find((a) =>
+        a.fishingSpots.some((s) => s.id === fishing.spotId),
+      )?.id;
+      if (areaId) return areaId;
+    }
+    return null;
+  }
+
+  /** Renders the World page's progression rail (#208): one row per Snapshot Area, in Snapshot
+   * order — all Areas stay visible and selectable (including locked ones, for inspection),
+   * regardless of which one is currently selected. */
+  function renderAreaRail(
+    snap: Snapshot,
+    selectedId: string | undefined,
+    activeId: string | null,
+  ): void {
+    el("#area-rail").innerHTML = snap.areas
       .map((area) => {
-        const monsterButtons = area.monsterIds
-          .map((id) => {
-            const def = content.monstersById.get(id);
-            return `<button data-monster="${id}" ${area.unlocked ? "" : "disabled"} title="${dropTableTooltip(id)}">${def?.name ?? id}</button>`;
-          })
-          .join("");
-        const spotButtons = area.fishingSpots
-          .map(({ id, unlocked }) => {
-            const def = content.fishingSpotsById.get(id);
-            return `<button data-spot="${id}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
-          })
-          .join("");
-        const dungeonButtons = content.dungeons
-          .filter((d) => d.areaId === area.id)
-          .map(
-            (d) =>
-              `<button data-dungeon="${d.id}" ${area.unlocked ? "" : "disabled"}>⚔ ${d.name}</button>`,
-          )
-          .join("");
-        return `
-          <p class="area-name">${area.name}${area.unlocked ? "" : ` ${lockClearLabel(area)}`}</p>
-          <div class="monster-buttons">${monsterButtons}</div>
-          ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}
-          ${dungeonButtons ? `<div class="monster-buttons dungeon-buttons">${dungeonButtons}</div>` : ""}`;
+        const classes = ["area-rail-item"];
+        if (!area.unlocked) classes.push("locked");
+        if (area.id === selectedId) classes.push("selected");
+        if (area.id === activeId) classes.push("current");
+        return `<button type="button" class="${classes.join(" ")}" data-area-select="${area.id}" aria-pressed="${area.id === selectedId}">
+          <span class="area-rail-name">${area.name}</span>
+          ${area.unlocked ? "" : `<span class="area-rail-lock" aria-hidden="true">🔒</span>`}
+        </button>`;
       })
       .join("");
+  }
+
+  /** Renders the selected Area's own detail section (#208: name/gate state, Monsters, Fishing
+   * Spots, Dungeon) — the Monster/Fishing Spot/Dungeon markup and its `disabled`/tooltip rules are
+   * unchanged from the pre-#208 flat picker, just scoped to one Area instead of every Area at
+   * once. The currently active Monster/Fishing Spot/Dungeon (Snapshot-driven, independent of which
+   * Area is selected) gets the `active` accent class. */
+  function renderAreaDetail(snap: Snapshot, area: Snapshot["areas"][number] | undefined): void {
+    if (!area) {
+      el("#area-detail").innerHTML = "";
+      return;
+    }
+    const inDungeon = snap.dungeon !== null;
+    const monsterButtons = area.monsterIds
+      .map((id) => {
+        const def = content.monstersById.get(id);
+        const active = !inDungeon && snap.monster?.id === id;
+        return `<button data-monster="${id}" class="${active ? "active" : ""}" ${area.unlocked ? "" : "disabled"} title="${dropTableTooltip(id)}">${def?.name ?? id}</button>`;
+      })
+      .join("");
+    const spotButtons = area.fishingSpots
+      .map(({ id, unlocked }) => {
+        const def = content.fishingSpotsById.get(id);
+        const active = snap.fishing?.spotId === id;
+        return `<button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
+      })
+      .join("");
+    const dungeonButtons = content.dungeons
+      .filter((d) => d.areaId === area.id)
+      .map((d) => {
+        const active = snap.dungeon?.id === d.id;
+        return `<button data-dungeon="${d.id}" class="${active ? "active" : ""}" ${area.unlocked ? "" : "disabled"}>⚔ ${d.name}</button>`;
+      })
+      .join("");
+    el("#area-detail").innerHTML = `
+      <p class="area-name">${area.name}${area.unlocked ? "" : ` ${lockClearLabel(area)}`}</p>
+      <div class="monster-buttons">${monsterButtons}</div>
+      ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}
+      ${dungeonButtons ? `<div class="monster-buttons dungeon-buttons">${dungeonButtons}</div>` : ""}`;
+  }
+
+  /** Rebuilds the World page (#208's progression rail + selected-Area detail) from the current
+   * Snapshot — replaces the old flat `buildPicker`. Called from `render()` every tick (so live
+   * Snapshot changes like Dungeon Wave advances keep the active highlight in sync) and eagerly
+   * from the levelup/dungeon-completed listeners below (mirroring `buildPicker`'s own two trigger
+   * sites), so a gate flip is reflected even when no other render() call follows in the same
+   * frame. */
+  function renderWorldPage(): void {
+    const snap = engine.snapshot();
+    const selectedArea = resolveSelectedArea(snap);
+    const activeAreaId = currentActivityAreaId(snap);
+    renderAreaRail(snap, selectedArea?.id, activeAreaId);
+    renderAreaDetail(snap, selectedArea);
   }
 
   /** "🔒 Clear <dungeon name>" for a locked Area's picker label, read straight from the
@@ -1347,9 +1466,6 @@ export function mountApp(
         <button class="card-close" data-management-back title="Back to Character">←</button>
       </header>
       <div id="management-scroll" class="card-scroll">
-        <div data-management-page="world" hidden>
-          <section id="picker"></section>
-        </div>
         <div data-management-page="workshop" hidden>
           <p class="panel-title">Smithing</p>
           <ul id="smithing-recipes"></ul>
@@ -1369,6 +1485,14 @@ export function mountApp(
           <p class="panel-title">Loot Feed</p>
           <ul id="feed"></ul>
         </div>
+      </div>
+      <!-- The World destination (#208) is not part of #management-scroll above: like the Bank
+           page below, it owns its own fixed shell — the progression rail never scrolls, only the
+           selected-Area detail does, so the rail stays put while a long detail (e.g. many
+           Monsters) scrolls under it. See styles.css's .world-page-body. -->
+      <div data-management-page="world" class="world-page-body" hidden>
+        <div id="area-rail" class="area-rail" role="tablist"></div>
+        <div id="area-detail" class="area-detail card-scroll"></div>
       </div>
       <!-- The expanded Bank/Vendor destination (#207) is not part of #management-scroll above: it
            owns its own fixed shell (search/filters/sort/detail/buy-slots never scroll, only the
@@ -1559,8 +1683,8 @@ export function mountApp(
     }
     feedLine("📦 Chest opened!", "chest-header");
   });
-  engine.on("levelup", () => buildPicker()); // Fishing-Spot levelReq gates are level-driven
-  engine.on("dungeon-completed", () => buildPicker()); // Area gates flip on Dungeon completion
+  engine.on("levelup", () => renderWorldPage()); // Fishing-Spot levelReq gates are level-driven
+  engine.on("dungeon-completed", () => renderWorldPage()); // Area gates flip on Dungeon completion
 
   // Character section headers (#134): one delegated listener on the whole tab-panel rather than one
   // per header, mirroring #management-row's own closest()-based delegation below. A click anywhere
@@ -1704,7 +1828,11 @@ export function mountApp(
     if (event.key === "Escape") onEscape();
   });
 
-  el("#picker").addEventListener("click", (event) => {
+  // World page's selected-Area detail (#208, formerly #picker): dispatches the existing
+  // Monster/Fishing Spot/Dungeon commands, unchanged from the pre-#208 flat picker. A locked
+  // Area's buttons carry `disabled`, so they never fire a click here — no extra guard needed
+  // (mirrors the Spell picker's own disabled-button reasoning above).
+  el("#area-detail").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const monsterId = target.dataset["monster"];
     if (monsterId) {
@@ -1723,6 +1851,17 @@ export function mountApp(
       engine.enterDungeon(dungeonId);
       render();
     }
+  });
+
+  // World page's progression rail (#208): selecting a row is session-only presentation state
+  // (`selectedAreaId`) — it never calls the Engine, unlike the detail buttons above. A locked
+  // Area's row stays selectable (inspection is allowed; only its activity controls are
+  // `disabled`), so there's no locked-guard here either.
+  el("#area-rail").addEventListener("click", (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-area-select]");
+    if (!row) return;
+    selectedAreaId = row.dataset["areaSelect"] ?? null;
+    render();
   });
 
   // Bank grid (#78): clicking a tile selects it (re-clicking the already-selected tile
@@ -1962,8 +2101,7 @@ export function mountApp(
     });
   }
 
-  buildPicker();
-  render();
+  render(); // includes renderWorldPage() (#208)
   // Both cards start closed (#206: workspace state is session-only, never restored across a
   // relaunch) and notifies WorkspaceChrome of zero open cards once up front, so the real Tauri
   // adapter (main.ts) sizes/positions the OS window to match on every mount, not just on the next

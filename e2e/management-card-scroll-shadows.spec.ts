@@ -15,13 +15,15 @@ import { PNG } from "pngjs";
  *
  * #207 gave the expanded Bank/Vendor destination its own fixed shell (`.bank-page-body`) with two
  * *more* `.card-scroll` surfaces nested inside `#card-management` (the Bank tile grid and the
- * Vendor list) — `.card-scroll` is a shared scroll-shadow utility class, reused deliberately for
- * all three, not a bug. This spec is specifically about the *outer* World/Workshop/Activity
- * wrapper (the one whose scrolling is exercised by navigating to "world" below), so it targets
- * that wrapper's own `#management-scroll` id rather than the now-ambiguous `.card-scroll` class —
+ * Vendor list), and #208 did the same for World (`.world-page-body`, a non-scrolling progression
+ * rail plus its own selected-Area-detail `.card-scroll`) — `.card-scroll` is a shared
+ * scroll-shadow utility class, reused deliberately across all of these, not a bug. This spec is
+ * specifically about the *outer* Workshop/Activity wrapper (the one whose scrolling is exercised
+ * by navigating to "activity" below — World and Bank each moved off it), so it targets that
+ * wrapper's own `#management-scroll` id rather than the now-ambiguous `.card-scroll` class —
  * `:visible` filtering wouldn't be enough here since a real per-page manual check could
- * legitimately want to assert on the Bank grid's own (also real, also `.card-scroll`) shadow
- * surface in a future spec.
+ * legitimately want to assert on the Bank grid's or World's own (also real, also `.card-scroll`)
+ * shadow surface in a future spec.
  */
 
 async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<boolean> {
@@ -60,7 +62,7 @@ async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<bool
 async function openManagementCardWithOverflow(page: Page): Promise<void> {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
-  await page.locator('[data-destination="world"]').click();
+  await page.locator('[data-destination="activity"]').click();
   await expect(page.locator("#card-management")).toBeVisible();
 
   // Force deterministic overflow inside the real `.card-scroll` surface regardless of current
@@ -107,7 +109,7 @@ test("overflowing management card shows only the top shadow when scrolled to bot
 test("non-overflowing management card shows neither shadow", async ({ page }) => {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
-  await page.locator('[data-destination="world"]').click();
+  await page.locator('[data-destination="activity"]').click();
   const scroll = page.locator("#management-scroll");
   await expect(page.locator("#card-management")).toBeVisible();
 
