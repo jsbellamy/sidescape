@@ -153,9 +153,11 @@ The brief post-death state during which the player cannot act; combat auto-resum
 _Avoid_: death screen, grave
 
 **Compact Widget**:
-The opaque gameplay card shown while no management surface is open. Its default
-geometry is 320×460; its locally stored dimensions are presentation state,
-never part of an Engine **Snapshot** or transferable save.
+The fixed 320×220 logical live stage shown while no management surface is open.
+It contains only Menu/drag/Close chrome and visual activity feedback: backdrop,
+actors, Production prop, non-numeric combat HP bars, transient effects, and the
+combat-only zero-Food warning. It scales with the complete workspace at the
+100%, 150%, and 200% **UiScale** stops and cannot be freely resized.
 
 **Cards-on-Glass**:
 The single transparent native window model: opaque DOM cards float inside one
@@ -182,8 +184,8 @@ all cards close. `workspaceRect` chooses it by monitor-midpoint comparison
 with the 50px `ANCHOR_DEADBAND`.
 
 **Capacity** (`workspaceCapacity`):
-The one-to-two-card Management Row limit derived from logical monitor width.
-`workspaceCapacity` computes it from 300px cards and the 8px `CARD_GAP`.
+The one-to-two-card Management Row limit derived from logical monitor width and
+the selected **UiScale**. It never changes the selected scale.
 
 **Workspace Chrome** (`WorkspaceChrome`):
 The UI boundary that receives an open-card count and applies the corresponding
@@ -196,10 +198,12 @@ size/position and scale factor operations; Workspace Chrome converts them to
 logical geometry, which lets the same behavior be tested without a desktop
 runtime.
 
-**Geometry Persistence** (`StoredGeometry`):
-Presentation-only local preference under `sidescape-ui-geometry-v2`: compact
-width/height and preferred Management Card height. It never records the open
-Card Row, so a relaunch starts closed.
+**UiScale**:
+Presentation-only local preference under `sidescape-ui-scale-v1`, restricted to
+1, 1.5, or 2 and tolerantly defaulted to 1. It scales Compact Widget, cards,
+gaps, text, controls, effects, and hit targets together. It never enters an
+Engine Snapshot or transferable save. Open cards never persist, and boot always
+restores the scaled closed Compact Widget.
 
 ## Relationships
 

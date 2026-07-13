@@ -1,19 +1,19 @@
-/** Tauri-free workspace geometry.  Keep this module pure so browser tests and the native shell
- * share exactly the same capacity, anchoring, and monitor-clamping decisions. */
-export const MIN_COMPACT_W = 320;
-export const MIN_COMPACT_H = 320;
-export const DEFAULT_COMPACT_W = 320;
-export const DEFAULT_COMPACT_H = 460;
+/** Tauri-free fixed-scale workspace geometry. */
+export const UI_SCALES = [1, 1.5, 2] as const;
+export type UiScale = (typeof UI_SCALES)[number];
+export const DEFAULT_UI_SCALE: UiScale = 1;
+export const UI_SCALE_KEY = "sidescape-ui-scale-v1";
+
+export const COMPACT_W = 320;
+export const COMPACT_H = 220;
 export const CARD_W = 300;
-export const DEFAULT_CARD_H = 600;
+export const CARD_H = 600;
 export const CARD_GAP = 8;
 export const ANCHOR_DEADBAND = 50;
 
+export const scaled = (value: number, scale: UiScale): number => Math.round(value * scale);
+
 export type VerticalAnchor = "top" | "bottom";
-export interface Size {
-  width: number;
-  height: number;
-}
 export interface MonitorRect {
   x: number;
   y: number;
@@ -22,8 +22,7 @@ export interface MonitorRect {
 }
 export interface WorkspaceRectArgs {
   current: { x: number; y: number; width: number; height: number };
-  compact: Size;
-  cardHeight: number;
+  scale: UiScale;
   wasCardCount: number;
   cardCount: number;
   anchor: VerticalAnchor | null;
@@ -38,77 +37,68 @@ export interface WorkspaceRectResult {
   capacity: 1 | 2;
 }
 
-/** The Management Row now holds at most two cards — Character and one Management destination
- * (#206: the three-card World/Character/Resources workspace is gone). */
-export function workspaceCapacity(monitorWidth: number): 1 | 2 {
-  return Math.max(1, Math.min(2, Math.floor((monitorWidth + CARD_GAP) / (CARD_W + CARD_GAP)))) as
-    1 | 2;
+export function workspaceCapacity(monitorWidth: number, scale: UiScale): 1 | 2 {
+  const card = scaled(CARD_W, scale);
+  const gap = scaled(CARD_GAP, scale);
+  return monitorWidth >= card * 2 + gap ? 2 : 1;
+}
+
+export function scaleFitsMonitorHeight(monitorHeight: number, scale: UiScale): boolean {
+  return monitorHeight >= scaled(COMPACT_H + CARD_GAP + CARD_H, scale);
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
-function clampRect(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  monitor: MonitorRect | null,
-) {
-  if (!monitor) return { x, y, width, height };
-  const maxX = Math.max(monitor.x, monitor.x + monitor.width - width);
-  const maxY = Math.max(monitor.y, monitor.y + monitor.height - height);
-  return { x: clamp(x, monitor.x, maxX), y: clamp(y, monitor.y, maxY), width, height };
-}
 
 export function workspaceRect(args: WorkspaceRectArgs): WorkspaceRectResult {
-  const { current, compact, wasCardCount, cardCount, monitor } = args;
-  const capacity = monitor ? workspaceCapacity(monitor.width) : 2;
-  const effective = Math.min(Math.max(0, cardCount), capacity);
+  const { current, scale, monitor } = args;
+  const compactW = scaled(COMPACT_W, scale);
+  const compactH = scaled(COMPACT_H, scale);
+  const cardW = scaled(CARD_W, scale);
+  const cardH = scaled(CARD_H, scale);
+  const gap = scaled(CARD_GAP, scale);
+  const capacity = monitor ? workspaceCapacity(monitor.width, scale) : 2;
+  const effective = Math.min(Math.max(0, args.cardCount), capacity);
+  const oldEffective = Math.min(Math.max(0, args.wasCardCount), capacity);
+  const oldRowW = oldEffective ? oldEffective * cardW + (oldEffective - 1) * gap : 0;
+  const oldWidth = Math.max(compactW, oldRowW);
+  const compactX = args.wasCardCount > 0 ? current.x + (oldWidth - compactW) / 2 : current.x;
+  const compactY =
+    args.wasCardCount > 0 && args.anchor === "bottom"
+      ? current.y + current.height - compactH
+      : current.y;
+
   if (effective === 0) {
-    // The current union's anchored compact point is converted back to its compact rect.
-    const oldEffective = Math.min(Math.max(0, wasCardCount), capacity);
-    const oldRow = oldEffective * CARD_W + Math.max(0, oldEffective - 1) * CARD_GAP;
-    const oldWidth = Math.max(compact.width, oldRow);
-    const x = current.x + (oldWidth - compact.width) / 2;
-    const y = args.anchor === "bottom" ? current.y + current.height - compact.height : current.y;
-    return { ...clampRect(x, y, compact.width, compact.height, monitor), anchor: null, capacity };
+    const x = monitor
+      ? clamp(compactX, monitor.x, Math.max(monitor.x, monitor.x + monitor.width - compactW))
+      : compactX;
+    const y = monitor
+      ? clamp(compactY, monitor.y, Math.max(monitor.y, monitor.y + monitor.height - compactH))
+      : compactY;
+    return { x, y, width: compactW, height: compactH, anchor: null, capacity };
   }
-  const rowWidth = effective * CARD_W + Math.max(0, effective - 1) * CARD_GAP;
-  const width = Math.max(compact.width, rowWidth);
-  const visibleCompactH = Math.max(MIN_COMPACT_H, compact.height);
-  const availableCardH = monitor
-    ? Math.max(0, monitor.height - visibleCompactH - CARD_GAP)
-    : args.cardHeight;
-  const cardHeight = clamp(args.cardHeight, 0, availableCardH || args.cardHeight);
-  const height = visibleCompactH + CARD_GAP + cardHeight;
+
+  const rowW = effective * cardW + (effective - 1) * gap;
+  const width = Math.max(compactW, rowW);
+  const height = compactH + gap + cardH;
   let anchor = args.anchor;
   if (!anchor) {
-    const center = current.y + compact.height / 2;
+    const center = current.y + compactH / 2;
     const midpoint = monitor ? monitor.y + monitor.height / 2 : center;
     if (center < midpoint - ANCHOR_DEADBAND) anchor = "top";
     else if (center > midpoint + ANCHOR_DEADBAND) anchor = "bottom";
     else {
-      // Inside the deadband, pick the side the cards extend *into* that has more room: a "top"
-      // anchor keeps the compact widget up top and grows cards downward, so it wants more space
-      // *below*; a "bottom" anchor grows cards upward and wants more space above. Ties use "bottom".
       const above = center - (monitor?.y ?? center);
       const below = monitor ? monitor.y + monitor.height - center : center;
       anchor = below > above ? "top" : "bottom";
     }
   }
-  // Recover the compact point from the old union when changing open-card count, then center it.
-  const oldEffective = Math.min(Math.max(0, wasCardCount), capacity);
-  const oldWidth = Math.max(
-    compact.width,
-    oldEffective * CARD_W + Math.max(0, oldEffective - 1) * CARD_GAP,
-  );
-  const compactX = wasCardCount > 0 ? current.x + (oldWidth - compact.width) / 2 : current.x;
-  const compactY =
-    wasCardCount > 0 && anchor === "bottom"
-      ? current.y + current.height - compact.height
-      : current.y;
-  const x = compactX - (width - compact.width) / 2;
-  const y = anchor === "bottom" ? compactY - (height - compact.height) : compactY;
-  return { ...clampRect(x, y, width, height, monitor), anchor, capacity };
+  let x = compactX - (width - compactW) / 2;
+  let y = anchor === "bottom" ? compactY - (height - compactH) : compactY;
+  if (monitor) {
+    x = clamp(x, monitor.x, Math.max(monitor.x, monitor.x + monitor.width - width));
+    y = clamp(y, monitor.y, Math.max(monitor.y, monitor.y + monitor.height - height));
+  }
+  return { x, y, width, height, anchor, capacity };
 }

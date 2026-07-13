@@ -50,6 +50,8 @@ body {
   background: transparent;
   --card-h: 600px; /* DEFAULT_CARD_H; overridden per-open by main.ts */
   --compact-w: 320px; /* MIN_COMPACT_W / DEFAULT_COMPACT_W; overridden by window-chrome.ts's applyCards */
+  --ui-scale: 1;
+  zoom: var(--ui-scale);
 }
 #app[data-anchor="top"] #management-row {
   order: 1;
@@ -75,8 +77,8 @@ body {
      card row (#138 §4): its width is independent of `#management-row`'s own, per `workspaceRect`'s
      `width = Math.max(compact.width, rowWidth)`. */
   width: var(--compact-w, 320px);
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 var(--compact-h, 220px);
+  height: var(--compact-h, 220px);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -250,6 +252,30 @@ body {
   color: var(--accent);
 }
 
+#ui-scale-selector {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+}
+
+#ui-scale-selector legend {
+  padding: 0 4px;
+  color: var(--text-dim);
+}
+
+#ui-scale-selector button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+#ui-scale-selector button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
 .pets-summary {
   position: relative;
   margin-top: 6px;
@@ -352,6 +378,17 @@ body {
   cursor: grab;
 }
 
+#titlebar button {
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+}
+
+:where(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 #titlebar-controls {
   display: flex;
   align-items: center;
@@ -425,6 +462,31 @@ body {
   border-radius: 6px;
   padding: 10px;
   overflow: hidden; /* backdrop layers must never push the 320px layout */
+}
+
+.sprite-hp {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -7px;
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #241b18;
+}
+.sprite-hp .fill {
+  height: 100%;
+  background: #9fbc62;
+}
+#no-food-warning {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(69, 30, 22, 0.9);
+  color: #ffd4ba;
+  font-size: 11px;
 }
 
 /* Parallax scene backdrop (#80): three stacked, absolutely-positioned layers keyed off

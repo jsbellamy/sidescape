@@ -7,4 +7,9 @@
 export interface WorkspaceChrome {
   getCapacity(): Promise<1 | 2>;
   setCardCount(cardCount: number): void;
+  getScale?(): import("./window-geometry").UiScale;
+  getScaleOptions?(): Promise<
+    Array<{ value: import("./window-geometry").UiScale; supported: boolean }>
+  >;
+  setScale?(scale: import("./window-geometry").UiScale): Promise<void>;
 }

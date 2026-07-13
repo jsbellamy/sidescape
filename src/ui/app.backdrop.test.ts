@@ -134,16 +134,6 @@ describe("scene backdrop (#80)", () => {
 
     const scene = root.querySelector<HTMLElement>("#scene");
     const ids = Array.from(scene!.children).map((c) => c.id);
-    expect(ids).toEqual([
-      "backdrop",
-      "toast-container",
-      "sprite-row",
-      "dungeon-header",
-      "monster-name",
-      "monster-stats",
-      "monster-bar",
-      "",
-      "food-slots",
-    ]);
+    expect(ids).toEqual(["backdrop", "toast-container", "sprite-row", "no-food-warning"]);
   });
 });

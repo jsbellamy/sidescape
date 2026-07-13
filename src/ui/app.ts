@@ -31,12 +31,7 @@ import {
   resolveSelection,
 } from "./bank-view";
 import type { BankFilter, BankMode } from "./bank-view";
-import {
-  PRODUCTION_SKILLS,
-  productionLabel,
-  productionPanelMarkup,
-  resolveProp,
-} from "./production";
+import { PRODUCTION_SKILLS, productionPanelMarkup, resolveProp } from "./production";
 import type { ProductionSkill } from "./production";
 import { createLoadoutSlotDispatcher, loadoutSlotMarkup } from "./loadout-slot";
 import type { LoadoutSlotChooserItem } from "./loadout-slot";
@@ -304,6 +299,19 @@ export function mountApp(
   // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
   // presentational UI state, an anchored popover that never changes card height.
   let openSettings = false;
+  async function syncScaleSelector(): Promise<void> {
+    const selected = windowChrome.getScale?.() ?? 1;
+    const options = await windowChrome.getScaleOptions?.();
+    root.querySelectorAll<HTMLButtonElement>("[data-ui-scale]").forEach((button) => {
+      const value = Number(button.dataset["uiScale"]);
+      const supported = options?.find((option) => option.value === value)?.supported !== false;
+      button.disabled = !supported;
+      button.title = supported
+        ? `Set UI scale to ${value * 100}%`
+        : `${value * 100}% unavailable: monitor cannot fit the full workspace`;
+      button.setAttribute("aria-pressed", String(value === selected));
+    });
+  }
   // Whether the Character hub's Pets summary popover (the full owned/total roster grid) is open
   // (#206) — same presentational shape as `openSettings`.
   let openPetsPopover = false;
@@ -582,7 +590,7 @@ export function mountApp(
     return root.querySelector(selector) as T;
   }
 
-  /** Appends a line to the Loot Feed panel AND mirrors it onto the main column's `#ticker` (the
+  /** Appends a line to the Activity card's Loot Feed.
    * amendment's "heartbeat" — one line, same band/class styling, never a replacement for the
    * full feed panel). Both are driven from this single call site so they can never drift apart. */
   function feedLine(text: string, cls = ""): void {
@@ -592,10 +600,6 @@ export function mountApp(
     const feed = el<HTMLUListElement>("#feed");
     feed.prepend(li);
     while (feed.children.length > 40) feed.lastChild?.remove();
-
-    const ticker = el<HTMLElement>("#ticker");
-    ticker.textContent = text;
-    ticker.className = cls;
   }
 
   /** Appends a damage splat (a red hit for `amount > 0`, a blue "0" miss otherwise) to `layer`,
@@ -726,7 +730,6 @@ export function mountApp(
     bankItems: { itemId: string; qty: number }[],
   ): void {
     const markup = foodSlotsMarkup(foodSlots, bankItems);
-    el("#food-slots").innerHTML = markup;
     el("#character-food-slots").innerHTML = markup;
   }
 
@@ -929,10 +932,7 @@ export function mountApp(
     propEl.className = prop ? `prop-${prop}` : "";
   }
 
-  /** Renders the main column's "scene": the current Dungeon banner (if any), the player HP bar,
-   * the gold counter in the chrome row directly above it, and whichever of Monster / Fishing Spot
-   * / production Recipe is active (or the "pick a monster" placeholder). Decomposed from the old
-   * monolithic `render()` (#39) — DOM output is unchanged. */
+  /** Renders the compact live stage. Persistent labels and numeric readouts live in cards. */
   function renderScene(
     dungeon: Snapshot["dungeon"],
     player: Snapshot["player"],
@@ -940,50 +940,24 @@ export function mountApp(
     fishing: Snapshot["fishing"],
     production: Snapshot["production"],
   ): void {
-    const dungeonHeader = el<HTMLElement>("#dungeon-header");
-    if (dungeon) {
-      dungeonHeader.textContent = `⚔ ${dungeon.name} — Wave ${dungeon.wave}/${dungeon.totalWaves}`;
-      dungeonHeader.hidden = false;
-    } else {
-      dungeonHeader.textContent = "";
-      dungeonHeader.hidden = true;
-    }
-
+    void dungeon;
     el("#player-hp-fill").style.width = `${(player.hp / player.maxHp) * 100}%`;
-    el("#player-hp-text").textContent = player.respawning
-      ? "Respawning…"
-      : `HP ${player.hp}/${player.maxHp}`;
+    const combat = monster !== null;
+    el<HTMLElement>("#player-bar").hidden = !combat;
+    const foodQty = player.foodSlots.reduce((sum, slot) => sum + (slot?.qty ?? 0), 0);
+    el<HTMLElement>("#no-food-warning").hidden = !combat || foodQty > 0;
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
-    const monsterStats = el<HTMLElement>("#monster-stats");
     if (production) {
-      // Scene label is descriptor-backed (#181, production.ts) — see productionLabel.
-      el("#monster-name").textContent = `${productionLabel(production.skill)}: ${production.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
-      monsterStats.hidden = true;
-      monsterStats.textContent = "";
     } else if (fishing) {
-      el("#monster-name").textContent = `🎣 Fishing at ${fishing.name}`;
       monsterImg.hidden = true;
       monsterBar.hidden = true;
-      monsterStats.hidden = true;
-      monsterStats.textContent = "";
     } else if (monster) {
       monsterBar.hidden = false;
-      el("#monster-name").textContent = monster.name;
       el("#monster-hp-fill").style.width = `${(monster.hp / monster.maxHp) * 100}%`;
-      el("#monster-hp-text").textContent = `${monster.hp}/${monster.maxHp}`;
-
-      // Deepened Snapshot (#184): every stat below is read straight from snap.monster — the
-      // Engine derives them fresh from the active MonsterDef at snapshot() time, so this no
-      // longer re-opens raw Content (no content.monsters.find/local weakSpot here anymore).
-      const attackTypeLabel =
-        monster.attackType.charAt(0).toUpperCase() + monster.attackType.slice(1);
-      const weakSuffix = ` · Weak: ${monster.weakSpot}${monster.weakElement ? ` · Weak: ${monster.weakElement}` : ""}`;
-      monsterStats.textContent = `${attackTypeLabel} · Atk ${monster.attackLevel} · Def ${monster.defenceLevel} · Max hit ${monster.maxHit} · Speed ${monster.attackSpeed}t${weakSuffix}`;
-      monsterStats.hidden = false;
 
       const sprite = monsterSprite(monster.id);
       if (sprite) {
@@ -994,16 +968,10 @@ export function mountApp(
         monsterImg.hidden = true;
       }
     } else {
-      monsterBar.hidden = false;
-      el("#monster-name").textContent = "Pick a monster ↓";
+      monsterBar.hidden = true;
       el("#monster-hp-fill").style.width = "0%";
-      el("#monster-hp-text").textContent = "";
       monsterImg.hidden = true;
-      monsterStats.hidden = true;
-      monsterStats.textContent = "";
     }
-
-    el("#gold").textContent = `🪙 ${player.gold}`;
   }
 
   /** Tooltip text for one Skill cell in the icon grid (#135): capitalized name, level, floored xp,
@@ -1122,21 +1090,6 @@ export function mountApp(
         .map((line) => `<p class="detail-stat">${line}</p>`)
         .join("")}
       <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
-  }
-
-  /** Renders the main column's interim compact Loot Strip: hidden while empty, otherwise one
-   * icon+qty tile per stack. Explicitly interim (#206): the Activity destination page now carries
-   * its own Loot Zone grid (`renderActivityLootZone`) plus the Loot Feed; this compact strip and
-   * `#ticker` are removed once the final compact-stage slice lands. */
-  function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
-    const lootStrip = el<HTMLElement>("#loot-strip");
-    lootStrip.hidden = lootZone.length === 0;
-    el("#loot-strip-items").innerHTML = lootZone
-      .map(
-        (s) =>
-          `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
-      )
-      .join("");
   }
 
   /** Renders the Activity destination page's own fixed Loot Zone header (#209: "Loot Zone
@@ -1291,7 +1244,6 @@ export function mountApp(
     renderXpRow(player.skills);
     renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
-    renderLootStrip(snap.lootZone);
     renderActivityLootZone(snap.lootZone);
     renderBank(bank, player.gold);
     renderEquipmentTray(bank, player.gold);
@@ -1460,6 +1412,12 @@ export function mountApp(
         <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊 Mute</button>
         <button id="export-save" title="Export save to clipboard">📤 Export</button>
         <button id="import-save" title="Import save from clipboard">📥 Import</button>
+        <fieldset id="ui-scale-selector">
+          <legend>UI scale</legend>
+          <button data-ui-scale="1" title="Set UI scale to 100%">100%</button>
+          <button data-ui-scale="1.5" title="Set UI scale to 150%">150%</button>
+          <button data-ui-scale="2" title="Set UI scale to 200%">200%</button>
+        </fieldset>
       </div>
       <div id="import-panel" hidden>
         <p>Paste a save below, then Apply. This overwrites your current save.</p>
@@ -1621,15 +1579,13 @@ export function mountApp(
     </div>
     <section id="compact-widget">
     <header id="titlebar" data-tauri-drag-region>
+      <button id="menu-toggle" data-menu title="Menu" aria-label="Menu">
+        <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
+      </button>
       <span data-tauri-drag-region>SideScape</span>
-      <div id="titlebar-controls">
-        <button id="close-btn" title="Quit">✕</button>
-      </div>
+      <button id="close-btn" title="Close SideScape" aria-label="Close SideScape">✕</button>
     </header>
     <div id="main-column">
-      <div id="chrome-row">
-        <span id="gold"></span>
-      </div>
       <section id="scene">
         <div id="backdrop" aria-hidden="true">
           <div class="layer-sky"></div>
@@ -1642,33 +1598,21 @@ export function mountApp(
         <div id="sprite-row">
           <div id="monster-sprite-wrap" class="sprite-wrap">
             <img id="monster-sprite" class="sprite pixel" alt="" hidden />
+            <div id="monster-bar" class="sprite-hp" hidden aria-label="Monster health"><div id="monster-hp-fill" class="fill"></div></div>
             <div id="monster-splats" class="splat-layer"></div>
           </div>
           <div id="player-sprite-wrap" class="sprite-wrap">
             <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+            <div id="player-bar" class="sprite-hp" hidden aria-label="Player health"><div id="player-hp-fill" class="fill"></div></div>
             <div id="player-splats" class="splat-layer"></div>
           </div>
         </div>
-        <p id="dungeon-header" hidden></p>
-        <p id="monster-name"></p>
-        <p id="monster-stats" hidden></p>
-        <div id="monster-bar" class="bar monster"><div id="monster-hp-fill" class="fill"></div><span id="monster-hp-text" class="bar-text"></span></div>
-        <div class="bar player"><div id="player-hp-fill" class="fill"></div><span id="player-hp-text" class="bar-text"></span></div>
-        <div id="food-slots" class="food-slots"></div>
+        <div id="no-food-warning" role="status" title="No active Food" hidden>No active Food</div>
       </section>
-      <p id="ticker"></p>
-      <section id="loot-strip" hidden>
-        <ul id="loot-strip-items"></ul>
-        <button id="loot-all-btn" data-loot-all>Loot all</button>
-      </section>
-      <div id="menu-row" class="menu-row">
-        <button id="menu-toggle" data-menu title="Character">
-          <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
-          <span>Character</span>
-        </button>
-      </div>
     </div>
     </section>`;
+
+  void syncScaleSelector();
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
   // the Monster's land on the player's; fires during engine.tick() itself, not the following
@@ -1837,8 +1781,14 @@ export function mountApp(
   // the whole card so nested `<img>`/`<span>` clicks resolve via `closest`. Checked in a stable
   // order: a destination click (World/Workshop/Activity nav buttons, or the Bank tray's "Expand
   // Bank" button — both carry `data-destination`) before the Settings/Pets popover toggles.
-  el("#card-character").addEventListener("click", (event) => {
+  el("#card-character").addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
+    const scaleValue = target.closest<HTMLButtonElement>("[data-ui-scale]")?.dataset["uiScale"];
+    if (scaleValue) {
+      await windowChrome.setScale?.(Number(scaleValue) as 1 | 1.5 | 2);
+      await syncScaleSelector();
+      return;
+    }
     const destinationBtn = target.closest<HTMLElement>("[data-destination]");
     if (destinationBtn) {
       void openDestination(destinationBtn.dataset["destination"] as ManagementDestination);
@@ -2053,7 +2003,6 @@ export function mountApp(
       },
     },
   );
-  el("#food-slots").addEventListener("click", foodSlotDispatcher);
   el("#character-food-slots").addEventListener("click", foodSlotDispatcher);
 
   // Potion Slot tile (#118): dispatch order mirrors the Food Slot bar above — unassign (✕) is
@@ -2153,7 +2102,6 @@ export function mountApp(
       feedLine("⚠ Bank full — loot left behind", "overflow");
     }
   }
-  el("#loot-all-btn").addEventListener("click", handleLootAll);
   el("#activity-loot-all-btn").addEventListener("click", handleLootAll);
 
   el("#buy-slots-btn").addEventListener("click", () => {
