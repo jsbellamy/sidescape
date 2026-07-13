@@ -60,7 +60,7 @@ illustration:
    warm-ink ring. This needs no per-pixel hand-work; the golden master stays the style authority via
    the build-time quantization, not by replacing it with the generation's look.
 2. **Grid-faithful reconstruction** of a committed, approved pixel-art reference sheet with a
-   regular pseudo-pixel grid (currently `icon-style-golden-master.png` and `icon-reference.png`) via
+   regular pseudo-pixel grid (currently `icon-style-golden-master.png`) via
    `scripts/art/trace-reference.mjs`, which detects the sheet's cell pitch, majority-votes each art
    cell, and quantizes to the named ramps. Its output is a _draft_ for hand-cleanup, not a source.
 
