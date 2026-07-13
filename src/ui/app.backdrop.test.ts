@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
@@ -11,6 +12,7 @@ import type { WorkspaceChrome } from "./workspace-chrome";
 
 const resolvedMeadowsContent = resolveContent(meadowsContent);
 const resolvedFixtureContent = resolveContent(fixtureContent);
+const stylesheet = readFileSync("src/styles.css", "utf8");
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(2),
@@ -18,6 +20,34 @@ const noopWindowChrome: WorkspaceChrome = {
 };
 
 describe("scene backdrop (#80)", () => {
+  it("references a pixel-art sky, mid, and near tile for every theme", () => {
+    const themes = ["meadow", "forest", "sewer", "crypt", "town"];
+    const layers = ["sky", "mid", "near"];
+
+    for (const theme of themes) {
+      for (const layer of layers) {
+        expect(stylesheet).toContain(`#backdrop[data-theme="${theme}"] .layer-${layer}`);
+        expect(stylesheet).toContain(`url("./assets/backdrops/${theme}-${layer}.png")`);
+      }
+    }
+  });
+
+  it("drifts only the mid and near layers at different slow speeds, with a seamless tile-width loop", () => {
+    expect(stylesheet).toContain("inset: 0 -160px 0 0");
+    expect(stylesheet).toContain("animation: backdrop-drift 90s linear infinite;");
+    expect(stylesheet).toContain("animation: backdrop-drift 60s linear infinite;");
+    expect(stylesheet).toMatch(/@keyframes backdrop-drift\s*\{/);
+    expect(stylesheet).toContain("transform: translateX(0);");
+    expect(stylesheet).toContain("transform: translateX(-160px);");
+  });
+
+  it("disables backdrop drift when reduced motion is requested", () => {
+    expect(stylesheet).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(stylesheet).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*#backdrop \.layer-mid,[\s\S]*#backdrop \.layer-near[\s\S]*animation: none;/,
+    );
+  });
+
   it("prepends #backdrop, with its three parallax layers, as the first child of #scene — ahead of #sprite-row/bars/toasts in DOM order (the z-order pin, alongside styles.css's negative z-index)", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
