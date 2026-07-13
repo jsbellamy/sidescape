@@ -16,7 +16,7 @@ const stylesheet = readFileSync("src/styles.css", "utf8");
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(2),
-  setCardCount: () => {},
+  setCardCount: () => Promise.resolve(),
 };
 
 describe("scene backdrop (#80)", () => {

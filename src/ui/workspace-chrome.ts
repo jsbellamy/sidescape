@@ -6,7 +6,10 @@
  */
 export interface WorkspaceChrome {
   getCapacity(): Promise<1 | 2>;
-  setCardCount(cardCount: number): void;
+  /** Resolves once the requested card count has actually been applied (queued native
+   * position/size writes plus `data-anchor` application) — callers await it to know when it is
+   * safe to reveal a newly opening card at its final Workspace Rect (#242). */
+  setCardCount(cardCount: number): Promise<void>;
   getScale?(): import("./window-geometry").UiScale;
   getScaleOptions?(): Promise<
     Array<{ value: import("./window-geometry").UiScale; supported: boolean }>

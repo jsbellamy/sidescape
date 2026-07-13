@@ -395,13 +395,23 @@ export function mountApp(
   // switching straight to another destination), since all of them funnel through this one function.
   let previousManagement: ManagementDestination | null = null;
 
-  /** The single synchronization path (#206): re-renders card/page visibility and notifies
-   * `WorkspaceChrome` of the new open-card *count* exactly once — `(characterOpen ? 1 : 0) +
-   * (management ? 1 : 0)` — the seam main.ts's real Tauri adapter resizes/anchors the transparent
-   * window from. Workspace state is session-only (never persisted, never the Engine
-   * Snapshot/save); every workspace change goes through this one function: the menu toggle,
-   * destination clicks, Back/second-card-close, transparent-glass close, Escape, and the initial
-   * boot sync (called once up front with both cards closed). */
+  /** The single synchronization path (#206, ordering fixed by #242): notifies `WorkspaceChrome`
+   * of the new open-card *count* exactly once — `(characterOpen ? 1 : 0) + (management ? 1 : 0)`
+   * — the seam main.ts's real Tauri adapter resizes/anchors the transparent window from, and
+   * re-renders card/page visibility at the right time relative to that native completion.
+   * Workspace state is session-only (never persisted, never the Engine Snapshot/save); every
+   * workspace change goes through this one function: the menu toggle, destination clicks,
+   * Back/second-card-close, transparent-glass close, Escape, and the initial boot sync (called
+   * once up front with both cards closed).
+   *
+   * #242: a newly opening card must never paint inside the old (smaller) Compact Widget rect and
+   * then snap into its final anchored position once the native window catches up — there is no
+   * opening animation, so the only fix is to not paint until the native move/resize (and
+   * `data-anchor` application) is actually done. Closing/same-count swaps stay immediate (hiding
+   * a departing card before the native window contracts is exactly the corrected order the
+   * original defect got backwards for expansions). A snapshot of `desired` plus a re-check right
+   * before the deferred render guards against a rapid re-entrant click's stale completion
+   * revealing state that is no longer current. */
   function syncWorkspace(): void {
     if (previousManagement === "bank" && workspace.management !== "bank") {
       bankPresentation.clearSearch(); // #207: search is session-only and resets whenever Bank's page closes
@@ -409,9 +419,27 @@ export function mountApp(
       if (searchInput) searchInput.value = ""; // the DOM value isn't otherwise re-synced per-render
     }
     previousManagement = workspace.management;
-    renderWorkspace();
-    const cardCount = (workspace.characterOpen ? 1 : 0) + (workspace.management ? 1 : 0);
-    windowChrome.setCardCount(cardCount);
+
+    const desired: WorkspaceState = { ...workspace };
+    const desiredCount = (desired.characterOpen ? 1 : 0) + (desired.management ? 1 : 0);
+    const paintedCount =
+      (el<HTMLElement>("#card-character").hidden ? 0 : 1) +
+      (el<HTMLElement>("#card-management").hidden ? 0 : 1);
+
+    if (desiredCount <= paintedCount) {
+      renderWorkspace();
+    }
+
+    const completion = windowChrome.setCardCount(desiredCount); // exactly one request per action
+
+    if (desiredCount > paintedCount) {
+      void completion.then(() => {
+        const stillDesired =
+          workspace.characterOpen === desired.characterOpen &&
+          workspace.management === desired.management;
+        if (stillDesired) renderWorkspace();
+      });
+    }
   }
 
   /** "menu click" (#206): if either card is visible, closes both; otherwise opens Character alone.
@@ -453,8 +481,19 @@ export function mountApp(
    * `snapshot.production.skill` when that's one of the four PRODUCTION_SKILLS (the player is
    * actively crafting something) — otherwise the prior session selection is left alone, so
    * navigating away mid-inspection and back doesn't silently reset the picked tab back to
-   * Smithing. */
+   * Smithing.
+   *
+   * #242: re-clicking the currently active Management destination is a toggle-close, not a
+   * no-op replace-with-itself — it closes Management and leaves Character open, exactly like the
+   * Management card's own Back control. This applies to every launcher routed through
+   * `data-destination` (World, Workshop, Activity, Skills, the Character levels summary, and
+   * Expand Bank), so the branch sits at the very top, before Workshop's active-production resync
+   * and before `getCapacity()` — neither should run for a click that is actually closing. */
   async function openDestination(destination: ManagementDestination): Promise<void> {
+    if (workspace.management === destination) {
+      backToCharacter();
+      return;
+    }
     if (destination === "workshop") {
       const activeSkill = engine.snapshot().production?.skill;
       const activeDescriptor = PRODUCTION_SKILLS.find((d) => d.skill === activeSkill);
