@@ -468,15 +468,26 @@ body {
   border-radius: 6px;
   padding: 10px;
   overflow: hidden; /* backdrop layers must never push the 320px layout */
-  /* #220: #scene previously had no flex/height, so it sat at content height (~64px sprites +
+  /* #232 ground-plane contract: #scene's height is variable (`flex: 1 1 auto`, from #220 — see
+     below). Anything that must sit on the ground plane is positioned in px measured from the
+     scene's bottom, keyed to the backdrop tile's native 120px height (`--tile-h` on #backdrop) —
+     never as a percentage of the scene's height, and never left to in-flow top-alignment. #scene
+     is `display: flex; flex-direction: column; justify-content: flex-end` so its one in-flow
+     child (#sprite-row) sits at the bottom regardless of scene height; #backdrop's px-keyed
+     gradients and #activity-prop's px `bottom` (both below) follow the same contract. A prior
+     version of this comment claimed #sprite-row's own `align-items: flex-end` anchored it to the
+     scene — it doesn't; that only bottom-aligns sprites within the row's own box. #226 shipped
+     that false premise and floated the sprites ~56px above the grass (#232).
+     #220: #scene previously had no flex/height, so it sat at content height (~64px sprites +
      padding) inside #main-column's flex column, leaving empty #main-column background below the
-     sprite row — the "dead area" this issue removes. Growing to fill the remaining height (after
+     sprite row — the "dead area" that issue removed. Growing to fill the remaining height (after
      #loot-strip's own fixed height, below) spends the space wave 1/6 (#219) reclaimed by deleting
      #titlebar. min-height: 0 is load-bearing: without it a flex item refuses to shrink below its
      content size, which would starve #loot-strip instead. #backdrop is absolutely positioned
-     against #scene and already stretches to fill it, so the parallax layers scale for free; the
-     ground-anchored #sprite-row (align-items: flex-end) keeps sprites standing on the near layer
-     rather than floating mid-sky as #scene grows. */
+     against #scene and already stretches to fill it, so the parallax layers scale for free. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -519,6 +530,11 @@ body {
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  /* #232 ground-plane contract (see #scene above): every ground-relative position in the scene is
+     px, keyed off these. */
+  --tile-h: 120px; /* SPEC: native height of every backdrop tile (160×120px PNG). Not tuning. */
+  --mid-horizon: 45px; /* tuning: px above the scene's bottom where .layer-mid goes solid */
+  --near-horizon: 30px; /* tuning: px above the scene's bottom where .layer-near goes solid */
 }
 
 #backdrop .layer-sky,
@@ -547,7 +563,16 @@ body {
 
 /* Per-theme layer art (#140). Each transparent pixel-art tile sits over a matching gradient fill
    so the scene remains covered above the tile's native 160x120 strip. Layers go lightest (sky,
-   furthest) to darkest (near, closest), the classic silhouette-depth parallax look. */
+   furthest) to darkest (near, closest), the classic silhouette-depth parallax look.
+   #232: .layer-mid/.layer-near follow the ground-plane contract on #backdrop above — `to top`
+   from the bottom, stops in px keyed to --mid-horizon/--near-horizon/--tile-h, never a percentage
+   of the scene's own (variable) height. Never use the bare `transparent` keyword in these
+   gradients — it is rgba(0, 0, 0, 0), which interpolates through black in sRGB and puts a dark
+   fringe across the fade; use the explicit rgba(r, g, b, 0) form instead, matching each layer's
+   own color.
+   .layer-sky is the deliberate exception: it stays a plain two-stop percentage wash with no
+   horizon to misalign, so stretching it over a taller scene is harmless and wanted — a taller
+   scene should simply show more sky. Do not convert it to px "for consistency". */
 #backdrop[data-theme="meadow"] .layer-sky {
   background-image:
     url("./assets/backdrops/meadow-sky.png"), linear-gradient(to bottom, #86b6d8, #cfe6a8);
@@ -555,13 +580,13 @@ body {
 #backdrop[data-theme="meadow"] .layer-mid {
   background-image:
     url("./assets/backdrops/meadow-mid.png"),
-    linear-gradient(to bottom, rgba(95, 138, 79, 0) 0%, #5f8a4f 55%, #5f8a4f 100%);
+    linear-gradient(to top, #5f8a4f 0 var(--mid-horizon), rgba(95, 138, 79, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="meadow"] .layer-near {
   background-image:
     url("./assets/backdrops/meadow-near.png"),
-    linear-gradient(to bottom, rgba(44, 74, 38, 0) 0%, #2c4a26 70%, #2c4a26 100%);
+    linear-gradient(to top, #2c4a26 0 var(--near-horizon), rgba(44, 74, 38, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
@@ -572,13 +597,13 @@ body {
 #backdrop[data-theme="forest"] .layer-mid {
   background-image:
     url("./assets/backdrops/forest-mid.png"),
-    linear-gradient(to bottom, rgba(31, 58, 38, 0) 0%, #1f3a26 55%, #1f3a26 100%);
+    linear-gradient(to top, #1f3a26 0 var(--mid-horizon), rgba(31, 58, 38, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="forest"] .layer-near {
   background-image:
     url("./assets/backdrops/forest-near.png"),
-    linear-gradient(to bottom, rgba(14, 26, 16, 0) 0%, #0e1a10 70%, #0e1a10 100%);
+    linear-gradient(to top, #0e1a10 0 var(--near-horizon), rgba(14, 26, 16, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
@@ -589,13 +614,13 @@ body {
 #backdrop[data-theme="sewer"] .layer-mid {
   background-image:
     url("./assets/backdrops/sewer-mid.png"),
-    linear-gradient(to bottom, rgba(42, 42, 34, 0) 0%, #2a2a22 55%, #2a2a22 100%);
+    linear-gradient(to top, #2a2a22 0 var(--mid-horizon), rgba(42, 42, 34, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="sewer"] .layer-near {
   background-image:
     url("./assets/backdrops/sewer-near.png"),
-    linear-gradient(to bottom, rgba(20, 20, 16, 0) 0%, #141410 70%, #141410 100%);
+    linear-gradient(to top, #141410 0 var(--near-horizon), rgba(20, 20, 16, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
@@ -606,13 +631,13 @@ body {
 #backdrop[data-theme="crypt"] .layer-mid {
   background-image:
     url("./assets/backdrops/crypt-mid.png"),
-    linear-gradient(to bottom, rgba(58, 50, 66, 0) 0%, #3a3242 55%, #3a3242 100%);
+    linear-gradient(to top, #3a3242 0 var(--mid-horizon), rgba(58, 50, 66, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="crypt"] .layer-near {
   background-image:
     url("./assets/backdrops/crypt-near.png"),
-    linear-gradient(to bottom, rgba(21, 15, 28, 0) 0%, #150f1c 70%, #150f1c 100%);
+    linear-gradient(to top, #150f1c 0 var(--near-horizon), rgba(21, 15, 28, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
@@ -623,13 +648,13 @@ body {
 #backdrop[data-theme="town"] .layer-mid {
   background-image:
     url("./assets/backdrops/town-mid.png"),
-    linear-gradient(to bottom, rgba(58, 36, 21, 0) 0%, #3a2415 55%, #3a2415 100%);
+    linear-gradient(to top, #3a2415 0 var(--mid-horizon), rgba(58, 36, 21, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="town"] .layer-near {
   background-image:
     url("./assets/backdrops/town-near.png"),
-    linear-gradient(to bottom, rgba(28, 16, 8, 0) 0%, #1c1008 70%, #1c1008 100%);
+    linear-gradient(to top, #1c1008 0 var(--near-horizon), rgba(28, 16, 8, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
@@ -655,8 +680,8 @@ body {
    rest of #backdrop, never overlapping them. */
 #activity-prop {
   position: absolute;
-  right: 16%;
-  bottom: 28%;
+  right: 16%; /* #scene's width is fixed at 320px and never flexes, so a % here cannot drift */
+  bottom: var(--near-horizon); /* #232: stands on the same ground line as the sprites */
   width: 22px;
   height: 18px;
 }
