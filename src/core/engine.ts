@@ -232,8 +232,9 @@ const ELEMENT_WEAKNESS_MULT = 1.5;
 /** Pets (#120): tiny per-qualifying-action chance to roll that action's pet (see `rollPetDrop`;
  * an already-owned pet is skipped, never re-rolled). Boss pets use a higher constant: a boss kill
  * is itself a far rarer event than an ordinary kill/Catch/craft, so its own pet needs a higher
- * per-kill chance to land at a comparable real-world rate. Both are tuning, not spec — see
- * `__setPetDropChanceForTest` for how tests override them instead of grinding for real. */
+ * per-kill chance to land at a comparable real-world rate. Both are tuning, not spec — tests force
+ * or deny a roll deterministically via the injected `Rng` seam instead of grinding for real
+ * (#234). */
 const PET_DROP_CHANCE = 1 / 2000;
 const BOSS_PET_DROP_CHANCE = 1 / 300;
 
@@ -764,42 +765,6 @@ interface ModifierSource {
   pct: number;
 }
 
-/** Test-only extra sources folded into every `createEngine` instance's `activeModifierSources()`
- * (below) on top of that instance's own real potion source AND real owned-pet sources (#120).
- * Empty in production; mutable only through the test-only seam (`__setModifierSourcesForTest`). */
-const modifierSources: ModifierSource[] = [];
-
-/** Test-only injection seam for the modifier-aggregation layer (#114) — pushes a `ModifierSource`
- * onto every engine instance's `activeModifierSources()` without exposing any other Engine
- * internal. Not part of the public Engine API (no `createEngine` instance carries or needs it);
- * production code never calls this. */
-export function __setModifierSourcesForTest(sources: ModifierSource[]): void {
-  modifierSources.length = 0;
-  modifierSources.push(...sources);
-}
-
-/** Test-only override for PET_DROP_CHANCE/BOSS_PET_DROP_CHANCE (#120) — mirrors
- * `__setModifierSourcesForTest`'s seam: production code never calls this. Lets a seeded-Rng test
- * force (or reliably rule out) a pet drop deterministically instead of grinding hundreds of
- * thousands of Ticks against the real 1-in-2000/1-in-300 chance. `null` resets both back to the
- * real production constants. */
-let petDropChanceOverride: { action: number; boss: number } | null = null;
-export function __setPetDropChanceForTest(chance: { action: number; boss: number } | null): void {
-  petDropChanceOverride = chance;
-}
-
-/** The per-action pet-drop chance in effect right now: the real `PET_DROP_CHANCE` tuning
- * constant, or `__setPetDropChanceForTest`'s override when a test has set one. */
-function currentPetDropChance(): number {
-  return petDropChanceOverride?.action ?? PET_DROP_CHANCE;
-}
-
-/** Sibling to `currentPetDropChance` for boss pets — the real `BOSS_PET_DROP_CHANCE`, or the
- * test override's own `boss` value. */
-function currentBossPetDropChance(): number {
-  return petDropChanceOverride?.boss ?? BOSS_PET_DROP_CHANCE;
-}
-
 /**
  * `content`/`rng` as before; `saved` resumes a Snapshot (tolerant field-by-field load, see
  * loadState); `now` (#69) is the clock `snapshot()` stamps `savedAt` from on every call — defaults
@@ -942,12 +907,13 @@ export function createEngine(
 
   /** Every currently-active modifier source (#114): every owned pet (#120 — unconditional, no
    * slot/charges, so a fully-collected roster folds in every one of them every call) PLUS this
-   * instance's own real potion source (#118 — the active Potion Slot, when `charges > 0`) PLUS
-   * whatever `__setModifierSourcesForTest` injected. Only one potion is ever active (the single
-   * Potion Slot), so at most one potion source is ever folded in here — no same-type stacking;
-   * pets have no such limit (that's the point — see PetDef's own doc). */
+   * instance's own real potion source (#118 — the active Potion Slot, when `charges > 0`).
+   * Instance-local by construction (#234): reads only THIS Engine's `state.ownedPets` and
+   * `state.potionSlot`, so two Engines never observe each other's sources. Only one potion is ever
+   * active (the single Potion Slot), so at most one potion source is ever folded in here — no
+   * same-type stacking; pets have no such limit (that's the point — see PetDef's own doc). */
   function activeModifierSources(): ModifierSource[] {
-    const sources = [...modifierSources];
+    const sources: ModifierSource[] = [];
     for (const petId of state.ownedPets) {
       const pet = resolved.petsById.get(petId);
       if (pet) sources.push({ target: pet.target, pct: pet.boostPct });
@@ -1496,11 +1462,11 @@ export function createEngine(
       // (this branch is shared by CombatActivity and DungeonActivity alike).
       rollPetDrop(
         content.pets.filter((p) => p.source === "combat"),
-        currentPetDropChance(),
+        PET_DROP_CHANCE,
       );
       rollPetDrop(
         content.pets.filter((p) => typeof p.source === "object" && p.source.boss === monster.id),
-        currentBossPetDropChance(),
+        BOSS_PET_DROP_CHANCE,
       );
       rollDrops(monster); // wave Monsters still roll their normal Drop Table; the Chest is on top
       if (activity.kind === "dungeon") {
@@ -1734,7 +1700,7 @@ export function createEngine(
       // fires on every attempt) is the "fishing" pet's qualifying action.
       rollPetDrop(
         content.pets.filter((p) => p.source === "fishing"),
-        currentPetDropChance(),
+        PET_DROP_CHANCE,
       );
     }
   }
@@ -1765,7 +1731,7 @@ export function createEngine(
     // not attempt" rule just below.
     rollPetDrop(
       content.pets.filter((p) => p.source === "production"),
-      currentPetDropChance(),
+      PET_DROP_CHANCE,
     );
     // Charge decrement (#118): the qualifying action for a "production-speed" potion is a craft
     // COMPLETION — this point, reached every time the cooldown elapses (a craft always resolves
