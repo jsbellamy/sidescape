@@ -199,7 +199,9 @@ function skillProgress(skill: SkillSnapshot): number {
 /** The two Management Row cards (#206: replaces the three-card World/Character/Resources
  * workspace) — a fixed Character hub plus one shared Management card whose body swaps between
  * four destinations. */
-export const MANAGEMENT_DESTINATIONS = ["world", "bank", "workshop", "activity"] as const;
+// #222 — APPEND ONLY. This array's order is load-bearing (it backs the nav order and the
+// ManagementDestination union); never insert earlier, only push a new destination onto the end.
+export const MANAGEMENT_DESTINATIONS = ["world", "bank", "workshop", "activity", "skills"] as const;
 export type ManagementDestination = (typeof MANAGEMENT_DESTINATIONS)[number];
 
 /** Display labels for the Management card's own title and for the Character hub's destination
@@ -209,13 +211,20 @@ const MANAGEMENT_DESTINATION_LABELS: Record<ManagementDestination, string> = {
   bank: "Bank",
   workshop: "Workshop",
   activity: "Activity",
+  skills: "Skills",
 };
 
 /** The Character hub's own destination nav buttons, in display order (#206 "header: Character |
- * World | Workshop | Activity | Settings") — `bank` is deliberately excluded from the nav strip;
- * it's reached only via the embedded Equipment Bank tray's own "Expand Bank" button, which
- * dispatches the same destination-click path as these buttons. */
-const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = ["world", "workshop", "activity"];
+ * World | Workshop | Activity | Settings", widened by #222 to add Skills last) — `bank` is
+ * deliberately excluded from the nav strip; it's reached only via the embedded Equipment Bank
+ * tray's own "Expand Bank" button, which dispatches the same destination-click path as these
+ * buttons. */
+const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = [
+  "world",
+  "workshop",
+  "activity",
+  "skills",
+];
 
 /** Presentation-only, session-only workspace state (#206) — never persisted under any key (a
  * relaunch always starts with both cards closed) and never entering the Engine Snapshot/save.
@@ -866,8 +875,9 @@ export function mountApp(
       : "Casting: No rune loaded";
   }
 
-  /** Renders the Character hub's Pets summary (#206: "compact owned/total summary whose popover
-   * reveals the roster") — a compact `<owned>/<total>` count always visible, plus the full
+  /** Renders the Skills page's Pets summary (#206: "compact owned/total summary whose popover
+   * reveals the roster"; moved off the Character card onto the Skills destination by #222, same
+   * ids/`data-nav="pets"` hook) — a compact `<owned>/<total>` count always visible, plus the full
    * collection grid inside `#pets-popover` (one tile per `content.pets` entry, in Content order —
    * never filtered down, so the roster itself previews what's collectible). An owned pet's tile
    * renders normally; an unobtained one is dimmed via `.tile-unowned` (CSS greyscale/opacity)
@@ -979,26 +989,42 @@ export function mountApp(
     return `${label}: level ${s.level} · ${xp} xp · ${pct}% to ${s.level + 1}`;
   }
 
-  /** Renders the Skills tab panel's xp-row as a RuneScape-style icon stat grid (#135, replacing
-   * the old 3-letter abbreviation chips): one cell per Skill, in `SKILL_NAMES` order (#36) — never
-   * an inline literal, so a future Skill addition needs no change here — plus a trailing Total
-   * cell (sum of all Skill levels), 12 cells total. */
-  function renderXpRow(skills: Snapshot["player"]["skills"]): void {
-    const cells = SKILL_NAMES.map((skill) => {
+  /** XP-remaining-to-next-level label for one Skill row (#222) — floored to a whole number, "MAX"
+   * once a Skill hits `MAX_LEVEL` (mirrors `skillTooltip`'s own MAX_LEVEL special case, since
+   * there's no next threshold to count down to). */
+  function xpToNextLabel(s: SkillSnapshot): string {
+    if (s.level >= MAX_LEVEL) return "MAX";
+    const remaining = Math.max(0, Math.ceil(xpForLevel(s.level + 1) - s.xp));
+    return `${remaining} xp to next`;
+  }
+
+  /** Renders the Skills destination's own page (#222, replacing the Character card's cramped
+   * 12-tile `#xp-row` icon grid): one row per Skill, in `SKILL_NAMES` order (#36) — never an
+   * inline literal, so a future Skill addition needs no change here — each with its icon at the
+   * shared `.tile .icon` chassis's 34px (issue #168's invariant, adopted rather than re-derived),
+   * name, level, XP bar, and XP-to-next, plus a trailing Total footer row (sum of all Skill
+   * levels). Kept `.skill`/`.skill-total`/`.skill-level`/`.skill-icon` class names from the old
+   * `#xp-row` cells so the existing per-Skill styling/selectors carry over unchanged. */
+  function renderSkillsPage(skills: Snapshot["player"]["skills"]): void {
+    const rows = SKILL_NAMES.map((skill) => {
       const s = skills[skill];
       const pct = Math.floor(skillProgress(s) * 100);
-      return `<div class="skill" data-skill="${skill}" title="${skillTooltip(skill, s)}">
+      const label = skill[0]?.toUpperCase() + skill.slice(1);
+      return `<li class="skill" data-skill="${skill}" title="${skillTooltip(skill, s)}">
              <img class="skill-icon pixel" src="${skillIcon(skill)}" alt="" />
-             <span class="skill-level">${s.level}</span>
-             <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
-           </div>`;
+             <div class="skill-info">
+               <p class="skill-name">${label} <span class="skill-level">${s.level}</span></p>
+               <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
+               <p class="skill-xp-next">${xpToNextLabel(s)}</p>
+             </div>
+           </li>`;
     });
     const total = SKILL_NAMES.reduce((sum, skill) => sum + skills[skill].level, 0);
-    cells.push(`<div class="skill skill-total" title="Total level">
+    rows.push(`<li class="skill skill-total" title="Total level">
              <span class="skill-total-label">Total</span>
              <span class="skill-level">${total}</span>
-           </div>`);
-    el("#xp-row").innerHTML = cells.join("");
+           </li>`);
+    el("#skills-list").innerHTML = rows.join("");
   }
 
   /** Renders the Character tab panel: worn Gear Slots as icon tiles, derived stat totals, the
@@ -1057,6 +1083,13 @@ export function mountApp(
     const b = player.bonuses;
     el("#character-totals").textContent =
       `+${b.atkBonus} atk +${b.strBonus} str ${defVectorLabel(b.def)} spd ${b.attackSpeed}t`;
+
+    // #222: the Character card's one-line Skills summary — Combat level plus Total level (the
+    // same sum `renderSkillsPage`'s own Total footer row computes), updated on every render so it
+    // stays in lockstep with the Skills page on the same Tick.
+    el("#summary-combat-level").textContent = String(player.combatLevel);
+    const totalLevel = SKILL_NAMES.reduce((sum, skill) => sum + player.skills[skill].level, 0);
+    el("#summary-total-level").textContent = String(totalLevel);
   }
 
   /** One `.detail-strip` body — name/qty, `itemDetailLines` stats, Equip/Sell actions — shared by
@@ -1250,7 +1283,7 @@ export function mountApp(
     renderQuiver(player.quiver, bank.items);
     renderRuneSlot(player.runeSlot, bank.items, player.skills.magic.level);
     renderCastingReadout(player.spell);
-    renderXpRow(player.skills);
+    renderSkillsPage(player.skills);
     renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
     renderActivityLootZone(snap.lootZone);
@@ -1448,7 +1481,13 @@ export function mountApp(
           <div id="rune-slot" class="potion-slot"></div>
         </div>
         <p id="casting-readout" class="totals-row"></p>
-        <section id="xp-row"></section>
+        <!-- #222: the 12-tile Skills icon grid (formerly #xp-row) moved to its own Management
+             destination — this is now a one-line clickable summary reusing the existing
+             data-destination nav dispatch (#card-character's delegated handler above), so no
+             new routing code. -->
+        <button id="character-levels-summary" data-destination="skills">
+          Combat <span id="summary-combat-level"></span> · Total <span id="summary-total-level"></span> ›
+        </button>
         <div id="style-row" class="style-row">
           ${Object.entries(STYLE_LABELS)
             .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
@@ -1463,15 +1502,6 @@ export function mountApp(
           <input type="checkbox" id="autosell-duplicates-toggle" />
           Auto-sell duplicate gear
         </label>
-        <div id="pets-summary" class="pets-summary">
-          <button data-nav="pets" title="Pets" aria-expanded="false">
-            <span aria-hidden="true">🐾</span>
-            <span id="pets-summary-count"></span>
-          </button>
-          <div id="pets-popover" class="pets-popover" hidden>
-            <div id="pets-grid" class="tile-grid"></div>
-          </div>
-        </div>
       </div>
       <div class="card-scroll">
         <div id="character-bank-tray" class="tile-grid"></div>
@@ -1582,6 +1612,25 @@ export function mountApp(
         <div data-bank-page="vendor" class="card-scroll" hidden>
           <p class="panel-title">Vendor</p>
           <ul id="vendor-list"></ul>
+        </div>
+      </div>
+      <!-- The Skills destination (#222): decrowds the Character card by giving the 11
+           SKILL_NAMES their own roomy one-row-per-Skill list plus the pets collection strip,
+           both formerly crammed onto the Character card. Own fixed shell mirroring
+           World/Bank/Workshop/Activity above — only the Skill list scrolls, the pets strip stays
+           put. See styles.css's .skills-page-body. -->
+      <div data-management-page="skills" class="skills-page-body" hidden>
+        <ul id="skills-list" class="card-scroll"></ul>
+        <div class="card-fixed">
+          <div id="pets-summary" class="pets-summary">
+            <button data-nav="pets" title="Pets" aria-expanded="false">
+              <span aria-hidden="true">🐾</span>
+              <span id="pets-summary-count"></span>
+            </button>
+            <div id="pets-popover" class="pets-popover" hidden>
+              <div id="pets-grid" class="tile-grid"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1779,16 +1828,28 @@ export function mountApp(
   // closing both cards — see `onMenuToggle`'s own doc comment above.
   el("#menu-toggle").addEventListener("click", onMenuToggle);
 
-  // Management card's Back control (#206): always returns to Character alone, whether one or two
-  // cards were showing.
+  // Management card's Back control (#206) and Skills page's Pets popover toggle (#222: pets moved
+  // off the Character card onto the Skills destination, so its `data-nav="pets"` hook now lives
+  // inside `#card-management` — same toggle shape as the Character hub's own Settings popover
+  // below).
   el("#card-management").addEventListener("click", (event) => {
-    if ((event.target as HTMLElement).closest("[data-management-back]")) backToCharacter();
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-management-back]")) {
+      backToCharacter();
+      return;
+    }
+    const navBtn = target.closest<HTMLElement>("[data-nav]");
+    if (navBtn?.dataset["nav"] === "pets") {
+      openPetsPopover = !openPetsPopover;
+      renderWorkspace();
+    }
   });
 
-  // Character hub's own header nav / Expand Bank / Settings / Pets popovers (#206), delegated on
+  // Character hub's own header nav / Expand Bank / Settings popover (#206), delegated on
   // the whole card so nested `<img>`/`<span>` clicks resolve via `closest`. Checked in a stable
-  // order: a destination click (World/Workshop/Activity nav buttons, or the Bank tray's "Expand
-  // Bank" button — both carry `data-destination`) before the Settings/Pets popover toggles.
+  // order: a destination click (World/Workshop/Activity/Skills nav buttons, the Skills summary
+  // line, or the Bank tray's "Expand Bank" button — all carry `data-destination`) before the
+  // Settings popover toggle.
   el("#card-character").addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
     const scaleValue = target.closest<HTMLButtonElement>("[data-ui-scale]")?.dataset["uiScale"];
@@ -1807,9 +1868,6 @@ export function mountApp(
     const nav = navBtn.dataset["nav"];
     if (nav === "settings") {
       openSettings = !openSettings;
-      renderWorkspace();
-    } else if (nav === "pets") {
-      openPetsPopover = !openPetsPopover;
       renderWorkspace();
     }
   });
