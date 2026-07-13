@@ -1,68 +1,107 @@
-/** One shared **Loadout Slot** renderer + dispatcher (#183): Food Slots, the Potion Slot, the
- * Quiver, and the Rune Pouch (see CONTEXT.md's Loadout Slot entry) all render the identical
- * filled-tile / empty-`[+]` / chooser-filtered-from-Bank shape and dispatch clicks in the same
- * unassign → (eat) → assign → open-chooser order. `app.ts`'s four render functions and four click
- * listeners now each build a small per-kind config and hand it to `loadoutSlotMarkup` /
- * `createLoadoutSlotDispatcher` below, mirroring how `production.ts` (#181) unified the four
- * Production Skill panels into one descriptor-backed module. Pure string/function building blocks
- * — no DOM access, no Engine calls — so they're unit-testable without mounting `app.ts`. */
+/** The deep, mounted Loadout Slot UI module (#235): owns all four Loadout Slot kinds — the three
+ * indexed Food Slots, the Potion Slot, the Quiver, and the Rune Slot (see CONTEXT.md's Loadout
+ * Slot entry) — end to end. Where the pre-#235 shape split "shared markup shell" (this file) from
+ * "everything that matters" (four render functions, four click listeners, chooser state, Item
+ * filtering, Rune-level gating; all in app.ts), `createLoadoutSlotUi` now owns the whole thing:
+ * chooser state and its at-most-one-open transition rules, Bank Item eligibility per kind, Rune
+ * Spell-level gating, tile markup, one delegated DOM listener per root, and the exact Engine
+ * command dispatch. `mountApp` constructs one instance after painting its own HTML shell and calls
+ * one `render()` method going forward — see app.ts's own call site. */
 
-/** One chooser row: the Bank stack's Item id (the assign button's dataset value) and its already-
- * formatted label (e.g. "Trout ×5", built by app.ts's own `itemName`/qty formatting). */
-export interface LoadoutSlotChooserItem {
+import type { Engine } from "../core/engine";
+import type { Snapshot } from "../core/types";
+import type { ResolvedContent } from "../core/validate-content";
+
+/** The slice of `Snapshot["player"]` every Loadout Slot kind's render/gating logic reads —
+ * `skills` for the Rune Slot's Magic-level gate, the rest for each kind's own filled/empty state. */
+export type LoadoutSlotPlayer = Pick<
+  Snapshot["player"],
+  "foodSlots" | "potionSlot" | "quiver" | "runeSlot" | "skills"
+>;
+
+/** The exact Engine commands this module dispatches — nothing more, so a caller can hand in the
+ * real Engine (a superset) without this module gaining access to unrelated commands. */
+export type LoadoutSlotCommands = Pick<
+  Engine,
+  | "assignFoodSlot"
+  | "unassignFoodSlot"
+  | "eatFromSlot"
+  | "assignPotionSlot"
+  | "unassignPotionSlot"
+  | "loadQuiver"
+  | "unloadQuiver"
+  | "loadRuneSlot"
+  | "unloadRuneSlot"
+>;
+
+export interface LoadoutSlotUi {
+  /** Repaints all six tiles (3 Food + Potion + Quiver + Rune) from the latest Snapshot slice,
+   * reflecting whichever chooser (if any) is currently open. Call on every app-level render, same
+   * as any other Snapshot-driven paint — chooser state lives in this module's own closure, not the
+   * Snapshot, so repeated calls with unchanged chooser state repaint identically. */
+  render(player: LoadoutSlotPlayer, bankItems: Snapshot["bank"]["items"]): void;
+}
+
+export interface LoadoutSlotUiOptions {
+  /** The element `#character-food-slots`/`#potion-slot`/`#quiver-slot`/`#rune-slot` are queried
+   * from — `mountApp`'s own root, constructed after it has painted `root.innerHTML`. */
+  root: HTMLElement;
+  content: ResolvedContent;
+  commands: LoadoutSlotCommands;
+  /** The shared icon+qty-badge tile body (app.ts's own `tileMarkup`) — kept as an injected
+   * function rather than duplicated here, so every tile in the app (Gear Slots, Bank, Loadout
+   * Slots) renders from one implementation. */
+  tileMarkup(itemId: string, qty: number): string;
+  /** Called exactly once per handled click (an unassign, an eat, an assign, or a chooser
+   * open/close toggle) — never for an irrelevant click. `mountApp` wires this to its own top-level
+   * `render()`, so a Loadout Slot action reaches the rest of the app the same way every other
+   * Engine-command click does. */
+  onChanged(): void;
+}
+
+/** Which Loadout Slot chooser (if any) is open — one discriminated value instead of four
+ * independent booleans, which is what makes "at most one open at a time" a structural guarantee
+ * rather than a rule four separate booleans have to be kept in sync by hand. */
+type OpenLoadoutChooser =
+  | { kind: "food"; slotIndex: number }
+  | { kind: "potion" }
+  | { kind: "quiver" }
+  | { kind: "rune" }
+  | null;
+
+/** One Bank stack's already-formatted chooser row: the assign button's `data-*` item id and its
+ * label, with an optional real `disabled` (the Rune Slot's Magic-level gate — the only kind that
+ * ever sets it). */
+interface ChooserRow {
   itemId: string;
   label: string;
-  /** Renders this row's button `disabled` (#221's Rune Slot chooser: a rune whose Spell is above
-   * the player's Magic level). A disabled button never dispatches a click event, so this is the
-   * actual gate — not just a visual one — with the Engine's own throw as the backstop. Omitted
-   * (falsy) for every other Loadout Slot kind, which never gates its chooser rows. */
   disabled?: boolean;
 }
 
-/** Everything one Loadout Slot tile (filled or empty) needs to render. Every field is a fully
- * pre-built class name or `data-*` attribute string (or empty string, for the attribute that
- * doesn't apply to that kind) — the config is where the four kinds' differences live; the
- * markup shape itself is single-sourced in `loadoutSlotMarkup`. */
-export interface LoadoutSlotTileConfig {
-  /** Outer wrapper class, shared by filled/empty: `"food-slot"` or `"potion-slot-tile"`. */
+/** Everything one tile (filled or empty) needs — the shape the four kinds differ on; the markup
+ * itself is single-sourced in `tileShellMarkup`. Kept private: #235 deletes the old exported
+ * `LoadoutSlotTileConfig` along with every other shallow helper this module used to hand to
+ * app.ts. */
+interface TileShellConfig {
   wrapperClass: string;
-  /** Extra attribute on the wrapper identifying which slot this is, e.g. `data-slot="0"` (Food) or
-   * `data-element="air"` (Rune Pouch); `""` for the singular Potion Slot/Quiver. */
   keyAttr: string;
-  /** Fully-built inner markup for the filled state (the tile itself, already using app.ts's own
-   * `tileMarkup`/icon helpers) — Food wraps it in a click-to-eat `<button>`, the others in a plain
-   * `<div>`; Potion appends its charges badge. Built by the caller, not this module. */
   filledInner: string;
-  /** Class on the filled state's ✕ button, e.g. `"food-slot-unassign"` or `"potion-slot-unassign"`. */
   unassignClass: string;
-  /** The ✕ button's `data-*-unassign` attribute, with any value it carries. */
   unassignAttr: string;
-  /** The ✕ button's tooltip: `"Unassign"` (Food/Potion) or `"Unload"` (Quiver/Rune Pouch). */
   unassignTitle: string;
-  /** Class on the empty state's `[+]` button, e.g. `"food-slot-add"` or `"potion-slot-add"`. */
   addClass: string;
-  /** The `[+]` button's `data-*-add` attribute, with any value it carries. */
   addAttr: string;
-  /** Class on the chooser wrapper div, e.g. `"food-slot-chooser"` or `"potion-slot-chooser"`. */
   chooserClass: string;
-  /** Whether this slot's chooser is currently open (presentation-only UI state owned by app.ts). */
   chooserOpen: boolean;
-  /** The Bank stacks eligible for this slot, already filtered by kind (and Element, for the Rune
-   * Pouch) by the caller. */
-  chooserItems: LoadoutSlotChooserItem[];
-  /** Builds one chooser button's `data-*` attribute(s) for a given Item id — Food's assign button
-   * carries both the slot index and the item id (`data-assign="0" data-item="trout"`); the other
-   * three kinds carry only the item id (`data-potion-assign="strength-potion"`). */
+  chooserItems: ChooserRow[];
   assignAttr: (itemId: string) => string;
-  /** Hint text shown instead of buttons when the chooser is open but `chooserItems` is empty, e.g.
-   * `"No Food in Bank"` or `"No air Runes in Bank"`. */
   emptyHint: string;
 }
 
-/** The shared filled/empty/chooser tile shape (#183) — byte-for-byte what each of
- * `renderFoodSlots`/`renderPotionSlot`/`renderQuiver`/`renderRunePouch` built by hand before this
- * module unified them. `filled` selects which of the two states to render for this tile. */
-export function loadoutSlotMarkup(config: LoadoutSlotTileConfig, filled: boolean): string {
+/** The shared filled/empty/chooser tile shape, byte-for-byte what the pre-#235 exported
+ * `loadoutSlotMarkup` produced — preserves every existing selector/class/data-attribute contract
+ * CSS and the e2e loadout-row spec depend on. */
+function tileShellMarkup(config: TileShellConfig, filled: boolean): string {
   const keyAttr = config.keyAttr ? ` ${config.keyAttr}` : "";
 
   if (filled) {
@@ -93,66 +132,314 @@ export function loadoutSlotMarkup(config: LoadoutSlotTileConfig, filled: boolean
           </div>`;
 }
 
-/** Which `data-*` attribute (as its `dataset` camelCase property name) carries each action for one
- * Loadout Slot kind. `assignItem` is set only for Food, whose assign button carries the item id in
- * a separate `data-item` attribute alongside `data-assign`'s slot index; the other three kinds
- * carry the item id directly in their own assign attribute. `eat` is set only for Food. */
-export interface LoadoutSlotDatasetKeys {
-  unassign: string;
-  eat?: string;
-  assign: string;
-  assignItem?: string;
-  add: string;
-}
+export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotUi {
+  const { root, content, commands, tileMarkup, onChanged } = options;
 
-/** Per-kind callbacks the dispatcher invokes once it has decided which action fired. Each receives
- * the raw dataset string value(s) — parsing (e.g. `Number()` for Food's index) and the actual
- * Engine command call stay in app.ts, alongside the chooser-state/`render()` side effects, since
- * those differ per kind and are not part of the shared dispatch shape. */
-export interface LoadoutSlotHandlers {
-  onUnassign: (value: string) => void;
-  onEat?: (value: string) => void;
-  onAssign: (value: string, itemId: string) => void;
-  onAdd: (value: string) => void;
-}
+  // Session-only chooser state, private to this mounted instance (#235's "two instances never
+  // share state" requirement) — never part of the Snapshot/save, mirroring the pre-#235 booleans'
+  // own boundary.
+  let openChooser: OpenLoadoutChooser = null;
 
-/** One dispatcher factory (#183) for all four Loadout Slot click listeners, preserving each
- * kind's exact former dispatch order: unassign check, then (Food only) the click-to-eat check,
- * then the chooser-pick assign check, then the `[+]` open-chooser toggle. Returns a plain
- * `(event) => void` handler suitable for `el(...).addEventListener("click", ...)`. */
-export function createLoadoutSlotDispatcher(
-  keys: LoadoutSlotDatasetKeys,
-  handlers: LoadoutSlotHandlers,
-): (event: Event) => void {
-  return (event: Event) => {
+  function el<T extends HTMLElement>(selector: string): T {
+    return root.querySelector(selector) as T;
+  }
+
+  function itemName(itemId: string): string {
+    return content.itemsById.get(itemId)?.name ?? itemId;
+  }
+
+  function foodSlotsMarkup(
+    foodSlots: LoadoutSlotPlayer["foodSlots"],
+    bankItems: Snapshot["bank"]["items"],
+  ): string {
+    const foodStacks = bankItems.filter((s) => content.itemsById.get(s.itemId)?.kind === "food");
+    const chooserItems: ChooserRow[] = foodStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+
+    return foodSlots
+      .map((slot, i) =>
+        tileShellMarkup(
+          {
+            wrapperClass: "food-slot",
+            keyAttr: `data-slot="${i}"`,
+            filledInner: slot
+              ? `<button class="food-slot-eat tile" data-eat="${i}" data-item="${slot.itemId}">
+                   ${tileMarkup(slot.itemId, slot.qty)}
+                 </button>`
+              : "",
+            unassignClass: "food-slot-unassign",
+            unassignAttr: `data-unassign="${i}"`,
+            unassignTitle: "Unassign",
+            addClass: "food-slot-add",
+            addAttr: `data-add="${i}"`,
+            chooserClass: "food-slot-chooser",
+            chooserOpen: openChooser?.kind === "food" && openChooser.slotIndex === i,
+            chooserItems,
+            assignAttr: (itemId) => `data-assign="${i}" data-item="${itemId}"`,
+            emptyHint: "No Food in Bank",
+          },
+          slot !== null,
+        ),
+      )
+      .join("");
+  }
+
+  function renderFoodSlots(
+    foodSlots: LoadoutSlotPlayer["foodSlots"],
+    bankItems: Snapshot["bank"]["items"],
+  ): void {
+    el("#character-food-slots").innerHTML = foodSlotsMarkup(foodSlots, bankItems);
+  }
+
+  function renderPotionSlot(
+    potionSlot: LoadoutSlotPlayer["potionSlot"],
+    bankItems: Snapshot["bank"]["items"],
+  ): void {
+    const potionStacks = bankItems.filter(
+      (s) => content.itemsById.get(s.itemId)?.kind === "potion",
+    );
+    const chooserItems: ChooserRow[] = potionStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+    const filledInner = potionSlot
+      ? (() => {
+          const def = content.itemsById.get(potionSlot.itemId);
+          const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
+          return `<div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
+                  <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>`;
+        })()
+      : "";
+
+    el("#potion-slot").innerHTML = tileShellMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-potion-unassign",
+        unassignTitle: "Unassign",
+        addClass: "potion-slot-add",
+        addAttr: "data-potion-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openChooser?.kind === "potion",
+        chooserItems,
+        assignAttr: (itemId) => `data-potion-assign="${itemId}"`,
+        emptyHint: "No Potions in Bank",
+      },
+      potionSlot !== null,
+    );
+  }
+
+  function renderQuiver(
+    quiver: LoadoutSlotPlayer["quiver"],
+    bankItems: Snapshot["bank"]["items"],
+  ): void {
+    const arrowStacks = bankItems.filter((s) => {
+      const def = content.itemsById.get(s.itemId);
+      return def?.kind === "ammo" && def.ammoType === "arrow";
+    });
+    const chooserItems: ChooserRow[] = arrowStacks.map((s) => ({
+      itemId: s.itemId,
+      label: `${itemName(s.itemId)} ×${s.qty}`,
+    }));
+    const filledInner = quiver
+      ? `<div class="tile" data-item="${quiver.itemId}">${tileMarkup(quiver.itemId, quiver.qty)}</div>`
+      : "";
+
+    el("#quiver-slot").innerHTML = tileShellMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-quiver-unassign",
+        unassignTitle: "Unload",
+        addClass: "potion-slot-add",
+        addAttr: "data-quiver-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openChooser?.kind === "quiver",
+        chooserItems,
+        assignAttr: (itemId) => `data-quiver-assign="${itemId}"`,
+        emptyHint: "No Arrows in Bank",
+      },
+      quiver !== null,
+    );
+  }
+
+  function renderRuneSlot(
+    runeSlot: LoadoutSlotPlayer["runeSlot"],
+    bankItems: Snapshot["bank"]["items"],
+    magicLevel: number,
+  ): void {
+    const runeStacks = bankItems.filter((s) => {
+      const def = content.itemsById.get(s.itemId);
+      return def?.kind === "ammo" && def.ammoType === "rune";
+    });
+    const chooserItems: ChooserRow[] = runeStacks.map((s) => {
+      const spell = content.spells.find((sp) => sp.runeId === s.itemId);
+      const gated = spell !== undefined && magicLevel < spell.levelReq;
+      return {
+        itemId: s.itemId,
+        label: `${itemName(s.itemId)} ×${s.qty}${gated ? ` <span class="rune-req">Lv ${spell.levelReq}</span>` : ""}`,
+        disabled: gated,
+      };
+    });
+    const filledInner = runeSlot
+      ? `<div class="tile" data-item="${runeSlot.itemId}">${tileMarkup(runeSlot.itemId, runeSlot.qty)}</div>`
+      : "";
+
+    el("#rune-slot").innerHTML = tileShellMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-rune-unassign",
+        unassignTitle: "Unload",
+        addClass: "potion-slot-add",
+        addAttr: "data-rune-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openChooser?.kind === "rune",
+        chooserItems,
+        assignAttr: (itemId) => `data-rune-assign="${itemId}"`,
+        emptyHint: "No Runes in Bank",
+      },
+      runeSlot !== null,
+    );
+  }
+
+  function render(player: LoadoutSlotPlayer, bankItems: Snapshot["bank"]["items"]): void {
+    renderFoodSlots(player.foodSlots, bankItems);
+    renderPotionSlot(player.potionSlot, bankItems);
+    renderQuiver(player.quiver, bankItems);
+    renderRuneSlot(player.runeSlot, bankItems, player.skills.magic.level);
+  }
+
+  // Food Slot bar: dispatch order is load-bearing — unassign (✕) is checked before the slot-level
+  // eat, so unassigning never also eats; a chooser pick is checked before the [+] toggle so
+  // picking a Food both assigns it and doesn't re-toggle the chooser.
+  el("#character-food-slots").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
 
-    const unassignValue = target.dataset[keys.unassign];
+    const unassignValue = target.dataset["unassign"];
     if (unassignValue !== undefined) {
-      handlers.onUnassign(unassignValue);
+      commands.unassignFoodSlot(Number(unassignValue));
+      openChooser = null;
+      onChanged();
       return;
     }
 
-    if (keys.eat !== undefined) {
-      const eatValue = target.dataset[keys.eat];
-      if (eatValue !== undefined) {
-        handlers.onEat?.(eatValue);
-        return;
-      }
+    const eatValue = target.dataset["eat"];
+    if (eatValue !== undefined) {
+      commands.eatFromSlot(Number(eatValue));
+      onChanged();
+      return;
     }
 
-    const assignValue = target.dataset[keys.assign];
+    const assignValue = target.dataset["assign"];
     if (assignValue !== undefined) {
-      const itemId = keys.assignItem !== undefined ? target.dataset[keys.assignItem] : assignValue;
+      const itemId = target.dataset["item"];
       if (itemId !== undefined) {
-        handlers.onAssign(assignValue, itemId);
+        commands.assignFoodSlot(Number(assignValue), itemId);
+        openChooser = null;
+        onChanged();
         return;
       }
     }
 
-    const addValue = target.dataset[keys.add];
+    const addValue = target.dataset["add"];
     if (addValue !== undefined) {
-      handlers.onAdd(addValue);
+      const slotIndex = Number(addValue);
+      const alreadyOpen = openChooser?.kind === "food" && openChooser.slotIndex === slotIndex;
+      openChooser = alreadyOpen ? null : { kind: "food", slotIndex }; // re-click dismisses
+      onChanged();
     }
-  };
+  });
+
+  // Potion Slot tile: dispatch order mirrors the Food Slot bar above — unassign (✕) is checked
+  // before a chooser pick, which is checked before the [+] toggle.
+  el("#potion-slot").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.dataset["potionUnassign"] !== undefined) {
+      commands.unassignPotionSlot(); // logs nothing; no feed line for unassign (mirrors Food Slot)
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    const itemId = target.dataset["potionAssign"];
+    if (itemId !== undefined) {
+      commands.assignPotionSlot(itemId);
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    if (target.dataset["potionAdd"] !== undefined) {
+      const alreadyOpen = openChooser?.kind === "potion";
+      openChooser = alreadyOpen ? null : { kind: "potion" }; // re-click dismisses
+      onChanged();
+    }
+  });
+
+  // Quiver tile: dispatch order mirrors the Potion Slot above — unassign (✕) before a chooser
+  // pick, before the [+] toggle.
+  el("#quiver-slot").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.dataset["quiverUnassign"] !== undefined) {
+      commands.unloadQuiver(); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    const itemId = target.dataset["quiverAssign"];
+    if (itemId !== undefined) {
+      commands.loadQuiver(itemId);
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    if (target.dataset["quiverAdd"] !== undefined) {
+      const alreadyOpen = openChooser?.kind === "quiver";
+      openChooser = alreadyOpen ? null : { kind: "quiver" }; // re-click dismisses
+      onChanged();
+    }
+  });
+
+  // Rune Slot tile: dispatch order mirrors the Quiver above — unassign (✕) before a chooser pick,
+  // before the [+] toggle. A gated (disabled) chooser row never fires click at all, so
+  // `loadRuneSlot`'s own "magic level too low" throw is a backstop, never the primary gate.
+  el("#rune-slot").addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.dataset["runeUnassign"] !== undefined) {
+      commands.unloadRuneSlot(); // logs nothing; no feed line for unload (mirrors Quiver)
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    const itemId = target.dataset["runeAssign"];
+    if (itemId !== undefined) {
+      commands.loadRuneSlot(itemId);
+      openChooser = null;
+      onChanged();
+      return;
+    }
+
+    if (target.dataset["runeAdd"] !== undefined) {
+      const alreadyOpen = openChooser?.kind === "rune";
+      openChooser = alreadyOpen ? null : { kind: "rune" }; // re-click dismisses
+      onChanged();
+    }
+  });
+
+  return { render };
 }
