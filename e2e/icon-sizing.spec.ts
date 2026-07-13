@@ -4,7 +4,8 @@ import { expect, test } from "@playwright/test";
 // src/ui/styles-compact-minimum.test.ts) only asserts the stylesheet's own rule text. This spec
 // is the real-layout half — it proves the fixed 34px icon chassis actually measures 34×34 in a
 // real browser, at both the shared `.tile .icon` seam and the two audited consumers (#220's
-// `.loot-chip` and #xp-row's `.skill-icon`) that used to render below 34px.
+// `.loot-chip` and the Skills page's `.skill-icon`, formerly `#xp-row`'s, moved by #222) that used
+// to render below 34px.
 
 const SAVE_KEY = "sidescape-save-v1";
 
@@ -26,7 +27,7 @@ async function seedBankAndLoot(page: import("@playwright/test").Page): Promise<v
   );
 }
 
-test("`.tile .icon` boxes measure exactly 34x34 in the Bank grid, the Loot Strip chip, and the xp-row skill chip", async ({
+test("`.tile .icon` boxes measure exactly 34x34 in the Bank grid, the Loot Strip chip, and the Skills page's skill icon", async ({
   page,
 }) => {
   await seedBankAndLoot(page);
@@ -48,8 +49,10 @@ test("`.tile .icon` boxes measure exactly 34x34 in the Bank grid, the Loot Strip
   expect(bankBox?.width).toBe(34);
   expect(bankBox?.height).toBe(34);
 
-  // xp-row skill chip (Character hub, `.skill-icon` — was 17px, a 0.5x downscale).
-  const skillIcon = page.locator("#xp-row .skill-icon").first();
+  // Skills page skill row icon (Management card's `skills` destination, `.skill-icon` — was
+  // 17px on the Character card's old #xp-row, a 0.5x downscale, before #222 moved it here).
+  await page.locator('#character-nav [data-destination="skills"]').click();
+  const skillIcon = page.locator("#skills-list .skill-icon").first();
   await expect(skillIcon).toBeVisible();
   const skillBox = await skillIcon.boundingBox();
   expect(skillBox?.width).toBe(34);

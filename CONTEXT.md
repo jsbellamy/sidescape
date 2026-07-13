@@ -167,7 +167,7 @@ creates child windows; it contains the Compact Widget and the Management Row.
 **Management Row**:
 The horizontal row of zero to two opaque management cards: the fixed
 Character hub and one shared Management card whose body swaps between the
-`world`/`bank`/`workshop`/`activity` destinations. Each card is 300px wide and
+`world`/`bank`/`workshop`/`activity`/`skills` destinations. Each card is 300px wide and
 cards are separated by an 8px gap; the row is vertically adjacent to the
 Compact Widget within Cards-on-Glass.
 

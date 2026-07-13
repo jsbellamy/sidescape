@@ -51,6 +51,12 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   await page.screenshot({ path: `${screenshots}/workshop.png`, fullPage: true });
   await page.locator('[data-destination="activity"]').click();
   await page.screenshot({ path: `${screenshots}/activity.png`, fullPage: true });
+  // #222: the fifth Skills destination — a roomy one-row-per-Skill list plus the pets strip,
+  // moved off the Character card. `[data-destination="skills"]` also matches the Character card's
+  // own `#character-levels-summary` button (both dispatch the same nav path), so this scopes to
+  // the Character hub's nav strip specifically, mirroring the other four destination clicks above.
+  await page.locator('#character-nav [data-destination="skills"]').click();
+  await page.screenshot({ path: `${screenshots}/skills.png`, fullPage: true });
 
   // #206: workspace state is session-only — no `sidescape-ui-workspace-v2` key is ever written —
   // so both cards deliberately close on a fresh boot/reload with nothing to recover.

@@ -792,25 +792,36 @@ describe("XP progress bars", () => {
   });
 });
 
-describe("Skills panel icon grid (#135: replaces the abbreviation-chip xp-row)", () => {
-  it("renders 12 cells: all 11 SKILL_NAMES in order via data-skill, then the Total cell last", () => {
+describe("Skills page (#222: replaces the Character card's abbreviation-chip xp-row)", () => {
+  it("renders 12 rows: all 11 SKILL_NAMES in order via data-skill, then the Total row last", () => {
     const { root } = mount(1);
-    const cells = [...root.querySelectorAll<HTMLElement>("#xp-row .skill")];
-    expect(cells).toHaveLength(12);
-    expect(cells.map((c) => c.dataset["skill"])).toEqual([...SKILL_NAMES, undefined]);
-    expect(cells[11]?.classList.contains("skill-total")).toBe(true);
+    const rows = [...root.querySelectorAll<HTMLElement>("#skills-list .skill")];
+    expect(rows).toHaveLength(12);
+    expect(rows.map((c) => c.dataset["skill"])).toEqual([...SKILL_NAMES, undefined]);
+    expect(rows[11]?.classList.contains("skill-total")).toBe(true);
   });
 
-  it("gives every Skill cell's icon a non-empty src", () => {
+  it("gives every Skill row's icon a non-empty src, sized by the shared 34px .skill-icon chassis (#168)", () => {
     const { root } = mount(1);
-    const imgs = [...root.querySelectorAll<HTMLImageElement>("#xp-row .skill[data-skill] img")];
+    const imgs = [
+      ...root.querySelectorAll<HTMLImageElement>("#skills-list .skill[data-skill] img"),
+    ];
     expect(imgs).toHaveLength(11);
     for (const img of imgs) {
       expect(img.getAttribute("src")).toBeTruthy();
+      expect(img.classList.contains("skill-icon")).toBe(true); // styles.css fixes this class at 34px
     }
   });
 
-  it("shows the Total cell as the sum of all 11 Skill levels, and updates it after a level-up Tick", () => {
+  it("shows each row's Skill name alongside its level and XP-to-next", () => {
+    const { root } = mount(1);
+    const attackRow = root.querySelector<HTMLElement>('#skills-list [data-skill="attack"]');
+    expect(attackRow?.querySelector(".skill-name")?.textContent).toMatch(/^Attack/);
+    expect(attackRow?.querySelector(".skill-level")?.textContent).toBe("1");
+    expect(attackRow?.querySelector(".skill-xp-next")?.textContent).toMatch(/to next/i);
+  });
+
+  it("shows the Total row as the sum of all 11 Skill levels, and updates it after a level-up Tick", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -827,8 +838,10 @@ describe("Skills panel icon grid (#135: replaces the abbreviation-chip xp-row)",
 
     const before = engine.snapshot().player.skills;
     const expectedBefore = SKILL_NAMES.reduce((sum, s) => sum + before[s].level, 0);
-    const totalCell = root.querySelector<HTMLElement>("#xp-row .skill-total .skill-level");
+    const totalCell = root.querySelector<HTMLElement>("#skills-list .skill-total .skill-level");
     expect(totalCell?.textContent).toBe(String(expectedBefore));
+    // The same Total also drives the Character card's one-line summary (#222).
+    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedBefore));
 
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     for (let i = 0; i < 20; i++) engine.tick();
@@ -837,10 +850,44 @@ describe("Skills panel icon grid (#135: replaces the abbreviation-chip xp-row)",
     const after = engine.snapshot().player.skills;
     const expectedAfter = SKILL_NAMES.reduce((sum, s) => sum + after[s].level, 0);
     expect(after.attack.level).toBeGreaterThan(before.attack.level); // sanity: a level-up did occur
-    expect(root.querySelector<HTMLElement>("#xp-row .skill-total .skill-level")?.textContent).toBe(
-      String(expectedAfter),
-    );
+    expect(
+      root.querySelector<HTMLElement>("#skills-list .skill-total .skill-level")?.textContent,
+    ).toBe(String(expectedAfter));
+    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedAfter));
     expect(expectedAfter).toBeGreaterThan(expectedBefore);
+  });
+
+  it("#xp-row no longer exists on the Character card", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#xp-row")).toBeNull();
+  });
+});
+
+describe("Character card levels summary (#222)", () => {
+  it("is a button that shows the live Combat level and Total level, and dispatches the skills destination", async () => {
+    const { root } = mount(1);
+    const summary = root.querySelector<HTMLButtonElement>("#character-levels-summary");
+    expect(summary?.tagName).toBe("BUTTON");
+    expect(summary?.dataset["destination"]).toBe("skills");
+    expect(root.querySelector("#summary-combat-level")?.textContent).not.toBe("");
+    expect(root.querySelector("#summary-total-level")?.textContent).not.toBe("");
+
+    summary?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="skills"]')?.hidden).toBe(
+        false,
+      ),
+    );
+    expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false);
+  });
+
+  it("shows the exact Combat level from the Snapshot", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(root.querySelector("#summary-combat-level")?.textContent).toBe(
+      String(engine.snapshot().player.combatLevel),
+    );
   });
 });
 
@@ -909,7 +956,40 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
     expect(pageHidden(root, "bank")).toBe(true);
     expect(pageHidden(root, "workshop")).toBe(true);
     expect(pageHidden(root, "activity")).toBe(true);
+    expect(pageHidden(root, "skills")).toBe(true);
     expect(destinationBtn(root, "world")?.classList.contains("active")).toBe(true);
+  });
+
+  it("the Skills destination (#222) behaves identically to the other four: opens alongside Character at capacity 2, and its nav button reuses an existing icon", async () => {
+    const { root } = mountWithChrome(noopWindowChrome);
+    destinationBtn(root, "skills")?.click();
+
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(cardHidden(root, "card-character")).toBe(false);
+    expect(pageHidden(root, "skills")).toBe(false);
+    expect(pageHidden(root, "world")).toBe(true);
+    expect(destinationBtn(root, "skills")?.classList.contains("active")).toBe(true);
+    const icon = destinationBtn(root, "skills")?.querySelector<HTMLImageElement>("img.tab-icon");
+    expect(icon?.getAttribute("src")).toBeTruthy();
+
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(false);
+  });
+
+  it("at capacity 1, the Skills destination replaces Character outright, and Back restores it (mirrors the other four destinations)", async () => {
+    const { chrome } = spyWindowChrome(1);
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    expect(cardHidden(root, "card-character")).toBe(false);
+
+    destinationBtn(root, "skills")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(cardHidden(root, "card-character")).toBe(true);
+
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(cardHidden(root, "card-character")).toBe(false);
+    expect(cardHidden(root, "card-management")).toBe(true);
   });
 
   it("selecting another destination replaces the Management card's body, without touching Character", async () => {
@@ -1407,7 +1487,7 @@ describe("Hidden pages keep rendering every Tick (#206: visibility never stales 
 });
 
 describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank tray scrolls)", () => {
-  it("every seven Gear Slots, the Loadout Slot grid, the Skills grid, compact controls, and the Equipment Bank tray are all present with no player portrait", () => {
+  it("every seven Gear Slots, the Loadout Slot grid, the levels summary, compact controls, and the Equipment Bank tray are all present with no player portrait", () => {
     const { root } = mount(1);
     for (const slot of ["weapon", "shield", "head", "body", "legs", "amulet", "ring"]) {
       expect(root.querySelector(`[data-slot="${slot}"]`)).not.toBeNull();
@@ -1417,11 +1497,13 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(root.querySelector("#quiver-slot")).not.toBeNull();
     expect(root.querySelector("#rune-slot")).not.toBeNull();
     expect(root.querySelector("#casting-readout")).not.toBeNull();
-    expect(root.querySelector("#xp-row")).not.toBeNull();
+    expect(root.querySelector("#character-levels-summary")).not.toBeNull(); // #222: replaces #xp-row
     expect(root.querySelector("#style-row")).not.toBeNull();
     expect(root.querySelector("#autoeat-row")).not.toBeNull();
     expect(root.querySelector("#autosell-duplicates-row")).not.toBeNull();
-    expect(root.querySelector("#pets-summary")).not.toBeNull();
+    // #222: Pets moved to the Skills page — still present in the DOM (see the Skills page describe
+    // block below), just no longer inside `#card-character`.
+    expect(root.querySelector("#card-character #pets-summary")).toBeNull();
     expect(root.querySelector("#character-bank-tray")).not.toBeNull();
     expect(root.querySelector("#expand-bank-btn")).not.toBeNull();
     expect(root.querySelector("img.player-portrait, .portrait, [data-portrait]")).toBeNull();
@@ -1441,8 +1523,8 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(tray?.closest(".card-scroll")).not.toBeNull();
     const gearGrid = root.querySelector("#character-slots");
     expect(gearGrid?.closest(".card-scroll")).toBeNull();
-    const xpRow = root.querySelector("#xp-row");
-    expect(xpRow?.closest(".card-scroll")).toBeNull();
+    const summary = root.querySelector("#character-levels-summary");
+    expect(summary?.closest(".card-scroll")).toBeNull();
   });
 
   it("the embedded Bank tray shows only Equipment items from the same Bank, sorted the same way as the full Bank page", () => {
@@ -2329,9 +2411,9 @@ describe("Fishing", () => {
     expect(deepPondBtn?.disabled).toBe(true); // behind the Test Crypt's Dungeon-completion gate
   });
 
-  it("XP row shows all 11 Skill cells in order, including one for Fishing (#135)", () => {
+  it("Skills page shows all 11 Skill rows in order, including one for Fishing (#135, #222)", () => {
     const { root } = mount(1);
-    const skills = [...root.querySelectorAll<HTMLElement>("#xp-row .skill[data-skill]")].map(
+    const skills = [...root.querySelectorAll<HTMLElement>("#skills-list .skill[data-skill]")].map(
       (el) => el.dataset["skill"],
     );
     expect(skills).toEqual([
@@ -2857,9 +2939,9 @@ describe("Smithing (#28)", () => {
     return { engine, root, app };
   }
 
-  it("XP row shows a cell for Smithing, alongside the other ten (#135)", () => {
+  it("Skills page shows a row for Smithing, alongside the other ten (#135, #222)", () => {
     const { root } = mount(1);
-    const skills = [...root.querySelectorAll<HTMLElement>("#xp-row .skill[data-skill]")].map(
+    const skills = [...root.querySelectorAll<HTMLElement>("#skills-list .skill[data-skill]")].map(
       (el) => el.dataset["skill"],
     );
     expect(skills).toHaveLength(11);

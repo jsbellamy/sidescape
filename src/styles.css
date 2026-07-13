@@ -1205,41 +1205,74 @@ body {
   cursor: pointer;
 }
 
-/* RuneScape-style icon stat grid (#135, replacing the old abbreviation chips): 11 SKILL_NAMES
-   cells + 1 Total cell = 12 cells, a clean 3-column x 4-row grid. Each cell gets ~92px of the
-   panel's 300px width — headroom enough for a 16-18px icon plus a 2-digit level, which is why
-   3 columns is pinned over 4. */
-#xp-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* The Skills destination's own fixed shell (#222): mirrors `.workshop-page-body`/
+   `.activity-page-body` — a direct flex child of `.management-card`, toggled by the same
+   `[data-management-page]` sync as every other destination. `#skills-list` is the only
+   scrollport; the pets strip below it stays fixed. */
+.skills-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Same cascade-order gotcha as `.management-card[hidden]`/`.workshop-page-body[hidden]` above: an
+   author `display` rule otherwise beats the UA `[hidden]` default. */
+.skills-page-body[hidden] {
+  display: none;
+}
+
+/* One row per Skill (#222, replacing the Character card's cramped 3-column `#xp-row` icon grid
+   this same issue deletes): icon + name/level/bar/xp-to-next, stacked full-width down a roomy
+   300×600 card instead of squeezed 3-across. */
+#skills-list {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  padding: 4px 0;
 }
 
 .skill {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  column-gap: 4px;
+  gap: 8px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 3px 4px;
-  text-align: center;
+  padding: 4px 6px;
   font-size: 11px;
 }
 
-/* #168: was a 2x fluid-feeling downscale of the 34×34 pixel-art source (17px = 0.5x, neither
-   34px nor an integer multiple). Named explicitly in #168's own audit list ("#xp-row skill
-   chips") and in the issue's sequencing comment; #222 (Skills destination) is expected to
-   eventually replace this whole `#xp-row` grid with its own 34px-native layout, but until #222
-   lands this is still a live consumer of the shared `.icon` chassis, so it gets fixed here too
-   rather than left to bit-rot at a non-compliant size. `#xp-row`'s 3-column grid has ~92px per
-   cell in the 300px management card, comfortable headroom for a 34px icon plus the level badge
-   and bar underneath. */
+.skill-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.skill-name {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 2px;
+}
+
+.skill-xp-next {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* The Total footer row (#222, formerly #xp-row's own trailing `.skill-total` cell): no icon, just
+   the label and the same `.skill-level` sum styling as every other row. */
+.skill.skill-total {
+  justify-content: space-between;
+}
+
+/* #168: exact 34 CSS px, never fluid — same discipline as `.tile .icon` (adopted rather than
+   re-derived, per the issue's own "if #168 lands first, adopt its .tile/icon chassis" guidance).
+   Was a 2x fluid-feeling downscale of the 34×34 pixel-art source (17px = 0.5x, neither 34px nor
+   an integer multiple) before #168 landed. */
 .skill-icon {
   width: 34px;
   height: 34px;
+  flex: 0 0 auto;
 }
 
 .skill-level {
@@ -1252,8 +1285,7 @@ body {
 }
 
 .skill-bar {
-  flex-basis: 100%;
-  margin-top: 3px;
+  margin-top: 2px;
   height: 4px;
   background: #111;
   border-radius: 2px;
@@ -1591,6 +1623,32 @@ body {
   border-top: 1px solid var(--border);
   color: var(--accent);
   font-size: 11px;
+}
+
+/* Character card's Skills summary line (#222, replacing the deleted `#xp-row` icon grid): a
+   single clickable row — Combat level, Total level, a trailing `›` disclosure cue — that opens
+   the Skills destination via the shared `data-destination` nav dispatch. */
+#character-levels-summary {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+#character-levels-summary:hover {
+  border-color: var(--accent);
+}
+
+#character-levels-summary span {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* The expanded Bank/Vendor destination's own fixed shell (#207): unlike the other three

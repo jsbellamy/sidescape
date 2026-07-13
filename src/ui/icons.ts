@@ -267,6 +267,9 @@ const tabIcons: Record<string, string> = {
   loot: tabLootUrl,
   workshop: tabSkillsUrl,
   activity: tabLootUrl,
+  // #222: Skills gets its own Management destination but ships no new art this wave — stand-in
+  // icon, reusing the Attack skill icon already in the sheet rather than 404ing on a missing key.
+  skills: skillIcon("attack"),
 };
 
 /** Resolves a workspace/internal-tab id to its pixel-icon URL. Throws for an unknown key (same
