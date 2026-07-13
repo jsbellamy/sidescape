@@ -58,6 +58,16 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   await page.locator('#character-nav [data-destination="skills"]').click();
   await page.screenshot({ path: `${screenshots}/skills.png`, fullPage: true });
 
+  // #242: re-clicking the currently active Management destination closes Management and leaves
+  // Character open (rather than replacing Management's body with itself) — checked here against a
+  // real browser layout, not just the happy-dom DOM assertions in app.test.ts.
+  await page.locator('#character-nav [data-destination="skills"]').click();
+  await expect(page.locator("#card-management")).toBeHidden();
+  await expect(page.locator("#card-character")).toBeVisible();
+  await expect(page.locator('#character-nav [data-destination="skills"]')).not.toHaveClass(
+    /active/,
+  );
+
   // #206: workspace state is session-only — no `sidescape-ui-workspace-v2` key is ever written —
   // so both cards deliberately close on a fresh boot/reload with nothing to recover.
   await expect

@@ -111,9 +111,23 @@ describe("WorkspaceChrome fixed scale", () => {
   it("moves before expanding so an open card never overlays the compact position", async () => {
     const port = fakePort();
     const chrome = createTauriWindowChrome(document.createElement("main"), port);
-    chrome.setCardCount(1);
+    void chrome.setCardCount(1);
     await chrome.settled();
     expect(port.writes.slice(-2)).toEqual(["position", "size"]);
+  });
+  it("setCardCount's returned Promise resolves only after the queued native writes and data-anchor application finish", async () => {
+    const root = document.createElement("main");
+    const port = fakePort();
+    const chrome = createTauriWindowChrome(root, port);
+    const completion = chrome.setCardCount(1);
+    expect(completion).toBeInstanceOf(Promise);
+    // Immediately after calling setCardCount, the queued native work has not run yet.
+    expect(port.writes).toEqual([]);
+    expect(root.dataset["anchor"]).toBeUndefined();
+    await completion;
+    // By the time the Promise resolves, both native writes and data-anchor have landed.
+    expect(port.writes.slice(-2)).toEqual(["position", "size"]);
+    expect(root.dataset["anchor"]).toBeDefined();
   });
   it("disables unsupported stops and never silently reduces the selected scale", async () => {
     const port = fakePort(320, 220, 1920, 1000);

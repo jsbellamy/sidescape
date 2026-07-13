@@ -154,6 +154,7 @@ export function createTauriWindowChrome(
     },
     setCardCount(next) {
       queue = queue.then(() => apply(next)).catch(console.error);
+      return queue;
     },
     settled: () => queue,
   };

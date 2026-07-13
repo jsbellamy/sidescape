@@ -16,7 +16,7 @@ import {
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(2),
-  setCardCount: () => {},
+  setCardCount: () => Promise.resolve(),
 };
 
 const runningBoots: Array<{ dispose(): void }> = [];

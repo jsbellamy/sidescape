@@ -18,21 +18,62 @@ import type { WorkspaceChrome } from "./workspace-chrome";
  * instead, to assert `setCardCount` is called with the right open-card count. */
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(2),
-  setCardCount: () => {},
+  setCardCount: () => Promise.resolve(),
 };
 
 /** A WorkspaceChrome spy (#206): records every `setCardCount` call in order, with a fixed capacity
- * (2 unless overridden) for `getCapacity()`. Shared by every describe block below that needs to
- * assert on the open-card count reported to WorkspaceChrome. */
+ * (2 unless overridden) for `getCapacity()`. `setCardCount()` resolves immediately, same as
+ * `noopWindowChrome` — tests that need to control *when* it resolves use `deferredWindowChrome`
+ * below instead. Shared by every describe block below that needs to assert on the open-card count
+ * reported to WorkspaceChrome. */
 function spyWindowChrome(capacity: 1 | 2 = 2) {
   const calls: number[] = [];
+  let getCapacityCalls = 0;
+  const chrome: WorkspaceChrome = {
+    getCapacity: () => {
+      getCapacityCalls++;
+      return Promise.resolve(capacity);
+    },
+    setCardCount: (count) => {
+      calls.push(count);
+      return Promise.resolve();
+    },
+  };
+  return {
+    chrome,
+    calls,
+    get getCapacityCalls() {
+      return getCapacityCalls;
+    },
+  };
+}
+
+/** A `WorkspaceChrome` whose `setCardCount()` Promise the test resolves on its own schedule
+ * (#242) — proves a newly opening Character/Management card stays hidden until the native
+ * Tauri window has actually reached its final Workspace Rect, instead of painting immediately
+ * and snapping into place once the real `createTauriWindowChrome` finishes its queued native
+ * writes. Each `setCardCount` call gets its own deferred Promise so a test can resolve an
+ * earlier call after a later one has already been requested (rapid re-entrant clicks). */
+function deferredWindowChrome(capacity: 1 | 2 = 2) {
+  const calls: number[] = [];
+  const deferreds: Array<{ resolve: () => void }> = [];
   const chrome: WorkspaceChrome = {
     getCapacity: () => Promise.resolve(capacity),
     setCardCount: (count) => {
       calls.push(count);
+      let resolve!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolve = res;
+      });
+      deferreds.push({ resolve });
+      return promise;
     },
   };
-  return { chrome, calls };
+  /** Resolves the Nth (0-indexed, default: most recent) `setCardCount` call's Promise. */
+  function resolveCall(index = deferreds.length - 1): void {
+    deferreds[index]?.resolve();
+  }
+  return { chrome, calls, resolveCall };
 }
 
 /** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
@@ -931,7 +972,8 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
     const menu = root.querySelector<HTMLButtonElement>("#menu-toggle");
 
     menu?.click();
-    expect(cardHidden(root, "card-character")).toBe(false);
+    // 0->1 expansion (#242): Character stays hidden until `setCardCount()`'s completion resolves.
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
     expect(cardHidden(root, "card-management")).toBe(true);
     expect(calls).toEqual([1]);
     expect(menu?.classList.contains("active")).toBe(true);
@@ -981,7 +1023,7 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
     const { chrome } = spyWindowChrome(1);
     const { root } = mountWithChrome(chrome);
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
-    expect(cardHidden(root, "card-character")).toBe(false);
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
 
     destinationBtn(root, "skills")?.click();
     await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
@@ -1009,7 +1051,7 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
     const { chrome } = spyWindowChrome(1);
     const { root } = mountWithChrome(chrome);
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
-    expect(cardHidden(root, "card-character")).toBe(false);
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
 
     destinationBtn(root, "activity")?.click();
     await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
@@ -1099,6 +1141,236 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
   });
 });
 
+/** #242: fixes the two Management Row seams above the shared workspace synchronization path —
+ * (1) a newly opening Character/Management card must stay hidden until the native Tauri window
+ * has actually reached its final Workspace Rect (`setCardCount()`'s returned Promise resolving),
+ * revealing immediately at that final position with no snap-into-place, and (2) re-clicking the
+ * currently active Management destination closes Management and leaves Character open, for every
+ * launcher routed through `data-destination`. `deferredWindowChrome` is the port-injected seam
+ * that proves the reveal/hide ordering without a real Tauri window. */
+describe("Atomic card reveal and active-destination re-click close (#242)", () => {
+  function mountWithChrome(chrome: WorkspaceChrome) {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), chrome);
+    return { engine, root, app };
+  }
+
+  function destinationBtn(root: HTMLElement, destination: string) {
+    return root.querySelector<HTMLButtonElement>(`[data-destination="${destination}"]`);
+  }
+
+  function cardHidden(root: HTMLElement, id: string): boolean | undefined {
+    return root.querySelector<HTMLElement>(`#${id}`)?.hidden;
+  }
+
+  /** `openDestination` always awaits `getCapacity()` before touching `workspace` or calling
+   * `setCardCount()` (even for a same-count swap), so every destination click's effects land one
+   * or more microtasks after the synchronous `.click()` call returns — these tests wait for the
+   * `setCardCount` call count to grow rather than asserting immediately after `.click()`. */
+  async function waitForCallCount(calls: number[], n: number): Promise<void> {
+    await vi.waitFor(() => expect(calls.length).toBe(n));
+  }
+
+  it("0->1: Character stays hidden until native completion resolves, then appears", async () => {
+    const { chrome, calls, resolveCall } = deferredWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    // calls[0] is the boot sync's own setCardCount(0) request, left unresolved and irrelevant here.
+
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    expect(calls).toEqual([0, 1]); // the geometry request happens immediately (onMenuToggle is sync)...
+    expect(cardHidden(root, "card-character")).toBe(true); // ...but the card does not paint yet
+
+    resolveCall(); // resolves the setCardCount(1) call
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+  });
+
+  it("1->2: Character stays visible but Management stays hidden until completion resolves, then Management appears in canonical order", async () => {
+    const { chrome, calls, resolveCall } = deferredWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+
+    destinationBtn(root, "world")?.click();
+    await waitForCallCount(calls, 3); // [0, 1, 2]
+    expect(calls[2]).toBe(2);
+    expect(cardHidden(root, "card-character")).toBe(false); // Character: still visible, untouched
+    expect(cardHidden(root, "card-management")).toBe(true); // Management: not yet, native still moving
+
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    // Canonical Character -> Management DOM order is preserved regardless of paint timing.
+    const domOrder = [...root.querySelectorAll<HTMLElement>(".management-card")].map((c) => c.id);
+    expect(domOrder).toEqual(["card-character", "card-management"]);
+  });
+
+  it("2->1 and 1->0: departing cards hide synchronously before the deferred contraction resolves", async () => {
+    const { chrome, calls, resolveCall } = deferredWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+    destinationBtn(root, "world")?.click();
+    await waitForCallCount(calls, 3);
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+
+    // 2->1: Back closes Management; it hides immediately, without waiting on the native contraction
+    // (its own setCardCount(1) request is left unresolved for the rest of this test).
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(false);
+
+    // 1->0: the menu button closes Character too, again hiding immediately.
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    expect(cardHidden(root, "card-character")).toBe(true);
+  });
+
+  it("a stale opening completion cannot reveal a card after a rapid second click changed the desired workspace state", async () => {
+    const { chrome, calls, resolveCall } = deferredWindowChrome(1);
+    const { root } = mountWithChrome(chrome);
+
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click(); // desires Character alone
+    expect(calls).toEqual([0, 1]);
+
+    // Before that setCardCount(1) resolves, re-close via the menu (desired state changes back to
+    // both-closed) — this is the "rapid re-entrant click" scenario the ordering must guard.
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    expect(calls).toEqual([0, 1, 0]); // closing is immediate and hides synchronously, no new card to open
+    expect(cardHidden(root, "card-character")).toBe(true);
+
+    // Now let the stale setCardCount(1) completion resolve — it must not reveal Character, since
+    // the desired workspace state has since moved on to "both closed".
+    resolveCall(1);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cardHidden(root, "card-character")).toBe(true);
+  });
+
+  it("same-count destination replacement (World -> Workshop) remains immediate", async () => {
+    const { chrome, calls, resolveCall } = deferredWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+    destinationBtn(root, "world")?.click();
+    await waitForCallCount(calls, 3);
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+
+    // Same-count destination swap (World -> Workshop): no new card, so it paints immediately once
+    // openDestination's own getCapacity() await resolves, without waiting on the (deliberately
+    // left-unresolved) setCardCount(2) Promise for this swap.
+    destinationBtn(root, "workshop")?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="workshop"]')?.hidden).toBe(
+        false,
+      ),
+    );
+  });
+
+  it("capacity-1 Character->Management replacement remains immediate", async () => {
+    const { chrome, resolveCall } = deferredWindowChrome(1);
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+
+    // Capacity 1: Character -> Management is a same-count (1 -> 1) replacement, so it stays
+    // immediate — it paints as soon as openDestination's getCapacity() await resolves, without
+    // waiting on the (deliberately left-unresolved) setCardCount(1) Promise for this swap.
+    destinationBtn(root, "world")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    expect(cardHidden(root, "card-character")).toBe(true);
+  });
+
+  /** Re-clicking each of the six `data-destination` launchers while its destination is the active
+   * Management destination must close Management, leave Character open, clear the active nav
+   * treatment, and drive a 2->1 transition (at capacity 2) — the owner decision widens this past
+   * Skills to every launcher. Covers World, Workshop, Activity, Skills, the Character levels
+   * summary (`#character-levels-summary`), and Expand Bank (`#expand-bank-btn`) through their real
+   * DOM launchers, per the issue's explicit list. */
+  // `bank` has no nav-strip button of its own (`CHARACTER_NAV_DESTINATIONS` deliberately excludes
+  // it — see its own doc comment above characterNavMarkup) — it's reachable only via
+  // `#expand-bank-btn`, which never carries the nav's "active" treatment, so that case skips the
+  // active-class assertion the other five (nav-button-backed) destinations get.
+  const RECLICK_CASES: Array<{
+    destination: string;
+    launcherSelector: string;
+    hasActiveNavTreatment: boolean;
+  }> = [
+    {
+      destination: "world",
+      launcherSelector: '[data-destination="world"]',
+      hasActiveNavTreatment: true,
+    },
+    {
+      destination: "workshop",
+      launcherSelector: '[data-destination="workshop"]',
+      hasActiveNavTreatment: true,
+    },
+    {
+      destination: "activity",
+      launcherSelector: '[data-destination="activity"]',
+      hasActiveNavTreatment: true,
+    },
+    {
+      destination: "skills",
+      launcherSelector: "#character-levels-summary",
+      hasActiveNavTreatment: true,
+    },
+    {
+      destination: "skills",
+      launcherSelector: '[data-destination="skills"]',
+      hasActiveNavTreatment: true,
+    },
+    { destination: "bank", launcherSelector: "#expand-bank-btn", hasActiveNavTreatment: false },
+  ];
+
+  for (const { destination, launcherSelector, hasActiveNavTreatment } of RECLICK_CASES) {
+    it(`re-clicking the active "${destination}" destination via ${launcherSelector} closes Management, leaves Character open, clears active nav, and reports [2, 1]`, async () => {
+      const { chrome, calls } = spyWindowChrome();
+      const { root } = mountWithChrome(chrome);
+      root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+      await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+
+      root.querySelector<HTMLButtonElement>(launcherSelector)?.click();
+      await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+      if (hasActiveNavTreatment) {
+        expect(destinationBtn(root, destination)?.classList.contains("active")).toBe(true);
+      }
+      calls.length = 0;
+
+      root.querySelector<HTMLButtonElement>(launcherSelector)?.click();
+      expect(cardHidden(root, "card-management")).toBe(true); // Management: closed
+      expect(cardHidden(root, "card-character")).toBe(false); // Character: left open
+      if (hasActiveNavTreatment) {
+        expect(destinationBtn(root, destination)?.classList.contains("active")).toBe(false);
+      }
+      expect(calls).toEqual([1]); // 2 -> 1 geometry request, exactly once
+    });
+  }
+
+  it("the toggle return happens before Workshop's active-production resync and before getCapacity()", async () => {
+    const { chrome, calls, getCapacityCalls } = spyWindowChrome();
+    const { root } = mountWithChrome(chrome);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
+
+    destinationBtn(root, "workshop")?.click();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
+    calls.length = 0;
+    const capacityCallsBeforeReclick = getCapacityCalls;
+
+    destinationBtn(root, "workshop")?.click(); // toggle-close: must not call getCapacity() either
+    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(calls).toEqual([1]); // only the 2 -> 1 close request, not a getCapacity-driven open
+    expect(getCapacityCalls).toBe(capacityCallsBeforeReclick); // toggle branch returns before it
+  });
+});
+
 describe("Workspace state is session-only (#206: stale sidescape-ui-workspace-v2/-panels keys are ignored)", () => {
   function mountFresh() {
     const engine = createEngine(fixtureContent, seededRng(1));
@@ -1145,14 +1417,16 @@ describe("Workspace state is session-only (#206: stale sidescape-ui-workspace-v2
     }
   });
 
-  it("a remount always restarts with both cards closed, even after opening them pre-remount", () => {
+  it("a remount always restarts with both cards closed, even after opening them pre-remount", async () => {
     vi.stubGlobal("localStorage", stubLocalStorage());
     try {
       const engine = createEngine(fixtureContent, seededRng(1));
       const root1 = document.createElement("main");
       mountApp(engine, root1, resolveContent(fixtureContent), noopWindowChrome);
       root1.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
-      expect(root1.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false);
+      await vi.waitFor(() =>
+        expect(root1.querySelector<HTMLElement>("#card-character")?.hidden).toBe(false),
+      );
 
       const root2 = document.createElement("main");
       mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);

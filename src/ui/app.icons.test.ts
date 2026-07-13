@@ -12,7 +12,7 @@ const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
   getCapacity: () => Promise.resolve(2),
-  setCardCount: () => {},
+  setCardCount: () => Promise.resolve(),
 };
 
 function mountWith(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
