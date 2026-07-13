@@ -2749,21 +2749,6 @@ describe("Compact widget Loot strip (#220)", () => {
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*left behind/i);
   });
 
-  it("Loot all shares one implementation with the Activity page's own button — clicking either sweeps the identical Loot Zone", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    root.querySelector<HTMLButtonElement>("#activity-loot-all-btn")?.click();
-
-    expect(engine.snapshot().lootZone).toEqual([]);
-    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(true);
-  });
-
   it("logs a 'Run failed — loot lost!' feed line (plus the lost stacks) on dungeon-failed", () => {
     const lethalDungeonContent = {
       ...fixtureContent,
@@ -3725,73 +3710,29 @@ describe("Workshop destination — all-visible Production Skill selector (#209)"
   });
 });
 
-describe("Activity destination — fixed Loot Zone header, independent scrollports (#209)", () => {
-  it("shows a fixed Loot Zone used/10 header and Loot all button that never sit inside a scrollport", () => {
+describe("Activity destination — full-height Recent Activity feed only (#243)", () => {
+  it("contains only the Recent Activity heading and #feed — none of the deleted Activity Loot Zone nodes exist", () => {
     const { root } = mount(1);
-    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 0/10");
-    const lootAllBtn = root.querySelector("#activity-loot-all-btn");
-    expect(lootAllBtn?.closest(".card-scroll")).toBeNull();
-    expect(root.querySelector("#activity-loot-count")?.closest(".card-scroll")).toBeNull();
+    const activityPage = root.querySelector('[data-management-page="activity"]');
+    const headings = [...(activityPage?.querySelectorAll(".panel-title") ?? [])].map(
+      (p) => p.textContent,
+    );
+    expect(headings).toEqual(["Recent Activity"]);
+    expect(activityPage?.querySelector("#feed")).not.toBeNull();
+    expect(root.querySelector("#activity-loot-count")).toBeNull();
+    expect(root.querySelector("#activity-loot-items")).toBeNull();
+    expect(root.querySelector("#activity-loot-all-btn")).toBeNull();
   });
 
-  it("the Loot Zone grid and the Recent Activity feed are two independent scrollports, not a shared wrapper", () => {
+  it("gives #feed the page's remaining height as its only .card-scroll scrollport", () => {
     const { root } = mount(1);
-    const lootGrid = root.querySelector("#activity-loot-items");
-    const feed = root.querySelector("#feed");
-    expect(lootGrid?.classList.contains("card-scroll")).toBe(true);
-    expect(feed?.classList.contains("card-scroll")).toBe(true);
-    expect(lootGrid?.contains(feed as Node)).toBe(false);
-    expect(feed?.contains(lootGrid as Node)).toBe(false);
-    expect(lootGrid?.closest(".card-scroll")).toBe(lootGrid);
-    expect(feed?.closest(".card-scroll")).toBe(feed);
+    const activityPage = root.querySelector('[data-management-page="activity"]');
+    const scrollports = activityPage?.querySelectorAll(".card-scroll");
+    expect(scrollports).toHaveLength(1);
+    expect(scrollports?.[0]?.id).toBe("feed");
   });
 
-  it("the header count tracks the Loot Zone as combat Drops land in it, from empty through full (10/10)", () => {
-    // Ten distinct real fixture item ids (never "junk-N" placeholders): loadLootZone (engine.ts)
-    // drops any saved Loot Zone entry whose itemId isn't in Content, so a real Snapshot round-trip
-    // needs real ids to actually land all 10 stacks.
-    const tenItemIds = [
-      "meat",
-      "bread",
-      "bronze-sword",
-      "lucky-charm",
-      "bar",
-      "raw-fish",
-      "hide",
-      "bow",
-      "staff",
-      "herb",
-    ];
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({ lootZone: tenItemIds.map((itemId) => ({ itemId, qty: 1 })) }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    expect(engine.snapshot().lootZone).toHaveLength(10); // sanity: all 10 really landed
-    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 10/10");
-  });
-
-  it("clicking Loot all inside the Activity page sweeps the zone into the Bank, same as the compact Loot Strip button", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 1/10");
-
-    root.querySelector<HTMLButtonElement>("#activity-loot-all-btn")?.click();
-
-    expect(engine.snapshot().lootZone).toEqual([]);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
-    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 0/10");
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/banked.*meat/i);
-  });
-
-  it("each kill event still yields exactly one 'Killed' Loot Feed line now that the panel lives solely in the Activity page", () => {
+  it("each kill event still yields exactly one 'Killed' Loot Feed line now that Activity is a feed-only page", () => {
     // A single Tick can carry several distinct Engine events (kill, drop, loot, levelup), each
     // rightly producing its own feed line — so the invariant to prove isn't "one Tick, one line",
     // it's "one kill event, one 'Killed' line": moving the panel to Activity reused the existing
@@ -4473,14 +4414,12 @@ describe("Save → remount round-trip (#9)", () => {
     const eatTile = root2.querySelector<HTMLElement>('[data-eat="0"]');
     expect(eatTile?.dataset["item"]).toBe("meat");
     expect(eatTile?.querySelector(".tile-qty")?.textContent).toBe("×5");
-    // Both Loot Zone views restore from the same Snapshot field (#220: the compact widget's own
-    // strip, plus the pre-existing Activity page grid).
+    // The restored Loot Zone appears in the Compact Widget strip only (#243: the sole Loot Zone
+    // interface).
     const stripChip = root2.querySelector<HTMLButtonElement>("#loot-strip-items .loot-chip");
     expect(stripChip?.dataset["item"]).toBe("bar");
     expect(stripChip?.querySelector(".tile-qty")?.textContent).toBe("×2");
-    const chip = root2.querySelector<HTMLLIElement>("#activity-loot-items .loot-chip");
-    expect(chip?.dataset["item"]).toBe("bar");
-    expect(chip?.querySelector(".tile-qty")?.textContent).toBe("×2");
+    expect(root2.querySelector("#activity-loot-items")).toBeNull();
   });
 });
 

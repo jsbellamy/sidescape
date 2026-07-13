@@ -21,12 +21,14 @@ import { PNG } from "pngjs";
  * #209 finished the same move for Workshop and Activity, which used to share one generic
  * `#management-scroll` wrapper (removed outright — nothing renders into it any more, since all
  * four Management destinations now own their own fixed shell): Workshop's own scrollport is its
- * recipe body (`#workshop-recipes`), and Activity owns TWO independent scrollports (the Loot Zone
- * grid `#activity-loot-items` and the Recent Activity feed `#feed`) rather than one shared wrapper.
+ * recipe body (`#workshop-recipes`), and Activity's own scrollport is the Recent Activity feed
+ * (`#feed`). #243 removed Activity's own duplicate Loot Zone grid entirely — the Compact Widget's
+ * Loot Zone strip is the sole Loot Zone interface — so Activity is now one full-height Recent
+ * Activity feed scrollport, not two independent ones.
  * This spec is parametrized over each destination's own real scrollport id, per the issue's own
  * "update the scroll-shadow E2E away from `.management-card` to the actual Workshop/Activity body
- * scrollports" instruction — `.card-scroll` alone would be ambiguous, since Bank/World/Activity's
- * *other* scrollport is also real, also `.card-scroll`, and could legitimately want its own future
+ * scrollports" instruction — `.card-scroll` alone would be ambiguous, since Bank/World's own
+ * scrollports are also real, also `.card-scroll`, and could legitimately want their own future
  * spec.
  */
 
@@ -216,39 +218,4 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   });
   expect(thumbRules.base).toBe("var(--border)");
   expect(thumbRules.hover).toBe("var(--accent)");
-});
-
-test("Activity's Loot Zone grid and Recent Activity feed scroll independently, each with its own shadow", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.locator("#menu-toggle").click();
-  await page.locator('[data-destination="activity"]').click();
-  await expect(page.locator("#card-management")).toBeVisible();
-
-  // Force overflow in the Loot Zone grid only — the Recent Activity feed stays short — then prove
-  // the feed's own top/bottom edges show no shadow while the Loot Zone grid's bottom edge does:
-  // two independent scrollports, not one shared wrapper (#209's own acceptance criterion).
-  await page.evaluate(() => {
-    const scroll = document.querySelector("#activity-loot-items") as HTMLElement;
-    const filler = document.createElement("li");
-    filler.id = "e2e-loot-overflow-filler";
-    filler.style.height = "2000px";
-    filler.style.width = "100%";
-    scroll.appendChild(filler);
-  });
-
-  const lootOverflowing = await page
-    .locator("#activity-loot-items")
-    .evaluate((el) => el.scrollHeight > el.clientHeight);
-  const feedOverflowing = await page
-    .locator("#feed")
-    .evaluate((el) => el.scrollHeight > el.clientHeight);
-  expect(lootOverflowing).toBe(true);
-  expect(feedOverflowing).toBe(false);
-
-  await page.locator("#activity-loot-items").evaluate((el) => (el.scrollTop = 0));
-  expect(await edgePixelIsDark(page, "#activity-loot-items", "bottom")).toBe(true);
-  expect(await edgePixelIsDark(page, "#feed", "top")).toBe(false);
-  expect(await edgePixelIsDark(page, "#feed", "bottom")).toBe(false);
 });

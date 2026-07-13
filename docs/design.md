@@ -24,10 +24,12 @@ display; closing restores the scaled compact rect. Open cards do not persist.
 The Compact Widget is visual rather than informational. Combat shows backdrop,
 player and Monster, small non-numeric HP bars, transient feedback, and a
 zero-Food warning when appropriate. Production replaces the Monster with its
-descriptor-backed prop; Fishing and idle show only backdrop and player. Gold is
-in Bank, Food configuration in Character, and the Loot Zone/Feed in Activity.
-The titlebar contains Menu, the SideScape drag region, and Close. Character
-Settings owns Mute, Import/Export, and the scale selector.
+descriptor-backed prop; Fishing and idle show only backdrop and player. It also
+carries the live Loot Zone strip beneath the scene, the sole Loot Zone
+interface. Gold is in Bank, Food configuration in Character, and the Loot Feed
+in Activity (a full-height Recent Activity feed, with no Loot Zone view of its
+own). The titlebar contains Menu, the SideScape drag region, and Close.
+Character Settings owns Mute, Import/Export, and the scale selector.
 
 ## Skills & XP
 

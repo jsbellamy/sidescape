@@ -1482,11 +1482,11 @@ body {
   height: 18px;
 }
 
-/* The Activity destination's own fixed shell (#209): the Loot Zone header (used/10) and Loot all
-   button never scroll away, and the Loot Zone grid (`.activity-loot-scroll`) and the Recent
-   Activity feed (`#feed`) are two INDEPENDENT scrollports rather than one shared wrapper — each
-   keeps its own overflow and its own scroll-shadow edges. Sits alongside World/Bank/Workshop as a
-   direct flex child of `.management-card`, toggled by the same `[data-management-page]` sync. */
+/* The Activity destination's own fixed shell (#243): one full-height Recent Activity feed
+   scrollport (`#feed`) — the Loot Zone strip in the Compact Widget is the sole Loot Zone
+   interface, so Activity carries no Loot Zone markup or scrollport of its own. Sits alongside
+   World/Bank/Workshop as a direct flex child of `.management-card`, toggled by the same
+   `[data-management-page]` sync. */
 .activity-page-body {
   display: flex;
   flex-direction: column;
@@ -1496,13 +1496,6 @@ body {
 /* Same cascade-order gotcha as `.management-card[hidden]`/`.world-page-body[hidden]` above. */
 .activity-page-body[hidden] {
   display: none;
-}
-/* Overrides `.card-scroll`'s own `flex: 1 1 auto` (declared earlier in this file): the Loot Zone
-   grid is capped to a bounded strip with its own internal scrollbar, rather than competing with
-   the feed list below it for the page's remaining height. */
-.activity-loot-scroll {
-  flex: 0 0 auto;
-  max-height: 110px;
 }
 
 /* The progression rail (#208): one row per Snapshot Area, in Snapshot order, always all visible —
@@ -1592,8 +1585,7 @@ body {
    exactly, the audit fix for one of the issue's own named consumers. Compact-widget chips are
    `<button>` elements (#220: `#compact-widget` carries a deep Tauri drag region, and only
    natively-clickable tags are exempt from it — see app.test.ts's natively-clickable guard), so
-   this also resets button chrome to keep them visually identical to the Activity page's
-   `<li class="loot-chip">`. */
+   this also resets button chrome to keep chips visually consistent regardless of context. */
 .loot-chip {
   width: 34px;
   height: 34px;
@@ -1604,8 +1596,7 @@ body {
   cursor: default;
 }
 
-#loot-strip-all-btn,
-#activity-loot-all-btn {
+#loot-strip-all-btn {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -1616,22 +1607,10 @@ body {
   flex: 0 0 auto;
 }
 
-#loot-strip-all-btn:disabled,
-#activity-loot-all-btn:disabled {
+#loot-strip-all-btn:disabled {
   color: var(--text-dim);
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-/* The Activity destination page's own Loot Zone grid (#206) — the same icon+qty `.loot-chip`
-   tiles as the compact widget's live Loot Strip (`#loot-strip-items` above), wrapped instead
-   of a single row since the page has room to spare. */
-.loot-zone-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  list-style: none;
-  margin-bottom: 6px;
 }
 
 #loot-strip-all-btn:hover:not(:disabled) {

@@ -120,10 +120,10 @@ describe("Shared #item-tooltip hover panel (#78)", () => {
     expect(tooltip?.querySelector(".tooltip-name")?.textContent).toBe("Cooked Meat");
   });
 
-  it("works the same way on an Activity Loot Zone tile", () => {
+  it("works the same way on a compact Loot Zone strip tile", () => {
     const { root } = mountWith({ lootZone: [{ itemId: "bar", qty: 7 }] });
 
-    const chip = root.querySelector<HTMLElement>("#activity-loot-items .loot-chip");
+    const chip = root.querySelector<HTMLElement>("#loot-strip-items .loot-chip");
     hover(chip as Element);
 
     const tooltip = root.querySelector<HTMLElement>("#item-tooltip");
@@ -178,9 +178,9 @@ describe("Food Slots and Loot strip render icon+qty tiles (#78)", () => {
     expect(tile?.querySelector(".tile-qty")?.textContent).toBe("×9");
   });
 
-  it("Activity Loot Zone chips are icon+qty tiles", () => {
+  it("compact Loot Zone strip chips are icon+qty tiles", () => {
     const { root } = mountWith({ lootZone: [{ itemId: "meat", qty: 12 }] });
-    const chip = root.querySelector<HTMLElement>("#activity-loot-items .loot-chip");
+    const chip = root.querySelector<HTMLElement>("#loot-strip-items .loot-chip");
     expect(chip?.classList.contains("tile")).toBe(true);
     expect(chip?.querySelector("img.pixel")).not.toBeNull();
     expect(chip?.querySelector(".tile-qty")?.textContent).toBe("×12");
