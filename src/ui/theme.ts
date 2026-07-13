@@ -1,6 +1,7 @@
 import { THEMES } from "../core/types";
 import type { Snapshot, Theme } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
+import { resolveActiveAreaId } from "./area-context";
 
 /** `resolveTheme`'s return: the Theme to paint, plus (when it came from an actual Area) that
  * Area's id — callers use the id to remember "last-used" across idle stretches; Smithing's `town`
@@ -17,12 +18,11 @@ export interface ResolvedTheme {
  * itself.
  *
  * Priority, matching the issue's owner-decided rules:
- * 1. Mid-Dungeon-run: the Dungeon's HOST Area's theme. Checked before the Monster branch because
- *    a Dungeon's later Waves (and its Boss) are often dungeon-only Monsters absent from every
- *    Area's `monsterIds` — the monster branch alone couldn't resolve those.
- * 2. Fighting/fishing in the open world: the Area holding that Monster/Fishing Spot.
- * 3. Smithing (a non-Area activity, #28): the shared `town` theme, no Area id.
- * 4. Idle (nothing selected): the last-used Area this session (`lastAreaId`, tracked by the
+ * 1. Mid-Dungeon-run, or fighting/fishing in the open world: the shared `resolveActiveAreaId`
+ *    (#236) resolver's host Area, in its own Dungeon → Monster → Fishing Spot order — see that
+ *    module's doc for why Dungeon must be checked first.
+ * 2. Smithing (a non-Area activity, #28): the shared `town` theme, no Area id.
+ * 3. Idle (nothing selected): the last-used Area this session (`lastAreaId`, tracked by the
  *    caller — see app.ts), else the first unlocked Area, so the scene is never blank/flashing.
  */
 export function resolveTheme(
@@ -30,24 +30,9 @@ export function resolveTheme(
   content: ResolvedContent,
   lastAreaId: string | null,
 ): ResolvedTheme {
-  const dungeon = snap.dungeon;
-  if (dungeon) {
-    const dungeonDef = content.dungeonsById.get(dungeon.id);
-    const area = dungeonDef && content.areasById.get(dungeonDef.areaId);
-    if (area) return { theme: area.theme, areaId: area.id };
-  }
-
-  const monster = snap.monster;
-  if (monster) {
-    const area = content.areas.find((a) => a.monsterIds.includes(monster.id));
-    if (area) return { theme: area.theme, areaId: area.id };
-  }
-
-  const fishing = snap.fishing;
-  if (fishing) {
-    const area = content.areas.find((a) => (a.fishingSpotIds ?? []).includes(fishing.spotId));
-    if (area) return { theme: area.theme, areaId: area.id };
-  }
+  const activeAreaId = resolveActiveAreaId(snap, content);
+  const activeArea = activeAreaId ? content.areasById.get(activeAreaId) : undefined;
+  if (activeArea) return { theme: activeArea.theme, areaId: activeArea.id };
 
   if (snap.production) {
     return { theme: "town", areaId: null };
