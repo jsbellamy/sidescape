@@ -1616,7 +1616,86 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     // The chooser closes after picking.
     expect(root.querySelector('[data-slot="weapon"] [data-gear-assign]')).toBeNull();
   });
+});
 
+describe("Gear Slot chooser dismissal (#235: outside click / window blur close it without racing its own toggle/selection click)", () => {
+  /** Mounts into `document.body` (like the Cards-on-glass describe block above) so the
+   * document-level outside-click/blur handlers under test have a real connected tree to bubble
+   * through, and opens the weapon Gear Slot's chooser as the shared starting state every case
+   * below builds on. */
+  function mountWithOpenGearChooser() {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    document.body.innerHTML = "";
+    const root = document.createElement("main");
+    document.body.appendChild(root);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
+    expect(root.querySelector(".gear-slot-chooser")).not.toBeNull();
+    return { engine, root };
+  }
+
+  it("a click elsewhere inside SideScape (outside the chooser and its toggle) closes it", () => {
+    const { root } = mountWithOpenGearChooser();
+    root
+      .querySelector<HTMLElement>("#character-totals")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+    document.body.innerHTML = "";
+  });
+
+  it("a click inside the chooser does not dismiss it before its own selection action runs", () => {
+    const { engine, root } = mountWithOpenGearChooser();
+    root.querySelector<HTMLButtonElement>('[data-gear-assign="bronze-sword"]')?.click();
+    // The chooser is gone, but because the selection closed it (and equipped the item) — not
+    // because the outside-click handler raced ahead of it.
+    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+    document.body.innerHTML = "";
+  });
+
+  it("clicking the active Gear Slot's own toggle still follows the existing re-click-close behavior, not a double-toggle from the outside-click handler", () => {
+    const { root } = mountWithOpenGearChooser();
+    root.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+    document.body.innerHTML = "";
+  });
+
+  it("window blur closes the open chooser", () => {
+    const { root } = mountWithOpenGearChooser();
+    window.dispatchEvent(new Event("blur"));
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+    document.body.innerHTML = "";
+  });
+
+  it("an outside click or blur while no Gear Slot chooser is open is a no-op", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    document.body.innerHTML = "";
+    const root = document.createElement("main");
+    document.body.appendChild(root);
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+
+    root
+      .querySelector<HTMLElement>("#character-totals")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    window.dispatchEvent(new Event("blur"));
+
+    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
+    // Still equipment-free — neither call mutated Engine state.
+    expect(engine.snapshot().player.equipment.weapon).toBeNull();
+    document.body.innerHTML = "";
+  });
+});
+
+describe("Character hub layout (#206) — Pets summary, Settings popover, and Bank tray remainder", () => {
   it("the Pets summary shows a compact owned/total count, with the full roster grid behind its own popover", () => {
     const { root } = mount(1);
     const count = root.querySelector<HTMLElement>("#pets-summary-count");
