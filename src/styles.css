@@ -221,6 +221,7 @@ body {
   position: absolute;
   top: 34px;
   right: 8px;
+  left: 8px;
   z-index: 6;
   display: flex;
   flex-direction: column;
@@ -230,6 +231,15 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  /* #223: the popover picked up two more rows (auto-eat threshold, auto-sell-duplicates) and can
+     now be taller than the card has room for below its `top` offset. `.management-card` is
+     `overflow: hidden` on purpose (the "#206 Character never page-scrolls" rule) — so if this
+     popover ever runs out of room, IT scrolls internally, the card never does. `top` is a fixed
+     34px, so the popover's own available height is the positioned ancestor's (`.management-card`,
+     which stretches to fill `#management-row`'s `--card-h`) height minus that offset and a bottom
+     margin to match `right`/`left`. */
+  max-height: calc(100% - 34px - 8px);
+  overflow-y: auto;
 }
 .settings-popover button {
   background: none;
@@ -245,7 +255,8 @@ body {
   color: var(--accent);
 }
 
-#ui-scale-selector {
+#ui-scale-selector,
+#autoeat-selector {
   display: flex;
   gap: 4px;
   margin: 4px 0 0;
@@ -253,7 +264,8 @@ body {
   border: 1px solid var(--border);
 }
 
-#ui-scale-selector legend {
+#ui-scale-selector legend,
+#autoeat-selector legend {
   padding: 0 4px;
   color: var(--text-dim);
 }
@@ -267,6 +279,23 @@ body {
 #ui-scale-selector button:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+/* #autoeat-selector's own row keeps `.style-row`'s existing look (unchanged markup/class) — this
+   fieldset only adds the legend/border wrapper #ui-scale-selector already established, and its
+   `.style-row` child's own `margin-top` would otherwise stack awkwardly under that. */
+#autoeat-selector .style-row {
+  margin-top: 0;
+}
+
+/* #223: the always-visible auto-eat threshold readout in the Character card's own header nav —
+   the row that communicates it (`#autoeat-row`) now lives behind the Settings popover, but this
+   value silently keeps the player alive and must stay legible without opening it. */
+.autoeat-indicator {
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  padding: 0 2px;
 }
 
 .pets-summary {

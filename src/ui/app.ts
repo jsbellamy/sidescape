@@ -250,8 +250,12 @@ function characterNavMarkup(): string {
         <span>${MANAGEMENT_DESTINATION_LABELS[destination]}</span>
       </button>`,
   ).join("");
+  // #223: the auto-eat threshold buttons moved into the Settings popover, but the threshold
+  // itself silently keeps the player alive — it must stay legible without opening that popover.
+  // This compact indicator's text is filled in by renderCharacter (mirrors #summary-combat-level).
   return `<nav id="character-nav" class="card-nav">
       ${destinationButtons}
+      <span id="autoeat-indicator" class="autoeat-indicator" title="Auto-eat threshold">🍖 …</span>
       <button data-nav="settings" title="Settings" aria-expanded="false">
         <span aria-hidden="true">⚙</span>
       </button>
@@ -1042,6 +1046,10 @@ export function mountApp(
       btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
     });
 
+    // #223: `#autoeat-row` itself now lives inside the (usually closed) Settings popover — this
+    // compact header indicator is what stays legible on every render.
+    el("#autoeat-indicator").textContent = `🍖 ${AUTO_EAT_LABELS[player.autoEatThreshold]}`;
+
     el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
 
     // Gear Slot tiles (#206): a filled slot stays a plain hover-only tile (its stats surface via
@@ -1461,6 +1469,22 @@ export function mountApp(
           <button data-ui-scale="1.5" title="Set UI scale to 150%">150%</button>
           <button data-ui-scale="2" title="Set UI scale to 200%">200%</button>
         </fieldset>
+        <!-- #223: relocated from the Character card body — set-once preferences, not per-fight
+             controls. Markup shape/ids/handlers unchanged; only the container moved. -->
+        <fieldset id="autoeat-selector">
+          <legend>Auto-eat at</legend>
+          <div id="autoeat-row" class="style-row">
+            ${Object.entries(AUTO_EAT_LABELS)
+              .map(
+                ([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`,
+              )
+              .join("")}
+          </div>
+        </fieldset>
+        <label id="autosell-duplicates-row" class="checkbox-row">
+          <input type="checkbox" id="autosell-duplicates-toggle" />
+          Auto-sell duplicate gear
+        </label>
       </div>
       <div id="import-panel" hidden>
         <p>Paste a save below, then Apply. This overwrites your current save.</p>
@@ -1493,15 +1517,6 @@ export function mountApp(
             .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
             .join("")}
         </div>
-        <div id="autoeat-row" class="style-row">
-          ${Object.entries(AUTO_EAT_LABELS)
-            .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
-            .join("")}
-        </div>
-        <label id="autosell-duplicates-row" class="checkbox-row">
-          <input type="checkbox" id="autosell-duplicates-toggle" />
-          Auto-sell duplicate gear
-        </label>
       </div>
       <div class="card-scroll">
         <div id="character-bank-tray" class="tile-grid"></div>
