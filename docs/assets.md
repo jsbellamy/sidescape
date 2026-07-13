@@ -120,6 +120,10 @@ in `src/styles.css`), no structural change.
 
 ## Item icons (#78)
 
+> **Superseded by #187:** the icon bytes documented below were replaced by original source-driven
+> art generated from committed golden sources through `scripts/art/icons.mjs`; the provenance history
+> below is preserved.
+
 Every `ItemDef` (`src/data/index.ts`) has a required `icon` key resolved through
 `src/ui/icons.ts` (mirrors `sprites.ts`'s pattern), rendered at `image-rendering: pixelated`
 like the combat sprites. Two CC0 packs cover the full 33-item set (weapons, armour, food,
