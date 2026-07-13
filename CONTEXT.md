@@ -103,7 +103,7 @@ The player's sole **Item** store — there is no separate carried inventory. Eve
 _Avoid_: storage, chest, warehouse, inventory
 
 **Loot Zone**:
-The small buffer (10 stacks) where combat Drops accumulate — kill Drops and Dungeon Chest items land here first, not straight in the Bank; Catches and Recipe outputs bypass it entirely and go straight to the Bank, unchanged. Auto-looted into the Bank when the player leaves combat, or manually via Loot all. Excess beyond its capacity is auto-sold for Gold (or discarded, if unsellable).
+The small buffer (10 stacks) where combat Drops accumulate — kill Drops and Dungeon Chest items land here first, not straight in the Bank; Catches and Recipe outputs bypass it entirely and go straight to the Bank, unchanged. Auto-looted into the Bank when the player leaves combat, or manually via Loot all. Excess beyond its capacity is auto-sold for Gold (or discarded, if unsellable). Its sole UI is the Compact Widget's live Loot Zone strip; the Activity destination shows no Loot Zone view, only the **Loot Feed**.
 _Avoid_: inventory, loot bag
 
 **Bank Slot**:
@@ -138,7 +138,7 @@ A **Dungeon**'s completion reward: every entry in its reward table is rolled ind
 _Avoid_: loot box
 
 **Loot Feed**:
-The scrolling UI log of kills, **Drops**, and level-ups.
+The scrolling UI log of kills, **Drops**, and level-ups. It is the Activity management destination's only content — a full-height Recent Activity feed with no **Loot Zone** view of its own.
 
 **Engine**:
 The single deep module that owns all game state and advances it one **Tick** per call; the only place combat rules live.
@@ -156,8 +156,10 @@ _Avoid_: death screen, grave
 The fixed 320×220 logical live stage shown while no management surface is open.
 It contains only Menu/drag/Close chrome and visual activity feedback: backdrop,
 actors, Production prop, non-numeric combat HP bars, transient effects, and the
-combat-only zero-Food warning. It scales with the complete workspace at the
-100%, 150%, and 200% **UiScale** stops and cannot be freely resized.
+combat-only zero-Food warning. It also carries the live **Loot Zone** strip
+beneath the scene, the sole Loot Zone interface. It scales with the complete
+workspace at the 100%, 150%, and 200% **UiScale** stops and cannot be freely
+resized.
 
 **Cards-on-Glass**:
 The single transparent native window model: opaque DOM cards float inside one

@@ -943,27 +943,13 @@ export function mountApp(
       <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
   }
 
-  /** Renders the Activity destination page's own fixed Loot Zone header (#209: "Loot Zone
-   * used/10", never scrolls away) plus its own independently-scrolling grid — the same stacks
-   * `renderLootStrip` shows in the compact widget's strip, as a full icon-tile grid rather than a
-   * compact chip row. */
-  function renderActivityLootZone(lootZone: Snapshot["lootZone"]): void {
-    el("#activity-loot-count").textContent =
-      `Loot Zone ${lootZone.length}/${LOOT_ZONE_DISPLAY_CAPACITY}`;
-    el("#activity-loot-items").innerHTML = lootZone
-      .map(
-        (s) =>
-          `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
-      )
-      .join("");
-  }
-
   /** Renders the compact widget's live Loot Zone strip (#220): one chip per `snap.lootZone` stack
-   * below `#scene`, filling the height wave 1/6 (#219) reclaimed by deleting `#titlebar`. Unlike
-   * the Activity page's own `<li>` grid above, `#compact-widget` carries a deep Tauri drag region
-   * (#219), so every chip here MUST be a `<button>` — a `<li>`/`<div>` is a drag surface under that
-   * region and would silently lose its own click (see app.test.ts's natively-clickable guard).
-   * `#loot-strip-items` scrolls horizontally rather than wrapping (a second row would re-open the
+   * below `#scene`, filling the height wave 1/6 (#219) reclaimed by deleting `#titlebar`. It is
+   * the sole Loot Zone interface (#243) — the Activity destination carries no Loot Zone markup of
+   * its own. `#compact-widget` carries a deep Tauri drag region (#219), so every chip here MUST be
+   * a `<button>` — a `<li>`/`<div>` is a drag surface under that region and would silently lose
+   * its own click (see app.test.ts's natively-clickable guard). `#loot-strip-items` scrolls
+   * horizontally rather than wrapping (a second row would re-open the
    * dead area this issue exists to close), so the `n/CAPACITY` count keeps a full zone legible
    * without scrolling. The strip keeps a fixed height regardless of content — an empty zone
    * disables `Loot all` rather than hiding the strip, so nothing jumps on every sweep. */
@@ -1103,7 +1089,6 @@ export function mountApp(
     renderSkillsPage(player.skills);
     renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
-    renderActivityLootZone(snap.lootZone);
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
     renderEquipmentTray(bank, player.gold);
@@ -1324,20 +1309,13 @@ export function mountApp(
         </div>
         <ul id="workshop-recipes" class="card-scroll"></ul>
       </div>
-      <!-- The Activity destination (#209) owns its own fixed shell too: the Loot Zone header
-           (used/10) and Loot all button never scroll away, and the Loot Zone grid and the Recent
-           Activity feed are two INDEPENDENT scrollports — not one shared wrapper — each with its
-           own overflow. Moves the existing Loot Zone/Loot Feed markup here rather than duplicating
-           it: still the one #feed target every Engine event feeds via feedLine(), so one Engine
-           event still yields exactly one feed entry. See styles.css's .activity-page-body. -->
+      <!-- The Activity destination (#243) is now a single full-height Recent Activity feed
+           scrollport — the Loot Zone strip in the Compact Widget (#loot-strip) is the sole Loot
+           Zone interface, so Activity no longer owns any Loot Zone markup of its own. #feed is
+           still the one target every Engine event feeds via feedLine(), so one Engine event still
+           yields exactly one feed entry, even while Activity is hidden. See styles.css's
+           .activity-page-body. -->
       <div data-management-page="activity" class="activity-page-body" hidden>
-        <div class="card-fixed">
-          <p class="panel-title">
-            <span id="activity-loot-count"></span>
-            <button id="activity-loot-all-btn" data-loot-all>Loot all</button>
-          </p>
-        </div>
-        <ul id="activity-loot-items" class="loot-zone-grid card-scroll activity-loot-scroll"></ul>
         <div class="card-fixed">
           <p class="panel-title">Recent Activity</p>
         </div>
@@ -1867,9 +1845,9 @@ export function mountApp(
     render();
   });
 
-  // Loot All (#206, wired into the compact widget's own Loot Strip by #220): shared by the
-  // compact widget's live Loot Strip button and the Activity destination page's own Loot Zone
-  // grid button — both sweep the identical Loot Zone, one implementation.
+  // Loot All (#206, wired into the compact widget's own Loot Strip by #220): the compact widget's
+  // Loot Strip button is the sole Loot Zone UI (#243), so this is the only handler and the only
+  // element it is wired to.
   function handleLootAll(): void {
     const before = engine.snapshot().lootZone.length;
     engine.lootAll(); // logs its own feed line via the looted subscription above, if anything moved
@@ -1881,7 +1859,6 @@ export function mountApp(
       feedLine("⚠ Bank full — loot left behind", "overflow");
     }
   }
-  el("#activity-loot-all-btn").addEventListener("click", handleLootAll);
   el("#loot-strip-all-btn").addEventListener("click", handleLootAll);
 
   el("#buy-slots-btn").addEventListener("click", () => {
