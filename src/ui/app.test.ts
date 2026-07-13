@@ -1213,14 +1213,15 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
     expect(tagged[0]?.getAttribute("data-tauri-drag-region")).toBe("deep");
   });
 
-  it("every interactive element inside #compact-widget's subtree is a natively-clickable tag, or explicitly opts out with data-tauri-drag-region=\"false\" — the regression guard for #219's deep drag region: it must fail the moment a future <div onclick> lands inside the widget", () => {
+  it("every interactive element inside #compact-widget's subtree is a natively-clickable tag, or explicitly opts out with data-tauri-drag-region=\"false\" — the regression guard for #219's deep drag region: it must fail the moment a future <div onclick> OR a delegated <li data-item>/<div data-slot> tile lands inside the widget", () => {
     const { root } = mount(1);
     const widget = root.querySelector<HTMLElement>("#compact-widget");
     expect(widget).not.toBeNull();
-    // Mirrors Tauri 2.11's own drag.js CLICKABLE_TAGS/isClickableElement predicate (see the issue
-    // body): natively-clickable tags are exempt for free; anything else that behaves click-
-    // interactive (onclick, a non-editable-off tabindex, contenteditable, or a clickable ARIA
-    // role) must be one of those tags or it silently loses its click under a `deep` ancestor.
+
+    // Tauri 2.11's drag.js exempts these tags from a `deep` drag region for free; anything else
+    // inside the widget becomes a drag surface, and mousedown on it gets preventDefault() +
+    // stopImmediatePropagation() before any listener runs — the click is handed to the OS and
+    // silently lost.
     const NATIVE_CLICKABLE_TAGS = new Set(["BUTTON", "INPUT", "SELECT", "A", "TEXTAREA", "LABEL"]);
     const CLICKABLE_ROLES = new Set([
       "button",
@@ -1232,8 +1233,69 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
       "switch",
       "option",
     ]);
-    const offenders = [...(widget as HTMLElement).querySelectorAll<HTMLElement>("*")].filter(
-      (el) => {
+
+    // SideScape does NOT mostly dispatch clicks via `onclick`/`tabindex`/`role` — its dominant
+    // idiom is DELEGATION on plain <div>/<li> keyed by a `data-*` attribute, resolved with
+    // `closest(...)`/`event.target.dataset` on an ancestor listener (see app.ts's
+    // `addEventListener("click", …)` handlers: `.tile[data-item]` on #bank/#character-bank-tray,
+    // `[data-item]` on the loadout dispatchers, `[data-gear-assign]`/`[data-gear-add]` on
+    // #character-slots, `[data-area-select]`, `[data-destination]`, `[data-spell]`, and the four
+    // `createLoadoutSlotDispatcher` key sets). Such an element carries NONE of the four
+    // attributes above, so a check that only looked for those would miss exactly the bug this
+    // guard exists to prevent: a `<li class="loot-chip" data-item="…">` (what wave 2/6 adds to
+    // this widget) would sail through while losing every click to the OS drag. So a delegation
+    // hook counts as "interactive" here, and inside the widget it must be a natively-clickable
+    // tag. Derived from app.ts's click listeners, not guessed:
+    const DELEGATION_HOOKS = new Set([
+      "data-item",
+      "data-slot",
+      "data-element",
+      "data-spell",
+      "data-style",
+      "data-threshold",
+      "data-monster",
+      "data-spot",
+      "data-dungeon",
+      "data-sell",
+      "data-equip",
+      "data-recipe",
+      "data-vendor-buy",
+      "data-area-select",
+      "data-destination",
+      "data-nav",
+      "data-menu",
+      "data-management-back",
+      "data-gear-assign",
+      "data-gear-add",
+      "data-bankpage",
+      "data-bank-filter",
+      "data-production-skill",
+      "data-ui-scale",
+      "data-loot-all",
+      "data-buy-slots",
+      "data-eat",
+      "data-unassign",
+      "data-assign",
+      "data-add",
+      "data-potion-unassign",
+      "data-potion-assign",
+      "data-potion-add",
+      "data-quiver-unassign",
+      "data-quiver-assign",
+      "data-quiver-add",
+      "data-rune-unassign",
+      "data-rune-assign",
+      "data-rune-add",
+    ]);
+
+    // Fail-closed backstop against hook drift: a NEW delegated `data-*` hook invented by a future
+    // issue wouldn't be in the set above, so any `data-*` attribute inside the widget that isn't
+    // on this short, deliberately-inert allowlist is treated as an offender too. Widening the
+    // allowlist is a conscious "this really is inert" decision, which is the point.
+    const INERT_DATA_ATTRS = new Set(["data-theme", "data-tauri-drag-region"]);
+
+    const offenders = [...(widget as HTMLElement).querySelectorAll<HTMLElement>("*")]
+      .filter((el) => {
         if (NATIVE_CLICKABLE_TAGS.has(el.tagName)) return false;
         if (el.getAttribute("data-tauri-drag-region") === "false") return false;
         if (el.hasAttribute("onclick")) return true;
@@ -1242,9 +1304,16 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
         if (tabindex !== null && tabindex !== "-1") return true;
         const role = el.getAttribute("role");
         if (role && CLICKABLE_ROLES.has(role)) return true;
-        return false;
-      },
-    );
+        return el
+          .getAttributeNames()
+          .some(
+            (name) =>
+              name.startsWith("data-") &&
+              (DELEGATION_HOOKS.has(name) || !INERT_DATA_ATTRS.has(name)),
+          );
+      })
+      .map((el) => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}.${el.className}`);
+
     expect(offenders).toEqual([]);
   });
 
