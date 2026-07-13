@@ -1,17 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
-import {
-  __setModifierSourcesForTest,
-  __setPetDropChanceForTest,
-  createEngine,
-  UNARMED_SPEED,
-} from "./engine";
+import { createEngine, UNARMED_SPEED } from "./engine";
 import { fixtureContent } from "./fixture-content";
 import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
-import type { AttackType, AutoEatThreshold, CombatStyle } from "./types";
+import type { AttackType, AutoEatThreshold, CombatStyle, Rng } from "./types";
 
 function freshEngine(seed = 42) {
   return createEngine(fixtureContent, seededRng(seed));
@@ -4973,16 +4968,16 @@ describe("Spells / Rune Slot (#101, #221)", () => {
 /**
  * Modifier-aggregation layer (#114): the layer itself is internal (no Snapshot surface), so these
  * prove the wiring the only way observable from the public Engine interface — through actual
- * combat/fishing outcomes, injecting a source via the documented test-only seam
- * (`__setModifierSourcesForTest`). Every other describe block in this file exercises the ×1
- * identity implicitly: none of the 603 pre-#114 tests changed, because zero sources means both
- * aggregators fold to 1 everywhere they're now applied.
+ * combat/fishing outcomes, using each Engine's own real per-instance state: an owned fixture Pet
+ * (via a Snapshot's `player.ownedPets`) or an active fixture Potion (via `player.potionSlot`), the
+ * production `activeModifierSources()` seams (#234 removed the process-global test-tuning
+ * `__setModifierSourcesForTest`). Every other describe block in this file exercises the ×1
+ * identity implicitly: zero owned Pets/active Potion means both aggregators fold to 1 everywhere
+ * they're applied.
  */
 describe("Modifier-aggregation layer (#114)", () => {
-  afterEach(() => __setModifierSourcesForTest([])); // never leak an injected source into later tests
-
-  it("a +20% Strength modifier source raises the observed player max hit in melee combat", () => {
-    function meleeDamages(ticks = 1000): number[] {
+  it("a +20% Strength modifier source (owned test-combat-pet) raises the observed player max hit in melee combat, vs a baseline Engine that doesn't own it", () => {
+    function meleeDamages(ownedPets: string[] = []): number[] {
       const engine = createEngine(
         fixtureContent,
         seededRng(99),
@@ -4993,6 +4988,7 @@ describe("Modifier-aggregation layer (#114)", () => {
               strength: { level: 90, xp: xpForLevel(90) },
               hitpoints: { level: 20, xp: xpForLevel(20) },
             },
+            ownedPets,
           },
         }),
       );
@@ -5004,26 +5000,43 @@ describe("Modifier-aggregation layer (#114)", () => {
       engine.on("attack", (e) => {
         if (e.actor === "player") damages.push(e.damage);
       });
-      for (let i = 0; i < ticks; i++) engine.tick();
+      for (let i = 0; i < 1000; i++) engine.tick();
       expect(damages.length).toBeGreaterThan(0);
       return damages;
     }
 
     const baseline = meleeDamages();
-    __setModifierSourcesForTest([{ target: "strength", pct: 0.2 }]);
-    const boosted = meleeDamages();
+    // "test-combat-pet" (fixtureContent): target "strength", boostPct 0.2 — a separate Engine
+    // built from a Snapshot that owns it, compared against the baseline Engine above that doesn't.
+    const boosted = meleeDamages(["test-combat-pet"]);
 
     // effectiveLevel(90, "strength", "aggressive") = 101 -> maxHit(101, 0) = 10 at ×1, but
-    // floor(101 * 1.2) = 121 -> maxHit(121, 0) = 12 once the source is active: a real ceiling
-    // raise, not RNG noise (attack level 90 vs control-dummy's defenceLevel 1 lands nearly every
-    // swing, so 1000 Ticks samples each ceiling many times over).
+    // floor(101 * 1.2) = 121 -> maxHit(121, 0) = 12 once the pet is owned: a real ceiling raise,
+    // not RNG noise (attack level 90 vs control-dummy's defenceLevel 1 lands nearly every swing,
+    // so 1000 Ticks samples each ceiling many times over).
     expect(Math.max(...boosted)).toBeGreaterThan(Math.max(...baseline));
   });
 
   it("a +20% Attack modifier source leaves the max hit alone but is isolated per Skill (Strength untouched)", () => {
-    __setModifierSourcesForTest([{ target: "attack", pct: 0.2 }]);
+    // Test-local Content (#234): fixtureContent plus one extra observable Pet targeting "attack"
+    // — not permanent production/fixture Content, and doesn't touch any other Pet-count/UI
+    // assertion elsewhere (fixtureContent itself is untouched; this is a local derivation).
+    const attackPetContent = {
+      ...fixtureContent,
+      pets: [
+        ...fixtureContent.pets,
+        {
+          id: "test-attack-pet",
+          name: "Test Attack Pet",
+          icon: "goblin-charm",
+          target: "attack" as const,
+          boostPct: 0.2,
+          source: "combat" as const,
+        },
+      ],
+    };
     const engine = createEngine(
-      fixtureContent,
+      attackPetContent,
       seededRng(99),
       makeSnapshot({
         player: {
@@ -5032,6 +5045,8 @@ describe("Modifier-aggregation layer (#114)", () => {
             strength: { level: 90, xp: xpForLevel(90) },
             hitpoints: { level: 20, xp: xpForLevel(20) },
           },
+          // Restored through this Engine's own Snapshot/loadout state (#234), not a global seam.
+          ownedPets: ["test-attack-pet"],
         },
       }),
     );
@@ -5047,9 +5062,13 @@ describe("Modifier-aggregation layer (#114)", () => {
     expect(Math.max(...damages)).toBe(10);
   });
 
-  it("a fishing-speed modifier source shortens the Catch cadence: more fish-caught events over the same Tick window", () => {
-    function catchesOver(ticks: number): number {
-      const engine = freshEngine();
+  it("a fishing-speed modifier source (owned test-fishing-pet) shortens the Catch cadence: more fish-caught events over the same Tick window than a baseline Engine that doesn't own it", () => {
+    function catchesOver(ticks: number, ownedPets: string[] = []): number {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ player: { ownedPets } }),
+      );
       let caught = 0;
       engine.on("fish-caught", () => caught++);
       engine.selectFishingSpot("pond");
@@ -5058,42 +5077,115 @@ describe("Modifier-aggregation layer (#114)", () => {
     }
 
     const baseline = catchesOver(60);
-    __setModifierSourcesForTest([{ target: "fishing-speed", pct: 0.5 }]);
-    const boosted = catchesOver(60);
+    // "test-fishing-pet" (fixtureContent): target "fishing-speed", boostPct 0.5.
+    const boosted = catchesOver(60, ["test-fishing-pet"]);
 
     expect(boosted).toBeGreaterThan(baseline);
+  });
+
+  it("locality regression (#234): pumping a baseline and a boosted Engine INTERLEAVED still shows the modifier only on the boosted instance", () => {
+    const baseline = createEngine(
+      fixtureContent,
+      seededRng(99),
+      makeSnapshot({
+        player: {
+          skills: {
+            attack: { level: 90, xp: xpForLevel(90) },
+            strength: { level: 90, xp: xpForLevel(90) },
+            hitpoints: { level: 20, xp: xpForLevel(20) },
+          },
+        },
+      }),
+    );
+    const boosted = createEngine(
+      fixtureContent,
+      seededRng(99),
+      makeSnapshot({
+        player: {
+          skills: {
+            attack: { level: 90, xp: xpForLevel(90) },
+            strength: { level: 90, xp: xpForLevel(90) },
+            hitpoints: { level: 20, xp: xpForLevel(20) },
+          },
+          ownedPets: ["test-combat-pet"],
+        },
+      }),
+    );
+    baseline.selectMonster("control-dummy");
+    boosted.selectMonster("control-dummy");
+
+    const baselineDamages: number[] = [];
+    const boostedDamages: number[] = [];
+    baseline.on("attack", (e) => {
+      if (e.actor === "player") baselineDamages.push(e.damage);
+    });
+    boosted.on("attack", (e) => {
+      if (e.actor === "player") boostedDamages.push(e.damage);
+    });
+
+    // Interleaved, not sequential: every Tick alternates which Engine advances, so any leakage
+    // through shared module state (the very bug #234 removes) would show up as the baseline
+    // Engine observing the boosted ceiling mid-run.
+    for (let i = 0; i < 1000; i++) {
+      baseline.tick();
+      boosted.tick();
+    }
+
+    expect(baselineDamages.length).toBeGreaterThan(0);
+    expect(boostedDamages.length).toBeGreaterThan(0);
+    // Same ceilings as the standalone Strength-boost test above: 10 (×1) vs 12 (×1.2).
+    expect(Math.max(...baselineDamages)).toBe(10);
+    expect(Math.max(...boostedDamages)).toBe(12);
+    expect(baseline.snapshot().player.ownedPets).toEqual([]);
+    expect(boosted.snapshot().player.ownedPets).toEqual(["test-combat-pet"]);
   });
 });
 
 /**
+ * Deterministic Rng adapter for Pet-drop tests (#234, local to this test file): replays `values`
+ * in order, then repeats `fallback` forever. A production Pet-roll draw compares against a real
+ * tuning constant (`PET_DROP_CHANCE` 1/2000, `BOSS_PET_DROP_CHANCE` 1/300), so a value below both
+ * forces a roll to succeed and a value at/above the relevant chance forces it to fail — the same
+ * seam every other Engine test drives (`createEngine`'s injected `Rng`), just fed a scripted
+ * sequence instead of a PRNG.
+ */
+function sequenceRng(values: number[], fallback = 0): Rng {
+  let index = 0;
+  return { next: () => values[index++] ?? fallback };
+}
+
+/**
  * Pets (#120): very-rare drops from a qualifying action (a kill, a Catch, a craft completion) or a
  * specific Boss, each granting a small ALWAYS-ON modifier once owned — no active-pet slot, no
- * charges (owner decision, grilled: "All owned always-on"). `__setPetDropChanceForTest` (mirrors
- * `__setModifierSourcesForTest`'s own test-only seam) forces or rules out a roll deterministically
- * so these tests don't need to grind hundreds of thousands of Ticks against the real
- * 1-in-2000/1-in-300 production chances. fixtureContent's "pet-target" (hp 1, maxHit 0) exists
- * purely so a kill-driven roll can be forced within a handful of Ticks.
+ * charges (owner decision, grilled: "All owned always-on"). These tests force or deny a roll
+ * deterministically through `sequenceRng` (above) against the real, unchanged production
+ * 1-in-2000/1-in-300 chances (#234 removed the `__setPetDropChanceForTest` global override).
+ * fixtureContent's "pet-target" (hp 1, maxHit 0) exists purely so a kill-driven roll resolves
+ * within a single scripted attack. For the player's one-hit kill against "pet-target", the known
+ * draw order per resolved swing is: accuracy draw, damage draw, then (only on a kill) the
+ * qualifying Pet-roll draw(s) — see `rollDamage`/`playerAttack` in engine.ts.
  */
 describe("Pets (#120)", () => {
-  afterEach(() => __setPetDropChanceForTest(null)); // never leak an override into later tests
-
-  it('a kill rolls the killed action\'s "combat" pet at the tuning chance, entering ownedPets and firing pet-dropped', () => {
-    __setPetDropChanceForTest({ action: 1, boss: 1 });
-    const engine = freshEngine(3);
+  it('a kill rolls the killed action\'s "combat" pet at the real tuning chance, entering ownedPets and firing pet-dropped', () => {
+    const engine = createEngine(fixtureContent, sequenceRng([0, 0.999, 0]));
     engine.selectMonster("pet-target");
     let droppedId: string | undefined;
     engine.on("pet-dropped", (e) => {
       droppedId = e.petId;
     });
-    for (let i = 0; i < 2000 && droppedId === undefined; i++) engine.tick();
+    // playerCooldown/monsterCooldown both start at their own attackSpeed, so the first several
+    // Ticks draw nothing; the scripted values land on the Tick the player's swing actually
+    // resolves.
+    for (let i = 0; i < 10 && droppedId === undefined; i++) engine.tick();
     expect(droppedId).toBe("test-combat-pet");
     expect(engine.snapshot().player.ownedPets).toContain("test-combat-pet");
   });
 
   it('a Catch success (not merely an attempt) rolls the "fishing" pet', () => {
-    __setPetDropChanceForTest({ action: 1, boss: 1 });
-    const engine = freshEngine(1);
-    engine.selectFishingSpot("pond"); // catchChance 1 (fixtureContent): every attempt succeeds
+    // catchChance 1 (fixtureContent's "pond") makes every attempt guaranteed, so an all-zero Rng
+    // both passes the catch roll and forces the Pet roll below the real chance.
+    const engine = createEngine(fixtureContent, sequenceRng([], 0));
+    engine.selectFishingSpot("pond");
     let droppedId: string | undefined;
     engine.on("pet-dropped", (e) => {
       droppedId = e.petId;
@@ -5104,10 +5196,9 @@ describe("Pets (#120)", () => {
   });
 
   it('a craft completion rolls the "production" pet', () => {
-    __setPetDropChanceForTest({ action: 1, boss: 1 });
     const engine = createEngine(
       fixtureContent,
-      seededRng(1),
+      sequenceRng([], 0),
       makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 1 }] } }),
     );
     engine.selectRecipe("test-sword"); // craftTicks 3, 1 bar in the Bank — completes once
@@ -5120,11 +5211,10 @@ describe("Pets (#120)", () => {
     expect(engine.snapshot().player.ownedPets).toContain("test-production-pet");
   });
 
-  it("an already-owned pet never re-rolls, even at chance 1", () => {
-    __setPetDropChanceForTest({ action: 1, boss: 1 });
+  it("an already-owned pet never re-rolls, even against a forced-success Rng", () => {
     const engine = createEngine(
       fixtureContent,
-      seededRng(1),
+      sequenceRng([0, 0.999], 0),
       makeSnapshot({ player: { ownedPets: ["test-combat-pet"] } }),
     );
     engine.selectMonster("pet-target");
@@ -5132,35 +5222,42 @@ describe("Pets (#120)", () => {
     engine.on("pet-dropped", () => {
       dropped = true;
     });
-    for (let i = 0; i < 200; i++) engine.tick();
+    for (let i = 0; i < 20; i++) engine.tick();
     expect(dropped).toBe(false);
     expect(engine.snapshot().player.ownedPets).toEqual(["test-combat-pet"]);
   });
 
-  it("a boss pet only drops from its source.boss Monster, never from an ordinary kill, even at chance 1", () => {
-    __setPetDropChanceForTest({ action: 1, boss: 1 });
-    const engine = freshEngine(5);
+  it("a boss pet only drops from its source.boss Monster, never from an ordinary kill, even against a forced-success Rng", () => {
+    const engine = createEngine(fixtureContent, sequenceRng([0, 0.999, 0]));
     engine.selectMonster("pet-target"); // NOT "boss-dummy" — test-boss-pet's source.boss
     const droppedIds: string[] = [];
     engine.on("pet-dropped", (e) => droppedIds.push(e.petId));
-    // pet-target's ~25%-per-attack kill rate (50% hit chance x 50% chance the 0/1 damage roll
-    // lands 1) at attackSpeed 4 gives ~25 expected kills over 400 Ticks — comfortably enough for
-    // at least one at chance 1.
-    for (let i = 0; i < 400; i++) engine.tick();
+    for (let i = 0; i < 10 && droppedIds.length === 0; i++) engine.tick();
     expect(droppedIds).toContain("test-combat-pet");
     expect(droppedIds).not.toContain("test-boss-pet");
   });
 
-  it("killing the matching source.boss Monster rolls its own boss pet", () => {
-    __setPetDropChanceForTest({ action: 0, boss: 1 }); // isolate: only the boss pet can ever roll
-    const engine = freshEngine(5);
+  it("killing the matching source.boss Monster rolls its own boss pet, independently of the generic combat-pet roll", () => {
+    // High Strength/Attack (mirrors the modifier-aggregation tests above) so the player one-shots
+    // "boss-dummy" (hp 5): floor(0.999 * (maxHit + 1)) needs a maxHit of at least 4.
+    const engine = createEngine(
+      fixtureContent,
+      sequenceRng([0, 0.999, 0, 0]),
+      makeSnapshot({
+        player: {
+          skills: {
+            attack: { level: 90, xp: xpForLevel(90) },
+            strength: { level: 90, xp: xpForLevel(90) },
+            hitpoints: { level: 20, xp: xpForLevel(20) },
+          },
+        },
+      }),
+    );
     engine.selectMonster("boss-dummy"); // fixtureContent's own "gauntlet" Dungeon boss
-    let droppedId: string | undefined;
-    engine.on("pet-dropped", (e) => {
-      droppedId = e.petId;
-    });
-    for (let i = 0; i < 2000 && droppedId === undefined; i++) engine.tick();
-    expect(droppedId).toBe("test-boss-pet");
+    const droppedIds: string[] = [];
+    engine.on("pet-dropped", (e) => droppedIds.push(e.petId));
+    for (let i = 0; i < 10 && droppedIds.length === 0; i++) engine.tick();
+    expect(droppedIds).toContain("test-boss-pet");
   });
 
   it("every owned pet's modifier is always-on via activeModifierSources (#114) — no slot, no charges", () => {
