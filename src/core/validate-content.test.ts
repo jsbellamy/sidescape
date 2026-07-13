@@ -375,7 +375,17 @@ describe("validateContent", () => {
   });
 
   it("reports zero spells (#101) — not doubled up with the redundant levelReq-1 message", () => {
-    const content: Content = { ...fixtureContent, spells: [] };
+    // Strip rune items (and their vendor entries) too (#221): with no Spells at all, every rune
+    // item would otherwise also report as unreferenced, and the vendor would then dangle-reference
+    // them — real, separate invariants, but not what this test isolates.
+    const content: Content = {
+      ...fixtureContent,
+      items: fixtureContent.items.filter((i) => !(i.kind === "ammo" && i.ammoType === "rune")),
+      vendor: fixtureContent.vendor.filter(
+        (v) => !["air-rune", "water-rune", "earth-rune", "fire-rune"].includes(v.itemId),
+      ),
+      spells: [],
+    };
     expect(validateContent(content)).toEqual(["Content defines no spells"]);
   });
 
@@ -442,6 +452,76 @@ describe("validateContent", () => {
     });
 
     it("a valid arrow/rune pair (rangedStr xor element) reports nothing", () => {
+      expect(validateContent(fixtureContent)).toEqual([]);
+    });
+  });
+
+  describe("Rune Slot 1:1 (#221): SpellDef.runeId <-> rune Item", () => {
+    it("reports a runeId that doesn't resolve to any Item", () => {
+      const content: Content = {
+        ...fixtureContent,
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-spark" ? { ...s, runeId: "no-such-item" } : s,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'spell "test-spark" runeId "no-such-item" does not resolve to a rune item',
+      );
+    });
+
+    it("reports a runeId that resolves to a non-rune Item", () => {
+      const content: Content = {
+        ...fixtureContent,
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-spark" ? { ...s, runeId: "arrow" } : s,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'spell "test-spark" runeId "arrow" does not resolve to a rune item',
+      );
+    });
+
+    it("reports a Spell whose Element disagrees with its rune's Element", () => {
+      const content: Content = {
+        ...fixtureContent,
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-spark" ? { ...s, runeId: "water-rune" } : s,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'spell "test-spark" element "air" disagrees with rune "water-rune" element "water"',
+      );
+    });
+
+    it("reports two Spells sharing one runeId", () => {
+      const content: Content = {
+        ...fixtureContent,
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-blast" ? { ...s, runeId: "air-rune" } : s,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'runeId "air-rune" is referenced by 2 spells, expected exactly 1',
+      );
+    });
+
+    it("reports a rune Item that no Spell references", () => {
+      const extraRune = {
+        kind: "ammo" as const,
+        id: "extra-rune",
+        name: "Extra Rune",
+        icon: "sapphire",
+        ammoType: "rune" as const,
+        element: "air" as const,
+        value: 1,
+      };
+      const content: Content = { ...fixtureContent, items: [...fixtureContent.items, extraRune] };
+      expect(validateContent(content)).toContain(
+        'rune "extra-rune" is not referenced by any spell',
+      );
+    });
+
+    it("the fixture's own 1:1 rune/Spell links report nothing", () => {
       expect(validateContent(fixtureContent)).toEqual([]);
     });
   });

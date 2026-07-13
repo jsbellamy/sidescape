@@ -116,8 +116,8 @@ describe("Ranged and Magic starter weapons (#7)", () => {
     const engine = createEngine(
       content,
       seededRng(7),
-      // Magic now requires the cast Spell's Element rune loaded in the Rune Pouch (#119) — the
-      // default-resolved Spell (air-strike, levelReq 1) needs air-rune.
+      // Magic now requires a loaded Rune Slot (#119, #221) — air-rune casts air-strike
+      // (levelReq 1), the Spell a fresh Magic-level-1 player can already cast.
       makeSnapshot({
         bank: {
           items: [
@@ -128,7 +128,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       }),
     );
     engine.equip("apprentice-staff");
-    engine.loadRunePouch("air-rune");
+    engine.loadRuneSlot("air-rune");
     expect(engine.snapshot().player.equipment.weapon).toBe("apprentice-staff");
 
     engine.selectMonster("chicken");

@@ -1591,10 +1591,38 @@ export const content: Content = {
   // (#119) and the x1.5 element-weakness upside on weak Monsters are priced in — parity is a
   // rough target, not an exact DPS match.
   spells: [
-    { id: "air-strike", name: "Air Strike", element: "air", levelReq: 1, baseMaxHit: 6 },
-    { id: "water-strike", name: "Water Strike", element: "water", levelReq: 5, baseMaxHit: 9 },
-    { id: "earth-strike", name: "Earth Strike", element: "earth", levelReq: 9, baseMaxHit: 12 },
-    { id: "fire-strike", name: "Fire Strike", element: "fire", levelReq: 13, baseMaxHit: 16 },
+    {
+      id: "air-strike",
+      name: "Air Strike",
+      element: "air",
+      levelReq: 1,
+      baseMaxHit: 6,
+      runeId: "air-rune",
+    },
+    {
+      id: "water-strike",
+      name: "Water Strike",
+      element: "water",
+      levelReq: 5,
+      baseMaxHit: 9,
+      runeId: "water-rune",
+    },
+    {
+      id: "earth-strike",
+      name: "Earth Strike",
+      element: "earth",
+      levelReq: 9,
+      baseMaxHit: 12,
+      runeId: "earth-rune",
+    },
+    {
+      id: "fire-strike",
+      name: "Fire Strike",
+      element: "fire",
+      levelReq: 13,
+      baseMaxHit: 16,
+      runeId: "fire-rune",
+    },
   ],
   // Fixed-price vendor (#119): sells the arrow tiers and four Element runes above — see the
   // economy-check comment on the ammo items themselves for the price arithmetic.

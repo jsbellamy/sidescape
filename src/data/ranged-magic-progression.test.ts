@@ -125,9 +125,9 @@ function darkrootGraduateSaveRanged() {
 }
 
 /** Magic counterpart of darkrootGraduateSaveRanged: same stats, iron-staff equipped instead, and
- * Fire Strike selected (#101) — the top starter spell (levelReq 13), well within this graduate's
- * Magic 28, so tier progression exercises spell-driven damage rather than the untrained
- * levelReq-1 fallback (Air Strike) a fresh save would resolve to. */
+ * fire-rune loaded (#221) — the top starter Spell (Fire Strike, levelReq 13), well within this
+ * graduate's Magic 28, so tier progression exercises Spell-driven damage rather than the
+ * untrained "no rune loaded" state a fresh save would sit in. */
 function darkrootGraduateSaveMagic() {
   const base = darkrootGraduateSaveRanged();
   return {
@@ -135,11 +135,10 @@ function darkrootGraduateSaveMagic() {
     player: {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "iron-staff" },
-      spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
-      // Magic now requires the cast Spell's Element rune loaded (#119) — Fire Strike needs
-      // fire-rune, not the ranged base fixture's own bronze-arrow (harmless leftover, unused by a
-      // staff-wielder).
-      runePouch: [{ itemId: "fire-rune", qty: 100_000 }],
+      // Magic now requires a loaded Rune Slot (#119, #221) — fire-rune casts Fire Strike, not
+      // the ranged base fixture's own bronze-arrow Quiver (harmless leftover, unused by a
+      // staff-wielder). The loaded rune derives `player.spell`; there is no separate selection.
+      runeSlot: { itemId: "fire-rune", qty: 100_000 },
     },
   };
 }
@@ -180,7 +179,7 @@ function sewersGraduateSaveRanged() {
 }
 
 /** Magic counterpart of sewersGraduateSaveRanged: same stats, steel-staff equipped instead, and
- * Fire Strike selected (#101) — see darkrootGraduateSaveMagic's doc above. */
+ * fire-rune loaded (#221) — see darkrootGraduateSaveMagic's doc above. */
 function sewersGraduateSaveMagic() {
   const base = sewersGraduateSaveRanged();
   return {
@@ -188,10 +187,9 @@ function sewersGraduateSaveMagic() {
     player: {
       ...base.player,
       equipment: { ...base.player.equipment, weapon: "steel-staff" },
-      spell: { id: "fire-strike", name: "Fire Strike", element: "fire" as const },
-      // Magic now requires the cast Spell's Element rune loaded (#119) — see
-      // darkrootGraduateSaveMagic's own comment above.
-      runePouch: [{ itemId: "fire-rune", qty: 100_000 }],
+      // Magic now requires a loaded Rune Slot (#119, #221) — see darkrootGraduateSaveMagic's own
+      // comment above.
+      runeSlot: { itemId: "fire-rune", qty: 100_000 },
     },
   };
 }
