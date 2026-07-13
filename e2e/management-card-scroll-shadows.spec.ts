@@ -180,7 +180,8 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
 
   const header = page.locator("#card-management .management-card-header");
   await expect(header).toBeVisible();
-  await expect(header).toHaveAttribute("data-tauri-drag-region", "");
+  // #219 de-chromed card headers: no drag region (dragging lives solely on #compact-widget now).
+  await expect(header).not.toHaveAttribute("data-tauri-drag-region");
 
   const scroll = page.locator("#feed");
   const barWidth = await scroll.evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width);

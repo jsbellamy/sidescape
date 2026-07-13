@@ -255,8 +255,7 @@ function characterNavMarkup(): string {
         <span>${MANAGEMENT_DESTINATION_LABELS[destination]}</span>
       </button>`,
   ).join("");
-  return `<span class="card-nav-title" data-tauri-drag-region>Character</span>
-    <nav id="character-nav" class="card-nav">
+  return `<nav id="character-nav" class="card-nav">
       ${destinationButtons}
       <button data-nav="settings" title="Settings" aria-expanded="false">
         <span aria-hidden="true">⚙</span>
@@ -387,10 +386,10 @@ export function mountApp(
     root.querySelectorAll<HTMLElement>("[data-management-page]").forEach((page) => {
       page.hidden = page.dataset["managementPage"] !== workspace.management;
     });
-    if (workspace.management) {
-      el<HTMLElement>("#management-title").textContent =
-        MANAGEMENT_DESTINATION_LABELS[workspace.management];
-    }
+    // #219 deleted the Management card's own `#management-title` chrome (de-chromed header, no
+    // background/border/title text) — the destination pages carry their own "where am I" cue
+    // instead (e.g. `#bank-header`, `#workshop-skill-name`, the World rail's Area names, and
+    // Activity's own "Recent Activity" heading), so there is nothing left to set here.
     root
       .querySelectorAll<HTMLButtonElement>("#character-nav button[data-destination]")
       .forEach((btn) => {
@@ -1405,7 +1404,7 @@ export function mountApp(
     <div id="item-tooltip" class="item-tooltip" hidden></div>
     <div id="management-row" class="management-row">
     <section id="card-character" class="management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region>
+      <header class="management-card-header">
         ${characterNavMarkup()}
       </header>
       <div id="settings-popover" class="settings-popover" hidden>
@@ -1470,8 +1469,7 @@ export function mountApp(
       <button id="expand-bank-btn" class="expand-bank-btn" data-destination="bank">Expand Bank</button>
     </section>
     <section id="card-management" class="management-card" hidden>
-      <header class="management-card-header" data-tauri-drag-region>
-        <p class="panel-title" id="management-title" data-tauri-drag-region></p>
+      <header class="management-card-header">
         <button class="card-close" data-management-back title="Back to Character">←</button>
       </header>
       <!-- The Workshop destination (#209) owns its own fixed shell, mirroring World/Bank below:
@@ -1577,14 +1575,7 @@ export function mountApp(
       </div>
     </section>
     </div>
-    <section id="compact-widget">
-    <header id="titlebar" data-tauri-drag-region>
-      <button id="menu-toggle" data-menu title="Menu" aria-label="Menu">
-        <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
-      </button>
-      <span data-tauri-drag-region>SideScape</span>
-      <button id="close-btn" title="Close SideScape" aria-label="Close SideScape">✕</button>
-    </header>
+    <section id="compact-widget" data-tauri-drag-region="deep">
     <div id="main-column">
       <section id="scene">
         <div id="backdrop" aria-hidden="true">
@@ -1608,6 +1599,12 @@ export function mountApp(
           </div>
         </div>
         <div id="no-food-warning" role="status" title="No active Food" hidden>No active Food</div>
+        <div id="widget-controls">
+          <button id="menu-toggle" data-menu title="Menu" aria-label="Menu">
+            <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
+          </button>
+          <button id="close-btn" title="Close SideScape" aria-label="Close SideScape">✕</button>
+        </div>
       </section>
     </div>
     </section>`;

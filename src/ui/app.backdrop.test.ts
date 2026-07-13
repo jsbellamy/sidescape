@@ -157,13 +157,23 @@ describe("scene backdrop (#80)", () => {
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
   });
 
-  it("does not change #scene's own children count/structure beyond the new #backdrop node (320px layout budget: no new scene-height-affecting siblings)", () => {
+  it("does not change #scene's own children count/structure beyond the new #backdrop node and #219's absolutely-positioned #widget-controls overlay (320px layout budget: no new scene-height-affecting siblings)", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
     mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
 
     const scene = root.querySelector<HTMLElement>("#scene");
     const ids = Array.from(scene!.children).map((c) => c.id);
-    expect(ids).toEqual(["backdrop", "toast-container", "sprite-row", "no-food-warning"]);
+    // #widget-controls is last so it paints above everything else in DOM-order-as-paint-order,
+    // without disturbing #backdrop staying first (the z-order pin the sibling test above checks).
+    // It's `position: absolute` (see styles.css), so — unlike a flow sibling — it never adds to
+    // #scene's own layout height.
+    expect(ids).toEqual([
+      "backdrop",
+      "toast-container",
+      "sprite-row",
+      "no-food-warning",
+      "widget-controls",
+    ]);
   });
 });

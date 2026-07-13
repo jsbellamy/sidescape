@@ -75,7 +75,8 @@ export interface BootDeps {
  * tests): load save → create engine → compute/pump offline ticks → mountApp → mountSfx → wire
  * close/export/import buttons → show away card → start tick + autosave intervals. Preserve this
  * order exactly — it encodes #69's invariant (offline pump BEFORE mountApp, away-card shown after)
- * and #138 §4's (button wiring after mountApp builds the titlebar).
+ * and #138 §4's (button wiring after mountApp builds the DOM, including #widget-controls — the
+ * floating cluster #219 substituted for the deleted titlebar).
  */
 export function boot(
   root: HTMLElement,
@@ -105,9 +106,11 @@ export function boot(
     awayCard = buildAwayCard(summary, awayMs, capped);
   }
 
-  // Mount first: the whole composition — including the compact widget's titlebar and its
-  // export/import/mute/close controls — is built inside `#app` by `mountApp` (#138 §4 moved the
-  // titlebar into the opaque compact card), so the button wiring below must run after this.
+  // Mount first: the whole composition — including the compact widget's floating
+  // `#widget-controls` cluster and the Settings popover's export/import/mute controls — is built
+  // inside `#app` by `mountApp` (#138 §4 moved these into the opaque compact/Character cards;
+  // #219 later replaced the compact widget's titlebar bar with `#widget-controls`), so the
+  // button wiring below must run after this.
   const app = mountApp(engine, root, resolved, deps.createChrome(root));
 
   const muteToggle = requireElement<HTMLButtonElement>(root, "#mute-toggle");
