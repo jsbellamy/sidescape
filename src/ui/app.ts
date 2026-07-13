@@ -304,7 +304,11 @@ export function mountApp(
     const options = await windowChrome.getScaleOptions?.();
     root.querySelectorAll<HTMLButtonElement>("[data-ui-scale]").forEach((button) => {
       const value = Number(button.dataset["uiScale"]);
-      button.disabled = options?.find((option) => option.value === value)?.supported === false;
+      const supported = options?.find((option) => option.value === value)?.supported !== false;
+      button.disabled = !supported;
+      button.title = supported
+        ? `Set UI scale to ${value * 100}%`
+        : `${value * 100}% unavailable: monitor cannot fit the full workspace`;
       button.setAttribute("aria-pressed", String(value === selected));
     });
   }
@@ -1777,12 +1781,12 @@ export function mountApp(
   // the whole card so nested `<img>`/`<span>` clicks resolve via `closest`. Checked in a stable
   // order: a destination click (World/Workshop/Activity nav buttons, or the Bank tray's "Expand
   // Bank" button — both carry `data-destination`) before the Settings/Pets popover toggles.
-  el("#card-character").addEventListener("click", (event) => {
+  el("#card-character").addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
     const scaleValue = target.closest<HTMLButtonElement>("[data-ui-scale]")?.dataset["uiScale"];
     if (scaleValue) {
-      windowChrome.setScale?.(Number(scaleValue) as 1 | 1.5 | 2);
-      void syncScaleSelector();
+      await windowChrome.setScale?.(Number(scaleValue) as 1 | 1.5 | 2);
+      await syncScaleSelector();
       return;
     }
     const destinationBtn = target.closest<HTMLElement>("[data-destination]");

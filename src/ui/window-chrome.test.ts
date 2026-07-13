@@ -29,9 +29,10 @@ function fakePort(
   height = 220,
   monitorWidth = 1920,
   monitorHeight = 1800,
-): NativeWindowPort & { sizes: LogicalSize[] } {
+): NativeWindowPort & { sizes: LogicalSize[]; writes: string[] } {
   let rect = { x: 100, y: 100, width, height };
   const sizes: LogicalSize[] = [];
+  const writes: string[] = [];
   const monitor: Monitor = {
     name: null,
     position: new PhysicalPosition(0, 0),
@@ -44,15 +45,18 @@ function fakePort(
   };
   return {
     sizes,
+    writes,
     scaleFactor: async () => 1,
     outerPosition: async () => new PhysicalPosition(rect.x, rect.y),
     outerSize: async () => new PhysicalSize(rect.width, rect.height),
     currentMonitor: async () => monitor,
     setSize: async (s) => {
+      writes.push("size");
       sizes.push(s);
       rect = { ...rect, width: s.width, height: s.height };
     },
     setPosition: async (p) => {
+      writes.push("position");
       rect = { ...rect, x: p.x, y: p.y };
     },
   };
@@ -96,6 +100,20 @@ describe("WorkspaceChrome fixed scale", () => {
     await chrome.settled();
     expect(port.sizes[port.sizes.length - 1]).toMatchObject({ width: 640, height: 440 });
     expect(root.style.getPropertyValue("--ui-scale")).toBe("2");
+  });
+  it("returns a completion promise so Settings can update after scale application", async () => {
+    const chrome = createTauriWindowChrome(document.createElement("main"), fakePort());
+    const completion = chrome.setScale?.(1.5);
+    expect(completion).toBeInstanceOf(Promise);
+    await completion;
+    expect(chrome.getScale?.()).toBe(1.5);
+  });
+  it("moves before expanding so an open card never overlays the compact position", async () => {
+    const port = fakePort();
+    const chrome = createTauriWindowChrome(document.createElement("main"), port);
+    chrome.setCardCount(1);
+    await chrome.settled();
+    expect(port.writes.slice(-2)).toEqual(["position", "size"]);
   });
   it("disables unsupported stops and never silently reduces the selected scale", async () => {
     const port = fakePort(320, 220, 1920, 1000);

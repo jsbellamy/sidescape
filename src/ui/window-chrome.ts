@@ -94,8 +94,18 @@ export function createTauriWindowChrome(
       anchor,
       monitor,
     });
-    await port.setSize(new LogicalSize(result.width, result.height));
-    await port.setPosition(new LogicalPosition(result.x, result.y));
+    const expanding = result.width > size.width || result.height > size.height;
+    if (expanding) {
+      // Move the compact rect to its final anchor before growing it. Resizing first briefly paints
+      // the expanded glass/cards over the old compact location, then visibly pops into place.
+      await port.setPosition(new LogicalPosition(result.x, result.y));
+      await port.setSize(new LogicalSize(result.width, result.height));
+    } else {
+      // Contract before moving so a closing bottom-anchored workspace does not sweep a large,
+      // still-expanded window across the monitor.
+      await port.setSize(new LogicalSize(result.width, result.height));
+      await port.setPosition(new LogicalPosition(result.x, result.y));
+    }
     cardCount = nextCardCount;
     anchor = result.anchor;
     if (anchor) root.dataset["anchor"] = anchor;
@@ -130,7 +140,7 @@ export function createTauriWindowChrome(
     },
     getScale: () => scale,
     setScale(next) {
-      if (!isUiScale(next)) return;
+      if (!isUiScale(next)) return Promise.resolve();
       queue = queue
         .then(async () => {
           const monitor = await monitorRect();
@@ -140,6 +150,7 @@ export function createTauriWindowChrome(
           await apply(cardCount);
         })
         .catch(console.error);
+      return queue;
     },
     setCardCount(next) {
       queue = queue.then(() => apply(next)).catch(console.error);

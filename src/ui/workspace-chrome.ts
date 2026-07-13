@@ -11,5 +11,5 @@ export interface WorkspaceChrome {
   getScaleOptions?(): Promise<
     Array<{ value: import("./window-geometry").UiScale; supported: boolean }>
   >;
-  setScale?(scale: import("./window-geometry").UiScale): void;
+  setScale?(scale: import("./window-geometry").UiScale): Promise<void>;
 }
