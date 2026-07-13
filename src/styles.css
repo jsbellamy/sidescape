@@ -494,8 +494,8 @@ body {
    negative z-index — not positive z-index on the foreground — so the existing sprite/splat/bar
    stacking (#77, #98) needs no changes at all. `#backdrop` is also the FIRST child of #scene in
    DOM order (see app.ts), which is the z-order test's other half (DOM order + this CSS).
-   Static this issue: no animation. The seam for later per-layer motion is right here — a
-   `transform` loop added to each `.layer-*` independently, no structural change needed. */
+   Mid/near motion is compositor-only: the layers are oversize by one native tile so their
+   transform loops can snap back without exposing an edge. */
 #backdrop {
   position: absolute;
   inset: 0;
@@ -514,6 +514,11 @@ body {
   image-rendering: pixelated; /* no-op on today's gradients; keeps a future sprite drop-in seamless */
 }
 
+#backdrop .layer-mid,
+#backdrop .layer-near {
+  inset: 0 -160px 0 0; /* one native tile of overscan for the translateX loop */
+}
+
 /* Readability (#80): a fixed dark fade over the lower portion of every theme, where the
    dungeon/monster text and HP/food-slot bars sit, so busy art never fights the text regardless of
    which theme is showing. */
@@ -523,60 +528,108 @@ body {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.55) 100%);
 }
 
-/* Per-theme layer art (#80). Hand-built with CSS gradients rather than sourced pixel-art packs —
-   the issue's own escape hatch ("if a decent CC0 set can't be found... hand-build with CSS
-   gradients/shapes... better than a license risk"), invoked for all five themes; see
-   docs/assets.md for the record. Each theme's three layers go lightest (sky, furthest) to darkest
-   (near, closest), the classic silhouette-depth parallax look. Swapping a theme to a real sprite
-   sheet later is a one-line background-image change per layer — no structural change. */
+/* Per-theme layer art (#140). Each transparent pixel-art tile sits over a matching gradient fill
+   so the scene remains covered above the tile's native 160x120 strip. Layers go lightest (sky,
+   furthest) to darkest (near, closest), the classic silhouette-depth parallax look. */
 #backdrop[data-theme="meadow"] .layer-sky {
-  background-image: linear-gradient(to bottom, #86b6d8, #cfe6a8);
+  background-image:
+    url("./assets/backdrops/meadow-sky.png"), linear-gradient(to bottom, #86b6d8, #cfe6a8);
 }
 #backdrop[data-theme="meadow"] .layer-mid {
-  background-image: linear-gradient(to bottom, rgba(95, 138, 79, 0) 0%, #5f8a4f 55%, #5f8a4f 100%);
+  background-image:
+    url("./assets/backdrops/meadow-mid.png"),
+    linear-gradient(to bottom, rgba(95, 138, 79, 0) 0%, #5f8a4f 55%, #5f8a4f 100%);
+  animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="meadow"] .layer-near {
-  background-image: linear-gradient(to bottom, rgba(44, 74, 38, 0) 0%, #2c4a26 70%, #2c4a26 100%);
+  background-image:
+    url("./assets/backdrops/meadow-near.png"),
+    linear-gradient(to bottom, rgba(44, 74, 38, 0) 0%, #2c4a26 70%, #2c4a26 100%);
+  animation: backdrop-drift 60s linear infinite;
 }
 
 #backdrop[data-theme="forest"] .layer-sky {
-  background-image: linear-gradient(to bottom, #2b3a3a, #4a5f4f);
+  background-image:
+    url("./assets/backdrops/forest-sky.png"), linear-gradient(to bottom, #2b3a3a, #4a5f4f);
 }
 #backdrop[data-theme="forest"] .layer-mid {
-  background-image: linear-gradient(to bottom, rgba(31, 58, 38, 0) 0%, #1f3a26 55%, #1f3a26 100%);
+  background-image:
+    url("./assets/backdrops/forest-mid.png"),
+    linear-gradient(to bottom, rgba(31, 58, 38, 0) 0%, #1f3a26 55%, #1f3a26 100%);
+  animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="forest"] .layer-near {
-  background-image: linear-gradient(to bottom, rgba(14, 26, 16, 0) 0%, #0e1a10 70%, #0e1a10 100%);
+  background-image:
+    url("./assets/backdrops/forest-near.png"),
+    linear-gradient(to bottom, rgba(14, 26, 16, 0) 0%, #0e1a10 70%, #0e1a10 100%);
+  animation: backdrop-drift 60s linear infinite;
 }
 
 #backdrop[data-theme="sewer"] .layer-sky {
-  background-image: linear-gradient(to bottom, #3a3f34, #4d5245);
+  background-image:
+    url("./assets/backdrops/sewer-sky.png"), linear-gradient(to bottom, #3a3f34, #4d5245);
 }
 #backdrop[data-theme="sewer"] .layer-mid {
-  background-image: linear-gradient(to bottom, rgba(42, 42, 34, 0) 0%, #2a2a22 55%, #2a2a22 100%);
+  background-image:
+    url("./assets/backdrops/sewer-mid.png"),
+    linear-gradient(to bottom, rgba(42, 42, 34, 0) 0%, #2a2a22 55%, #2a2a22 100%);
+  animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="sewer"] .layer-near {
-  background-image: linear-gradient(to bottom, rgba(20, 20, 16, 0) 0%, #141410 70%, #141410 100%);
+  background-image:
+    url("./assets/backdrops/sewer-near.png"),
+    linear-gradient(to bottom, rgba(20, 20, 16, 0) 0%, #141410 70%, #141410 100%);
+  animation: backdrop-drift 60s linear infinite;
 }
 
 #backdrop[data-theme="crypt"] .layer-sky {
-  background-image: linear-gradient(to bottom, #241a33, #3a2f4a);
+  background-image:
+    url("./assets/backdrops/crypt-sky.png"), linear-gradient(to bottom, #241a33, #3a2f4a);
 }
 #backdrop[data-theme="crypt"] .layer-mid {
-  background-image: linear-gradient(to bottom, rgba(58, 50, 66, 0) 0%, #3a3242 55%, #3a3242 100%);
+  background-image:
+    url("./assets/backdrops/crypt-mid.png"),
+    linear-gradient(to bottom, rgba(58, 50, 66, 0) 0%, #3a3242 55%, #3a3242 100%);
+  animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="crypt"] .layer-near {
-  background-image: linear-gradient(to bottom, rgba(21, 15, 28, 0) 0%, #150f1c 70%, #150f1c 100%);
+  background-image:
+    url("./assets/backdrops/crypt-near.png"),
+    linear-gradient(to bottom, rgba(21, 15, 28, 0) 0%, #150f1c 70%, #150f1c 100%);
+  animation: backdrop-drift 60s linear infinite;
 }
 
 #backdrop[data-theme="town"] .layer-sky {
-  background-image: linear-gradient(to bottom, #4a2e1a, #8a5a2c);
+  background-image:
+    url("./assets/backdrops/town-sky.png"), linear-gradient(to bottom, #4a2e1a, #8a5a2c);
 }
 #backdrop[data-theme="town"] .layer-mid {
-  background-image: linear-gradient(to bottom, rgba(58, 36, 21, 0) 0%, #3a2415 55%, #3a2415 100%);
+  background-image:
+    url("./assets/backdrops/town-mid.png"),
+    linear-gradient(to bottom, rgba(58, 36, 21, 0) 0%, #3a2415 55%, #3a2415 100%);
+  animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="town"] .layer-near {
-  background-image: linear-gradient(to bottom, rgba(28, 16, 8, 0) 0%, #1c1008 70%, #1c1008 100%);
+  background-image:
+    url("./assets/backdrops/town-near.png"),
+    linear-gradient(to bottom, rgba(28, 16, 8, 0) 0%, #1c1008 70%, #1c1008 100%);
+  animation: backdrop-drift 60s linear infinite;
+}
+
+@keyframes backdrop-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-160px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #backdrop .layer-mid,
+  #backdrop .layer-near {
+    animation: none;
+  }
 }
 
 /* Activity foreground prop (#80): follows the ACTIVITY (unlike the backdrop, which follows the
