@@ -1,32 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { fixtureContent } from "../core/fixture-content";
 import { resolveContent } from "../core/validate-content";
-import { compareStacks, loadSortKey, saveSortKey, sortStacks } from "./sort";
+import { compareStacks, sortStacks } from "./sort";
 import type { Stack } from "./sort";
 
 const resolvedFixtureContent = resolveContent(fixtureContent);
-
-/**
- * happy-dom's localStorage getter doesn't resolve reliably under Vitest's global-population
- * strategy (mirrors the stub in ui/sfx.test.ts).
- */
-function stubLocalStorage(): Storage {
-  const store = new Map<string, string>();
-  return {
-    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
-    setItem: (key: string, value: string) => {
-      store.set(key, String(value));
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-    clear: () => store.clear(),
-    key: (index: number) => Array.from(store.keys())[index] ?? null,
-    get length() {
-      return store.size;
-    },
-  } as Storage;
-}
 
 // fixtureContent items: gold (currency), meat (food, value 3), bronze-sword
 // (equipment/weapon, value 20), lucky-charm (equipment/head, value 100).
@@ -76,38 +54,5 @@ describe("compareStacks / sortStacks", () => {
     const stacks = stacksFor(["gold", "meat", "bronze-sword"]);
     stacks.sort(compareStacks("name", resolvedFixtureContent));
     expect(stacks.map((s) => s.itemId)).toEqual(["bronze-sword", "meat", "gold"]);
-  });
-});
-
-describe("loadSortKey / saveSortKey persistence", () => {
-  beforeEach(() => {
-    vi.stubGlobal("localStorage", stubLocalStorage());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("defaults to 'name' when nothing is persisted", () => {
-    expect(loadSortKey()).toBe("name");
-  });
-
-  it("round-trips a saved sort key", () => {
-    saveSortKey("value");
-    expect(loadSortKey()).toBe("value");
-
-    saveSortKey("kind");
-    expect(loadSortKey()).toBe("kind");
-  });
-
-  it("falls back to 'name' for a corrupted/unknown persisted value", () => {
-    localStorage.setItem("sidescape-ui-sort", "not-a-real-key");
-    expect(loadSortKey()).toBe("name");
-  });
-
-  it("stores the sort key under its own localStorage key, separate from the game save", () => {
-    saveSortKey("value");
-    expect(localStorage.getItem("sidescape-ui-sort")).toBe("value");
-    expect(localStorage.getItem("sidescape-save-v1")).toBeNull();
   });
 });

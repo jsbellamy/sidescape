@@ -16,8 +16,6 @@ export interface Stack {
   qty: number;
 }
 
-const SORT_STORAGE_KEY = "sidescape-ui-sort";
-
 /** equipment -> food -> potion -> ammo -> material -> currency, covering every current
  * `ItemDef.kind` (#207 — the expanded Bank's filter set mirrors this same list minus currency,
  * which never occupies a Bank Slot). Any kind not listed sorts last. */
@@ -82,27 +80,4 @@ export function sortStacks<T extends Stack>(
   content: ResolvedContent,
 ): T[] {
   return [...stacks].sort(compareStacks(key, content));
-}
-
-function isSortKey(value: unknown): value is SortKey {
-  return (SORT_KEYS as readonly unknown[]).includes(value);
-}
-
-/** The persisted sort choice, or "name" (a sensible default) if unset or localStorage is
- * unavailable (private mode, disabled). */
-export function loadSortKey(): SortKey {
-  try {
-    const raw = localStorage.getItem(SORT_STORAGE_KEY);
-    return isSortKey(raw) ? raw : "name";
-  } catch {
-    return "name";
-  }
-}
-
-export function saveSortKey(key: SortKey): void {
-  try {
-    localStorage.setItem(SORT_STORAGE_KEY, key);
-  } catch {
-    // localStorage may be unavailable; the choice just won't persist.
-  }
 }

@@ -1,16 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fixtureContent } from "../core/fixture-content";
 import { resolveContent } from "../core/validate-content";
-import {
-  BANK_FILTERS,
-  BANK_VIEW_KEY,
-  filterBankStacks,
-  loadBankView,
-  resolveSelection,
-  saveBankView,
-  visibleBankStacks,
-} from "./bank-view";
-import type { Stack } from "./sort";
+import { BANK_FILTERS, BANK_VIEW_KEY, createBankPresentation } from "./bank-view";
+import type { Snapshot } from "../core/types";
 
 const content = resolveContent(fixtureContent);
 
@@ -39,7 +31,7 @@ function stubLocalStorage(): Storage {
 // fixtureContent items relevant here: bronze-sword/lucky-charm/bow/staff (equipment), meat/bread
 // (food), bar/raw-fish/hide/herb (material), strength-potion/fishing-potion/production-potion
 // (potion), arrow/iron-arrow/air-rune/water-rune/earth-rune/fire-rune (ammo), gold (currency).
-function stacksFor(itemIds: string[]): Stack[] {
+function stacksFor(itemIds: string[]): Snapshot["bank"]["items"] {
   return itemIds.map((itemId) => ({ itemId, qty: 1 }));
 }
 
@@ -49,120 +41,7 @@ describe("BANK_FILTERS", () => {
   });
 });
 
-describe("filterBankStacks", () => {
-  const stacks = stacksFor(["bronze-sword", "meat", "bar", "strength-potion", "arrow"]);
-
-  it("returns every stack unfiltered for 'all' with no search", () => {
-    expect(filterBankStacks(stacks, "all", "", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-      "meat",
-      "bar",
-      "strength-potion",
-      "arrow",
-    ]);
-  });
-
-  it("filters by kind for every non-'all' BankFilter value", () => {
-    expect(filterBankStacks(stacks, "equipment", "", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-    ]);
-    expect(filterBankStacks(stacks, "food", "", content).map((s) => s.itemId)).toEqual(["meat"]);
-    expect(filterBankStacks(stacks, "material", "", content).map((s) => s.itemId)).toEqual(["bar"]);
-    expect(filterBankStacks(stacks, "potion", "", content).map((s) => s.itemId)).toEqual([
-      "strength-potion",
-    ]);
-    expect(filterBankStacks(stacks, "ammo", "", content).map((s) => s.itemId)).toEqual(["arrow"]);
-  });
-
-  it("matches search case-insensitively", () => {
-    expect(filterBankStacks(stacks, "all", "BRONZE", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-    ]);
-    expect(filterBankStacks(stacks, "all", "bronze", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-    ]);
-  });
-
-  it("trims surrounding whitespace from the search term", () => {
-    expect(filterBankStacks(stacks, "all", "  meat  ", content).map((s) => s.itemId)).toEqual([
-      "meat",
-    ]);
-  });
-
-  it("treats a search of only whitespace as empty (matches everything)", () => {
-    expect(filterBankStacks(stacks, "all", "   ", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-      "meat",
-      "bar",
-      "strength-potion",
-      "arrow",
-    ]);
-  });
-
-  it("composes kind filter and search together (kind narrows first, search narrows further)", () => {
-    // "sword" only matches bronze-sword by name; filtering to "food" first should exclude it
-    // even though the name substring would otherwise match nothing in that kind either.
-    expect(filterBankStacks(stacks, "food", "sword", content)).toEqual([]);
-    expect(filterBankStacks(stacks, "equipment", "sword", content).map((s) => s.itemId)).toEqual([
-      "bronze-sword",
-    ]);
-  });
-
-  it("never mutates the input array", () => {
-    const original = [...stacks];
-    filterBankStacks(stacks, "equipment", "", content);
-    expect(stacks).toEqual(original);
-  });
-});
-
-describe("visibleBankStacks (filter-before-sort ordering)", () => {
-  it("filters by kind, then by search, then sorts the filtered copy — never the other order", () => {
-    // Sorting by value descending would put lucky-charm (100g) before bronze-sword (20g) if sort
-    // ran before the equipment filter/search; the filtered set here is search-narrowed to "sword"
-    // so lucky-charm must be gone entirely, not just re-ordered.
-    const stacks = stacksFor(["lucky-charm", "bronze-sword", "meat"]);
-    const result = visibleBankStacks(stacks, "equipment", "sword", "value", content);
-    expect(result.map((s) => s.itemId)).toEqual(["bronze-sword"]);
-  });
-
-  it("sorts the filtered result by the given SortKey", () => {
-    const stacks = stacksFor(["meat", "bronze-sword", "lucky-charm"]);
-    const byValue = visibleBankStacks(stacks, "all", "", "value", content);
-    // lucky-charm 100g, bronze-sword 20g, meat 3g
-    expect(byValue.map((s) => s.itemId)).toEqual(["lucky-charm", "bronze-sword", "meat"]);
-  });
-
-  it("never mutates the input array", () => {
-    const stacks = stacksFor(["lucky-charm", "bronze-sword", "meat"]);
-    const original = [...stacks];
-    visibleBankStacks(stacks, "all", "", "value", content);
-    expect(stacks).toEqual(original);
-  });
-});
-
-describe("resolveSelection", () => {
-  const stacks = stacksFor(["bronze-sword", "meat"]);
-
-  it("returns the selected id unchanged when it is present in the visible stacks", () => {
-    expect(resolveSelection("bronze-sword", stacks)).toBe("bronze-sword");
-  });
-
-  it("returns null when the selected id is absent from the visible stacks", () => {
-    expect(resolveSelection("lucky-charm", stacks)).toBeNull();
-  });
-
-  it("returns null for a null selection", () => {
-    expect(resolveSelection(null, stacks)).toBeNull();
-  });
-
-  it("is a pure lookup — it never mutates its inputs", () => {
-    const original = [...stacks];
-    resolveSelection("lucky-charm", stacks);
-    expect(stacks).toEqual(original);
-  });
-});
-
-describe("loadBankView / saveBankView persistence", () => {
+describe("createBankPresentation", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", stubLocalStorage());
   });
@@ -171,63 +50,259 @@ describe("loadBankView / saveBankView persistence", () => {
     vi.unstubAllGlobals();
   });
 
-  it("defaults to { version: 1, filter: 'all', sort: 'name' } when nothing is persisted", () => {
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "name" });
+  describe("construction / tolerant load", () => {
+    it("defaults to filter 'all', sort 'name', empty search when nothing is persisted", () => {
+      const presentation = createBankPresentation(content);
+      expect(presentation.state()).toEqual({ filter: "all", sort: "name", search: "" });
+    });
+
+    it("restores a validly stored filter and sort", () => {
+      localStorage.setItem(
+        BANK_VIEW_KEY,
+        JSON.stringify({ version: 1, filter: "food", sort: "value" }),
+      );
+      const presentation = createBankPresentation(content);
+      expect(presentation.state()).toEqual({ filter: "food", sort: "value", search: "" });
+    });
+
+    it("falls back to the default for malformed JSON", () => {
+      localStorage.setItem(BANK_VIEW_KEY, "{not json");
+      expect(createBankPresentation(content).state()).toEqual({
+        filter: "all",
+        sort: "name",
+        search: "",
+      });
+    });
+
+    it("falls back to the default for a JSON value that isn't an object", () => {
+      localStorage.setItem(BANK_VIEW_KEY, "42");
+      expect(createBankPresentation(content).state()).toEqual({
+        filter: "all",
+        sort: "name",
+        search: "",
+      });
+    });
+
+    it("defaults only the invalid field when the filter is unknown", () => {
+      localStorage.setItem(
+        BANK_VIEW_KEY,
+        JSON.stringify({ version: 1, filter: "not-a-filter", sort: "value" }),
+      );
+      expect(createBankPresentation(content).state()).toEqual({
+        filter: "all",
+        sort: "value",
+        search: "",
+      });
+    });
+
+    it("defaults only the invalid field when the sort is unknown", () => {
+      localStorage.setItem(
+        BANK_VIEW_KEY,
+        JSON.stringify({ version: 1, filter: "food", sort: "not-a-sort" }),
+      );
+      expect(createBankPresentation(content).state()).toEqual({
+        filter: "food",
+        sort: "name",
+        search: "",
+      });
+    });
+
+    it("tolerates missing fields entirely", () => {
+      localStorage.setItem(BANK_VIEW_KEY, JSON.stringify({ version: 1 }));
+      expect(createBankPresentation(content).state()).toEqual({
+        filter: "all",
+        sort: "name",
+        search: "",
+      });
+    });
+
+    it("never throws when localStorage access itself fails", () => {
+      vi.stubGlobal("localStorage", {
+        getItem: () => {
+          throw new Error("blocked");
+        },
+        setItem: () => {
+          throw new Error("blocked");
+        },
+      } as unknown as Storage);
+      let presentation: ReturnType<typeof createBankPresentation> | undefined;
+      expect(() => {
+        presentation = createBankPresentation(content);
+      }).not.toThrow();
+      expect(presentation?.state()).toEqual({ filter: "all", sort: "name", search: "" });
+      expect(() => presentation?.setFilter("food")).not.toThrow();
+    });
   });
 
-  it("round-trips a saved filter and sort", () => {
-    saveBankView({ version: 1, filter: "food", sort: "value" });
-    expect(loadBankView()).toEqual({ version: 1, filter: "food", sort: "value" });
+  describe("persistence timing", () => {
+    it("setFilter immediately persists with the current sort", () => {
+      const presentation = createBankPresentation(content);
+      presentation.setSort("value");
+      presentation.setFilter("food");
+      expect(JSON.parse(localStorage.getItem(BANK_VIEW_KEY) as string)).toEqual({
+        version: 1,
+        filter: "food",
+        sort: "value",
+      });
+    });
+
+    it("setSort immediately persists with the current filter", () => {
+      const presentation = createBankPresentation(content);
+      presentation.setFilter("potion");
+      presentation.setSort("kind");
+      expect(JSON.parse(localStorage.getItem(BANK_VIEW_KEY) as string)).toEqual({
+        version: 1,
+        filter: "potion",
+        sort: "kind",
+      });
+    });
+
+    it("setSearch never persists", () => {
+      const presentation = createBankPresentation(content);
+      presentation.setSearch("sword");
+      expect(localStorage.getItem(BANK_VIEW_KEY)).toBeNull();
+      expect(presentation.state().search).toBe("sword");
+    });
+
+    it("clearSearch never persists and clears only search", () => {
+      const presentation = createBankPresentation(content);
+      presentation.setFilter("food");
+      presentation.setSearch("meat");
+      const beforeClear = localStorage.getItem(BANK_VIEW_KEY);
+      presentation.clearSearch();
+      expect(presentation.state()).toEqual({ filter: "food", sort: "name", search: "" });
+      expect(localStorage.getItem(BANK_VIEW_KEY)).toBe(beforeClear);
+    });
+
+    it("toggleSelection never persists", () => {
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("bronze-sword");
+      expect(localStorage.getItem(BANK_VIEW_KEY)).toBeNull();
+    });
   });
 
-  it("stores under its own key, separate from the game save and the old standalone sort key", () => {
-    saveBankView({ version: 1, filter: "potion", sort: "kind" });
-    expect(localStorage.getItem(BANK_VIEW_KEY)).toBe(
-      JSON.stringify({ version: 1, filter: "potion", sort: "kind" }),
-    );
-    expect(localStorage.getItem("sidescape-save-v1")).toBeNull();
+  describe("full() projection", () => {
+    it("applies kind filter, then trimmed case-insensitive search, then sort — filter/search never expand the sorted set", () => {
+      const stacks = stacksFor(["lucky-charm", "bronze-sword", "meat"]);
+      const presentation = createBankPresentation(content);
+      presentation.setFilter("equipment");
+      presentation.setSearch("  SWORD  ");
+      expect(presentation.full(stacks).stacks.map((s) => s.itemId)).toEqual(["bronze-sword"]);
+    });
+
+    it("sorts using the current SortKey", () => {
+      const stacks = stacksFor(["meat", "bronze-sword", "lucky-charm"]);
+      const presentation = createBankPresentation(content);
+      presentation.setSort("value");
+      // lucky-charm 100g, bronze-sword 20g, meat 3g
+      expect(presentation.full(stacks).stacks.map((s) => s.itemId)).toEqual([
+        "lucky-charm",
+        "bronze-sword",
+        "meat",
+      ]);
+    });
+
+    it("resolves selected to null when the selected id is filtered out", () => {
+      const stacks = stacksFor(["bronze-sword", "meat"]);
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("meat");
+      presentation.setFilter("equipment");
+      expect(presentation.full(stacks).selected).toBeNull();
+    });
+
+    it("resolves selected to the matching stack when present", () => {
+      const stacks = stacksFor(["bronze-sword", "meat"]);
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("meat");
+      expect(presentation.full(stacks).selected).toEqual({ itemId: "meat", qty: 1 });
+    });
+
+    it("never mutates the input array or its order", () => {
+      const stacks = stacksFor(["lucky-charm", "bronze-sword", "meat"]);
+      const original = stacks.map((s) => ({ ...s }));
+      const presentation = createBankPresentation(content);
+      presentation.setSort("value");
+      presentation.full(stacks);
+      expect(stacks).toEqual(original);
+    });
   });
 
-  it("falls back to the default for malformed JSON", () => {
-    localStorage.setItem(BANK_VIEW_KEY, "{not json");
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "name" });
+  describe("equipment() projection", () => {
+    it("ignores the full Bank's kind filter and search, keeping only Equipment", () => {
+      const stacks = stacksFor(["bronze-sword", "lucky-charm", "meat", "bar"]);
+      const presentation = createBankPresentation(content);
+      presentation.setFilter("food");
+      presentation.setSearch("sword");
+      expect(
+        presentation
+          .equipment(stacks)
+          .stacks.map((s) => s.itemId)
+          .sort(),
+      ).toEqual(["bronze-sword", "lucky-charm"].sort());
+    });
+
+    it("shares the current SortKey with full()", () => {
+      const stacks = stacksFor(["bronze-sword", "lucky-charm"]);
+      const presentation = createBankPresentation(content);
+      presentation.setSort("value");
+      // lucky-charm 100g before bronze-sword 20g
+      expect(presentation.equipment(stacks).stacks.map((s) => s.itemId)).toEqual([
+        "lucky-charm",
+        "bronze-sword",
+      ]);
+    });
+
+    it("never mutates the input array or its order", () => {
+      const stacks = stacksFor(["bronze-sword", "lucky-charm", "meat"]);
+      const original = stacks.map((s) => ({ ...s }));
+      const presentation = createBankPresentation(content);
+      presentation.equipment(stacks);
+      expect(stacks).toEqual(original);
+    });
   });
 
-  it("falls back to the default for a JSON value that isn't an object", () => {
-    localStorage.setItem(BANK_VIEW_KEY, "42");
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "name" });
+  describe("shared-but-independently-resolved selection", () => {
+    it("full()'s filter hiding the selection does not blank equipment()'s selection", () => {
+      const stacks = stacksFor(["bronze-sword", "meat"]);
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("bronze-sword");
+      presentation.setFilter("food");
+      expect(presentation.full(stacks).selected).toBeNull();
+      expect(presentation.equipment(stacks).selected).toEqual({ itemId: "bronze-sword", qty: 1 });
+    });
+
+    it("re-clicking (toggling) the same selection turns it off in both projections", () => {
+      const stacks = stacksFor(["bronze-sword"]);
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("bronze-sword");
+      expect(presentation.full(stacks).selected).not.toBeNull();
+      presentation.toggleSelection("bronze-sword");
+      expect(presentation.full(stacks).selected).toBeNull();
+      expect(presentation.equipment(stacks).selected).toBeNull();
+    });
+
+    it("a selected stack absent from both inputs (sold/equipped) resolves to null in both without mutating input, and can reappear later", () => {
+      const presentation = createBankPresentation(content);
+      presentation.toggleSelection("bronze-sword");
+      const emptyStacks: Snapshot["bank"]["items"] = [];
+      expect(presentation.full(emptyStacks).selected).toBeNull();
+      expect(presentation.equipment(emptyStacks).selected).toBeNull();
+
+      const restocked = stacksFor(["bronze-sword"]);
+      expect(presentation.full(restocked).selected).toEqual({ itemId: "bronze-sword", qty: 1 });
+    });
   });
 
-  it("tolerates an unknown filter or sort value, defaulting only the bad field", () => {
-    localStorage.setItem(
-      BANK_VIEW_KEY,
-      JSON.stringify({ version: 1, filter: "not-a-filter", sort: "value" }),
-    );
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "value" });
-
-    localStorage.setItem(
-      BANK_VIEW_KEY,
-      JSON.stringify({ version: 1, filter: "food", sort: "not-a-sort" }),
-    );
-    expect(loadBankView()).toEqual({ version: 1, filter: "food", sort: "name" });
-  });
-
-  it("tolerates missing fields entirely", () => {
-    localStorage.setItem(BANK_VIEW_KEY, JSON.stringify({ version: 1 }));
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "name" });
-  });
-
-  it("never throws when localStorage access itself fails", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => {
-        throw new Error("blocked");
-      },
-    } as unknown as Storage);
-    expect(() => loadBankView()).not.toThrow();
-    expect(loadBankView()).toEqual({ version: 1, filter: "all", sort: "name" });
-    expect(() => saveBankView({ version: 1, filter: "food", sort: "name" })).not.toThrow();
+  describe("two-instance locality", () => {
+    it("two instances do not share filter/search/selection state", () => {
+      const a = createBankPresentation(content);
+      const b = createBankPresentation(content);
+      a.setFilter("food");
+      a.setSearch("meat");
+      a.toggleSelection("meat");
+      expect(b.state()).toEqual({ filter: "all", sort: "name", search: "" });
+      const stacks = stacksFor(["meat"]);
+      expect(b.full(stacks).selected).toBeNull();
+    });
   });
 });

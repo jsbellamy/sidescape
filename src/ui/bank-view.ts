@@ -1,6 +1,7 @@
+import type { Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { sortStacks, SORT_KEYS } from "./sort";
-import type { SortKey, Stack } from "./sort";
+import type { SortKey } from "./sort";
 
 /**
  * The expanded Bank page's filter vocabulary (#207): one entry per bankable `ItemDef.kind`, plus
@@ -10,15 +11,9 @@ import type { SortKey, Stack } from "./sort";
 export const BANK_FILTERS = ["all", "equipment", "food", "material", "potion", "ammo"] as const;
 export type BankFilter = (typeof BANK_FILTERS)[number];
 
-/** Which of the Management card's "bank" destination sub-pages is showing — purely
- * presentational and session-only (never persisted, never the Snapshot/save), same boundary as
- * search text and the selected Bank item below. */
-export type BankMode = "bank" | "vendor";
-
 /** The one piece of Bank-view state that *is* persisted locally (#207): filter and sort survive a
- * relaunch, the same boundary `sort.ts`'s own `SORT_STORAGE_KEY` already used for sort alone.
- * Bundled into one versioned object so a future field (e.g. a second filter axis) is one more
- * property, not a second parallel localStorage key. */
+ * relaunch, bundled into one versioned object so a future field (e.g. a second filter axis) is one
+ * more property, not a second parallel localStorage key. */
 export interface StoredBankViewV1 {
   version: 1;
   filter: BankFilter;
@@ -39,9 +34,8 @@ function isSortKey(value: unknown): value is SortKey {
 
 /** Tolerant load (#207): malformed JSON, a missing file, an unknown filter/sort value, or a
  * localStorage access failure (private mode, disabled) all fall back to the default — never
- * throws. Mirrors `sort.ts`'s own `loadSortKey` tolerance, one level deeper (two fields instead of
- * one). */
-export function loadBankView(): StoredBankViewV1 {
+ * throws. */
+function loadBankView(): StoredBankViewV1 {
   try {
     const raw = localStorage.getItem(BANK_VIEW_KEY);
     if (!raw) return { ...DEFAULT_BANK_VIEW };
@@ -58,7 +52,7 @@ export function loadBankView(): StoredBankViewV1 {
   }
 }
 
-export function saveBankView(view: StoredBankViewV1): void {
+function saveBankView(view: StoredBankViewV1): void {
   try {
     localStorage.setItem(BANK_VIEW_KEY, JSON.stringify(view));
   } catch {
@@ -66,54 +60,100 @@ export function saveBankView(view: StoredBankViewV1): void {
   }
 }
 
+export interface BankPresentationState {
+  readonly filter: BankFilter;
+  readonly sort: SortKey;
+  readonly search: string;
+}
+
+export interface PresentedBank {
+  readonly stacks: Snapshot["bank"]["items"];
+  readonly selected: Snapshot["bank"]["items"][number] | null;
+}
+
 /**
- * The expanded Bank page's exact filtering order (#207): kind filter, then a case-insensitive
- * trimmed substring match on `ItemDef.name`. Sorting is a separate step (`visibleBankStacks`
- * below) so this stays independently testable — filter-before-sort is load-bearing (sorting never
- * changes which stacks are present, only their order).
+ * One deep, instance-local module owning the Bank's presentation state (#237): filter, sort,
+ * search, and shared selection, plus the tolerant load / immediate-persist timing described on
+ * `StoredBankViewV1`. Two DOM adapters in `app.ts` — the full Bank destination and the Character
+ * hub's Equipment-only tray — call `full`/`equipment` against one shared instance rather than each
+ * owning filter/sort/search/selection variables of their own.
  */
-export function filterBankStacks<T extends Stack>(
-  stacks: T[],
+export interface BankPresentation {
+  state(): BankPresentationState;
+  setFilter(filter: BankFilter): void;
+  setSort(sort: SortKey): void;
+  setSearch(search: string): void;
+  clearSearch(): void;
+  toggleSelection(itemId: string): void;
+  full(stacks: Snapshot["bank"]["items"]): PresentedBank;
+  equipment(stacks: Snapshot["bank"]["items"]): PresentedBank;
+}
+
+/** Filter-then-search-then-sort, shared by `full`'s kind filter and `equipment`'s fixed
+ * equipment-only filter — kept as one internal helper so the two projections' pipelines can never
+ * drift apart on ordering (filter always precedes sort). */
+function project(
+  stacks: Snapshot["bank"]["items"],
   filter: BankFilter,
   search: string,
+  sort: SortKey,
+  selectedItemId: string | null,
   content: ResolvedContent,
-): T[] {
+): PresentedBank {
   const trimmed = search.trim().toLowerCase();
-  return stacks.filter((s) => {
+  const filtered = stacks.filter((s) => {
     const def = content.itemsById.get(s.itemId);
     if (filter !== "all" && def?.kind !== filter) return false;
     if (trimmed === "") return true;
     return (def?.name ?? s.itemId).toLowerCase().includes(trimmed);
   });
+  const sorted = sortStacks(filtered, sort, content);
+  const selected = sorted.find((s) => s.itemId === selectedItemId) ?? null;
+  return { stacks: sorted, selected };
 }
 
-/** `filterBankStacks` followed by `sortStacks` — the full "start with snapshot.bank.items ->
- * filter by kind -> filter by search -> sort" pipeline, minus the final "drop selectedBankItem if
- * it no longer appears" step (that step is view-local, see `resolveSelection` below: the full Bank
- * page and Character's Equipment tray each apply their own filter, so each must resolve selection
- * visibility against its own list rather than a single shared computation). */
-export function visibleBankStacks<T extends Stack>(
-  stacks: T[],
-  filter: BankFilter,
-  search: string,
-  sort: SortKey,
-  content: ResolvedContent,
-): T[] {
-  return sortStacks(filterBankStacks(stacks, filter, search, content), sort, content);
-}
+export function createBankPresentation(content: ResolvedContent): BankPresentation {
+  const initial = loadBankView();
+  let filter: BankFilter = initial.filter;
+  let sort: SortKey = initial.sort;
+  // Session-only: never persisted, never the Snapshot/save. Cleared by `clearSearch` whenever the
+  // Bank Management destination closes (see app.ts's `syncWorkspace`).
+  let search = "";
+  // Shared internally by both projections, but each projection resolves *visibility* against its
+  // own filtered/sorted list — one view's filter hiding the item must not blank the other view's
+  // still-valid selection (#207's original `resolveSelection`, now internal to this module).
+  let selectedItemId: string | null = null;
 
-/**
- * Resolves whether `selected` should drive a detail strip against `visibleStacks` (#207's "drop
- * selectedBankItem if it no longer appears" step) — returns `selected` unchanged when present,
- * `null` otherwise. Deliberately a pure, non-mutating lookup rather than a variable reset: the full
- * Bank page and Character's Equipment tray share one `selectedBankItem`, but each filters
- * differently (the tray is always Equipment-only, regardless of the Bank page's own active
- * filter), so one view's filter hiding the item must not erase the other view's still-valid
- * selection. Each caller resolves visibility for its own render only.
- */
-export function resolveSelection<T extends Stack>(
-  selected: string | null,
-  visibleStacks: T[],
-): string | null {
-  return selected !== null && visibleStacks.some((s) => s.itemId === selected) ? selected : null;
+  function persist(): void {
+    saveBankView({ version: 1, filter, sort });
+  }
+
+  return {
+    state(): BankPresentationState {
+      return { filter, sort, search };
+    },
+    setFilter(next: BankFilter): void {
+      filter = next;
+      persist();
+    },
+    setSort(next: SortKey): void {
+      sort = next;
+      persist();
+    },
+    setSearch(next: string): void {
+      search = next;
+    },
+    clearSearch(): void {
+      search = "";
+    },
+    toggleSelection(itemId: string): void {
+      selectedItemId = selectedItemId === itemId ? null : itemId;
+    },
+    full(stacks: Snapshot["bank"]["items"]): PresentedBank {
+      return project(stacks, filter, search, sort, selectedItemId, content);
+    },
+    equipment(stacks: Snapshot["bank"]["items"]): PresentedBank {
+      return project(stacks, "equipment", "", sort, selectedItemId, content);
+    },
+  };
 }
