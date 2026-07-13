@@ -424,31 +424,6 @@ body {
   overflow: hidden;
 }
 
-#chrome-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-}
-
-#gold {
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-/* Event ticker (#62 amendment): a one-line heartbeat mirroring the latest Loot Feed line, styled
-   with the same band/class rules as `#feed li` (see those rules further down — they're
-   unscoped from `#feed` on purpose so `#ticker` shares them). */
-#ticker {
-  min-height: 14px;
-  font-size: 11px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 #scene {
   position: relative; /* anchors #toast-container and #backdrop */
   /* Own stacking context (#80): keeps #backdrop's negative z-index scoped inside #scene instead of
@@ -459,6 +434,17 @@ body {
   border-radius: 6px;
   padding: 10px;
   overflow: hidden; /* backdrop layers must never push the 320px layout */
+  /* #220: #scene previously had no flex/height, so it sat at content height (~64px sprites +
+     padding) inside #main-column's flex column, leaving empty #main-column background below the
+     sprite row — the "dead area" this issue removes. Growing to fill the remaining height (after
+     #loot-strip's own fixed height, below) spends the space wave 1/6 (#219) reclaimed by deleting
+     #titlebar. min-height: 0 is load-bearing: without it a flex item refuses to shrink below its
+     content size, which would starve #loot-strip instead. #backdrop is absolutely positioned
+     against #scene and already stretches to fill it, so the parallax layers scale for free; the
+     ground-anchored #sprite-row (align-items: flex-end) keeps sprites standing on the near layer
+     rather than floating mid-sky as #scene grows. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sprite-hp {
@@ -1480,16 +1466,31 @@ body {
   font-size: 10px;
 }
 
+/* Compact widget Loot Zone strip (#220): fills the space #scene doesn't grow into. Fixed height
+   regardless of content — an empty zone disables `Loot all` (below) rather than hiding the strip,
+   so nothing jumps on every sweep — and never wraps or widens the widget: `#loot-strip-items`
+   below scrolls horizontally instead, which is why this row's own `flex: 0 0 auto` never grows to
+   soak up #scene's share. */
 #loot-strip {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
+  height: 36px;
+}
+
+#loot-strip-count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 #loot-strip-items {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* a full 10-stack zone scrolls horizontally, never wraps (#220) */
+  overflow-x: auto;
+  overflow-y: hidden;
   gap: 4px;
   list-style: none;
   flex: 1;
@@ -1498,14 +1499,21 @@ body {
 
 /* .loot-chip also carries .tile (#78 — icon + qty badge instead of a text chip); this rule just
    caps its size so a row of chips stays compact rather than stretching to the grid's usual tile
-   size. */
+   size. Compact-widget chips are `<button>` elements (#220: `#compact-widget` carries a deep Tauri
+   drag region, and only natively-clickable tags are exempt from it — see app.test.ts's
+   natively-clickable guard), so this also resets button chrome to keep them visually identical to
+   the Activity page's `<li class="loot-chip">`. */
 .loot-chip {
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: default;
 }
 
-#loot-all-btn,
+#loot-strip-all-btn,
 #activity-loot-all-btn {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -1517,8 +1525,15 @@ body {
   flex: 0 0 auto;
 }
 
+#loot-strip-all-btn:disabled,
+#activity-loot-all-btn:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* The Activity destination page's own Loot Zone grid (#206) — the same icon+qty `.loot-chip`
-   tiles as the compact widget's interim Loot Strip (`#loot-strip-items` above), wrapped instead
+   tiles as the compact widget's live Loot Strip (`#loot-strip-items` above), wrapped instead
    of a single row since the page has room to spare. */
 .loot-zone-grid {
   display: flex;
@@ -1528,7 +1543,7 @@ body {
   margin-bottom: 6px;
 }
 
-#loot-all-btn:hover {
+#loot-strip-all-btn:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
@@ -1976,31 +1991,4 @@ button.tile:hover {
   color: var(--text-dim);
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-/* Compact minimum (#137): pure CSS height media queries progressively hide the two lowest-value
-   #main-column regions as the compact widget shortens, freeing vertical room for the three
-   regions that must ALWAYS be visible — the complete scene (backdrop, sprites/prop, name/stats,
-   both HP bars, Food Slots, and #219's floating #widget-controls), and #136's launcher row. No JS
-   resize listener and no
-   new persisted mode state: the browser alone applies/un-applies these rules as height crosses
-   each threshold, so shrinking and growing automatically reverse each other. Pinned hide order
-   (issue's owner direction): Loot Strip goes first (its own threshold is the taller of the two,
-   so it disappears sooner while shortening), the ticker goes second. Thresholds are tuned against
-   the actual post-#136 DOM (measured via a headless-Chromium sweep at MIN_COMPACT_W, checking
-   `#food-slots`/`#card-launchers` for clipping against `#scene`/`#compact-widget`'s own box), not
-   the issue's illustrative starting values — see the PR for the measurement floors each threshold
-   carries a safety margin over. This is independent of `#loot-strip[hidden]` (set by
-   `renderLootStrip` in app.ts when the Loot Zone is empty): the two mechanisms both just resolve
-   to `display: none` and freely coexist — neither refactors the other away. */
-@media (max-height: 375px) {
-  #loot-strip {
-    display: none;
-  }
-}
-
-@media (max-height: 335px) {
-  #ticker {
-    display: none;
-  }
 }
