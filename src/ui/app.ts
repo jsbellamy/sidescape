@@ -1093,7 +1093,7 @@ export function mountApp(
 
   /** Renders the Activity destination page's own fixed Loot Zone header (#209: "Loot Zone
    * used/10", never scrolls away) plus its own independently-scrolling grid — the same stacks
-   * `renderLootStrip` shows in the interim compact strip, as a full icon-tile grid rather than a
+   * `renderLootStrip` shows in the compact widget's strip, as a full icon-tile grid rather than a
    * compact chip row. */
   function renderActivityLootZone(lootZone: Snapshot["lootZone"]): void {
     el("#activity-loot-count").textContent =
@@ -1104,6 +1104,26 @@ export function mountApp(
           `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
       )
       .join("");
+  }
+
+  /** Renders the compact widget's live Loot Zone strip (#220): one chip per `snap.lootZone` stack
+   * below `#scene`, filling the height wave 1/6 (#219) reclaimed by deleting `#titlebar`. Unlike
+   * the Activity page's own `<li>` grid above, `#compact-widget` carries a deep Tauri drag region
+   * (#219), so every chip here MUST be a `<button>` — a `<li>`/`<div>` is a drag surface under that
+   * region and would silently lose its own click (see app.test.ts's natively-clickable guard).
+   * `#loot-strip-items` scrolls horizontally rather than wrapping (a second row would re-open the
+   * dead area this issue exists to close), so the `n/CAPACITY` count keeps a full zone legible
+   * without scrolling. The strip keeps a fixed height regardless of content — an empty zone
+   * disables `Loot all` rather than hiding the strip, so nothing jumps on every sweep. */
+  function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
+    el("#loot-strip-count").textContent = `${lootZone.length}/${LOOT_ZONE_DISPLAY_CAPACITY}`;
+    el("#loot-strip-items").innerHTML = lootZone
+      .map(
+        (s) =>
+          `<button class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</button>`,
+      )
+      .join("");
+    el<HTMLButtonElement>("#loot-strip-all-btn").disabled = lootZone.length === 0;
   }
 
   /** Renders the Workshop destination page (#209): the four always-visible Production Skill
@@ -1244,6 +1264,7 @@ export function mountApp(
     renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
     renderActivityLootZone(snap.lootZone);
+    renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
     renderEquipmentTray(bank, player.gold);
     renderVendor(bank, player.gold);
@@ -1606,6 +1627,11 @@ export function mountApp(
           <button id="close-btn" title="Close SideScape" aria-label="Close SideScape">✕</button>
         </div>
       </section>
+      <div id="loot-strip">
+        <span id="loot-strip-count"></span>
+        <ul id="loot-strip-items"></ul>
+        <button id="loot-strip-all-btn" data-loot-all>Loot all</button>
+      </div>
     </div>
     </section>`;
 
@@ -2086,8 +2112,9 @@ export function mountApp(
     render();
   });
 
-  // Loot All (#206): shared by the compact widget's interim Loot Strip button and the Activity
-  // destination page's own Loot Zone grid button — both sweep the identical Loot Zone.
+  // Loot All (#206, wired into the compact widget's own Loot Strip by #220): shared by the
+  // compact widget's live Loot Strip button and the Activity destination page's own Loot Zone
+  // grid button — both sweep the identical Loot Zone, one implementation.
   function handleLootAll(): void {
     const before = engine.snapshot().lootZone.length;
     engine.lootAll(); // logs its own feed line via the looted subscription above, if anything moved
@@ -2100,6 +2127,7 @@ export function mountApp(
     }
   }
   el("#activity-loot-all-btn").addEventListener("click", handleLootAll);
+  el("#loot-strip-all-btn").addEventListener("click", handleLootAll);
 
   el("#buy-slots-btn").addEventListener("click", () => {
     engine.buyBankSlots();

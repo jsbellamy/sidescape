@@ -2203,27 +2203,37 @@ describe("Food Slot bar (#61)", () => {
   });
 });
 
-describe.skip("Compact Loot strip (moved to Activity by #210)", () => {
-  it("is hidden when the Loot Zone is empty, on a fresh mount", () => {
+describe("Compact widget Loot strip (#220)", () => {
+  it("shows a fixed-height strip on a fresh mount with an empty Loot Zone: 0/10 count, no chips, Loot all disabled", () => {
     const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#loot-strip")).not.toBeNull();
+    expect(root.querySelector("#loot-strip-count")?.textContent).toBe("0/10");
+    expect(root.querySelectorAll("#loot-strip-items .loot-chip").length).toBe(0);
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(true);
   });
 
-  it("renders zone stacks as chips and shows the strip once combat Drops land in the zone", () => {
+  it("renders zone stacks as button chips (icon + qty) and updates the n/10 count as Drops land", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
 
     for (let i = 0; i < 2000 && engine.snapshot().lootZone.length === 0; i++) engine.tick();
     app.render();
 
-    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
-    const chip = root.querySelector<HTMLLIElement>("#loot-strip-items .loot-chip");
+    const chip = root.querySelector<HTMLButtonElement>("#loot-strip-items .loot-chip");
     expect(chip).not.toBeNull();
+    // Must be a real <button>, not a <li>/<div> — #compact-widget carries a deep Tauri drag
+    // region (#219), which treats anything else as a drag surface that swallows its own click
+    // (see the natively-clickable guard test above).
+    expect(chip?.tagName).toBe("BUTTON");
     const zoneEntry = engine.snapshot().lootZone[0]!;
     expect(chip?.textContent).toContain(`×${zoneEntry.qty}`);
+    expect(root.querySelector("#loot-strip-count")?.textContent).toBe(
+      `${engine.snapshot().lootZone.length}/10`,
+    );
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(false);
   });
 
-  it("clicking Loot all sweeps the zone into the Bank, hides the strip, and logs a Banked feed line", () => {
+  it("clicking Loot all sweeps the zone into the Bank, empties the strip, disables the button again, and logs a Banked feed line", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -2231,17 +2241,19 @@ describe.skip("Compact Loot strip (moved to Activity by #210)", () => {
     );
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(false);
 
-    root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
+    root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.click();
 
     expect(engine.snapshot().lootZone).toEqual([]);
     expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
-    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#loot-strip")).not.toBeNull(); // strip itself never disappears
+    expect(root.querySelectorAll("#loot-strip-items .loot-chip").length).toBe(0);
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(true);
     expect(root.querySelector("#feed li")?.textContent).toMatch(/banked.*meat/i);
   });
 
-  it("a sweep that leaves a stack behind (full Bank) logs a 'Bank full — loot left behind' feed line and keeps the strip visible", () => {
+  it("a sweep that leaves a stack behind (full Bank) logs a 'Bank full — loot left behind' feed line and keeps the chip/button live", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -2253,11 +2265,27 @@ describe.skip("Compact Loot strip (moved to Activity by #210)", () => {
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
 
-    root.querySelector<HTMLButtonElement>("#loot-all-btn")?.click();
+    root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.click();
 
     expect(engine.snapshot().lootZone).toEqual([{ itemId: "meat", qty: 3 }]); // couldn't fit
-    expect(root.querySelector<HTMLElement>("#loot-strip")?.hidden).toBe(false);
+    expect(root.querySelectorAll("#loot-strip-items .loot-chip").length).toBe(1);
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(false);
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*left behind/i);
+  });
+
+  it("Loot all shares one implementation with the Activity page's own button — clicking either sweeps the identical Loot Zone", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root.querySelector<HTMLButtonElement>("#activity-loot-all-btn")?.click();
+
+    expect(engine.snapshot().lootZone).toEqual([]);
+    expect(root.querySelector<HTMLButtonElement>("#loot-strip-all-btn")?.disabled).toBe(true);
   });
 
   it("logs a 'Run failed — loot lost!' feed line (plus the lost stacks) on dungeon-failed", () => {
@@ -3926,7 +3954,11 @@ describe("Save → remount round-trip (#9)", () => {
     const eatTile = root2.querySelector<HTMLElement>('[data-eat="0"]');
     expect(eatTile?.dataset["item"]).toBe("meat");
     expect(eatTile?.querySelector(".tile-qty")?.textContent).toBe("×5");
-    expect(root2.querySelector("#loot-strip")).toBeNull();
+    // Both Loot Zone views restore from the same Snapshot field (#220: the compact widget's own
+    // strip, plus the pre-existing Activity page grid).
+    const stripChip = root2.querySelector<HTMLButtonElement>("#loot-strip-items .loot-chip");
+    expect(stripChip?.dataset["item"]).toBe("bar");
+    expect(stripChip?.querySelector(".tile-qty")?.textContent).toBe("×2");
     const chip = root2.querySelector<HTMLLIElement>("#activity-loot-items .loot-chip");
     expect(chip?.dataset["item"]).toBe("bar");
     expect(chip?.querySelector(".tile-qty")?.textContent).toBe("×2");
@@ -3943,7 +3975,6 @@ describe("fixed compact live stage (#210)", () => {
     for (const selector of [
       "#gold",
       "#food-slots",
-      "#loot-strip",
       "#ticker",
       "#monster-name",
       "#monster-stats",
@@ -3953,6 +3984,9 @@ describe("fixed compact live stage (#210)", () => {
     ]) {
       expect(root.querySelector(selector), selector).toBeNull();
     }
+    // #220: #loot-strip is the live Loot Zone strip this issue adds below #scene — it must exist,
+    // unlike the still-dead selectors above.
+    expect(root.querySelector("#loot-strip")).not.toBeNull();
   });
 
   it("shows sprite-attached non-numeric HP bars and a zero-Food warning only in combat", () => {
