@@ -1245,6 +1245,81 @@ body {
   display: none;
 }
 
+/* The Workshop destination's own fixed shell (#209): mirrors `.world-page-body`/`.bank-page-body`
+   — the four-button Production Skill selector and the selected Skill's own name/Level header
+   (`.card-fixed`) never scroll, only the recipe body (`#workshop-recipes`, reusing `.card-scroll`)
+   does. Sits alongside World/Bank/Activity as a direct flex child of `.management-card`, toggled
+   by the same `[data-management-page]` sync as every other destination. */
+.workshop-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Same cascade-order gotcha as `.management-card[hidden]`/`.world-page-body[hidden]` above: an
+   author `display` rule otherwise beats the UA `[hidden]` default. */
+.workshop-page-body[hidden] {
+  display: none;
+}
+
+/* Workshop's always-visible four-button Production Skill selector (#209): mirrors `.card-nav
+   button`'s icon-over-label shape, but an equal-flex full-width row (all four fit naturally at
+   the 300px card width, so there's never a need for `.bank-filter-row`'s 3-per-row grid or any
+   horizontal scrolling) rather than a flex-end header cluster. */
+.workshop-skill-row {
+  display: flex;
+  gap: 4px;
+}
+.workshop-skill-row button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 9px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+.workshop-skill-row button:hover {
+  border-color: var(--accent);
+}
+.workshop-skill-row button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.workshop-skill-row img.tab-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* The Activity destination's own fixed shell (#209): the Loot Zone header (used/10) and Loot all
+   button never scroll away, and the Loot Zone grid (`.activity-loot-scroll`) and the Recent
+   Activity feed (`#feed`) are two INDEPENDENT scrollports rather than one shared wrapper — each
+   keeps its own overflow and its own scroll-shadow edges. Sits alongside World/Bank/Workshop as a
+   direct flex child of `.management-card`, toggled by the same `[data-management-page]` sync. */
+.activity-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Same cascade-order gotcha as `.management-card[hidden]`/`.world-page-body[hidden]` above. */
+.activity-page-body[hidden] {
+  display: none;
+}
+/* Overrides `.card-scroll`'s own `flex: 1 1 auto` (declared earlier in this file): the Loot Zone
+   grid is capped to a bounded strip with its own internal scrollbar, rather than competing with
+   the feed list below it for the page's remaining height. */
+.activity-loot-scroll {
+  flex: 0 0 auto;
+  max-height: 110px;
+}
+
 /* The progression rail (#208): one row per Snapshot Area, in Snapshot order, always all visible —
    including locked ones, selectable for inspection. Vertical list (not a horizontal strip) so
    full Area names never truncate at the 300px card width. */
@@ -1741,11 +1816,15 @@ button.tile:hover {
   letter-spacing: 0;
 }
 
-#smithing-recipes {
+/* #209: one shared scrollable recipe list for whichever Production Skill is selected, replacing
+   the four separately-id'd `#smithing-recipes`/`#cooking-recipes`/`#crafting-recipes`/
+   `#herblore-recipes` lists this rule used to be scoped to alone (a pre-existing gap: the other
+   three never picked up this same list-style/li styling). */
+#workshop-recipes {
   list-style: none;
 }
 
-#smithing-recipes li {
+#workshop-recipes li {
   padding: 6px 0;
   border-bottom: 1px solid #221c15;
 }

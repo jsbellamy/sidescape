@@ -3,20 +3,26 @@ import type { Content, SkillName, Snapshot } from "../core/types";
 /** One Production Skill — a Recipe-driven Skill trained by crafting (see CONTEXT.md). Smithing
  * (#28/#113), Cooking (#115), Crafting (#116), and Herblore (#118) each get exactly one row here:
  * one management panel, one activity prop, one scene label. Adding a fifth Production Skill is
- * one row, not new renderer code. */
+ * one row, not new renderer code. `panelId` (a per-skill recipe-list element id) was retired by
+ * #209: the Workshop destination now shows one shared scrollable recipe list (`#workshop-recipes`
+ * in app.ts) for whichever Skill is selected, rather than four permanently-stacked lists. */
 export interface ProductionSkillDescriptor {
   skill: "smithing" | "cooking" | "crafting" | "herblore";
   label: string; // scene label, e.g. "🔨 Smithing"
   prop: string; // prop-<key> CSS class suffix, e.g. "anvil"
-  panelId: string; // recipe-list element id, e.g. "smithing-recipes"
 }
 
 export const PRODUCTION_SKILLS: readonly ProductionSkillDescriptor[] = [
-  { skill: "smithing", label: "🔨 Smithing", prop: "anvil", panelId: "smithing-recipes" },
-  { skill: "cooking", label: "🍳 Cooking", prop: "cooking", panelId: "cooking-recipes" },
-  { skill: "crafting", label: "🧵 Crafting", prop: "crafting", panelId: "crafting-recipes" },
-  { skill: "herblore", label: "🧪 Herblore", prop: "cauldron", panelId: "herblore-recipes" },
+  { skill: "smithing", label: "🔨 Smithing", prop: "anvil" },
+  { skill: "cooking", label: "🍳 Cooking", prop: "cooking" },
+  { skill: "crafting", label: "🧵 Crafting", prop: "crafting" },
+  { skill: "herblore", label: "🧪 Herblore", prop: "cauldron" },
 ];
+
+/** One of the four Production Skills, derived from `PRODUCTION_SKILLS` itself (#209) rather than a
+ * hand-duplicated union — widening the descriptor table automatically widens this type too. Drives
+ * the Workshop destination's session-only `selectedProductionSkill` selection in app.ts. */
+export type ProductionSkill = (typeof PRODUCTION_SKILLS)[number]["skill"];
 
 /**
  * Foreground-prop registry (#80): which activity gets a prop beside the player sprite, and which

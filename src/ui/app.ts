@@ -37,6 +37,7 @@ import {
   productionPanelMarkup,
   resolveProp,
 } from "./production";
+import type { ProductionSkill } from "./production";
 import { createLoadoutSlotDispatcher, loadoutSlotMarkup } from "./loadout-slot";
 import type { LoadoutSlotChooserItem } from "./loadout-slot";
 import { resolveTheme } from "./theme";
@@ -189,6 +190,22 @@ const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
   0.75: "75%",
 };
 
+/** Workshop's four always-visible Production Skill button labels (#209) — plain title-case,
+ * distinct from `productionLabel`'s own scene-label form (e.g. "🔨 Smithing", used by
+ * `renderScene`): the Workshop header names the Skill itself, not the activity. */
+const PRODUCTION_SKILL_LABELS: Record<ProductionSkill, string> = {
+  smithing: "Smithing",
+  cooking: "Cooking",
+  crafting: "Crafting",
+  herblore: "Herblore",
+};
+
+/** Mirrors core/engine.ts's own internal `LOOT_ZONE_CAPACITY` (CONTEXT.md's Loot Zone: "the small
+ * buffer (10 stacks)"). Unlike the Bank's own dynamic capacity (`Snapshot.bank.capacity`), the Loot
+ * Zone's capacity never changes, so the Activity page's header can safely know this literal
+ * without a new Snapshot field or Engine/data change (#209 is a UI-only issue). */
+const LOOT_ZONE_DISPLAY_CAPACITY = 10;
+
 /** Fraction (0..1) of the way a Skill's XP is from its current level's threshold to the next
  * level's threshold. Skills at MAX_LEVEL have no next threshold, so the bar reads full. */
 function skillProgress(skill: SkillSnapshot): number {
@@ -277,6 +294,13 @@ export function mountApp(
   // purely presentational, session-only, independent of `workspace.management` itself so the
   // choice survives switching away to another destination and back.
   let managementBankPage: BankMode = "bank";
+  // Which Production Skill the Workshop destination's four-button selector shows (#209) — purely
+  // presentational, session-only, independent of `workspace.management`, mirroring
+  // `managementBankPage`'s own shape. Defaults to Smithing; `openDestination` resyncs it to
+  // `snapshot.production.skill` whenever Workshop opens while one of the four Production Skills is
+  // actively crafting, but otherwise leaves a prior manual pick alone (see `openDestination`'s own
+  // doc comment).
+  let selectedProductionSkill: ProductionSkill = "smithing";
   // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
   // presentational UI state, an anchored popover that never changes card height.
   let openSettings = false;
@@ -355,13 +379,6 @@ export function mountApp(
     root.querySelectorAll<HTMLElement>("[data-management-page]").forEach((page) => {
       page.hidden = page.dataset["managementPage"] !== workspace.management;
     });
-    // The "bank" and "world" destinations each own their own fixed shell (`.bank-page-body`
-    // #207, `.world-page-body` #208) rather than sharing the Workshop/Activity pages' single
-    // scrolling wrapper — hide that wrapper outright while either is showing so it doesn't sit
-    // alongside them as an empty flex sibling stealing half the card's height (both are
-    // `flex: 1 1 auto`).
-    el<HTMLElement>("#management-scroll").hidden =
-      workspace.management === "bank" || workspace.management === "world";
     if (workspace.management) {
       el<HTMLElement>("#management-title").textContent =
         MANAGEMENT_DESTINATION_LABELS[workspace.management];
@@ -448,8 +465,22 @@ export function mountApp(
   /** "destination click" (#206): opens `destination` in the Management card, alongside Character
    * when the monitor has room for two cards, replacing Character outright at capacity 1. Wired to
    * the Character hub's own World/Workshop/Activity nav buttons and its Bank tray's "Expand Bank"
-   * button (which dispatches the "bank" destination). */
+   * button (which dispatches the "bank" destination).
+   *
+   * #209: opening "workshop" specifically also resyncs `selectedProductionSkill` to
+   * `snapshot.production.skill` when that's one of the four PRODUCTION_SKILLS (the player is
+   * actively crafting something) — otherwise the prior session selection is left alone, so
+   * navigating away mid-inspection and back doesn't silently reset the picked tab back to
+   * Smithing. */
   async function openDestination(destination: ManagementDestination): Promise<void> {
+    if (destination === "workshop") {
+      const activeSkill = engine.snapshot().production?.skill;
+      const activeDescriptor = PRODUCTION_SKILLS.find((d) => d.skill === activeSkill);
+      if (activeDescriptor) {
+        selectedProductionSkill = activeDescriptor.skill;
+        renderWorkshopPage(); // reflect the resynced selection immediately, not on the next Tick
+      }
+    }
     const capacity = await windowChrome.getCapacity();
     if (capacity >= 2) {
       workspace.characterOpen = true;
@@ -1108,16 +1139,43 @@ export function mountApp(
       .join("");
   }
 
-  /** Renders the Activity destination page's own Loot Zone grid (#206) — the same stacks
+  /** Renders the Activity destination page's own fixed Loot Zone header (#209: "Loot Zone
+   * used/10", never scrolls away) plus its own independently-scrolling grid — the same stacks
    * `renderLootStrip` shows in the interim compact strip, as a full icon-tile grid rather than a
    * compact chip row. */
   function renderActivityLootZone(lootZone: Snapshot["lootZone"]): void {
+    el("#activity-loot-count").textContent =
+      `Loot Zone ${lootZone.length}/${LOOT_ZONE_DISPLAY_CAPACITY}`;
     el("#activity-loot-items").innerHTML = lootZone
       .map(
         (s) =>
           `<li class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</li>`,
       )
       .join("");
+  }
+
+  /** Renders the Workshop destination page (#209): the four always-visible Production Skill
+   * buttons' active state, the selected Skill's own name/Level header, and its recipe body
+   * (`productionPanelMarkup`, unchanged gating/owned-count/command behavior) — one scrollable
+   * recipe list at a time (`#workshop-recipes`) rather than four permanently-stacked lists. Called
+   * every Tick from `render()` regardless of whether the Workshop destination is open, so its
+   * content never stales (#206's "hidden bodies keep rendering" rule). */
+  function renderWorkshopPage(): void {
+    const snap = engine.snapshot();
+    root.querySelectorAll<HTMLButtonElement>("#workshop-skill-row button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset["productionSkill"] === selectedProductionSkill);
+    });
+    const descriptor = PRODUCTION_SKILLS.find((d) => d.skill === selectedProductionSkill);
+    if (!descriptor) return; // unreachable: selectedProductionSkill is always one of the four
+    const level = snap.player.skills[selectedProductionSkill].level;
+    el("#workshop-skill-name").textContent = PRODUCTION_SKILL_LABELS[selectedProductionSkill];
+    el("#workshop-skill-level").textContent = `Lvl ${level}`;
+    el("#workshop-recipes").innerHTML = productionPanelMarkup(
+      descriptor,
+      content,
+      snap.bank.items,
+      level,
+    );
   }
 
   /** Renders the expanded Bank destination page (#207): the six filter buttons' + sort select's
@@ -1238,14 +1296,7 @@ export function mountApp(
     renderBank(bank, player.gold);
     renderEquipmentTray(bank, player.gold);
     renderVendor(bank, player.gold);
-    for (const descriptor of PRODUCTION_SKILLS) {
-      el(`#${descriptor.panelId}`).innerHTML = productionPanelMarkup(
-        descriptor,
-        content,
-        bank.items,
-        player.skills[descriptor.skill].level,
-      );
-    }
+    renderWorkshopPage();
   }
 
   /**
@@ -1465,38 +1516,59 @@ export function mountApp(
         <p class="panel-title" id="management-title" data-tauri-drag-region></p>
         <button class="card-close" data-management-back title="Back to Character">←</button>
       </header>
-      <div id="management-scroll" class="card-scroll">
-        <div data-management-page="workshop" hidden>
-          <p class="panel-title">Smithing</p>
-          <ul id="smithing-recipes"></ul>
-          <p class="panel-title">Cooking</p>
-          <ul id="cooking-recipes"></ul>
-          <p class="panel-title">Crafting</p>
-          <ul id="crafting-recipes"></ul>
-          <p class="panel-title">Herblore</p>
-          <ul id="herblore-recipes"></ul>
+      <!-- The Workshop destination (#209) owns its own fixed shell, mirroring World/Bank below:
+           the four always-visible Production Skill buttons and the selected Skill's own
+           name/Level header never scroll — only the recipe body (#workshop-recipes) does. One
+           shared scrollable list for whichever Skill is selected, replacing the four
+           permanently-stacked lists this destination used to render at once. See styles.css's
+           .workshop-page-body. -->
+      <div data-management-page="workshop" class="workshop-page-body" hidden>
+        <div class="card-fixed">
+          <div id="workshop-skill-row" class="workshop-skill-row" role="tablist">
+            ${PRODUCTION_SKILLS.map(
+              (d) =>
+                `<button data-production-skill="${d.skill}" role="tab" title="${PRODUCTION_SKILL_LABELS[d.skill]}">
+                  <img class="tab-icon pixel" src="${tabIcon(d.skill)}" alt="" />
+                  <span>${PRODUCTION_SKILL_LABELS[d.skill]}</span>
+                </button>`,
+            ).join("")}
+          </div>
+          <p class="panel-title">
+            <span id="workshop-skill-name"></span>
+            <span id="workshop-skill-level"></span>
+          </p>
         </div>
-        <div data-management-page="activity" hidden>
-          <section id="activity-loot-zone">
-            <p class="panel-title">Loot Zone</p>
-            <ul id="activity-loot-items" class="loot-zone-grid"></ul>
-            <button id="activity-loot-all-btn" data-loot-all>Loot all</button>
-          </section>
-          <p class="panel-title">Loot Feed</p>
-          <ul id="feed"></ul>
-        </div>
+        <ul id="workshop-recipes" class="card-scroll"></ul>
       </div>
-      <!-- The World destination (#208) is not part of #management-scroll above: like the Bank
-           page below, it owns its own fixed shell — the progression rail never scrolls, only the
-           selected-Area detail does, so the rail stays put while a long detail (e.g. many
-           Monsters) scrolls under it. See styles.css's .world-page-body. -->
+      <!-- The Activity destination (#209) owns its own fixed shell too: the Loot Zone header
+           (used/10) and Loot all button never scroll away, and the Loot Zone grid and the Recent
+           Activity feed are two INDEPENDENT scrollports — not one shared wrapper — each with its
+           own overflow. Moves the existing Loot Zone/Loot Feed markup here rather than duplicating
+           it: still the one #feed target every Engine event feeds via feedLine(), so one Engine
+           event still yields exactly one feed entry. See styles.css's .activity-page-body. -->
+      <div data-management-page="activity" class="activity-page-body" hidden>
+        <div class="card-fixed">
+          <p class="panel-title">
+            <span id="activity-loot-count"></span>
+            <button id="activity-loot-all-btn" data-loot-all>Loot all</button>
+          </p>
+        </div>
+        <ul id="activity-loot-items" class="loot-zone-grid card-scroll activity-loot-scroll"></ul>
+        <div class="card-fixed">
+          <p class="panel-title">Recent Activity</p>
+        </div>
+        <ul id="feed" class="card-scroll"></ul>
+      </div>
+      <!-- The World destination (#208) owns its own fixed shell — the progression rail never
+           scrolls, only the selected-Area detail does, so the rail stays put while a long detail
+           (e.g. many Monsters) scrolls under it. See styles.css's .world-page-body. -->
       <div data-management-page="world" class="world-page-body" hidden>
         <div id="area-rail" class="area-rail" role="tablist"></div>
         <div id="area-detail" class="area-detail card-scroll"></div>
       </div>
-      <!-- The expanded Bank/Vendor destination (#207) is not part of #management-scroll above: it
-           owns its own fixed shell (search/filters/sort/detail/buy-slots never scroll, only the
-           tile grid and the Vendor list do) — see styles.css's .bank-page-body. -->
+      <!-- The expanded Bank/Vendor destination (#207) owns its own fixed shell too
+           (search/filters/sort/detail/buy-slots never scroll, only the tile grid and the Vendor
+           list do) — see styles.css's .bank-page-body. -->
       <div data-management-page="bank" class="bank-page-body" hidden>
         <div class="card-fixed">
           <div id="bank-vendor-toggle" class="style-row">
@@ -2090,16 +2162,25 @@ export function mountApp(
     render();
   });
 
-  // One identical Craft-click handler per Production Skill panel (#181: descriptor-driven, see
-  // production.ts — replaces the four former per-skill listeners).
-  for (const descriptor of PRODUCTION_SKILLS) {
-    el(`#${descriptor.panelId}`).addEventListener("click", (event) => {
-      const recipeId = (event.target as HTMLElement).dataset["recipe"];
-      if (!recipeId) return;
-      engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
-      render();
-    });
-  }
+  // Workshop's four-button Production Skill selector (#209): clicking a button is session-only
+  // presentation state (mirrors the World rail's `selectedAreaId` and the Bank/Vendor toggle's
+  // `managementBankPage`) — it never calls the Engine, just swaps which Skill's recipe body shows.
+  el("#workshop-skill-row").addEventListener("click", (event) => {
+    const skill = (event.target as HTMLElement).closest<HTMLElement>("[data-production-skill]")
+      ?.dataset["productionSkill"] as ProductionSkill | undefined;
+    if (!skill) return;
+    selectedProductionSkill = skill;
+    render();
+  });
+
+  // Workshop's single recipe list (#209: replaces the four former per-skill listeners this used
+  // to need — one descriptor-driven list at a time instead of four permanently-stacked ones).
+  el("#workshop-recipes").addEventListener("click", (event) => {
+    const recipeId = (event.target as HTMLElement).dataset["recipe"];
+    if (!recipeId) return;
+    engine.selectRecipe(recipeId); // logs its own feed line via the item-crafted subscription
+    render();
+  });
 
   render(); // includes renderWorldPage() (#208)
   // Both cards start closed (#206: workspace state is session-only, never restored across a

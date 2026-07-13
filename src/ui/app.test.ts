@@ -8,6 +8,7 @@ import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
+import { PRODUCTION_SKILLS } from "./production";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
 /** A do-nothing WorkspaceChrome for tests that don't care about window resize/position (the vast
@@ -1253,7 +1254,7 @@ describe("Hidden pages keep rendering every Tick (#206: visibility never stales 
     const { engine, root, app } = mount(1);
     engine.tick();
     app.render();
-    expect(root.querySelector("#smithing-recipes")).not.toBeNull();
+    expect(root.querySelector("#workshop-recipes")).not.toBeNull();
     expect(root.querySelector("#feed")).not.toBeNull();
     expect(root.querySelector<HTMLElement>('[data-management-page="workshop"]')?.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-management-page="activity"]')?.hidden).toBe(true);
@@ -2825,6 +2826,9 @@ describe("Cooking (#115)", () => {
     );
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    // Workshop's four-button selector (#209) defaults to Smithing — select Cooking's own tab so
+    // this describe block's recipe-row assertions have something to find in #workshop-recipes.
+    root.querySelector<HTMLButtonElement>('[data-production-skill="cooking"]')?.click();
     return { engine, root, app };
   }
 
@@ -2881,6 +2885,8 @@ describe("Crafting (#116)", () => {
     );
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    // Workshop's four-button selector (#209) defaults to Smithing — select Crafting's own tab.
+    root.querySelector<HTMLButtonElement>('[data-production-skill="crafting"]')?.click();
     return { engine, root, app };
   }
 
@@ -2937,6 +2943,8 @@ describe("Herblore (#118)", () => {
     );
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    // Workshop's four-button selector (#209) defaults to Smithing — select Herblore's own tab.
+    root.querySelector<HTMLButtonElement>('[data-production-skill="herblore"]')?.click();
     return { engine, root, app };
   }
 
@@ -2991,6 +2999,208 @@ describe("Herblore (#118)", () => {
     expect(engine.snapshot().player.skills.herblore.xp).toBeGreaterThan(0);
     expect(engine.snapshot().player.skills.smithing.xp).toBe(0);
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "strength-potion")?.qty).toBe(1);
+  });
+});
+
+describe("Workshop destination — all-visible Production Skill selector (#209)", () => {
+  function skillBtn(root: HTMLElement, skill: string) {
+    return root.querySelector<HTMLButtonElement>(
+      `#workshop-skill-row [data-production-skill="${skill}"]`,
+    );
+  }
+
+  it("renders exactly four always-visible buttons, in PRODUCTION_SKILLS order, each with an icon and an accessible title", () => {
+    const { root } = mount(1);
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("#workshop-skill-row button")];
+    expect(buttons.map((b) => b.dataset["productionSkill"])).toEqual(
+      PRODUCTION_SKILLS.map((d) => d.skill),
+    );
+    for (const btn of buttons) {
+      expect(btn.title.length).toBeGreaterThan(0);
+      expect(btn.querySelector("img")).not.toBeNull();
+    }
+  });
+
+  it("defaults to Smithing selected/active on a fresh mount, with Smithing's own recipes showing", () => {
+    const { root } = mount(1);
+    expect(skillBtn(root, "smithing")?.classList.contains("active")).toBe(true);
+    expect(skillBtn(root, "cooking")?.classList.contains("active")).toBe(false);
+    expect(root.querySelector("#workshop-skill-name")?.textContent).toBe("Smithing");
+    expect(root.querySelector("#workshop-skill-level")?.textContent).toBe("Lvl 1");
+    expect(root.querySelector('#workshop-recipes [data-recipe-row="test-sword"]')).not.toBeNull();
+  });
+
+  it("clicking a Skill button switches the active button, the name/Level header, and the recipe body — never a page-reload of the whole card", () => {
+    const { root } = mount(1);
+    skillBtn(root, "cooking")?.click();
+
+    expect(skillBtn(root, "cooking")?.classList.contains("active")).toBe(true);
+    expect(skillBtn(root, "smithing")?.classList.contains("active")).toBe(false);
+    expect(root.querySelector("#workshop-skill-name")?.textContent).toBe("Cooking");
+    expect(root.querySelector('#workshop-recipes [data-recipe-row="test-cook"]')).not.toBeNull();
+    expect(root.querySelector('#workshop-recipes [data-recipe-row="test-sword"]')).toBeNull();
+  });
+
+  it("preserves recipe gating, owned-input counts, and selectRecipe() dispatch after switching Skills", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    skillBtn(root, "cooking")?.click();
+
+    const row = root.querySelector('#workshop-recipes [data-recipe-row="test-cook"]');
+    expect(row?.textContent).toContain("1× Raw Fish (have 1)");
+    const craftBtn = root.querySelector<HTMLButtonElement>(
+      '#workshop-recipes [data-recipe="test-cook"]',
+    );
+    expect(craftBtn?.disabled).toBe(false);
+
+    craftBtn?.click();
+    expect(engine.snapshot().production?.skill).toBe("cooking");
+  });
+
+  it("opening the Workshop destination selects whichever Production Skill is currently active in the Engine", async () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        // loadProduction (engine.ts) only resumes a saved production activity when the Bank still
+        // covers the recipe's own inputs — seed enough raw-fish or the resumed activity silently
+        // drops back to idle (tolerant load, same as an unknown monster/fishing id).
+        bank: { items: [{ itemId: "raw-fish", qty: 5 }] },
+        production: { recipeId: "test-cook", name: "Cook Fish", skill: "cooking" },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>('[data-destination="workshop"]')?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="workshop"]')?.hidden).toBe(
+        false,
+      ),
+    );
+
+    expect(skillBtn(root, "cooking")?.classList.contains("active")).toBe(true);
+  });
+
+  it("opening Workshop while no Production Skill is active retains the prior session selection instead of resetting to Smithing", async () => {
+    const { root, engine } = mount(1);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>('[data-destination="workshop"]')?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="workshop"]')?.hidden).toBe(
+        false,
+      ),
+    );
+    skillBtn(root, "herblore")?.click(); // session pick, away from the Smithing default
+
+    root.querySelector<HTMLButtonElement>('[data-destination="world"]')?.click(); // navigate away
+    engine.selectMonster("dummy"); // no Production Skill active at all
+    root.querySelector<HTMLButtonElement>('[data-destination="workshop"]')?.click(); // reopen
+
+    expect(skillBtn(root, "herblore")?.classList.contains("active")).toBe(true);
+  });
+
+  it("the four-button selector and the skill/Level header sit in the fixed (non-scrolling) region; only the recipe body scrolls", () => {
+    const { root } = mount(1);
+    const skillRow = root.querySelector("#workshop-skill-row");
+    expect(skillRow?.closest(".card-scroll")).toBeNull();
+    expect(skillRow?.closest(".card-fixed")).not.toBeNull();
+    const recipes = root.querySelector("#workshop-recipes");
+    expect(recipes?.classList.contains("card-scroll")).toBe(true);
+  });
+});
+
+describe("Activity destination — fixed Loot Zone header, independent scrollports (#209)", () => {
+  it("shows a fixed Loot Zone used/10 header and Loot all button that never sit inside a scrollport", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 0/10");
+    const lootAllBtn = root.querySelector("#activity-loot-all-btn");
+    expect(lootAllBtn?.closest(".card-scroll")).toBeNull();
+    expect(root.querySelector("#activity-loot-count")?.closest(".card-scroll")).toBeNull();
+  });
+
+  it("the Loot Zone grid and the Recent Activity feed are two independent scrollports, not a shared wrapper", () => {
+    const { root } = mount(1);
+    const lootGrid = root.querySelector("#activity-loot-items");
+    const feed = root.querySelector("#feed");
+    expect(lootGrid?.classList.contains("card-scroll")).toBe(true);
+    expect(feed?.classList.contains("card-scroll")).toBe(true);
+    expect(lootGrid?.contains(feed as Node)).toBe(false);
+    expect(feed?.contains(lootGrid as Node)).toBe(false);
+    expect(lootGrid?.closest(".card-scroll")).toBe(lootGrid);
+    expect(feed?.closest(".card-scroll")).toBe(feed);
+  });
+
+  it("the header count tracks the Loot Zone as combat Drops land in it, from empty through full (10/10)", () => {
+    // Ten distinct real fixture item ids (never "junk-N" placeholders): loadLootZone (engine.ts)
+    // drops any saved Loot Zone entry whose itemId isn't in Content, so a real Snapshot round-trip
+    // needs real ids to actually land all 10 stacks.
+    const tenItemIds = [
+      "meat",
+      "bread",
+      "bronze-sword",
+      "lucky-charm",
+      "bar",
+      "raw-fish",
+      "hide",
+      "bow",
+      "staff",
+      "herb",
+    ];
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ lootZone: tenItemIds.map((itemId) => ({ itemId, qty: 1 })) }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(engine.snapshot().lootZone).toHaveLength(10); // sanity: all 10 really landed
+    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 10/10");
+  });
+
+  it("clicking Loot all inside the Activity page sweeps the zone into the Bank, same as the compact Loot Strip button", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ lootZone: [{ itemId: "meat", qty: 3 }] }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 1/10");
+
+    root.querySelector<HTMLButtonElement>("#activity-loot-all-btn")?.click();
+
+    expect(engine.snapshot().lootZone).toEqual([]);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
+    expect(root.querySelector("#activity-loot-count")?.textContent).toBe("Loot Zone 0/10");
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/banked.*meat/i);
+  });
+
+  it("each kill event still yields exactly one 'Killed' Loot Feed line now that the panel lives solely in the Activity page", () => {
+    // A single Tick can carry several distinct Engine events (kill, drop, loot, levelup), each
+    // rightly producing its own feed line — so the invariant to prove isn't "one Tick, one line",
+    // it's "one kill event, one 'Killed' line": moving the panel to Activity reused the existing
+    // feedLine() call site rather than adding a second subscription that would double (or, if
+    // mis-wired, drop) that count.
+    const { engine, root } = mount(1);
+    let kills = 0;
+    engine.on("kill", () => {
+      kills += 1;
+    });
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    for (let i = 0; i < 3000 && kills < 5; i++) engine.tick();
+    expect(kills).toBeGreaterThanOrEqual(5);
+
+    const killLines = [...root.querySelectorAll("#feed li")].filter((li) =>
+      /^Killed /.test(li.textContent ?? ""),
+    );
+    expect(killLines.length).toBe(kills);
   });
 });
 
