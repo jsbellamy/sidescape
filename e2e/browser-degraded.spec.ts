@@ -22,6 +22,7 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   // #206: the menu button opens the Character hub; its own header nav then opens the Management
   // card at the World destination.
   await page.locator("#menu-toggle").click();
+  await page.screenshot({ path: `${screenshots}/character-only.png`, fullPage: true });
   await page.locator('[data-destination="world"]').click();
 
   // Smoke 2: Tauri calls reject in a browser, but the UI stays usable. The expected
@@ -42,7 +43,13 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
     .evaluate((el) => el.scrollHeight - el.clientHeight);
   expect(overflow).toBeLessThanOrEqual(0);
 
-  await page.screenshot({ path: `${screenshots}/panel-open.png`, fullPage: true });
+  await page.screenshot({ path: `${screenshots}/world.png`, fullPage: true });
+  await page.locator('[data-destination="bank"]').click();
+  await page.screenshot({ path: `${screenshots}/bank.png`, fullPage: true });
+  await page.locator('[data-destination="workshop"]').click();
+  await page.screenshot({ path: `${screenshots}/workshop.png`, fullPage: true });
+  await page.locator('[data-destination="activity"]').click();
+  await page.screenshot({ path: `${screenshots}/activity.png`, fullPage: true });
 
   // #206: workspace state is session-only — no `sidescape-ui-workspace-v2` key is ever written —
   // so both cards deliberately close on a fresh boot/reload with nothing to recover.

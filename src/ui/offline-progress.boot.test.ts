@@ -97,7 +97,7 @@ describe("offline-progress boot wiring", () => {
     // fail; mountApp's engine.on("fish-caught", ...) subscription only exists after mount, i.e.
     // after the pump already finished.
     expect(root.querySelector("#feed")?.children.length ?? 0).toBe(0);
-    expect(root.querySelector("#ticker")?.textContent).toBe("");
+    expect(root.querySelector("#ticker")).toBeNull();
   });
 
   it("shows exactly one card whose content matches buildAwayCard's own output", () => {
