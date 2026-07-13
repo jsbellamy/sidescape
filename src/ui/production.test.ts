@@ -127,7 +127,6 @@ describe("productionPanelMarkup", () => {
       skill: "smithing" as const,
       label: "⚗️ Alchemy",
       prop: "alembic",
-      panelId: "alchemy-recipes",
     };
     const fakeContent = {
       ...fixtureContent,

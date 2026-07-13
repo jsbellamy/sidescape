@@ -16,20 +16,42 @@ import { PNG } from "pngjs";
  * #207 gave the expanded Bank/Vendor destination its own fixed shell (`.bank-page-body`) with two
  * *more* `.card-scroll` surfaces nested inside `#card-management` (the Bank tile grid and the
  * Vendor list), and #208 did the same for World (`.world-page-body`, a non-scrolling progression
- * rail plus its own selected-Area-detail `.card-scroll`) — `.card-scroll` is a shared
- * scroll-shadow utility class, reused deliberately across all of these, not a bug. This spec is
- * specifically about the *outer* Workshop/Activity wrapper (the one whose scrolling is exercised
- * by navigating to "activity" below — World and Bank each moved off it), so it targets that
- * wrapper's own `#management-scroll` id rather than the now-ambiguous `.card-scroll` class —
- * `:visible` filtering wouldn't be enough here since a real per-page manual check could
- * legitimately want to assert on the Bank grid's or World's own (also real, also `.card-scroll`)
- * shadow surface in a future spec.
+ * rail plus its own selected-Area-detail `.card-scroll`).
+ *
+ * #209 finished the same move for Workshop and Activity, which used to share one generic
+ * `#management-scroll` wrapper (removed outright — nothing renders into it any more, since all
+ * four Management destinations now own their own fixed shell): Workshop's own scrollport is its
+ * recipe body (`#workshop-recipes`), and Activity owns TWO independent scrollports (the Loot Zone
+ * grid `#activity-loot-items` and the Recent Activity feed `#feed`) rather than one shared wrapper.
+ * This spec is parametrized over each destination's own real scrollport id, per the issue's own
+ * "update the scroll-shadow E2E away from `.management-card` to the actual Workshop/Activity body
+ * scrollports" instruction — `.card-scroll` alone would be ambiguous, since Bank/World/Activity's
+ * *other* scrollport is also real, also `.card-scroll`, and could legitimately want its own future
+ * spec.
  */
 
-async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<boolean> {
-  const scroll = page.locator("#management-scroll");
+interface Scrollport {
+  /** Human-readable name for this case's test titles. */
+  name: string;
+  /** Which Management destination to open via `[data-destination]` before sampling. */
+  destination: "workshop" | "activity";
+  /** The scrollport's own element id (never the generic, now-removed `#management-scroll`). */
+  scrollId: string;
+}
+
+const SCROLLPORTS: Scrollport[] = [
+  { name: "Workshop's recipe body", destination: "workshop", scrollId: "#workshop-recipes" },
+  { name: "Activity's Recent Activity feed", destination: "activity", scrollId: "#feed" },
+];
+
+async function edgePixelIsDark(
+  page: Page,
+  scrollId: string,
+  edge: "top" | "bottom",
+): Promise<boolean> {
+  const scroll = page.locator(scrollId);
   const box = await scroll.boundingBox();
-  if (!box) throw new Error("#management-scroll has no box");
+  if (!box) throw new Error(`${scrollId} has no box`);
 
   // Sample a 1px-tall strip a few px in from the sampled edge, centered horizontally. The
   // `farthest-side` radial gradient is a wide, flat ellipse (card-width by shadow-height), so it
@@ -59,71 +81,87 @@ async function edgePixelIsDark(page: Page, edge: "top" | "bottom"): Promise<bool
   return minLuma < bgLuma - 8;
 }
 
-async function openManagementCardWithOverflow(page: Page): Promise<void> {
+async function openManagementCardWithOverflow(
+  page: Page,
+  destination: Scrollport["destination"],
+  scrollId: string,
+): Promise<void> {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
-  await page.locator('[data-destination="activity"]').click();
+  await page.locator(`[data-destination="${destination}"]`).click();
   await expect(page.locator("#card-management")).toBeVisible();
 
-  // Force deterministic overflow inside the real `.card-scroll` surface regardless of current
-  // save/bank contents, so the test doesn't depend on gameplay state.
-  await page.evaluate(() => {
-    const scroll = document.querySelector("#management-scroll") as HTMLElement;
+  // Force deterministic overflow inside the real scrollport regardless of current save/bank
+  // contents, so the test doesn't depend on gameplay state.
+  await page.evaluate((id) => {
+    const scroll = document.querySelector(id) as HTMLElement;
     const filler = document.createElement("div");
     filler.id = "e2e-overflow-filler";
     filler.style.height = "2000px";
     scroll.appendChild(filler);
+  }, scrollId);
+}
+
+for (const { name, destination, scrollId } of SCROLLPORTS) {
+  test.describe(`${name} (${scrollId})`, () => {
+    test("overflowing scrollport shows only the bottom shadow when scrolled to top", async ({
+      page,
+    }) => {
+      await openManagementCardWithOverflow(page, destination, scrollId);
+      await page.locator(scrollId).evaluate((el) => (el.scrollTop = 0));
+
+      expect(await edgePixelIsDark(page, scrollId, "top")).toBe(false);
+      expect(await edgePixelIsDark(page, scrollId, "bottom")).toBe(true);
+    });
+
+    test("overflowing scrollport shows both shadows mid-scroll", async ({ page }) => {
+      await openManagementCardWithOverflow(page, destination, scrollId);
+      await page.locator(scrollId).evaluate((el) => {
+        el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+      });
+
+      expect(await edgePixelIsDark(page, scrollId, "top")).toBe(true);
+      expect(await edgePixelIsDark(page, scrollId, "bottom")).toBe(true);
+    });
+
+    test("overflowing scrollport shows only the top shadow when scrolled to bottom", async ({
+      page,
+    }) => {
+      await openManagementCardWithOverflow(page, destination, scrollId);
+      await page.locator(scrollId).evaluate((el) => (el.scrollTop = el.scrollHeight));
+
+      expect(await edgePixelIsDark(page, scrollId, "top")).toBe(true);
+      expect(await edgePixelIsDark(page, scrollId, "bottom")).toBe(false);
+    });
   });
 }
 
-test("overflowing management card shows only the bottom shadow when scrolled to top", async ({
+// "Non-overflowing scrollport shows neither shadow" only holds for Activity's feed: a fresh save
+// starts with zero feed entries, but Workshop's own Smithing recipe body has several real
+// (non-fixture) recipes that already overflow a 300px card's fixed height on a stock boot — the
+// technique itself (`.card-scroll`, the same shared class both scrollports use) is already proven
+// by the three forced-overflow cases above, so this empty-state case is only meaningful — and only
+// true — for Activity.
+test("Activity's Recent Activity feed shows neither shadow on a fresh, empty boot", async ({
   page,
 }) => {
-  await openManagementCardWithOverflow(page);
-  await page.locator("#management-scroll").evaluate((el) => (el.scrollTop = 0));
-
-  expect(await edgePixelIsDark(page, "top")).toBe(false);
-  expect(await edgePixelIsDark(page, "bottom")).toBe(true);
-});
-
-test("overflowing management card shows both shadows mid-scroll", async ({ page }) => {
-  await openManagementCardWithOverflow(page);
-  await page.locator("#management-scroll").evaluate((el) => {
-    el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
-  });
-
-  expect(await edgePixelIsDark(page, "top")).toBe(true);
-  expect(await edgePixelIsDark(page, "bottom")).toBe(true);
-});
-
-test("overflowing management card shows only the top shadow when scrolled to bottom", async ({
-  page,
-}) => {
-  await openManagementCardWithOverflow(page);
-  await page.locator("#management-scroll").evaluate((el) => (el.scrollTop = el.scrollHeight));
-
-  expect(await edgePixelIsDark(page, "top")).toBe(true);
-  expect(await edgePixelIsDark(page, "bottom")).toBe(false);
-});
-
-test("non-overflowing management card shows neither shadow", async ({ page }) => {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
   await page.locator('[data-destination="activity"]').click();
-  const scroll = page.locator("#management-scroll");
+  const scroll = page.locator("#feed");
   await expect(page.locator("#card-management")).toBeVisible();
 
   const overflowing = await scroll.evaluate((el) => el.scrollHeight > el.clientHeight);
   expect(overflowing).toBe(false);
 
-  expect(await edgePixelIsDark(page, "top")).toBe(false);
-  expect(await edgePixelIsDark(page, "bottom")).toBe(false);
+  expect(await edgePixelIsDark(page, "#feed", "top")).toBe(false);
+  expect(await edgePixelIsDark(page, "#feed", "bottom")).toBe(false);
 });
 
-test("management card keeps #138's opaque fill, border, radius, and shadow, and its scroll surface gets a themed thin scrollbar", async ({
+test("management card keeps #138's opaque fill, border, radius, and shadow, and its scroll surfaces get a themed thin scrollbar", async ({
   page,
 }) => {
-  await openManagementCardWithOverflow(page);
+  await openManagementCardWithOverflow(page, "activity", "#feed");
 
   const card = page.locator("#card-management");
   const style = await card.evaluate((el) => {
@@ -144,7 +182,7 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   await expect(header).toBeVisible();
   await expect(header).toHaveAttribute("data-tauri-drag-region", "");
 
-  const scroll = page.locator("#management-scroll");
+  const scroll = page.locator("#feed");
   const barWidth = await scroll.evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width);
   expect(barWidth).toBe("6px");
 
@@ -177,4 +215,39 @@ test("management card keeps #138's opaque fill, border, radius, and shadow, and 
   });
   expect(thumbRules.base).toBe("var(--border)");
   expect(thumbRules.hover).toBe("var(--accent)");
+});
+
+test("Activity's Loot Zone grid and Recent Activity feed scroll independently, each with its own shadow", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="activity"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
+
+  // Force overflow in the Loot Zone grid only — the Recent Activity feed stays short — then prove
+  // the feed's own top/bottom edges show no shadow while the Loot Zone grid's bottom edge does:
+  // two independent scrollports, not one shared wrapper (#209's own acceptance criterion).
+  await page.evaluate(() => {
+    const scroll = document.querySelector("#activity-loot-items") as HTMLElement;
+    const filler = document.createElement("li");
+    filler.id = "e2e-loot-overflow-filler";
+    filler.style.height = "2000px";
+    filler.style.width = "100%";
+    scroll.appendChild(filler);
+  });
+
+  const lootOverflowing = await page
+    .locator("#activity-loot-items")
+    .evaluate((el) => el.scrollHeight > el.clientHeight);
+  const feedOverflowing = await page
+    .locator("#feed")
+    .evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(lootOverflowing).toBe(true);
+  expect(feedOverflowing).toBe(false);
+
+  await page.locator("#activity-loot-items").evaluate((el) => (el.scrollTop = 0));
+  expect(await edgePixelIsDark(page, "#activity-loot-items", "bottom")).toBe(true);
+  expect(await edgePixelIsDark(page, "#feed", "top")).toBe(false);
+  expect(await edgePixelIsDark(page, "#feed", "bottom")).toBe(false);
 });
