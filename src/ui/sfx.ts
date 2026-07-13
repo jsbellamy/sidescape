@@ -36,8 +36,8 @@ function saveMuted(muted: boolean): void {
 
 /**
  * Subscribes to Engine events and plays a distinct CC0 sound effect for each
- * (kill, food-eaten, levelup, rare drop, death), and wires the titlebar mute
- * toggle button. Mute state persists in localStorage under its own key,
+ * (kill, food-eaten, levelup, rare drop, death), and wires the Character hub's
+ * Settings-popover mute toggle button. Mute state persists in localStorage under its own key,
  * separate from the game save. UI-side only: makes no Engine changes and adds
  * no timers of its own (ADR-0001) — it purely reacts to events the Engine already emits.
  */

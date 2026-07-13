@@ -11,8 +11,9 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   await page.goto("/");
 
   // Smoke 1: the compact widget still mounts in the plain-browser fallback. Mute/Export/Import
-  // moved into the Character hub's Settings popover (#206), so only the always-visible titlebar
-  // Quit button and the menu button are checked here.
+  // moved into the Character hub's Settings popover (#206), so only the always-visible
+  // #widget-controls Close button and the Menu button are checked here (#219 replaced the
+  // titlebar bar with this floating cluster overlaid on #scene's top-right corner).
   await expect(page.locator("#app")).toBeVisible();
   for (const selector of ["#close-btn", "#menu-toggle"]) {
     await expect(page.locator(selector)).toBeVisible();

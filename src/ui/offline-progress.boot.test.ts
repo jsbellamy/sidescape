@@ -172,3 +172,22 @@ describe("offline-progress boot wiring", () => {
     expect(awayCard?.heading).toContain("8h+");
   });
 });
+
+describe("close-btn save persistence (#219 chrome pass: #close-btn moved into #widget-controls, but must keep writing SAVE_KEY exactly like it did inside the deleted #titlebar)", () => {
+  it("writes the current Snapshot to SAVE_KEY before closing the window", () => {
+    const now = 10_000_000_000;
+    const savedSnap = { ...makeSnapshot({ player: { gold: 42 } }), savedAt: now };
+    const { root, engine } = bootSavedSnapshot(savedSnap, now);
+
+    expect(localStorage.getItem(SAVE_KEY)).not.toBeNull();
+    localStorage.removeItem(SAVE_KEY); // prove the click itself writes it, not just the boot-time load
+    expect(localStorage.getItem(SAVE_KEY)).toBeNull();
+
+    root.querySelector<HTMLButtonElement>("#close-btn")?.click();
+
+    const raw = localStorage.getItem(SAVE_KEY);
+    expect(raw).not.toBeNull();
+    const saved = JSON.parse(raw as string);
+    expect(saved.player.gold).toBe(engine.snapshot().player.gold);
+  });
+});

@@ -956,7 +956,9 @@ describe("Character hub destination nav (#206: World/Workshop/Activity nav butto
 
     root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
     await vi.waitFor(() => expect(pageHidden(root, "bank")).toBe(false));
-    expect(root.querySelector<HTMLElement>("#management-title")?.textContent).toBe("Bank");
+    // #219 deleted the Management card's own `#management-title` chrome; the bank page's own
+    // `#bank-header` (rendered by the bank page itself) is now the "where am I" cue instead.
+    expect(root.querySelector<HTMLElement>("#bank-header")?.textContent).toMatch(/^Bank /);
   });
 
   it("switching destinations reports the same card count exactly once (one geometry sync per action)", async () => {
@@ -1108,11 +1110,12 @@ describe("Vertical cards-on-glass composition (#151 §1/§2, #206)", () => {
     expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it("nests the titlebar and its close control, plus the Settings popover's export/import/mute controls, inside the compact/Character cards (#206 moved Mute/Export/Import into the Settings popover)", () => {
+  it("nests the floating widget-controls cluster and its close control, plus the Settings popover's export/import/mute controls, inside the compact/Character cards (#219 replaced the titlebar with an overlaid cluster; #206 moved Mute/Export/Import into the Settings popover)", () => {
     const { root } = mount(1);
     const compact = root.querySelector<HTMLElement>("#compact-widget");
     const character = root.querySelector<HTMLElement>("#card-character");
-    expect(root.querySelector("#titlebar")?.closest("#compact-widget")).toBe(compact);
+    expect(root.querySelector("#widget-controls")?.closest("#compact-widget")).toBe(compact);
+    expect(root.querySelector("#close-btn")?.closest("#widget-controls")).not.toBeNull();
     expect(root.querySelector("#close-btn")?.closest("#compact-widget")).toBe(compact);
     for (const id of ["#export-save", "#import-save", "#mute-toggle"]) {
       expect(root.querySelector(id)?.closest("#card-character")).toBe(character);
@@ -1177,25 +1180,100 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
     expect(root.querySelector<HTMLElement>("#card-character")?.hidden).toBe(true); // then Character
   });
 
-  it("card headers are Tauri drag regions but their own interactive controls are not", () => {
+  it("card headers carry no drag region, background, or title text — only their nav icons/back arrow survive de-chroming (#219)", () => {
     const { root } = mount(1);
     const characterHeader = root.querySelector<HTMLElement>(
       "#card-character .management-card-header",
     );
-    expect(characterHeader?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(characterHeader?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    // The "Character" title span is gone entirely; only the nav (destination buttons + settings
+    // gear) remains inside the header.
+    expect(characterHeader?.querySelector(".card-nav-title")).toBeNull();
+    expect(characterHeader?.querySelector("#character-nav")).not.toBeNull();
     expect(
-      characterHeader
-        ?.querySelector<HTMLElement>("button[data-destination], button[data-nav]")
-        ?.hasAttribute("data-tauri-drag-region"),
-    ).toBe(false);
+      characterHeader?.querySelector<HTMLElement>("button[data-destination], button[data-nav]"),
+    ).not.toBeNull();
 
     const managementHeader = root.querySelector<HTMLElement>(
       "#card-management .management-card-header",
     );
-    expect(managementHeader?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(managementHeader?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    // The old `#management-title` "World"/"Workshop"/"Bank"/"Activity" label is deleted, not
+    // just hidden — de-chroming removes the header's only text content.
+    expect(root.querySelector("#management-title")).toBeNull();
     const backBtn = managementHeader?.querySelector<HTMLElement>("[data-management-back]");
     expect(backBtn).not.toBeNull();
     expect(backBtn?.hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
+  it('`data-tauri-drag-region` appears exactly once in the whole document, on #compact-widget, with value "deep" (#219)', () => {
+    const { root } = mount(1);
+    const tagged = [...root.querySelectorAll("[data-tauri-drag-region]")];
+    expect(tagged.map((el) => el.id)).toEqual(["compact-widget"]);
+    expect(tagged[0]?.getAttribute("data-tauri-drag-region")).toBe("deep");
+  });
+
+  it("every interactive element inside #compact-widget's subtree is a natively-clickable tag, or explicitly opts out with data-tauri-drag-region=\"false\" — the regression guard for #219's deep drag region: it must fail the moment a future <div onclick> lands inside the widget", () => {
+    const { root } = mount(1);
+    const widget = root.querySelector<HTMLElement>("#compact-widget");
+    expect(widget).not.toBeNull();
+    // Mirrors Tauri 2.11's own drag.js CLICKABLE_TAGS/isClickableElement predicate (see the issue
+    // body): natively-clickable tags are exempt for free; anything else that behaves click-
+    // interactive (onclick, a non-editable-off tabindex, contenteditable, or a clickable ARIA
+    // role) must be one of those tags or it silently loses its click under a `deep` ancestor.
+    const NATIVE_CLICKABLE_TAGS = new Set(["BUTTON", "INPUT", "SELECT", "A", "TEXTAREA", "LABEL"]);
+    const CLICKABLE_ROLES = new Set([
+      "button",
+      "link",
+      "menuitem",
+      "tab",
+      "checkbox",
+      "radio",
+      "switch",
+      "option",
+    ]);
+    const offenders = [...(widget as HTMLElement).querySelectorAll<HTMLElement>("*")].filter(
+      (el) => {
+        if (NATIVE_CLICKABLE_TAGS.has(el.tagName)) return false;
+        if (el.getAttribute("data-tauri-drag-region") === "false") return false;
+        if (el.hasAttribute("onclick")) return true;
+        if (el.hasAttribute("contenteditable")) return true;
+        const tabindex = el.getAttribute("tabindex");
+        if (tabindex !== null && tabindex !== "-1") return true;
+        const role = el.getAttribute("role");
+        if (role && CLICKABLE_ROLES.has(role)) return true;
+        return false;
+      },
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("each of the four Management destinations still identifies itself via its own content heading now that #management-title's chrome is gone (#219)", () => {
+    const { root } = mount(1);
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+
+    // World: no literal "World" text, but the progression rail lists Area names and the detail
+    // pane shows the selected Area's own name — self-identifying content, same as pre-#219.
+    root.querySelector<HTMLButtonElement>('[data-destination="world"]')?.click();
+    expect(root.querySelectorAll("#area-rail .area-rail-name").length).toBeGreaterThan(0);
+    expect(root.querySelector(".area-name")?.textContent).toBeTruthy();
+
+    // Workshop: the selected Production Skill's own name/level heading.
+    root.querySelector<HTMLButtonElement>('[data-destination="workshop"]')?.click();
+    expect(root.querySelector("#workshop-skill-name")?.textContent).toBeTruthy();
+
+    // Activity: "Recent Activity" is a plain (non-bar) content heading, unaffected by the
+    // deleted card-header title.
+    root.querySelector<HTMLButtonElement>('[data-destination="activity"]')?.click();
+    const activityHeadings = [
+      ...root.querySelectorAll("[data-management-page='activity'] .panel-title"),
+    ].map((p) => p.textContent);
+    expect(activityHeadings.some((t) => t?.includes("Recent Activity"))).toBe(true);
+
+    // Bank: reached via Expand Bank from the Character hub's embedded tray; `#bank-header` shows
+    // "Bank <used>/<capacity>".
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    expect(root.querySelector("#bank-header")?.textContent).toMatch(/^Bank /);
   });
 
   it("opening, switching, and closing cards never mutates the Engine's Snapshot (presentation-only)", async () => {
@@ -3787,11 +3865,12 @@ describe("Save → remount round-trip (#9)", () => {
 });
 
 describe("fixed compact live stage (#210)", () => {
-  it("contains only Menu/drag title/Close controls and no portrait or moved information", () => {
+  it("contains only the floating Menu/Close controls and no portrait or moved information — no titlebar chrome (#219)", () => {
     const { root } = mount(1);
+    expect(root.querySelector("#titlebar")).toBeNull();
     expect(
-      [...root.querySelectorAll("#titlebar > *")].map((node) => node.id || node.textContent),
-    ).toEqual(["menu-toggle", "SideScape", "close-btn"]);
+      [...root.querySelectorAll("#widget-controls > *")].map((node) => node.id || node.textContent),
+    ).toEqual(["menu-toggle", "close-btn"]);
     for (const selector of [
       "#gold",
       "#food-slots",
