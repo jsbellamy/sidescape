@@ -12,7 +12,6 @@ import type {
   CurrencyDef,
   DropBand,
   DungeonDef,
-  Element,
   EquipmentDef,
   FishingSpotDef,
   FoodDef,
@@ -80,12 +79,6 @@ interface State {
   xp: Record<SkillName, number>;
   hp: number;
   combatStyle: CombatStyle;
-  /** The player's selected spell (Combat Depth wave 3/4, #101) — a loadout choice like
-   * `combatStyle`, legal to change any time. `null` resolves at cast time to the lowest-levelReq
-   * spell (see `resolvedSpell`); validateContent guarantees one at levelReq 1, so a fresh save can
-   * always cast. Levels only rise, so a previously-legal selection can never become illegal
-   * (no level-down guard needed). */
-  spellId: string | null;
   autoEatThreshold: AutoEatThreshold;
   /** Toggles auto-sell of duplicate Equipment (#63) — see creditCombatItem/isDuplicateEquipment. */
   autoSellDuplicates: boolean;
@@ -99,20 +92,20 @@ interface State {
    * rules. `null` = empty; a depleted stack stays loaded at qty 0 (empty != unloaded, mirrors a
    * Food Slot). */
   quiver: { itemId: string; qty: number } | null;
-  /** The Rune Pouch (#119), keyed by Element — structurally enforces "at most one stack per
-   * Element" (Snapshot.player.runePouch's own doc, types.ts) the same way `bank`/`lootZone`'s Map
-   * keying enforces "at most one stack per itemId". */
-  runePouch: Map<Element, { itemId: string; qty: number }>;
+  /** The Rune Slot (#221) — see Snapshot.player.runeSlot's own doc (types.ts) for the shape/home
+   * rules. `null` = empty; a depleted stack stays loaded at qty 0 (empty != unloaded, mirrors the
+   * Quiver above exactly). The loaded rune's itemId determines the currently castable Spell — see
+   * `currentSpell`. */
+  runeSlot: { itemId: string; qty: number } | null;
   /** Whether an empty-Quiver out-of-ammo event has already fired for the CURRENT depletion
    * (#119) — reset to false the moment the Quiver holds qty > 0 again, so the next depletion
    * fires its own event instead of staying silently suppressed forever. Never persisted — a fresh
    * load always starts un-warned, same as respawnTicksLeft/regenTicks below. */
   quiverOutWarned: boolean;
-  /** The Element an out-of-ammo event has already fired for on the CURRENT Rune Pouch depletion
-   * (#119), or null if no depletion is currently unwarned. Mirrors quiverOutWarned's shape but
-   * keyed by Element (switching to a DIFFERENT depleted Element's Spell is its own new depletion).
-   * Never persisted. */
-  runeOutWarned: Element | null;
+  /** Whether an empty/depleted-Rune-Slot out-of-ammo event has already fired for the CURRENT
+   * depletion (#221) — mirrors quiverOutWarned's shape exactly, now singular since there is only
+   * one Rune Slot. Never persisted. */
+  runeOutWarned: boolean;
   activity: Activity;
   /** The player's currency balance (#59) — gold stopped being an item stack; the Bank below is
    * the sole store for every other Item. */
@@ -141,10 +134,6 @@ export interface Engine {
   selectFishingSpot(spotId: string): void;
   enterDungeon(dungeonId: string): void;
   selectRecipe(recipeId: string): void;
-  /** Selects the player's spell (Combat Depth wave 3/4, #101) — a loadout choice, not an activity:
-   * legal any time, never changes `activity`. Throws on an unknown id or a Magic level below the
-   * spell's `levelReq` (message pattern matches `selectRecipe`). */
-  selectSpell(id: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
   /** Toggles auto-sell of duplicate Equipment (#63, default ON) — see creditCombatItem/
@@ -189,17 +178,17 @@ export interface Engine {
   /** Returns the Quiver's stack to the Bank (bank-full -> loud throw); Quiver -> null. No-op if
    * already empty. */
   unloadQuiver(): void;
-  /** Loads `runeItemId` (must be an `ammoType: "rune"` AmmoDef the player owns in the Bank) into
-   * the Rune Pouch (#119) under its own Element: moves the whole Bank stack in. The pouch holds
-   * all four Elements at once — loading one Element's rune never displaces another; loading the
-   * SAME rune again tops up its stack in place. Throws on an unknown/non-rune id or zero owned;
-   * if a DIFFERENT item was already loaded under the same Element (bank-full on returning it ->
-   * loud throw, mirrors `assignFoodSlot`'s swap). */
-  loadRunePouch(runeItemId: string): void;
-  /** Returns `runeItemId`'s Element's Rune Pouch stack to the Bank (bank-full -> loud throw). A
-   * no-op if that Element isn't currently loaded with `runeItemId` specifically (unknown id,
-   * different Element loaded, or already empty). */
-  unloadRunePouch(runeItemId: string): void;
+  /** Loads `runeItemId` (an `ammoType: "rune"` AmmoDef the player owns in the Bank) into the Rune
+   * Slot (#221), moving the whole Bank stack in. Selecting a rune IS selecting a Spell. Throws on:
+   * an unknown or non-rune id; zero owned; and — per ADR-0001 (invalid commands throw loudly,
+   * never silently no-op) — `magic level too low: need ${levelReq}` when the player's Magic level
+   * is below the Spell's levelReq. A rune already in the slot is returned to the Bank first
+   * (bank-full -> loud throw, mirroring `assignFoodSlot`'s swap). Loading the SAME rune tops up
+   * its stack in place. */
+  loadRuneSlot(runeItemId: string): void;
+  /** Returns the Rune Slot's stack to the Bank and empties the slot (bank-full -> loud throw). A
+   * no-op when the slot is already empty. */
+  unloadRuneSlot(): void;
   /** Buys `qty` (default 1) of `itemId` from `content.vendor`'s fixed price list (#119): cost is
    * `price * qty`; throws `` `not enough gold: need ${cost}` `` if short (mirrors `buyBankSlots`)
    * and "bank is full" if a brand-new Bank stack is needed at capacity (a player command, never
@@ -281,17 +270,6 @@ function isCombatStyle(value: unknown): value is CombatStyle {
   return (COMBAT_STYLES as readonly unknown[]).includes(value);
 }
 
-/** Tolerant load of `player.spell.id` (#101): the save stores the selection only, not the
- * resolved spell — an unknown id (dropped content, corrupted save) or a missing/pre-#101 field
- * both fall back to `null`, which resolves at cast time to the lowest-levelReq spell (see
- * `resolvedSpell`). No level check here: levels only rise, so a previously-legal selection can
- * never become illegal. */
-function loadSpellId(saved: Snapshot, content: Content): string | null {
-  const raw: unknown = saved.player?.spell?.id;
-  if (typeof raw !== "string") return null;
-  return content.spells.some((s) => s.id === raw) ? raw : null;
-}
-
 /** Ticks between player attacks for `weaponId`; unarmed (or an unresolvable/non-equipment id)
  * falls back to UNARMED_SPEED. Pure so it can size a resumed fight's cooldown during load,
  * before the Engine's closures (which call this with `state.equipment.weapon`) exist yet. */
@@ -341,15 +319,14 @@ function freshState(_content: Content): State {
     },
     hp: 10,
     combatStyle: "aggressive",
-    spellId: null,
     autoEatThreshold: DEFAULT_AUTO_EAT_THRESHOLD,
     autoSellDuplicates: DEFAULT_AUTO_SELL_DUPLICATES,
     foodSlots: Array.from({ length: FOOD_SLOT_COUNT }, () => null),
     potionSlot: null,
     quiver: null,
-    runePouch: new Map(),
+    runeSlot: null,
     quiverOutWarned: false,
-    runeOutWarned: null,
+    runeOutWarned: false,
     activity: null,
     gold: 0,
     bank: new Map(),
@@ -489,29 +466,52 @@ function loadQuiver(
   return { itemId: def.id, qty };
 }
 
-/** Tolerant load of `player.runePouch` (#119): missing/non-array/pre-#119 -> an empty Map (mirrors
- * `runePouch: []` on a fresh save). Each entry's itemId must resolve to an `ammoType: "rune"`
- * AmmoDef carrying a real `element`; anything else (unknown id, wrong ammoType, a rune with no
- * element — shouldn't exist post-validateContent, but a saved file predates today's Content) is
- * dropped, mirroring loadBank's drop-unresolvable-entries rule. Two saved entries resolving to the
- * SAME Element (a corrupted save, since the live commands enforce at most one) sum their
- * quantities under the LATER entry's itemId, mirroring loadBank's own duplicate-summing shape. */
-function loadRunePouch(
+/** Tolerant load of `player.runeSlot` (#221): missing/pre-#221 -> null (a save-shape slice, same
+ * tolerance as `quiver`/`potionSlot` before it — see `loadLegacyRuneStacks` below for the pre-#221
+ * `runePouch` migration path, which banks the old stacks instead of guessing which one matches the
+ * dropped `spellId`). An itemId that doesn't resolve to an `ammoType: "rune"` AmmoDef -> null
+ * (dropped/renamed content, or a corrupted save). qty is coerced to a finite non-negative integer,
+ * falling back to 0 (a depleted Rune Slot legitimately sits at qty 0 while still loaded — mirrors
+ * loadQuiver's own tolerance exactly). */
+function loadRuneSlot(
   saved: Snapshot,
   content: ResolvedContent,
-): Map<Element, { itemId: string; qty: number }> {
-  const pouch = new Map<Element, { itemId: string; qty: number }>();
-  const raw: unknown = saved.player?.runePouch;
-  if (!Array.isArray(raw)) return pouch;
+): { itemId: string; qty: number } | null {
+  const raw = saved.player?.runeSlot as { itemId?: unknown; qty?: unknown } | null | undefined;
+  if (!raw) return null;
+  const itemId: unknown = raw.itemId;
+  const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
+  if (def?.kind !== "ammo" || def.ammoType !== "rune") return null;
+  const qty = isNonNegativeIntQty(raw.qty) ? raw.qty : 0;
+  return { itemId: def.id, qty };
+}
+
+/** Migration (#221): every valid pre-#221 `player.runePouch` stack, to be folded into the Bank via
+ * `addToBank` once the Engine's Bank machinery exists (see createEngine) — never returned directly
+ * as a loaded Rune Slot. Owner decision, verbatim: "bank everything, start empty" — unambiguous
+ * over guessing which of up to four stacks matches the dropped `spellId`, and cannot silently
+ * switch which Spell the player ends up casting. An itemId that doesn't resolve to an
+ * `ammoType: "rune"` AmmoDef, or a non-positive qty, is dropped silently (mirrors loadBank's own
+ * tolerant-drop rule); duplicate itemIds (a corrupted save) sum their quantities. */
+function loadLegacyRuneStacks(
+  saved: Snapshot,
+  content: ResolvedContent,
+): { itemId: string; qty: number }[] {
+  // Pre-#221 saves carried `player.runePouch`; Snapshot no longer has that field (mirrors
+  // loadLegacyInventory's own narrow cast for pre-#59 `player.inventory` above), so it's read
+  // back only here, through a narrow cast, at this migration boundary.
+  const legacy = saved as unknown as { player?: { runePouch?: unknown } };
+  const raw: unknown = legacy.player?.runePouch;
+  if (!Array.isArray(raw)) return [];
+  const stacks = new Map<string, number>();
   for (const entry of raw as { itemId?: unknown; qty?: unknown }[]) {
     const itemId: unknown = entry?.itemId;
     const def = typeof itemId === "string" ? content.itemsById.get(itemId) : undefined;
-    if (def?.kind !== "ammo" || def.ammoType !== "rune" || def.element === undefined) continue;
-    const qty = isNonNegativeIntQty(entry?.qty) ? entry.qty : 0;
-    const existing = pouch.get(def.element);
-    pouch.set(def.element, { itemId: def.id, qty: (existing?.qty ?? 0) + qty });
+    if (def?.kind !== "ammo" || def.ammoType !== "rune") continue;
+    if (!isPositiveIntQty(entry?.qty)) continue;
+    stacks.set(def.id, (stacks.get(def.id) ?? 0) + entry.qty);
   }
-  return pouch;
+  return [...stacks.entries()].map(([itemId, qty]) => ({ itemId, qty }));
 }
 
 /** Pre-#59 saves persisted a carried `player.inventory` stack array (including a currency
@@ -729,7 +729,6 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
     xp,
     hp: loadHp(saved, maxHp),
     combatStyle: isCombatStyle(saved.player?.combatStyle) ? saved.player.combatStyle : "aggressive",
-    spellId: loadSpellId(saved, content),
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
@@ -737,9 +736,9 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
     foodSlots: loadFoodSlots(saved, content),
     potionSlot: loadPotionSlot(saved, content),
     quiver: loadQuiver(saved, content),
-    runePouch: loadRunePouch(saved, content),
+    runeSlot: loadRuneSlot(saved, content),
     quiverOutWarned: false,
-    runeOutWarned: null,
+    runeOutWarned: false,
     activity,
     gold,
     bank,
@@ -834,6 +833,20 @@ export function createEngine(
     for (const handler of handlers.get(event.type) ?? []) handler(event);
   }
 
+  // Rune Slot migration (#221): a pre-#221 `player.runePouch` may hold up to four valid stacks
+  // that `loadState` deliberately did NOT turn into a loaded `state.runeSlot` (owner decision:
+  // "bank everything, start empty" — see loadLegacyRuneStacks' own doc). Each stack is folded into
+  // the Bank here, once `addToBank`/`emit` exist (it auto-sells on overflow rather than throwing,
+  // so a full Bank can never make an old save unloadable) — `state.bank`/`state.gold` are already
+  // final by the time any command or the first `snapshot()` runs. No listener has subscribed yet
+  // at construction time, so an `overflow-sold`/`overflow-lost` fired here is unobservable via
+  // events; the resulting Bank/gold state is the durable evidence instead.
+  if (saved) {
+    for (const { itemId, qty } of loadLegacyRuneStacks(saved, resolved)) {
+      addToBank(itemId, qty);
+    }
+  }
+
   function level(skill: SkillName): number {
     return levelForXp(state.xp[skill]);
   }
@@ -862,19 +875,16 @@ export function createEngine(
     return def;
   }
 
-  function spellDef(id: string): SpellDef {
-    const def = resolved.spellsById.get(id);
-    if (!def) throw new Error(`unknown spell: ${id}`);
-    return def;
-  }
-
-  /** The player's currently RESOLVED spell (#101): `state.spellId` if it still resolves, else the
-   * lowest-levelReq spell — validateContent guarantees one at levelReq 1, so this always succeeds
-   * even on a fresh save (`spellId: null`) or after content dropped a previously-selected spell. */
-  function resolvedSpell(): SpellDef {
-    const selected = state.spellId ? resolved.spellsById.get(state.spellId) : undefined;
-    if (selected) return selected;
-    return content.spells.reduce((lowest, s) => (s.levelReq < lowest.levelReq ? s : lowest));
+  /** The Spell the loaded rune casts, or null when the Rune Slot is empty (#221). Replaces
+   * `resolvedSpell()` and its "fall back to the lowest-levelReq spell" behaviour: with no rune
+   * loaded there is no Spell at all, and `checkAmmo` blocks the swing before this is ever asked to
+   * produce a max hit for a null Spell. Looked up via `spellsByRuneId` (validateContent guarantees
+   * every rune resolves to exactly one Spell), keyed off the loaded stack's itemId regardless of
+   * its qty — a depleted (qty 0) stack still resolves to its Spell, which is what lets the
+   * "Casting: …" readout and the out-of-ammo event's `element` stay populated while depleted. */
+  function currentSpell(): SpellDef | null {
+    if (!state.runeSlot) return null;
+    return resolved.spellsByRuneId.get(state.runeSlot.itemId) ?? null;
   }
 
   /** Whether the Bank covers at least one craft of `recipe`. */
@@ -1375,9 +1385,12 @@ export function createEngine(
       );
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
-        // Magic max hit is the resolved Spell's own baseMaxHit (#101), not Strength-derived —
-        // left unmultiplied here on purpose (#114): a magic-damage source is out of scope this wave.
-        max: resolvedSpell().baseMaxHit,
+        // Magic max hit is the currently cast Spell's own baseMaxHit (#101, #221), not
+        // Strength-derived — left unmultiplied here on purpose (#114): a magic-damage source is
+        // out of scope this wave. Caller (playerAttack) has already gated on checkAmmo confirming
+        // a loaded Rune Slot, so this only ever runs with a real Spell; the `?? 0` guards
+        // defensively, mirroring arrowDef's own guard above.
+        max: currentSpell()?.baseMaxHit ?? 0,
       };
     }
     return {
@@ -1398,61 +1411,59 @@ export function createEngine(
     };
   }
 
-  /** Ammo gate (#119): checked BEFORE any accuracy/damage math. Ranged needs the Quiver at
-   * qty > 0; magic needs the CAST Spell's own Element present at qty > 0 in the Rune Pouch
-   * (`resolvedSpell().element` — never any other Element, even if the pouch holds others). Melee
-   * is untouched (mode "melee" never reaches either branch). Returns the resolved Element for a
-   * magic cast (undefined for ranged/melee) so the caller can pass it straight to the matching
-   * consume step without re-resolving the Spell a second time. Out-of-ammo warns ONCE per
-   * depletion (quiverOutWarned/runeOutWarned below) rather than every Tick the resource sits
-   * empty, and clears that warning the moment the resource is available again so the NEXT
-   * depletion gets its own event. */
-  function checkAmmo(mode: CombatMode): { ok: true; element?: Element } | { ok: false } {
+  /** Ammo gate (#119, #221): checked BEFORE any accuracy/damage math. Ranged needs the Quiver at
+   * qty > 0; magic needs the Rune Slot loaded at qty > 0 — the loaded rune IS the cast Spell, so
+   * there is no separate Element lookup any more. Melee is untouched (mode "melee" never reaches
+   * either branch). Out-of-ammo warns ONCE per depletion (quiverOutWarned/runeOutWarned below)
+   * rather than every Tick the resource sits empty, and clears that warning the moment the
+   * resource is available again so the NEXT depletion gets its own event. The magic branch's
+   * `element` (via `currentSpell()`) is set for a depleted (qty 0, itemId still present) Rune
+   * Slot and omitted for a truly empty one, since an empty slot has no Spell. */
+  function checkAmmo(mode: CombatMode): boolean {
     if (mode === "ranged") {
       if (state.quiver && state.quiver.qty > 0) {
         state.quiverOutWarned = false;
-        return { ok: true };
+        return true;
       }
       if (!state.quiverOutWarned) {
         emit({ type: "out-of-ammo", need: "arrow" });
         state.quiverOutWarned = true;
       }
-      return { ok: false };
+      return false;
     }
     if (mode === "magic") {
-      const element = resolvedSpell().element;
-      const stack = state.runePouch.get(element);
-      if (stack && stack.qty > 0) {
-        if (state.runeOutWarned === element) state.runeOutWarned = null;
-        return { ok: true, element };
+      if (state.runeSlot && state.runeSlot.qty > 0) {
+        state.runeOutWarned = false;
+        return true;
       }
-      if (state.runeOutWarned !== element) {
-        emit({ type: "out-of-ammo", need: "rune", element });
-        state.runeOutWarned = element;
+      if (!state.runeOutWarned) {
+        // exactOptionalPropertyTypes forbids an explicit `element: undefined` — spread it in only
+        // when a (depleted) Spell is actually resolved, omitting the key entirely otherwise.
+        const spell = currentSpell();
+        emit({ type: "out-of-ammo", need: "rune", ...(spell ? { element: spell.element } : {}) });
+        state.runeOutWarned = true;
       }
-      return { ok: false };
+      return false;
     }
-    return { ok: true }; // melee: never gated
+    return true; // melee: never gated
   }
 
-  /** Decrements 1 unit of the resource a just-RESOLVED ranged/magic swing consumed (#119) — called
-   * only after checkAmmo confirmed availability and the swing actually resolved (hit or miss both
-   * count, per the owner's "on a resolved attack" rule); melee is a no-op. Both stores stay
-   * "loaded" at qty 0 rather than clearing (mirrors a Food Slot's empty != unassigned rule) so the
-   * UI can still show "you're out of X" rather than the store vanishing. */
-  function consumeAmmo(mode: CombatMode, element: Element | undefined): void {
+  /** Decrements 1 unit of the resource a just-RESOLVED ranged/magic swing consumed (#119, #221) —
+   * called only after checkAmmo confirmed availability and the swing actually resolved (hit or
+   * miss both count, per the owner's "on a resolved attack" rule); melee is a no-op. Both stores
+   * stay "loaded" at qty 0 rather than clearing (mirrors a Food Slot's empty != unassigned rule)
+   * so the UI can still show "you're out of X" rather than the store vanishing. */
+  function consumeAmmo(mode: CombatMode): void {
     if (mode === "ranged" && state.quiver) {
       state.quiver.qty -= 1;
-    } else if (mode === "magic" && element !== undefined) {
-      const stack = state.runePouch.get(element);
-      if (stack) stack.qty -= 1;
+    } else if (mode === "magic" && state.runeSlot) {
+      state.runeSlot.qty -= 1;
     }
   }
 
   function playerAttack(monster: MonsterDef, activity: CombatActivity | DungeonActivity): void {
     const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
-    const ammo = checkAmmo(mode);
-    if (!ammo.ok) return; // swing doesn't resolve this Tick: no damage, no XP, monster still acts
+    if (!checkAmmo(mode)) return; // swing doesn't resolve this Tick: no damage, no XP, monster still acts
     const weaponType = weaponAttackTypeFor(state.equipment.weapon, resolved);
     const { atkRoll, max } = playerAccuracyAndMaxHit();
     // Routed lookup (#99): the monster's weak spot is simply the type it defends worst.
@@ -1463,17 +1474,17 @@ export function createEngine(
     // a miss's `rolled` is already 0), but a zero-damage HIT still applies it. Melee/ranged are
     // elementless (weaponType !== "magic"), so this never touches their damage.
     let elementDamage = rolled;
-    if (weaponType === "magic" && hit && monster.weakElement === resolvedSpell().element) {
+    if (weaponType === "magic" && hit && monster.weakElement === currentSpell()?.element) {
       elementDamage = Math.floor(rolled * ELEMENT_WEAKNESS_MULT);
     }
     const damage = Math.min(elementDamage, activity.monsterHp);
     activity.monsterHp -= damage;
     awardCombatXp(damage);
     emit({ type: "attack", actor: "player", damage, hit });
-    // Ammo consumption (#119): the swing above just RESOLVED (checkAmmo already confirmed
+    // Ammo consumption (#119, #221): the swing above just RESOLVED (checkAmmo already confirmed
     // availability), so 1 unit is spent regardless of hit/miss, mirroring the owner's "on a
     // resolved attack" rule — melee is a no-op inside consumeAmmo.
-    consumeAmmo(mode, ammo.element);
+    consumeAmmo(mode);
     // Charge decrement (#118): a resolved player attack is the qualifying action for every
     // combat-Skill-targeted potion, regardless of which Skill this particular swing trained —
     // "fishing-speed"/"production-speed" targets never match here (see the two other call sites).
@@ -1553,15 +1564,15 @@ export function createEngine(
         combatLevel: combatLevel(),
         combatStyle: state.combatStyle,
         spell: (() => {
-          const spell = resolvedSpell();
-          return { id: spell.id, name: spell.name, element: spell.element };
+          const spell = currentSpell();
+          return spell ? { id: spell.id, name: spell.name, element: spell.element } : null;
         })(),
         autoEatThreshold: state.autoEatThreshold,
         autoSellDuplicates: state.autoSellDuplicates,
         foodSlots: state.foodSlots.map((slot) => (slot ? { ...slot } : null)),
         potionSlot: state.potionSlot ? { ...state.potionSlot } : null,
         quiver: state.quiver ? { ...state.quiver } : null,
-        runePouch: [...state.runePouch.values()].map((stack) => ({ ...stack })),
+        runeSlot: state.runeSlot ? { ...state.runeSlot } : null,
         skills,
         equipment: { ...state.equipment },
         bonuses: {
@@ -1900,15 +1911,6 @@ export function createEngine(
         craftCooldown: recipe.craftTicks,
       };
     },
-    selectSpell(id) {
-      const spell = spellDef(id); // throws on unknown id
-      if (level("magic") < spell.levelReq) {
-        throw new Error(`${spell.name} requires Magic level ${spell.levelReq}`);
-      }
-      // A loadout choice, not an activity (mirrors setCombatStyle): legal any time, never touches
-      // state.activity.
-      state.spellId = spell.id;
-    },
     setCombatStyle(style) {
       state.combatStyle = style;
     },
@@ -2056,41 +2058,37 @@ export function createEngine(
       returnToBank(current.itemId, current.qty);
       state.quiver = null;
     },
-    loadRunePouch(runeItemId) {
+    loadRuneSlot(runeItemId) {
       const { def, owned } = takeOwned(
         runeItemId,
-        (d): d is AmmoDef & { element: Element } =>
-          d.kind === "ammo" && d.ammoType === "rune" && d.element !== undefined,
+        (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "rune",
         `${runeItemId} is not a Rune`,
       );
-      const element = def.element;
+      // Selecting a rune IS selecting a Spell (#221): validateContent guarantees every rune
+      // resolves to exactly one Spell, so `spell` is always found here for a resolvable rune.
+      const spell = resolved.spellsByRuneId.get(def.id);
+      if (spell && level("magic") < spell.levelReq) {
+        throw new Error(`magic level too low: need ${spell.levelReq}`);
+      }
 
-      const current = state.runePouch.get(element);
+      const current = state.runeSlot;
       let homeQty = owned;
       if (current && current.itemId === runeItemId) {
-        homeQty += current.qty; // topping up this Element's already-loaded rune
+        homeQty += current.qty; // topping up the Rune Slot's already-loaded rune
       } else {
-        // Swap (only reachable if a future content set ever ships two rune items for the same
-        // Element; also a harmless no-op when nothing is loaded there yet): the previously
-        // loaded rune returns to the Bank first — same pull-then-check ordering as loadQuiver's
-        // own swap above.
+        // Swap (or a null/qty-0 Rune Slot, a harmless no-op): the previously loaded rune returns
+        // to the Bank first — mirrors loadQuiver's own pull-then-check ordering.
         swapBackToBank(current);
       }
 
       state.bank.delete(runeItemId);
-      state.runePouch.set(element, { itemId: runeItemId, qty: homeQty });
+      state.runeSlot = { itemId: runeItemId, qty: homeQty };
     },
-    unloadRunePouch(runeItemId) {
-      const def = resolveItem(
-        runeItemId,
-        (d): d is AmmoDef & { element: Element } =>
-          d.kind === "ammo" && d.ammoType === "rune" && d.element !== undefined,
-        `${runeItemId} is not a Rune`,
-      );
-      const current = state.runePouch.get(def.element);
-      if (!current || current.itemId !== runeItemId) return; // that Element isn't loaded — no-op
+    unloadRuneSlot() {
+      const current = state.runeSlot;
+      if (!current) return; // already empty — harmless no-op
       returnToBank(current.itemId, current.qty);
-      state.runePouch.delete(def.element);
+      state.runeSlot = null;
     },
     buy(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid buy quantity: ${qty}`);

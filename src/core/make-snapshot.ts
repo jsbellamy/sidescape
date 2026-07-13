@@ -57,16 +57,16 @@ function baseSnapshot(): Snapshot {
       maxHp,
       combatLevel,
       combatStyle: "accurate",
-      // Resolved to fixtureContent's own levelReq-1 spell (#101) — mirrors engine.ts's
-      // resolvedSpell fallback for a fresh/unselected save; a caller overriding player.spell (or
-      // equipment/skills that would change which spell resolves) should also override this.
-      spell: { id: "test-spark", name: "Test Spark", element: "air" },
+      // No rune loaded by default (#221) -> no Spell (there is no "fall back to the lowest-
+      // levelReq spell" behaviour any more, see engine.ts's currentSpell). A caller loading
+      // `player.runeSlot` should also override `player.spell` to match.
+      spell: null,
       autoEatThreshold: 0,
       autoSellDuplicates: true,
       foodSlots: [null, null, null],
       potionSlot: null,
       quiver: null,
-      runePouch: [],
+      runeSlot: null,
       skills,
       equipment: {
         weapon: null,

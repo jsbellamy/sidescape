@@ -1,5 +1,6 @@
 import { SKILL_NAMES } from "./types";
 import type {
+  AmmoDef,
   AreaDef,
   Content,
   DungeonDef,
@@ -92,9 +93,10 @@ export function validateContent(content: Content): string[] {
   violations.push(...duplicateIds(content.recipes, "recipes"));
   violations.push(...duplicateIds(content.spells, "spells"));
 
-  // Spells (#101): non-empty, at least one at levelReq 1 (spellId: null resolves to it — see
-  // engine.ts's resolvedSpell — so a fresh save must always have one to fall back to), and every
-  // baseMaxHit is a real hit (>= 1).
+  // Spells (#101): non-empty, at least one at levelReq 1 (kept as a content-shape floor even
+  // though #221 removed the "spellId: null falls back to it" behaviour a Spell being castable no
+  // longer follows from this alone — see currentSpell, engine.ts), and every baseMaxHit is a real
+  // hit (>= 1).
   if (content.spells.length === 0) {
     violations.push("Content defines no spells");
   }
@@ -104,6 +106,39 @@ export function validateContent(content: Content): string[] {
   for (const spell of content.spells) {
     if (spell.baseMaxHit < 1) {
       violations.push(`spell "${spell.id}" baseMaxHit must be >= 1`);
+    }
+  }
+
+  // Rune Slot (#221): the loaded rune IS the Spell choice, so the SpellDef.runeId <-> rune Item
+  // link must be exactly 1:1 — every Spell's runeId must resolve to a rune Item with an agreeing
+  // Element, no two Spells may share a runeId, and no rune Item may go unreferenced (a dead item
+  // the player could buy and never cast).
+  const runeItems = content.items.filter(
+    (i): i is AmmoDef => i.kind === "ammo" && i.ammoType === "rune",
+  );
+  const runeItemsById = new Map(runeItems.map((i) => [i.id, i]));
+  const runeIdCounts = new Map<string, number>();
+  for (const spell of content.spells) {
+    const rune = runeItemsById.get(spell.runeId);
+    if (!rune) {
+      violations.push(
+        `spell "${spell.id}" runeId "${spell.runeId}" does not resolve to a rune item`,
+      );
+    } else if (rune.element !== spell.element) {
+      violations.push(
+        `spell "${spell.id}" element "${spell.element}" disagrees with rune "${rune.id}" element "${rune.element}"`,
+      );
+    }
+    runeIdCounts.set(spell.runeId, (runeIdCounts.get(spell.runeId) ?? 0) + 1);
+  }
+  for (const [runeId, count] of runeIdCounts) {
+    if (count > 1) {
+      violations.push(`runeId "${runeId}" is referenced by ${count} spells, expected exactly 1`);
+    }
+  }
+  for (const rune of runeItems) {
+    if (!runeIdCounts.has(rune.id)) {
+      violations.push(`rune "${rune.id}" is not referenced by any spell`);
     }
   }
 
@@ -164,10 +199,10 @@ export function validateContent(content: Content): string[] {
     }
   }
 
-  // Ammo (#119): a rune must declare its Element (a cast consumes the resolved Spell's own
-  // Element from the pouch — loadRunePouch/unloadRunePouch key off it), and an arrow must declare
-  // rangedStr (folded into ranged max hit) while NOT declaring an Element (arrows are elementless,
-  // like every other non-magic Attack Type — see ELEMENTS' own doc, types.ts).
+  // Ammo (#119): a rune must declare its Element (must agree with its owning Spell's own Element —
+  // see the Rune Slot 1:1 check above), and an arrow must declare rangedStr (folded into ranged
+  // max hit) while NOT declaring an Element (arrows are elementless, like every other non-magic
+  // Attack Type — see ELEMENTS' own doc, types.ts).
   for (const item of content.items) {
     if (item.kind !== "ammo") continue;
     if (item.ammoType === "rune" && item.element === undefined) {
@@ -235,6 +270,10 @@ export interface ResolvedContent extends Content {
   dungeonsById: ReadonlyMap<string, DungeonDef>;
   recipesById: ReadonlyMap<string, RecipeDef>;
   spellsById: ReadonlyMap<string, SpellDef>;
+  /** Rune itemId -> the one Spell it casts (#221) — validateContent's 1:1 rule guarantees this is
+   * total over every rune item, so `currentSpell()`/`loadRuneSlot` (engine.ts) never need to
+   * re-scan `content.spells` on every lookup. */
+  spellsByRuneId: ReadonlyMap<string, SpellDef>;
   petsById: ReadonlyMap<string, PetDef>;
 }
 
@@ -259,6 +298,7 @@ export function resolveContent(content: Content): ResolvedContent {
     dungeonsById: byId(content.dungeons),
     recipesById: byId(content.recipes),
     spellsById: byId(content.spells),
+    spellsByRuneId: new Map(content.spells.map((s) => [s.runeId, s])),
     petsById: byId(content.pets),
   };
 }

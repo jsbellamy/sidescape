@@ -1,13 +1,12 @@
 import { UNARMED_SPEED } from "../core/engine";
 import type { Engine } from "../core/engine";
-import { ATTACK_TYPES, ELEMENTS, SKILL_NAMES } from "../core/types";
+import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
 import type {
   AmmoDef,
   AttackType,
   AutoEatThreshold,
   CombatStyle,
   DropTableEntry,
-  Element,
   EquipmentDef,
   FoodSlot,
   GearSlot,
@@ -16,7 +15,6 @@ import type {
   SkillName,
   SkillSnapshot,
   Snapshot,
-  SpellDef,
 } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
@@ -164,18 +162,6 @@ const STYLE_LABELS: Record<CombatStyle, string> = {
   aggressive: "Aggressive",
   defensive: "Defensive",
 };
-
-/** One row of the Spell picker (#101): name, a short Element tag, and — only while under-leveled
- * — the Magic level it needs. #78's icon pass restyles this later (issue's own UI note); today
- * it's a compact text row, mirroring the Combat Style selector it sits beside. */
-function spellRowMarkup(spell: SpellDef, magicLevel: number, selectedId: string): string {
-  const gated = magicLevel < spell.levelReq;
-  return `<button data-spell="${spell.id}" class="spell-btn ${spell.id === selectedId ? "active" : ""}" ${gated ? "disabled" : ""}>
-    <span class="spell-name">${spell.name}</span>
-    <span class="spell-element">${spell.element}</span>
-    ${gated ? `<span class="spell-req">Lvl ${spell.levelReq}</span>` : ""}
-  </button>`;
-}
 
 /** Auto-eat threshold segmented control labels, keyed by the Engine's AutoEatThreshold union. */
 const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
@@ -343,11 +329,10 @@ export function mountApp(
   // Whether the (singular) Quiver's Bank-Arrow chooser is open (#119) — same presentational shape
   // as `openPotionChooser` (a single active arrow stack, mirroring the single active potion).
   let openQuiverChooser = false;
-  // Which Rune Pouch Element slot (if any) currently has its Bank-Rune chooser open (#119) — same
-  // presentational shape as `openFoodChooserSlot`, but keyed by Element (air/water/earth/fire)
-  // instead of an array index, since the pouch holds one slot per Element rather than N generic
-  // slots.
-  let openRunePouchChooserElement: Element | null = null;
+  // Whether the (singular) Rune Slot's Bank-Rune chooser is open (#221) — same presentational
+  // shape as `openQuiverChooser` (a single loaded rune stack, replacing the pre-#221 four-Element
+  // Rune Pouch).
+  let openRuneSlotChooser = false;
   // Which Bank Item (if any) is selected, driving the detail strip below the grid (#78) — purely
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
   // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior. Shared (#207)
@@ -820,55 +805,65 @@ export function mountApp(
     );
   }
 
-  /** Renders the Rune Pouch panel on the Character tab panel (#119): one slot per Element, in
-   * `ELEMENTS` order (air/water/earth/fire) — never an inline literal, mirroring `renderXpRow`'s
-   * own "iterate the canonical order" discipline. Unlike the Quiver (singular) or Food Slots
-   * (N generic slots), each slot here is keyed by its own Element: a filled slot shows that
-   * Element's loaded rune (icon + qty badge, ✕ to unload); an empty slot shows a `[+]` that opens
-   * a chooser listing ONLY that Element's rune stacks in the Bank (there is normally one rune item
-   * per Element, but the chooser filters by Element rather than assuming it, staying correct if
-   * that ever changes). Reuses the Food Slot bar's own flex-row/tile/chooser CSS shape (#61) — a
-   * 4-wide row instead of 3, otherwise identical. */
-  function renderRunePouch(
-    runePouch: Snapshot["player"]["runePouch"],
+  /** Renders the Rune Slot on the Character tab panel (#221): a single tile, replacing the pre-
+   * #221 four-Element Rune Pouch (`ELEMENTS`-order row) — the loaded rune IS the Spell choice, so
+   * there is exactly one slot now. Reuses the Quiver's own singular chassis (`.potion-slot`/
+   * `.potion-slot-tile`) byte-for-byte, not the Food Slot bar's multi-slot one: a filled tile shows
+   * the loaded rune (icon + qty badge, ✕ to unload); an empty tile shows a `[+]` that opens a
+   * chooser listing every rune the player owns. Runes whose Spell is above the player's Magic
+   * level render `disabled` with a `Lv {levelReq}` badge (same gating treatment the deleted
+   * `#spell-row` gave Spells) — the Engine's own throw is the backstop, not the primary gate. This
+   * issue's layout is interim (wave 6/6 restyles the unified loadout row). */
+  function renderRuneSlot(
+    runeSlot: Snapshot["player"]["runeSlot"],
     bankItems: { itemId: string; qty: number }[],
+    magicLevel: number,
   ): void {
-    el("#rune-pouch").innerHTML = ELEMENTS.map((element) => {
-      const loaded = runePouch.find((s) => {
-        const def = content.itemsById.get(s.itemId);
-        return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
-      });
-      const runeStacks = bankItems.filter((s) => {
-        const def = content.itemsById.get(s.itemId);
-        return def?.kind === "ammo" && def.ammoType === "rune" && def.element === element;
-      });
-      const chooserItems: LoadoutSlotChooserItem[] = runeStacks.map((s) => ({
+    const runeStacks = bankItems.filter((s) => {
+      const def = content.itemsById.get(s.itemId);
+      return def?.kind === "ammo" && def.ammoType === "rune";
+    });
+    const chooserItems: LoadoutSlotChooserItem[] = runeStacks.map((s) => {
+      const spell = content.spells.find((sp) => sp.runeId === s.itemId);
+      const gated = spell !== undefined && magicLevel < spell.levelReq;
+      return {
         itemId: s.itemId,
-        label: `${itemName(s.itemId)} ×${s.qty}`,
-      }));
-      const filledInner = loaded
-        ? `<div class="tile" data-item="${loaded.itemId}">${tileMarkup(loaded.itemId, loaded.qty)}</div>`
-        : "";
+        label: `${itemName(s.itemId)} ×${s.qty}${gated ? ` <span class="rune-req">Lv ${spell.levelReq}</span>` : ""}`,
+        disabled: gated,
+      };
+    });
+    const filledInner = runeSlot
+      ? `<div class="tile" data-item="${runeSlot.itemId}">${tileMarkup(runeSlot.itemId, runeSlot.qty)}</div>`
+      : "";
 
-      return loadoutSlotMarkup(
-        {
-          wrapperClass: "food-slot",
-          keyAttr: `data-element="${element}"`,
-          filledInner,
-          unassignClass: "food-slot-unassign",
-          unassignAttr: `data-rune-unassign="${loaded?.itemId ?? ""}"`,
-          unassignTitle: "Unload",
-          addClass: "food-slot-add",
-          addAttr: `data-rune-add="${element}"`,
-          chooserClass: "food-slot-chooser",
-          chooserOpen: openRunePouchChooserElement === element,
-          chooserItems,
-          assignAttr: (itemId) => `data-rune-assign="${itemId}"`,
-          emptyHint: `No ${element} Runes in Bank`,
-        },
-        loaded !== undefined,
-      );
-    }).join("");
+    el("#rune-slot").innerHTML = loadoutSlotMarkup(
+      {
+        wrapperClass: "potion-slot-tile",
+        keyAttr: "",
+        filledInner,
+        unassignClass: "potion-slot-unassign",
+        unassignAttr: "data-rune-unassign",
+        unassignTitle: "Unload",
+        addClass: "potion-slot-add",
+        addAttr: "data-rune-add",
+        chooserClass: "potion-slot-chooser",
+        chooserOpen: openRuneSlotChooser,
+        chooserItems,
+        assignAttr: (itemId) => `data-rune-assign="${itemId}"`,
+        emptyHint: "No Runes in Bank",
+      },
+      runeSlot !== null,
+    );
+  }
+
+  /** Renders the "Casting: …" readout (#221) driven by `snapshot().player.spell` — the Spell the
+   * loaded rune casts, derived, never independently selected (replaces the deleted `#spell-row`
+   * picker). Shows a "No rune loaded" empty state when the Rune Slot is empty rather than a stale
+   * Spell name. */
+  function renderCastingReadout(spell: Snapshot["player"]["spell"]): void {
+    el("#casting-readout").textContent = spell
+      ? `Casting: ${spell.name}`
+      : "Casting: No rune loaded";
   }
 
   /** Renders the Character hub's Pets summary (#206: "compact owned/total summary whose popover
@@ -1016,12 +1011,6 @@ export function mountApp(
     root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
     });
-
-    // Spell picker (#101): one row per known spell (content.spells, not just castable ones),
-    // level-gated ones disabled with their req shown, the resolved selection highlighted.
-    el("#spell-row").innerHTML = content.spells
-      .map((spell) => spellRowMarkup(spell, player.skills.magic.level, player.spell?.id ?? ""))
-      .join("");
 
     root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
       btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
@@ -1259,7 +1248,8 @@ export function mountApp(
     renderFoodSlots(player.foodSlots, bank.items);
     renderPotionSlot(player.potionSlot, bank.items);
     renderQuiver(player.quiver, bank.items);
-    renderRunePouch(player.runePouch, bank.items);
+    renderRuneSlot(player.runeSlot, bank.items, player.skills.magic.level);
+    renderCastingReadout(player.spell);
     renderXpRow(player.skills);
     renderCharacter(player, bank.items);
     renderPets(player.ownedPets);
@@ -1455,15 +1445,15 @@ export function mountApp(
           <div id="character-food-slots" class="food-slots"></div>
           <div id="potion-slot" class="potion-slot"></div>
           <div id="quiver-slot" class="potion-slot"></div>
-          <div id="rune-pouch" class="food-slots"></div>
+          <div id="rune-slot" class="potion-slot"></div>
         </div>
+        <p id="casting-readout" class="totals-row"></p>
         <section id="xp-row"></section>
         <div id="style-row" class="style-row">
           ${Object.entries(STYLE_LABELS)
             .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
             .join("")}
         </div>
-        <div id="spell-row" class="spell-row"></div>
         <div id="autoeat-row" class="style-row">
           ${Object.entries(AUTO_EAT_LABELS)
             .map(([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`)
@@ -1695,7 +1685,14 @@ export function mountApp(
   // line, mirroring the overflow-sold/overflow-lost/duplicate-sold warnings' "⚠" + "overflow"
   // class treatment — this is the same "player needs to notice" severity.
   engine.on("out-of-ammo", (e) => {
-    const text = e.need === "arrow" ? "🏹 Out of arrows!" : `🔮 Out of ${e.element} runes!`;
+    // #221: `element` is only set for a DEPLETED (but still loaded) Rune Slot; a truly empty slot
+    // has no Spell at all, so it falls back to a Spell-agnostic message rather than "undefined".
+    const text =
+      e.need === "arrow"
+        ? "🏹 Out of arrows!"
+        : e.element
+          ? `🔮 Out of ${e.element} runes!`
+          : "🔮 No rune loaded!";
     showToast(text);
     feedLine(`⚠ ${text}`, "overflow");
   });
@@ -1732,18 +1729,6 @@ export function mountApp(
     const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
     if (style) {
       engine.setCombatStyle(style);
-      render();
-    }
-  });
-
-  // Spell picker (#101): a disabled (under-leveled) button never fires click, so no extra guard
-  // is needed here — mirrors #style-row's own pattern above.
-  el("#spell-row").addEventListener("click", (event) => {
-    const spellId = (event.target as HTMLElement).closest<HTMLElement>("[data-spell]")?.dataset[
-      "spell"
-    ];
-    if (spellId) {
-      engine.selectSpell(spellId);
       render();
     }
   });
@@ -2076,27 +2061,25 @@ export function mountApp(
     ),
   );
 
-  // Rune Pouch panel (#119): dispatch order mirrors the Food Slot bar — unassign (✕) before a
-  // chooser pick, before the [+] toggle; `data-rune-add` carries the Element rather than an index.
-  el("#rune-pouch").addEventListener(
+  // Rune Slot tile (#221): dispatch order mirrors the Quiver above — unassign (✕) before a
+  // chooser pick, before the [+] toggle. A gated (disabled) chooser row never fires click at all,
+  // so `loadRuneSlot`'s own "magic level too low" throw is a backstop, never the primary gate.
+  el("#rune-slot").addEventListener(
     "click",
     createLoadoutSlotDispatcher(
       { unassign: "runeUnassign", assign: "runeAssign", add: "runeAdd" },
       {
-        onUnassign: (itemId) => {
-          engine.unloadRunePouch(itemId); // logs nothing; no feed line for unload
+        onUnassign: () => {
+          engine.unloadRuneSlot(); // logs nothing; no feed line for unload (mirrors Quiver)
           render();
         },
         onAssign: (_value, itemId) => {
-          engine.loadRunePouch(itemId);
-          openRunePouchChooserElement = null;
+          engine.loadRuneSlot(itemId);
+          openRuneSlotChooser = false;
           render();
         },
-        onAdd: (value) => {
-          const addElement = value as Element;
-          // re-click dismisses
-          openRunePouchChooserElement =
-            openRunePouchChooserElement === addElement ? null : addElement;
+        onAdd: () => {
+          openRuneSlotChooser = !openRuneSlotChooser; // re-click dismisses
           render();
         },
       },

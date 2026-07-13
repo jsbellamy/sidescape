@@ -312,8 +312,8 @@ body {
   display: none;
 }
 
-/* The Character hub's Loadout Slot grid (#206: Food x3, Potion, Quiver, Rune Pouch x4 Elements) —
-   stacks the four existing Loadout Slot rows/tiles vertically. */
+/* The Character hub's Loadout Slot grid (#206: Food x3, Potion, Quiver, Rune Slot — #221 collapsed
+   the old four-Element Rune Pouch to one slot) — stacks the four rows/tiles vertically. */
 .loadout-grid {
   display: flex;
   flex-direction: column;
@@ -1133,6 +1133,15 @@ body {
   color: var(--accent);
 }
 
+/* #221: a gated Rune Slot chooser row (above the player's Magic level) — mirrors the deleted
+ * #spell-row's own disabled treatment. Disabled buttons never dispatch click, so this is purely
+ * visual; the gate itself is the missing click handler + the Engine's own throw as backstop. */
+.potion-slot-chooser button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: var(--text);
+}
+
 .potion-slot-chooser .hint {
   color: var(--text-dim);
   font-size: 10px;
@@ -1174,48 +1183,10 @@ body {
   margin: 8px 0 3px;
 }
 
-.spell-row {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.spell-row button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 11px;
-  padding: 3px 6px;
-  cursor: pointer;
-}
-
-.spell-row button:hover {
-  border-color: var(--accent);
-}
-
-.spell-row button.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.spell-row button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.spell-element {
-  text-transform: uppercase;
-  font-size: 9px;
-  color: var(--text-dim);
-}
-
-.spell-req {
+/* Rune Slot chooser (#221): the "Lv N" badge on a gated (above-Magic-level) rune row, mirroring
+ * the deleted #spell-row's own .spell-req badge. The row's own disabled state (dimmed, no pointer)
+ * comes from the shared .potion-slot-chooser button styling below. */
+.rune-req {
   font-size: 9px;
   color: var(--text-dim);
 }

@@ -87,6 +87,25 @@ describe("loadoutSlotMarkup — empty tile", () => {
     expect(buttons[1]?.getAttribute("data-item")).toBe("shrimp");
   });
 
+  it("renders a chooser item's disabled flag (#221) as a real disabled attribute on its button", () => {
+    const html = loadoutSlotMarkup(
+      foodConfig({
+        chooserOpen: true,
+        chooserItems: [
+          { itemId: "fire-rune", label: "Fire Rune ×5", disabled: true },
+          { itemId: "air-rune", label: "Air Rune ×5" },
+        ],
+      }),
+      false,
+    );
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    const chooser = div.querySelector(".food-slot-chooser");
+    const buttons = [...(chooser?.querySelectorAll("button") ?? [])];
+    expect(buttons[0]?.disabled).toBe(true);
+    expect(buttons[1]?.disabled).toBe(false);
+  });
+
   it("renders the empty-Bank hint instead of buttons when the chooser is open with no items", () => {
     const html = loadoutSlotMarkup(
       foodConfig({ chooserOpen: true, chooserItems: [], emptyHint: "No Food in Bank" }),

@@ -12,6 +12,11 @@
 export interface LoadoutSlotChooserItem {
   itemId: string;
   label: string;
+  /** Renders this row's button `disabled` (#221's Rune Slot chooser: a rune whose Spell is above
+   * the player's Magic level). A disabled button never dispatches a click event, so this is the
+   * actual gate — not just a visual one — with the Engine's own throw as the backstop. Omitted
+   * (falsy) for every other Loadout Slot kind, which never gates its chooser rows. */
+  disabled?: boolean;
 }
 
 /** Everything one Loadout Slot tile (filled or empty) needs to render. Every field is a fully
@@ -72,7 +77,10 @@ export function loadoutSlotMarkup(config: LoadoutSlotTileConfig, filled: boolean
         ${
           config.chooserItems.length > 0
             ? config.chooserItems
-                .map((item) => `<button ${config.assignAttr(item.itemId)}>${item.label}</button>`)
+                .map(
+                  (item) =>
+                    `<button ${config.assignAttr(item.itemId)} ${item.disabled ? "disabled" : ""}>${item.label}</button>`,
+                )
                 .join("")
             : `<p class="hint">${config.emptyHint}</p>`
         }

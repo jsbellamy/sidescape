@@ -197,11 +197,11 @@ export interface PetDef {
   source: "combat" | "fishing" | "production" | { boss: string /* monsterId */ };
 }
 
-/** Ammo (#119): the resource ranged/magic attacks consume — an arrow from the Quiver, or a rune
- * from the Rune Pouch (see `Snapshot.player.quiver`/`runePouch`). Two independent stores, not a
- * shared ammo slot (owner decision, grilled, verbatim: "The player has access to both all the
- * time") — the Quiver holds ONE active arrow stack, the Rune Pouch holds all four Elements'
- * runes simultaneously, so switching between a bow and a staff needs no reload step. */
+/** Ammo (#119, #221): the resource ranged/magic attacks consume — an arrow from the Quiver, or a
+ * rune from the Rune Slot (see `Snapshot.player.quiver`/`runeSlot`). Two independent stores, not a
+ * shared ammo slot — the Quiver holds ONE active arrow stack, the Rune Slot holds ONE active rune
+ * stack (#221 collapsed the old four-Element Rune Pouch to a single slot: the loaded rune IS the
+ * Spell choice). */
 export interface AmmoDef {
   kind: "ammo";
   id: string;
@@ -209,8 +209,8 @@ export interface AmmoDef {
   /** See EquipmentDef.icon's doc — same requirement, every ItemDef kind. */
   icon: string;
   ammoType: "arrow" | "rune";
-  /** Runes only: which Element's Spells this rune powers — a cast consumes its OWN Spell's
-   * Element from the pouch (`resolvedSpell().element`), never any other. Required for runes,
+  /** Runes only: this rune's Element, which must equal its owning Spell's `element`
+   * (`SpellDef.runeId` -> this item; validateContent enforces agreement). Required for runes,
    * forbidden on arrows (validateContent enforces both halves). */
   element?: Element;
   /** Arrows only: ranged-strength bonus folded into ranged max hit alongside gear's strBonus
@@ -274,10 +274,10 @@ export interface MonsterDef {
   dropTable: DropTableEntry[];
 }
 
-/** Magic's own content ladder (Combat Depth wave 3/4, #101) — a spell, not an element-on-staff:
- * Magic level gates WHICH spell can be selected, the spell itself decides the damage (baseMaxHit),
- * replacing wave 1/4's interim level-driven magic max hit. See `selectSpell` (engine.ts) and
- * `Snapshot.player.spell` for the resolved-selection shape. */
+/** Magic's own content ladder (Combat Depth wave 3/4, #101; collapsed to rune-driven selection by
+ * #221) — a spell, not an element-on-staff: Magic level gates WHICH spell can be cast, the spell
+ * itself decides the damage (baseMaxHit). Since #221 there is no independent spell selection: the
+ * loaded rune IS the Spell choice (see `runeId` and `Snapshot.player.spell`/`runeSlot`). */
 export interface SpellDef {
   id: string;
   name: string;
@@ -286,6 +286,11 @@ export interface SpellDef {
   levelReq: number;
   /** Spell-driven max hit — Magic level gates WHICH spell, the spell decides the damage. */
   baseMaxHit: number;
+  /** The rune Item that casts this Spell (#221). Exactly one rune per Spell and one Spell per
+   * rune — validateContent enforces the 1:1. Runes ARE the Spell's charges: 10 Air Runes = 10 Air
+   * Strikes. A future rune tier is therefore pure data: a new rune Item + a new SpellDef pointing
+   * at it, with no Engine change. */
+  runeId: string;
 }
 
 export interface FishingSpotDef {
@@ -399,10 +404,11 @@ export type EngineEvent =
   /** A player command bought `qty` of `itemId` from the fixed-price vendor (#119) — see `buy`. */
   | { type: "item-bought"; itemId: string; qty: number; gold: number }
   /** A ranged/magic swing that could NOT resolve this Tick because its resource ran out — the
-   * Quiver (need: "arrow") or the cast Spell's Element rune in the Rune Pouch (need: "rune",
-   * `element` set) — see `playerAttack`'s ammo-gate (engine.ts, #119). Fires once per DEPLETION,
-   * not once per Tick the resource sits empty: the swing keeps skipping silently every Tick after
-   * the first until ammo is loaded again. Melee never emits this. */
+   * Quiver (need: "arrow") or the Rune Slot (need: "rune") — see `playerAttack`'s ammo-gate
+   * (engine.ts, #119, #221). `element` is set when a Spell was loaded (a depleted Rune Slot); it
+   * is omitted for an empty Rune Slot, since an empty slot has no Spell and therefore no Element.
+   * Fires once per DEPLETION, not once per Tick the resource sits empty: the swing keeps skipping
+   * silently every Tick after the first until ammo is loaded again. Melee never emits this. */
   | { type: "out-of-ammo"; need: "arrow" | "rune"; element?: Element }
   /** A never-before-owned Pet (#120) just rolled on a qualifying action (a kill, a Catch, or a
    * craft completion) — see `PetDef.source`. Fires once per NEW pet only; an already-owned pet
@@ -444,12 +450,14 @@ export interface Snapshot {
      * engine.ts), same as a Food Slot's own qty-0-while-assigned rule. Tolerant load: missing/
      * pre-#119 -> null. */
     quiver: { itemId: string; qty: number } | null;
-    /** The Rune Pouch (#119): every rune type the player has loaded, held SIMULTANEOUSLY — at
-     * most one stack per Element (owner decision, verbatim: "a rune-pouch-style for runes/magic
-     * ... access to both all the time"), so loading fire-runes never displaces air-runes. A cast
-     * consumes the resolved Spell's own Element's stack only. Tolerant load: missing/pre-#119 ->
-     * []. */
-    runePouch: { itemId: string; qty: number }[];
+    /** The Rune Slot (#221): the single loaded rune stack, or null when nothing is loaded.
+     * Replaces the pre-#221 four-Element Rune Pouch. The loaded rune determines the Spell that is
+     * cast (`SpellDef.runeId`) and its `qty` is the number of casts remaining. Empty != unloaded:
+     * qty may sit at 0 while `itemId` persists (a depleted stack stays "loaded" — mirrors the
+     * Quiver above exactly, see `loadRuneSlot`/`unloadRuneSlot`, engine.ts). Tolerant load:
+     * missing/pre-#221 `player.runePouch` -> null, and any stacks found in the old pouch are
+     * returned to the Bank (see loadState). */
+    runeSlot: { itemId: string; qty: number } | null;
     skills: Record<SkillName, SkillSnapshot>;
     equipment: Record<GearSlot, string | null>;
     /** Derived totals across every equipped Gear Slot (ADR-0001: a rule, not raw data), computed
@@ -464,10 +472,9 @@ export interface Snapshot {
       def: Record<AttackType, number>;
       attackSpeed: number;
     };
-    /** The player's currently RESOLVED spell (Combat Depth wave 3/4, #101) — never null when any
-     * spell is castable (validateContent guarantees a levelReq-1 spell always exists). Reflects the
-     * `spellId: null` fallback to the lowest-levelReq spell; see engine.ts's `resolvedSpell`. The
-     * save stores `spellId` only (a plain selection, like `combatStyle`), tolerant on load. */
+    /** The Spell the loaded rune casts, or null when the Rune Slot is empty (#221). Derived from
+     * `runeSlot`, never independently selected — there is no spellId state any more; see
+     * engine.ts's `currentSpell`. */
     spell: { id: string; name: string; element: Element } | null;
     /** The player's currency balance (#59) — a number on the player, not an Item stack; the Bank
      * is the sole store for every other Item. */

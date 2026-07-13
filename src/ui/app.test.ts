@@ -1239,7 +1239,7 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
     // `closest(...)`/`event.target.dataset` on an ancestor listener (see app.ts's
     // `addEventListener("click", …)` handlers: `.tile[data-item]` on #bank/#character-bank-tray,
     // `[data-item]` on the loadout dispatchers, `[data-gear-assign]`/`[data-gear-add]` on
-    // #character-slots, `[data-area-select]`, `[data-destination]`, `[data-spell]`, and the four
+    // #character-slots, `[data-area-select]`, `[data-destination]`, and the four
     // `createLoadoutSlotDispatcher` key sets). Such an element carries NONE of the four
     // attributes above, so a check that only looked for those would miss exactly the bug this
     // guard exists to prevent: a `<li class="loot-chip" data-item="…">` (what wave 2/6 adds to
@@ -1249,8 +1249,6 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
     const DELEGATION_HOOKS = new Set([
       "data-item",
       "data-slot",
-      "data-element",
-      "data-spell",
       "data-style",
       "data-threshold",
       "data-monster",
@@ -1417,10 +1415,10 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     expect(root.querySelector("#character-food-slots")).not.toBeNull();
     expect(root.querySelector("#potion-slot")).not.toBeNull();
     expect(root.querySelector("#quiver-slot")).not.toBeNull();
-    expect(root.querySelector("#rune-pouch")).not.toBeNull();
+    expect(root.querySelector("#rune-slot")).not.toBeNull();
+    expect(root.querySelector("#casting-readout")).not.toBeNull();
     expect(root.querySelector("#xp-row")).not.toBeNull();
     expect(root.querySelector("#style-row")).not.toBeNull();
-    expect(root.querySelector("#spell-row")).not.toBeNull();
     expect(root.querySelector("#autoeat-row")).not.toBeNull();
     expect(root.querySelector("#autosell-duplicates-row")).not.toBeNull();
     expect(root.querySelector("#pets-summary")).not.toBeNull();
@@ -2515,86 +2513,44 @@ describe("Character panel (#26)", () => {
   });
 });
 
-describe("Spell picker (#101)", () => {
-  function spellButtons(root: HTMLElement) {
-    return [...root.querySelectorAll<HTMLButtonElement>("#spell-row button")];
-  }
-
-  it("renders one row per Content spell (fixtureContent's test-spark and test-blast)", () => {
+describe("Spell picker: #spell-row is fully removed (#221)", () => {
+  it("#spell-row is gone from the DOM", () => {
     const { root } = mount(1);
-    const buttons = spellButtons(root);
-    expect(buttons).toHaveLength(2);
-    expect(buttons.map((b) => b.dataset["spell"]).sort()).toEqual(["test-blast", "test-spark"]);
+    expect(root.querySelector("#spell-row")).toBeNull();
   });
+});
 
-  it("a fresh engine highlights the resolved levelReq-1 spell (test-spark) and shows the level gate on the under-leveled one", () => {
+describe("Casting readout (#221)", () => {
+  it("shows the no-rune-loaded state on a fresh engine (empty Rune Slot)", () => {
     const { root } = mount(1);
-    const buttons = spellButtons(root);
-    const spark = buttons.find((b) => b.dataset["spell"] === "test-spark");
-    const blast = buttons.find((b) => b.dataset["spell"] === "test-blast");
-
-    expect(spark?.classList.contains("active")).toBe(true);
-    expect(spark?.disabled).toBe(false);
-
-    expect(blast?.classList.contains("active")).toBe(false);
-    expect(blast?.disabled).toBe(true);
-    expect(blast?.querySelector(".spell-req")?.textContent).toBe("Lvl 20");
+    expect(root.querySelector("#casting-readout")?.textContent).toMatch(/no rune loaded/i);
   });
 
-  it("clicking a gated spell's disabled button does nothing (no selectSpell call, no engine error)", () => {
-    const { engine, root } = mount(1);
-    const blast = root.querySelector<HTMLButtonElement>('[data-spell="test-blast"]');
-    expect(() => blast?.click()).not.toThrow();
-    expect(engine.snapshot().player.spell?.id).toBe("test-spark");
-  });
-
-  it("clicking a legal spell (including a click on its inner element-tag span) selects it, calls selectSpell, and moves the highlight", () => {
+  it("shows 'Casting: {spell.name}' once a rune is loaded", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
-      makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
+      makeSnapshot({ bank: { items: [{ itemId: "air-rune", qty: 10 }] } }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    // The button's child <span> is the actual click target (closest("[data-spell]") walks up to
-    // the button) — proves the handler doesn't require clicking the bare button element.
-    const elementTag = root.querySelector<HTMLElement>('[data-spell="test-blast"] .spell-element');
-    elementTag?.click();
-
-    expect(engine.snapshot().player.spell).toEqual({
-      id: "test-blast",
-      name: "Test Blast",
-      element: "water",
-    });
-    const buttons = spellButtons(root);
-    expect(
-      buttons.find((b) => b.dataset["spell"] === "test-blast")?.classList.contains("active"),
-    ).toBe(true);
-    expect(
-      buttons.find((b) => b.dataset["spell"] === "test-spark")?.classList.contains("active"),
-    ).toBe(false);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    engine.loadRuneSlot("air-rune");
+    app.render();
+    expect(root.querySelector("#casting-readout")?.textContent).toBe("Casting: Test Spark");
   });
 
-  it("survives a save/remount round-trip: the selected spell stays highlighted after reloading from a fresh Snapshot", () => {
-    const engine1 = createEngine(
+  it("reverts to the no-rune state once the Rune Slot is unloaded", () => {
+    const engine = createEngine(
       fixtureContent,
       seededRng(1),
-      makeSnapshot({ player: { skills: { magic: { level: 20, xp: xpForLevel(20) } } } }),
+      makeSnapshot({ player: { runeSlot: { itemId: "air-rune", qty: 10 } } }),
     );
-    const root1 = document.createElement("main");
-    mountApp(engine1, root1, resolveContent(fixtureContent), noopWindowChrome);
-    root1.querySelector<HTMLButtonElement>('[data-spell="test-blast"]')?.click();
-    expect(engine1.snapshot().player.spell?.id).toBe("test-blast");
-
-    const saved = JSON.parse(JSON.stringify(engine1.snapshot()));
-    const engine2 = createEngine(fixtureContent, seededRng(2), saved);
-    const root2 = document.createElement("main");
-    mountApp(engine2, root2, resolveContent(fixtureContent), noopWindowChrome);
-
-    expect(engine2.snapshot().player.spell?.id).toBe("test-blast");
-    const blast = root2.querySelector<HTMLButtonElement>('[data-spell="test-blast"]');
-    expect(blast?.classList.contains("active")).toBe(true);
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(root.querySelector("#casting-readout")?.textContent).toBe("Casting: Test Spark");
+    engine.unloadRuneSlot();
+    app.render();
+    expect(root.querySelector("#casting-readout")?.textContent).toMatch(/no rune loaded/i);
   });
 });
 
@@ -3532,89 +3488,94 @@ describe("Quiver tile (#119)", () => {
   });
 });
 
-describe("Rune Pouch panel (#119)", () => {
-  it("renders 4 slots, one per Element (air/water/earth/fire), independent of load order", () => {
+describe("Rune Slot tile (#221) — collapses the pre-#221 four-Element Rune Pouch to one slot", () => {
+  it("an empty Rune Slot shows a [+] that opens a chooser listing every rune the player owns", () => {
     const { root } = ammoMount({
-      player: {
-        runePouch: [
-          { itemId: "fire-rune", qty: 5 },
-          { itemId: "air-rune", qty: 3 },
-        ],
-      },
-    });
-    const slots = [...root.querySelectorAll<HTMLElement>("#rune-pouch [data-element]")];
-    expect(slots.map((s) => s.dataset["element"])).toEqual(["air", "water", "earth", "fire"]);
-    expect(slots[0]?.classList.contains("filled")).toBe(true); // air, loaded
-    expect(slots[1]?.classList.contains("empty")).toBe(true); // water, not loaded
-    expect(slots[3]?.classList.contains("filled")).toBe(true); // fire, loaded
-  });
-
-  it("loading one Element's rune never displaces another — all four can be loaded simultaneously with zero reload", () => {
-    const { engine, root } = ammoMount({
       bank: {
         items: [
           { itemId: "air-rune", qty: 10 },
-          { itemId: "water-rune", qty: 8 },
-          { itemId: "earth-rune", qty: 6 },
-          { itemId: "fire-rune", qty: 4 },
-        ],
-      },
-    });
-    for (const itemId of ["air-rune", "water-rune", "earth-rune", "fire-rune"]) {
-      root.querySelector<HTMLButtonElement>(`[data-rune-add="${itemId.split("-")[0]}"]`)?.click();
-      root.querySelector<HTMLButtonElement>(`[data-rune-assign="${itemId}"]`)?.click();
-    }
-    const pouch = engine.snapshot().player.runePouch;
-    expect(pouch).toHaveLength(4);
-    expect(pouch).toEqual(
-      expect.arrayContaining([
-        { itemId: "air-rune", qty: 10 },
-        { itemId: "water-rune", qty: 8 },
-        { itemId: "earth-rune", qty: 6 },
-        { itemId: "fire-rune", qty: 4 },
-      ]),
-    );
-    expect(engine.snapshot().bank.items).toEqual([]);
-  });
-
-  it("an empty Element slot's chooser lists only that Element's own rune stacks, never another Element's", () => {
-    const { root } = ammoMount({
-      bank: {
-        items: [
-          { itemId: "air-rune", qty: 5 },
           { itemId: "water-rune", qty: 5 },
+          { itemId: "arrow", qty: 2 }, // an arrow — must never show up as a rune choice
+          { itemId: "meat", qty: 1 }, // Food — must never show up as a rune choice
         ],
       },
     });
-    root
-      .querySelector<HTMLElement>('#rune-pouch [data-element="water"]')
-      ?.querySelector<HTMLButtonElement>("[data-rune-add]")
-      ?.click();
-    // Re-query after the click's render() replaced #rune-pouch's innerHTML — the pre-click
-    // `waterSlot` reference would otherwise point at a now-detached DOM node.
-    const chooser = root
-      .querySelector<HTMLElement>('#rune-pouch [data-element="water"]')
-      ?.querySelector(".food-slot-chooser");
+    const runeSlot = root.querySelector<HTMLElement>("#rune-slot");
+    expect(runeSlot?.querySelector("[data-rune-add]")).not.toBeNull();
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull(); // closed by default
+
+    runeSlot?.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+
+    const chooser = root.querySelector(".potion-slot-chooser");
     expect(chooser).not.toBeNull();
+    expect(chooser?.querySelector('[data-rune-assign="air-rune"]')).not.toBeNull();
     expect(chooser?.querySelector('[data-rune-assign="water-rune"]')).not.toBeNull();
-    expect(chooser?.querySelector('[data-rune-assign="air-rune"]')).toBeNull();
+    expect(chooser?.querySelector('[data-rune-assign="arrow"]')).toBeNull();
+    expect(chooser?.querySelector('[data-rune-assign="meat"]')).toBeNull();
   });
 
-  it("clicking ✕ on a loaded Element returns that stack to the Bank, leaving other Elements untouched", () => {
-    const { engine, root } = ammoMount({
-      player: {
-        runePouch: [
-          { itemId: "air-rune", qty: 20 },
-          { itemId: "water-rune", qty: 8 },
-        ],
-      },
-    });
-    root.querySelector<HTMLButtonElement>('[data-rune-unassign="air-rune"]')?.click();
+  it("an empty Rune Slot's chooser shows a hint when the Bank has no runes at all", () => {
+    const { root } = ammoMount();
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    expect(root.querySelector("#rune-slot .hint")?.textContent).toMatch(/no runes/i);
+  });
 
-    expect(engine.snapshot().player.runePouch).toEqual([{ itemId: "water-rune", qty: 8 }]);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 20 }]);
-    const airSlot = root.querySelector<HTMLElement>('#rune-pouch [data-element="air"]');
-    expect(airSlot?.classList.contains("empty")).toBe(true);
+  it("picking a rune from the chooser loads it (moving the whole Bank stock), closes the chooser, and updates the Casting readout", () => {
+    const { engine, root } = ammoMount({ bank: { items: [{ itemId: "air-rune", qty: 10 }] } });
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    root.querySelector<HTMLButtonElement>('[data-rune-assign="air-rune"]')?.click();
+
+    expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 10 });
+    expect(engine.snapshot().bank.items).toEqual([]);
+    expect(root.querySelector(".potion-slot-chooser")).toBeNull();
+
+    const filledTile = root.querySelector<HTMLElement>('#rune-slot .tile[data-item="air-rune"]');
+    expect(filledTile?.querySelector("img")?.alt).toBe("Test Air Rune");
+    expect(filledTile?.querySelector(".tile-qty")?.textContent).toBe("×10");
+    expect(root.querySelector("#casting-readout")?.textContent).toBe("Casting: Test Spark");
+  });
+
+  it("clicking ✕ unloads the Rune Slot, returning the whole stack to the Bank", () => {
+    const { engine, root } = ammoMount({
+      player: { runeSlot: { itemId: "air-rune", qty: 12 } },
+    });
+    root.querySelector<HTMLButtonElement>("[data-rune-unassign]")?.click();
+
+    expect(engine.snapshot().player.runeSlot).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 12 }]);
+    expect(root.querySelector("[data-rune-add]")).not.toBeNull(); // now renders as empty
+  });
+
+  it("a rune whose Spell is above the player's Magic level renders disabled with a 'Lv N' badge in the chooser", () => {
+    const { root } = ammoMount({
+      bank: { items: [{ itemId: "fire-rune", qty: 5 }] }, // test-inferno, levelReq 13; player is Magic level 1
+    });
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
+    expect(fireBtn?.disabled).toBe(true);
+    expect(fireBtn?.querySelector(".rune-req")?.textContent).toBe("Lv 13");
+  });
+
+  it("clicking a gated (disabled) chooser row does nothing — it cannot be loaded by clicking", () => {
+    const { engine, root } = ammoMount({
+      bank: { items: [{ itemId: "fire-rune", qty: 5 }] },
+    });
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
+    expect(() => fireBtn?.click()).not.toThrow();
+    expect(engine.snapshot().player.runeSlot).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "fire-rune", qty: 5 }]);
+  });
+
+  it("a rune the player is high enough level to cast renders enabled, with no badge", () => {
+    const { root } = ammoMount({
+      player: { skills: { magic: { level: 13, xp: xpForLevel(13) } } },
+      bank: { items: [{ itemId: "fire-rune", qty: 5 }] },
+    });
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
+    expect(fireBtn?.disabled).toBe(false);
+    expect(fireBtn?.querySelector(".rune-req")).toBeNull();
   });
 });
 
@@ -3773,6 +3734,25 @@ describe("Combat feedback (#4)", () => {
 
     vi.advanceTimersByTime(5000); // > the toast's auto-dismiss delay
     expect(root.querySelector("#toast-container .toast")).toBeNull();
+  });
+
+  it("shows a Spell-agnostic out-of-ammo toast (#221) when the Rune Slot is completely EMPTY (no Spell to name)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { equipment: { weapon: "staff" }, runeSlot: null } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    const toast = root.querySelector("#toast-container .toast");
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).not.toMatch(/undefined/i);
+    expect(toast?.textContent).toMatch(/no rune loaded/i);
   });
 
   it("flashes the screen and highlights the Loot Feed line when a rare Drop lands, then clears", () => {

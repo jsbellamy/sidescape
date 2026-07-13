@@ -406,12 +406,45 @@ export const fixtureContent: Content = {
       craftTicks: 3,
     },
   ],
-  // Spells (#101): one always-castable at levelReq 1 (validateContent's own requirement) plus one
-  // gated, so level-gate tests don't need to touch the real v1 spellbook. "test-spark" is "air" so
-  // it pairs with "weak-dummy" (monsters.ts, above) for element-multiplier tests.
+  // Spells (#101, #221): one per fixture rune item (validateContent's 1:1 runeId <-> rune-item
+  // rule requires every rune to be referenced), covering a spread of levelReqs so
+  // gating/level-too-low tests don't need to touch the real v1 spellbook. "test-spark" is
+  // always-castable at levelReq 1 (validateContent's own requirement) and "air" so it pairs with
+  // "weak-dummy" (monsters.ts, above) for element-multiplier tests; "test-blast" (levelReq 20) is
+  // the gated one most tests reach for.
   spells: [
-    { id: "test-spark", name: "Test Spark", element: "air", levelReq: 1, baseMaxHit: 5 },
-    { id: "test-blast", name: "Test Blast", element: "water", levelReq: 20, baseMaxHit: 15 },
+    {
+      id: "test-spark",
+      name: "Test Spark",
+      element: "air",
+      levelReq: 1,
+      baseMaxHit: 5,
+      runeId: "air-rune",
+    },
+    {
+      id: "test-blast",
+      name: "Test Blast",
+      element: "water",
+      levelReq: 20,
+      baseMaxHit: 15,
+      runeId: "water-rune",
+    },
+    {
+      id: "test-quake",
+      name: "Test Quake",
+      element: "earth",
+      levelReq: 9,
+      baseMaxHit: 10,
+      runeId: "earth-rune",
+    },
+    {
+      id: "test-inferno",
+      name: "Test Inferno",
+      element: "fire",
+      levelReq: 13,
+      baseMaxHit: 12,
+      runeId: "fire-rune",
+    },
   ],
   // Vendor (#119): fixed prices for the fixture's own ammo items above.
   vendor: [
