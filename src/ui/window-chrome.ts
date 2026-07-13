@@ -95,16 +95,31 @@ export function createTauriWindowChrome(
       monitor,
     });
     const expanding = result.width > size.width || result.height > size.height;
+    // #242 follow-up: issue the position and size native calls back-to-back — starting the second
+    // one immediately rather than `await`ing the first's full IPC round trip first — instead of
+    // fully sequencing them. Tauri's IPC command queue is FIFO, so the *order* Rust applies these
+    // two native mutations in is unaffected (still position-then-size when expanding, size-then-
+    // position when contracting — see the two `await Promise.all` calls below and their own
+    // comments). What changes is how long only one of the two is applied: awaiting the first call's
+    // full round trip before even sending the second left a real (if brief) window during which the
+    // OS had moved the window but not yet grown it (or vice versa on contraction) — invisible while
+    // opening the very first card (nothing was on screen yet to show it), but a visible "jump to an
+    // intermediate rect, then snap" once a card was already painted (e.g. Character during a 1->2
+    // Management-card expansion), which manual testing in `npm run tauri dev` confirmed. Dispatching
+    // both requests together shrinks that half-applied window to the two commands' own arrival gap
+    // on the same FIFO queue, instead of a full extra IPC round trip.
     if (expanding) {
       // Move the compact rect to its final anchor before growing it. Resizing first briefly paints
       // the expanded glass/cards over the old compact location, then visibly pops into place.
-      await port.setPosition(new LogicalPosition(result.x, result.y));
-      await port.setSize(new LogicalSize(result.width, result.height));
+      const move = port.setPosition(new LogicalPosition(result.x, result.y));
+      const grow = port.setSize(new LogicalSize(result.width, result.height));
+      await Promise.all([move, grow]);
     } else {
       // Contract before moving so a closing bottom-anchored workspace does not sweep a large,
       // still-expanded window across the monitor.
-      await port.setSize(new LogicalSize(result.width, result.height));
-      await port.setPosition(new LogicalPosition(result.x, result.y));
+      const shrink = port.setSize(new LogicalSize(result.width, result.height));
+      const move = port.setPosition(new LogicalPosition(result.x, result.y));
+      await Promise.all([shrink, move]);
     }
     cardCount = nextCardCount;
     anchor = result.anchor;
