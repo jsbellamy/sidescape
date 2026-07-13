@@ -679,11 +679,12 @@ export function mountApp(
    * eatFromSlot) plus a small ✕ (click = unassignFoodSlot); an empty slot shows a `[+]` that opens
    * a chooser listing the Bank's Food stacks (click one = assignFoodSlot). `openFoodChooserSlot`
    * is presentation-only UI state (never part of the Snapshot), so this reads it directly from the
-   * enclosing closure rather than taking it as a parameter. Shared by two DOM locations (#206): the
-   * compact widget's own always-visible bar near the player HP bar (`#food-slots`, pre-existing,
-   * unrelated to this issue's card redesign) and the Character hub's Loadout Slot grid
-   * (`#character-food-slots`) — `renderFoodSlots` below paints the identical markup into both, and
-   * both share one click-dispatcher instance (see the event wiring near the bottom of this file). */
+   * enclosing closure rather than taking it as a parameter. Historically (#206) this also painted
+   * a copy near the compact widget's own HP bar — #220 replaced that copy with the live Loot Zone
+   * strip, so `loadoutSlotMarkup` (loadout-slot.ts) is shared code, not a shared-DOM-location
+   * helper any more: `renderFoodSlots` below paints exactly once, into `#character-food-slots`
+   * inside `#loadout-row` (#224), which sits OUTSIDE `#compact-widget`'s deep drag region — see
+   * that section's own comment for why the `<button>`-based markup here still matters regardless. */
   function foodSlotsMarkup(
     foodSlots: FoodSlot[],
     bankItems: { itemId: string; qty: number }[],
@@ -1498,7 +1499,14 @@ export function mountApp(
       <div class="card-fixed">
         <div id="character-slots" class="tile-grid gear-grid"></div>
         <p id="character-totals" class="totals-row"></p>
-        <div id="loadout-grid" class="loadout-grid">
+        <!-- #224: one unified Loadout row — food x3, potion, quiver, rune all on the same 40px
+             tile chassis #168 established for the gear grid (.tile-grid's own 40px track),
+             replacing the pre-#224 four stacked rows (.food-slots flex:1-stretched food tiles
+             rendering ~94px, plus three separate 44px singular tiles). The four render functions
+             below still target their own id so each keeps painting only its own slice, but
+             .food-slots/.potion-slot are now display:contents pass-throughs (see styles.css) so
+             all six tiles sit on #loadout-row's single flex line, not four nested boxes. -->
+        <div id="loadout-row" class="loadout-row">
           <div id="character-food-slots" class="food-slots"></div>
           <div id="potion-slot" class="potion-slot"></div>
           <div id="quiver-slot" class="potion-slot"></div>
@@ -2057,10 +2065,6 @@ export function mountApp(
   // slot-level eat, so unassigning never also eats; a chooser pick is checked before the [+]
   // toggle so picking a Food both assigns it and doesn't re-toggle the chooser. One shared
   // dispatcher factory (#183) drives all four Loadout Slot listeners below — see loadout-slot.ts.
-  // The dispatcher instance itself is shared by both DOM locations (#206) — the compact widget's
-  // pre-existing always-visible bar and the Character hub's Loadout Slot grid (see
-  // `foodSlotsMarkup`'s own doc comment) — since it only ever reads `event.target.dataset`, not
-  // which element it was bound to.
   const foodSlotDispatcher = createLoadoutSlotDispatcher(
     { unassign: "unassign", eat: "eat", assign: "assign", assignItem: "item", add: "add" },
     {

@@ -341,12 +341,17 @@ body {
   display: none;
 }
 
-/* The Character hub's Loadout Slot grid (#206: Food x3, Potion, Quiver, Rune Slot — #221 collapsed
-   the old four-Element Rune Pouch to one slot) — stacks the four rows/tiles vertically. */
-.loadout-grid {
+/* The Character hub's Loadout row (#206: Food x3, Potion, Quiver, Rune Slot — #221 collapsed the
+   old four-Element Rune Pouch to one slot; #224 collapsed the pre-#224 four stacked rows into this
+   single flex line). `.food-slots`/`.potion-slot` below are `display: contents` on their own id
+   containers (`#character-food-slots`/`#potion-slot`/`#quiver-slot`/`#rune-slot`) so their painted
+   tiles become direct flex items here instead of nesting their own box — one row, one flex line,
+   per #224's own spec. At the 300px card width (minus `.card-fixed`'s 8px×2 padding = 284px),
+   6 tiles x 40px + 5 gaps x 4px = 260px fits with room to spare, so this never needs to wrap. */
+.loadout-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 4px;
   margin: 6px 0;
 }
 
@@ -987,24 +992,28 @@ body {
   text-shadow: 0 1px 2px #000;
 }
 
+/* #224: dissolves this wrapper from layout — its 3 painted `.food-slot` tiles become direct flex
+   items of `#loadout-row` (see that rule's own comment) instead of forming their own stretched
+   row. Was `display: flex; gap: 4px` (the pre-#224 3-stretched-slots row `.food-slot { flex: 1 }`
+   blew up to ~94px tiles from) before this issue folded it into the unified row. */
 .food-slots {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
-  position: relative;
+  display: contents;
 }
 
+/* #224: a fixed 40px tile, matching #168's gear-tile chassis (`.tile-grid`'s own 40px track) —
+   was `flex: 1`, which (inside the pre-#224 `.food-slots` flex row) stretched each of the 3 food
+   slots to roughly a third of the 300px card (~94px, `aspect-ratio: 1` made it that tall too). */
 .food-slot {
-  flex: 1;
   position: relative;
+  width: 40px;
+  flex: 0 0 auto;
 }
 
-/* .food-slot-eat also carries .tile (#78 — icon + qty badge instead of a text row), so its own
-   rule here only needs to override .tile's sizing to fill the slot; .food-slot-add stays a plain
-   text/glyph button (there's no item to show an icon for until one's assigned). */
-.food-slot-eat {
-  width: 100%;
-}
+/* .food-slot-eat also carries .tile (#78 — icon + qty badge instead of a text row); #224 deletes
+   this rule's former `width: 100%` — with `.food-slot` now a fixed 40px wrapper (not a flex-1
+   stretch target), the button's own default block-fill width already lands on exactly 40px, so
+   the explicit override is redundant. .food-slot-add stays a plain text/glyph button (there's no
+   item to show an icon for until one's assigned). */
 
 .food-slot-add {
   width: 100%;
@@ -1040,6 +1049,10 @@ body {
   color: var(--accent);
 }
 
+/* #224: `min-width` (matching `.gear-slot-chooser`'s own 110px and `.potion-slot-chooser`'s 120px)
+   keeps this popover readable now that its 40px `.food-slot` anchor is a third the width of the
+   pre-#224 ~94px stretched slot — `left`/`right: 0` alone would otherwise size the box to the
+   anchor's own 40px, same width-clamping precedent `.gear-slot-chooser` already relies on. */
 .food-slot-chooser {
   position: absolute;
   top: 100%;
@@ -1051,6 +1064,7 @@ body {
   gap: 2px;
   margin-top: 2px;
   padding: 4px;
+  min-width: 120px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -1077,14 +1091,22 @@ body {
 }
 
 /* Potion Slot tile (#118): mirrors the Food Slot bar's filled/empty/chooser shapes above, but a
-   single tile rather than a 3-wide row, and adds a charges/max readout next to the icon. */
+   single tile rather than a 3-wide row, and adds a charges/max readout next to the icon. Also
+   reused byte-for-byte by the Quiver (`#quiver-slot`) and Rune Slot (`#rune-slot`) below.
+   #224: dissolves this wrapper from layout, same as `.food-slots` above — its one painted
+   `.potion-slot-tile` becomes a direct flex item of `#loadout-row` instead of its own 44px box
+   (the pre-#168 "44px" figure this issue's own text calls out as superseded — #168's actual
+   40px `.tile` chassis is what `.potion-slot-tile` sizes to now). */
 .potion-slot {
-  position: relative;
-  width: 44px;
+  display: contents;
 }
 
+/* #224: a fixed 40px tile, matching #168's gear-tile chassis and `.food-slot` above — was sized
+   only by the (now-removed) `.potion-slot` container's `width: 44px`, a pre-#168 figure. */
 .potion-slot-tile {
   position: relative;
+  width: 40px;
+  flex: 0 0 auto;
 }
 
 .potion-slot-tile.filled .tile {
