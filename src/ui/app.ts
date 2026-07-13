@@ -21,8 +21,16 @@ import type {
 import type { ResolvedContent } from "../core/validate-content";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import { monsterSprite, playerSprite } from "./sprites";
-import { loadSortKey, saveSortKey, sortStacks, SORT_KEYS } from "./sort";
+import { SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
+import {
+  BANK_FILTERS,
+  loadBankView,
+  saveBankView,
+  visibleBankStacks,
+  resolveSelection,
+} from "./bank-view";
+import type { BankFilter, BankMode } from "./bank-view";
 import {
   PRODUCTION_SKILLS,
   productionLabel,
@@ -42,8 +50,26 @@ import type { WorkspaceChrome } from "./workspace-chrome";
  * order in core/types.ts. */
 const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs", "amulet", "ring"];
 
-/** Sort control labels, in `SORT_KEYS` order — "Kind | Value | Name". */
-const SORT_LABELS: Record<SortKey, string> = { kind: "Kind", value: "Value", name: "Name" };
+/** Bank filter button labels, in `BANK_FILTERS` order (#207) — "Gear"/"Materials" rather than
+ * "Equipment"/"Material" keep every one of the six always-visible buttons short enough to fit a
+ * 300px card three-per-row with no horizontal scrolling (see styles.css's `.bank-filter-row`). */
+const BANK_FILTER_LABELS: Record<BankFilter, string> = {
+  all: "All",
+  equipment: "Gear",
+  food: "Food",
+  material: "Materials",
+  potion: "Potions",
+  ammo: "Ammo",
+};
+
+/** The expanded Bank's sort `<select>` options, in the issue's own Name/Kind/Value order (#207) —
+ * deliberately not `SORT_KEYS`' own kind/value/name order, which drove the old three-button
+ * `#sort-row` this replaces. */
+const BANK_SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "kind", label: "Kind" },
+  { key: "value", label: "Value" },
+];
 
 /** Damage-splat fade duration (#4); mirrors styles.css's `splat-fade` keyframes so the DOM node is
  * removed right as the CSS animation finishes. */
@@ -250,7 +276,7 @@ export function mountApp(
   // Which Bank|Vendor page is showing inside the Management card's "bank" destination (#206) —
   // purely presentational, session-only, independent of `workspace.management` itself so the
   // choice survives switching away to another destination and back.
-  let managementBankPage: "bank" | "vendor" = "bank";
+  let managementBankPage: BankMode = "bank";
   // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
   // presentational UI state, an anchored popover that never changes card height.
   let openSettings = false;
@@ -261,12 +287,20 @@ export function mountApp(
   // become clickable slot tiles, mirroring the Loadout Slot choosers below) — purely
   // presentational, closes on a re-click of the same slot's `[+]` or on picking an Equipment item.
   let openGearChooserSlot: GearSlot | null = null;
-  // Which tile (if any) is selected in the Character hub's embedded Equipment-only Bank tray,
-  // driving its own detail strip (#206) — independent of `selectedBankItem` below (the full Bank
-  // page's own selection), since the two grids show different, independently-scrollable subsets.
-  let selectedEquipmentTrayItem: string | null = null;
-  // Presentation-only, persisted in localStorage (#26) — never part of the Snapshot/save.
-  let sortKey: SortKey = loadSortKey();
+  // The expanded Bank page's own filter/sort choice (#207), persisted together in one
+  // `sidescape-ui-bank-view-v1` localStorage entry — never part of the Snapshot/save (same
+  // boundary as the old standalone `sidescape-ui-sort` key it supersedes as this module's own
+  // persistence, see bank-view.ts's own doc comment).
+  const initialBankView = loadBankView();
+  let bankFilter: BankFilter = initialBankView.filter;
+  let sortKey: SortKey = initialBankView.sort;
+  // The expanded Bank page's free-text search (#207) — session-only, never persisted, never the
+  // Snapshot/save: cleared whenever the "bank" Management destination closes (see `syncWorkspace`'s
+  // `previousManagement` tracking below).
+  let bankSearch = "";
+  function persistBankView(): void {
+    saveBankView({ version: 1, filter: bankFilter, sort: sortKey });
+  }
   // Which empty Food Slot (if any) currently has its Bank-Food chooser open (#61) — purely
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same slot's [+], or
   // picking a Food from the chooser, closes it (set back to null).
@@ -283,9 +317,14 @@ export function mountApp(
   // instead of an array index, since the pouch holds one slot per Element rather than N generic
   // slots.
   let openRunePouchChooserElement: Element | null = null;
-  // Which Bank tile (if any) is selected, driving the detail strip below the grid (#78) — purely
+  // Which Bank Item (if any) is selected, driving the detail strip below the grid (#78) — purely
   // presentational UI state, never part of the Snapshot/save. Re-clicking the same tile deselects
-  // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior.
+  // it (closing the strip), mirroring the tab-strip's own re-click-to-close behavior. Shared (#207)
+  // by the full Bank page and the Character hub's embedded Equipment-only tray — selecting a tile
+  // in either view drives both views' detail strips, since it's one Bank, never two. Each view
+  // still resolves *visibility* against its own filtered stack list (`resolveSelection` in
+  // bank-view.ts): the tray is always Equipment-only regardless of the Bank page's own active
+  // filter, so the Bank page's filter hiding an Equipment item must not blank the tray's detail.
   let selectedBankItem: string | null = null;
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
@@ -310,6 +349,11 @@ export function mountApp(
     root.querySelectorAll<HTMLElement>("[data-management-page]").forEach((page) => {
       page.hidden = page.dataset["managementPage"] !== workspace.management;
     });
+    // The "bank" destination owns its own fixed shell (`.bank-page-body`, #207) rather than
+    // sharing the World/Workshop/Activity pages' single scrolling wrapper — hide that wrapper
+    // outright while Bank is showing so it doesn't sit alongside `.bank-page-body` as an empty
+    // flex sibling stealing half the card's height (both are `flex: 1 1 auto`).
+    el<HTMLElement>("#management-scroll").hidden = workspace.management === "bank";
     if (workspace.management) {
       el<HTMLElement>("#management-title").textContent =
         MANAGEMENT_DESTINATION_LABELS[workspace.management];
@@ -348,6 +392,12 @@ export function mountApp(
       !workspace.characterOpen && workspace.management === null;
   }
 
+  // Tracks `workspace.management`'s previous value across `syncWorkspace` calls, purely to detect
+  // the "bank" destination closing (#207: "search clears whenever the Bank Management destination
+  // closes") — covers every path away from Bank (Back, Escape, the transparent-glass close, and
+  // switching straight to another destination), since all of them funnel through this one function.
+  let previousManagement: ManagementDestination | null = null;
+
   /** The single synchronization path (#206): re-renders card/page visibility and notifies
    * `WorkspaceChrome` of the new open-card *count* exactly once — `(characterOpen ? 1 : 0) +
    * (management ? 1 : 0)` — the seam main.ts's real Tauri adapter resizes/anchors the transparent
@@ -356,6 +406,12 @@ export function mountApp(
    * destination clicks, Back/second-card-close, transparent-glass close, Escape, and the initial
    * boot sync (called once up front with both cards closed). */
   function syncWorkspace(): void {
+    if (previousManagement === "bank" && workspace.management !== "bank") {
+      bankSearch = ""; // #207: search is session-only and resets whenever Bank's page closes
+      const searchInput = root.querySelector<HTMLInputElement>("#bank-search");
+      if (searchInput) searchInput.value = ""; // the DOM value isn't otherwise re-synced per-render
+    }
+    previousManagement = workspace.management;
     renderWorkspace();
     const cardCount = (workspace.characterOpen ? 1 : 0) + (workspace.management ? 1 : 0);
     windowChrome.setCardCount(cardCount);
@@ -1056,47 +1112,58 @@ export function mountApp(
       .join("");
   }
 
-  /** Renders the Bank destination page: the sort-row's active toggle, the capacity header +
-   * buy-slots button, and the sorted stack grid (#78: `<button class="tile">`s carrying only icon
-   * + qty badge — the click-to-select detail strip below shows the name/stats/Equip/Sell buttons
-   * that used to sit inline on each row). `gold` (rather than the whole player) is all the
-   * buy-slots button's disabled check needs. */
+  /** Renders the expanded Bank destination page (#207): the six filter buttons' + sort select's
+   * active state, the capacity/Gold header, the buy-slots button, and the filtered/searched/sorted
+   * stack grid (#78: `<button class="tile">`s carrying only icon + qty badge — the click-to-select
+   * detail strip below shows the name/stats/Equip/Sell buttons that used to sit inline on each
+   * row). Filtering order is exact — kind filter, then search, then sort — all delegated to
+   * `visibleBankStacks` (bank-view.ts) so this pipeline stays identical to its own pure tests.
+   * `gold` (rather than the whole player) is all the Gold readout and buy-slots button's disabled
+   * check need. */
   function renderBank(bank: Snapshot["bank"], gold: number): void {
-    root.querySelectorAll<HTMLButtonElement>("#sort-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["sort"] === sortKey);
+    root.querySelectorAll<HTMLButtonElement>("#bank-filter-row button").forEach((btn) => {
+      const active = btn.dataset["bankFilter"] === bankFilter;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
     });
+    el<HTMLSelectElement>("#bank-sort-select").value = sortKey;
 
     const used = bank.items.length;
     el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
+    el("#bank-gold").textContent = `🪙 ${gold}`;
     const buySlotsBtn = el<HTMLButtonElement>("#buy-slots-btn");
     buySlotsBtn.textContent = `Buy +10 slots (${bank.nextSlotsPrice}g)`;
     buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
 
-    const stacks = sortStacks(bank.items, sortKey, content);
-    // A selected Bank tile can vanish from under the detail strip (its last unit sold/equipped,
-    // or a re-sort/filter that no longer surfaces it) — drop a selection that no longer resolves
-    // to a stack so the detail strip hides itself instead of showing stale Equip/Sell buttons.
-    if (selectedBankItem && !stacks.some((s) => s.itemId === selectedBankItem)) {
-      selectedBankItem = null;
-    }
+    const stacks = visibleBankStacks(bank.items, bankFilter, bankSearch, sortKey, content);
+    // A selected Bank tile can vanish from under the detail strip — its last unit sold/equipped,
+    // or the Bank page's own filter/search no longer surfacing it. `resolveSelection` is a local,
+    // non-mutating lookup (#207): it never writes `selectedBankItem` itself, so the Bank page's own
+    // filter hiding an Equipment item can't blank the Character tray's still-valid detail strip for
+    // that same shared selection (see `renderEquipmentTray` below).
+    const visibleSelected = resolveSelection(selectedBankItem, stacks);
 
     el("#bank").innerHTML = stacks
       .map(
         (s) =>
-          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === selectedBankItem}">
+          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === visibleSelected}">
              ${tileMarkup(s.itemId, s.qty)}
            </button>`,
       )
       .join("");
 
-    renderBankDetail(stacks);
+    renderBankDetail(stacks, visibleSelected);
   }
 
   /** Renders the Bank page's detail strip (#78): hidden while nothing is selected, otherwise
-   * `bankDetailMarkup`'s shared name/stats/Equip/Sell body. */
-  function renderBankDetail(stacks: { itemId: string; qty: number }[]): void {
+   * `bankDetailMarkup`'s shared name/stats/Equip/Sell body. `visibleSelected` is `renderBank`'s own
+   * locally-resolved selection (#207), not necessarily identical to `renderEquipmentTray`'s. */
+  function renderBankDetail(
+    stacks: { itemId: string; qty: number }[],
+    visibleSelected: string | null,
+  ): void {
     const detail = el<HTMLElement>("#bank-detail");
-    const stack = selectedBankItem ? stacks.find((s) => s.itemId === selectedBankItem) : undefined;
+    const stack = visibleSelected ? stacks.find((s) => s.itemId === visibleSelected) : undefined;
     if (!stack) {
       detail.hidden = true;
       detail.innerHTML = "";
@@ -1106,35 +1173,29 @@ export function mountApp(
     detail.innerHTML = bankDetailMarkup(stack);
   }
 
-  /** Renders the Character hub's embedded Equipment-only Bank tray (#206) — `snapshot.bank.items`
-   * filtered to `content.itemsById.get(itemId)?.kind === "equipment"`, sorted by the same
-   * `sortKey` choice the full Bank page uses (#26). It is the same Bank, never an Inventory or a
-   * second store: this is a filtered view over the identical `bank.items`, and its detail strip
-   * (`selectedEquipmentTrayItem`) reuses the full Bank page's own Equip/Sell action shape via
+  /** Renders the Character hub's embedded Equipment-only Bank tray (#206, filter behavior updated
+   * #207) — `snapshot.bank.items` always filtered to `kind === "equipment"` regardless of the full
+   * Bank page's own active filter, with no search of its own, sorted by the same `sortKey` choice
+   * the full Bank page uses. It is the same Bank, never an Inventory or a second store: this is a
+   * filtered view over the identical `bank.items`, and it shares `selectedBankItem` with the full
+   * Bank page (#207) — selecting a tile in either view drives both views' detail strips via
    * `bankDetailMarkup`. This tray is the Character hub's only scrollport. */
   function renderEquipmentTray(bank: Snapshot["bank"], gold: number): void {
     void gold; // kept for symmetry with renderBank; the tray has no buy-slots control of its own
-    const equipmentItems = bank.items.filter(
-      (s) => content.itemsById.get(s.itemId)?.kind === "equipment",
-    );
-    const stacks = sortStacks(equipmentItems, sortKey, content);
-    if (selectedEquipmentTrayItem && !stacks.some((s) => s.itemId === selectedEquipmentTrayItem)) {
-      selectedEquipmentTrayItem = null;
-    }
+    const stacks = visibleBankStacks(bank.items, "equipment", "", sortKey, content);
+    const visibleSelected = resolveSelection(selectedBankItem, stacks);
 
     el("#character-bank-tray").innerHTML = stacks
       .map(
         (s) =>
-          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === selectedEquipmentTrayItem}">
+          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === visibleSelected}">
              ${tileMarkup(s.itemId, s.qty)}
            </button>`,
       )
       .join("");
 
     const detail = el<HTMLElement>("#character-bank-detail");
-    const stack = selectedEquipmentTrayItem
-      ? stacks.find((s) => s.itemId === selectedEquipmentTrayItem)
-      : undefined;
+    const stack = visibleSelected ? stacks.find((s) => s.itemId === visibleSelected) : undefined;
     if (!stack) {
       detail.hidden = true;
       detail.innerHTML = "";
@@ -1285,30 +1346,9 @@ export function mountApp(
         <p class="panel-title" id="management-title" data-tauri-drag-region></p>
         <button class="card-close" data-management-back title="Back to Character">←</button>
       </header>
-      <div class="card-scroll">
+      <div id="management-scroll" class="card-scroll">
         <div data-management-page="world" hidden>
           <section id="picker"></section>
-        </div>
-        <div data-management-page="bank" hidden>
-          <div id="bank-vendor-toggle" class="style-row">
-            <button data-bankpage="bank">Bank</button>
-            <button data-bankpage="vendor">Vendor</button>
-          </div>
-          <div data-bank-page="bank">
-            <p class="panel-title">
-              <span id="bank-header"></span>
-              <button id="buy-slots-btn" data-buy-slots></button>
-            </p>
-            <div id="sort-row" class="style-row">
-              ${SORT_KEYS.map((key) => `<button data-sort="${key}">${SORT_LABELS[key]}</button>`).join("")}
-            </div>
-            <div id="bank" class="tile-grid"></div>
-            <div id="bank-detail" class="detail-strip" hidden></div>
-          </div>
-          <div data-bank-page="vendor" hidden>
-            <p class="panel-title">Vendor</p>
-            <ul id="vendor-list"></ul>
-          </div>
         </div>
         <div data-management-page="workshop" hidden>
           <p class="panel-title">Smithing</p>
@@ -1328,6 +1368,57 @@ export function mountApp(
           </section>
           <p class="panel-title">Loot Feed</p>
           <ul id="feed"></ul>
+        </div>
+      </div>
+      <!-- The expanded Bank/Vendor destination (#207) is not part of #management-scroll above: it
+           owns its own fixed shell (search/filters/sort/detail/buy-slots never scroll, only the
+           tile grid and the Vendor list do) — see styles.css's .bank-page-body. -->
+      <div data-management-page="bank" class="bank-page-body" hidden>
+        <div class="card-fixed">
+          <div id="bank-vendor-toggle" class="style-row">
+            <button data-bankpage="bank">Bank</button>
+            <button data-bankpage="vendor">Vendor</button>
+          </div>
+          <div data-bank-page="bank">
+            <p class="panel-title">
+              <span id="bank-header"></span>
+              <span id="bank-gold"></span>
+            </p>
+            <div class="bank-search-row">
+              <input
+                id="bank-search"
+                type="search"
+                placeholder="Search"
+                aria-label="Search Bank"
+                title="Search Bank"
+              />
+            </div>
+            <div id="bank-filter-row" class="bank-filter-row">
+              ${BANK_FILTERS.map(
+                (filter) =>
+                  `<button data-bank-filter="${filter}" aria-pressed="false">${BANK_FILTER_LABELS[filter]}</button>`,
+              ).join("")}
+            </div>
+            <label class="bank-sort-row">
+              Sort
+              <select id="bank-sort-select" aria-label="Sort Bank" title="Sort Bank">
+                ${BANK_SORT_OPTIONS.map(
+                  (opt) => `<option value="${opt.key}">${opt.label}</option>`,
+                ).join("")}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div data-bank-page="bank" class="card-scroll">
+          <div id="bank" class="tile-grid"></div>
+        </div>
+        <div data-bank-page="bank" class="card-fixed">
+          <div id="bank-detail" class="detail-strip" hidden></div>
+          <button id="buy-slots-btn" data-buy-slots class="buy-slots-btn"></button>
+        </div>
+        <div data-bank-page="vendor" class="card-scroll" hidden>
+          <p class="panel-title">Vendor</p>
+          <ul id="vendor-list"></ul>
         </div>
       </div>
     </section>
@@ -1507,13 +1598,33 @@ export function mountApp(
     render();
   });
 
-  el("#sort-row").addEventListener("click", (event) => {
-    const key = (event.target as HTMLElement).dataset["sort"] as SortKey | undefined;
-    if (key) {
-      sortKey = key;
-      saveSortKey(key);
-      render();
-    }
+  // Bank filter buttons (#207): six always-visible kind filters plus "all"; re-clicking the active
+  // filter is a no-op (unlike Bank tile selection, there's no "unfiltered by re-click" gesture —
+  // "all" is itself the reachable no-filter state).
+  el("#bank-filter-row").addEventListener("click", (event) => {
+    const filter = (event.target as HTMLElement).closest<HTMLElement>("[data-bank-filter]")
+      ?.dataset["bankFilter"];
+    if (!filter || !(BANK_FILTERS as readonly string[]).includes(filter)) return;
+    bankFilter = filter as BankFilter;
+    persistBankView();
+    render();
+  });
+
+  // Bank search (#207): session-only, filters as you type; cleared on its own whenever the Bank
+  // Management destination closes (see `syncWorkspace`'s `previousManagement` tracking).
+  el<HTMLInputElement>("#bank-search").addEventListener("input", (event) => {
+    bankSearch = (event.target as HTMLInputElement).value;
+    render();
+  });
+
+  // Bank sort select (#207): replaces the old Kind|Value|Name button row (`#sort-row`) with a
+  // single `<select>`, per the issue's own "sort select: Name, Kind, Value" shell description.
+  el<HTMLSelectElement>("#bank-sort-select").addEventListener("change", (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    if (!(SORT_KEYS as readonly string[]).includes(value)) return;
+    sortKey = value as SortKey;
+    persistBankView();
+    render();
   });
 
   // Menu button (#206): always-visible in the compact widget, toggling Character alone open or
@@ -1647,13 +1758,14 @@ export function mountApp(
   });
 
   // Character hub's embedded Equipment-only Bank tray (#206): mirrors the full Bank grid's own
-  // select/deselect-tile behavior above, over its own independent `selectedEquipmentTrayItem`.
+  // select/deselect-tile behavior above, over the same shared `selectedBankItem` (#207) — selecting
+  // an Equipment tile here also drives the full Bank page's own detail strip, and vice versa.
   el("#character-bank-tray").addEventListener("click", (event) => {
     const tile = (event.target as HTMLElement).closest<HTMLElement>(".tile[data-item]");
     if (!tile) return;
     const itemId = tile.dataset["item"];
     if (!itemId) return;
-    selectedEquipmentTrayItem = selectedEquipmentTrayItem === itemId ? null : itemId;
+    selectedBankItem = selectedBankItem === itemId ? null : itemId;
     render();
   });
 
