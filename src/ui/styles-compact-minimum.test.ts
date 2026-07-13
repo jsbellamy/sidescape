@@ -61,11 +61,15 @@ describe("fixed 34px icon chassis (#168)", () => {
     expect(skillIcon![1]).toMatch(/width:\s*34px/);
     expect(skillIcon![1]).toMatch(/height:\s*34px/);
 
-    // .food-slot-eat and .potion-slot-tile.filled .tile carry .tile (no icon-specific override of
-    // their own) so they inherit the fixed `.tile .icon` rule above rather than resizing it.
-    expect(css.match(/\.food-slot-eat\s*{([^}]*)}/s)![1]).not.toMatch(
-      /\.icon|max-width|max-height/,
-    );
+    // .food-slot-eat carries .tile (no icon-specific override of its own) so it inherits the
+    // fixed `.tile .icon` rule above rather than resizing it. #224 deleted this selector's own
+    // `width: 100%` rule entirely (the wrapping `.food-slot` is now a fixed 40px box, so the
+    // button's default block-fill width already lands on 40px without an explicit override) — so
+    // there is no rule body left to audit; its absence IS the no-icon-override guarantee.
+    expect(css.match(/\.food-slot-eat\s*{([^}]*)}/s)).toBeNull();
+    // .potion-slot-tile.filled .tile still carries its own rule (`width: 100%`, filling the fixed
+    // 40px `.potion-slot-tile` wrapper #224 introduced) and must not additionally override icon
+    // sizing.
     expect(css.match(/\.potion-slot-tile\.filled \.tile\s*{([^}]*)}/s)![1]).not.toMatch(
       /\.icon|max-width|max-height/,
     );

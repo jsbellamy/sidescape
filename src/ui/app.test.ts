@@ -3704,6 +3704,67 @@ describe("Rune Slot tile (#221) — collapses the pre-#221 four-Element Rune Pou
   });
 });
 
+describe("unified Loadout row (#224) — food x3, potion, quiver, rune collapse into one #loadout-row", () => {
+  it("all six loadout tiles (food x3, potion, quiver, rune) render as descendants of #loadout-row", () => {
+    const { root } = ammoMount({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+        potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 },
+        quiver: { itemId: "arrow", qty: 12 },
+        runeSlot: { itemId: "air-rune", qty: 12 },
+      },
+    });
+    const row = root.querySelector<HTMLElement>("#loadout-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelectorAll(".food-slot")).toHaveLength(3);
+    expect(row?.querySelector('.tile[data-item="strength-potion"]')).not.toBeNull();
+    expect(row?.querySelector('.tile[data-item="arrow"]')).not.toBeNull();
+    expect(row?.querySelector('.tile[data-item="air-rune"]')).not.toBeNull();
+  });
+
+  it("a filled Food Slot's tile carries the identical .tile chassis (and icon) a filled Gear Slot tile does — no bespoke sizing class survives", () => {
+    const { root } = ammoMount({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+        equipment: { weapon: "bronze-sword" },
+      },
+    });
+    const foodTile = root.querySelector<HTMLElement>('.food-slot .tile[data-eat="0"]');
+    const gearTile = root.querySelector<HTMLElement>("#character-slots .tile[data-item]");
+    expect(foodTile).not.toBeNull();
+    expect(gearTile).not.toBeNull();
+    expect(foodTile?.classList.contains("tile")).toBe(true);
+    expect(gearTile?.classList.contains("tile")).toBe(true);
+    // Neither carries the deleted `flex: 1` / `width: 100%` stretch rules' selectors as their
+    // wrapper's own sizing authority any more — both now size from the shared 40px `.tile` chassis.
+    expect(foodTile?.querySelector(".icon")).not.toBeNull();
+    expect(gearTile?.querySelector(".icon")).not.toBeNull();
+  });
+
+  it("loading a rune does not unload the Quiver, and unloading the Quiver does not unload the Rune Slot — two distinct tiles, independent Engine state", () => {
+    const { engine, root } = ammoMount({
+      player: {
+        quiver: { itemId: "arrow", qty: 12 },
+        runeSlot: { itemId: "air-rune", qty: 5 },
+      },
+    });
+
+    // Unassign then re-load the same rune (test-spark's levelReq is 1, so this needs no Magic
+    // level override) — the point isn't which rune loads, only that loading it never touches the
+    // Quiver, and that unloading the Quiver afterward never touches the Rune Slot.
+    root.querySelector<HTMLButtonElement>("[data-rune-unassign]")?.click();
+    root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
+    root.querySelector<HTMLButtonElement>('[data-rune-assign="air-rune"]')?.click();
+
+    expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 5 });
+    expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 12 }); // untouched
+
+    root.querySelector<HTMLButtonElement>("[data-quiver-unassign]")?.click();
+    expect(engine.snapshot().player.quiver).toBeNull();
+    expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 5 }); // untouched
+  });
+});
+
 describe("Vendor tab panel (#119)", () => {
   it("lists every vendor entry with its price and how many the player already owns", () => {
     const { root } = ammoMount({ bank: { items: [{ itemId: "arrow", qty: 7 }] } });
