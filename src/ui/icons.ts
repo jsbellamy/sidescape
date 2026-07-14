@@ -1,3 +1,13 @@
+import adamantArrowUrl from "../assets/icons/adamant-arrow.png";
+import adamantBarUrl from "../assets/icons/adamant-bar.png";
+import adamantChainbodyUrl from "../assets/icons/adamant-chainbody.png";
+import adamantDaggerUrl from "../assets/icons/adamant-dagger.png";
+import adamantFullHelmUrl from "../assets/icons/adamant-full-helm.png";
+import adamantKiteshieldUrl from "../assets/icons/adamant-kiteshield.png";
+import adamantMaceUrl from "../assets/icons/adamant-mace.png";
+import adamantShortbowUrl from "../assets/icons/adamant-shortbow.png";
+import adamantStaffUrl from "../assets/icons/adamant-staff.png";
+import adamantSwordUrl from "../assets/icons/adamant-sword.png";
 import airRuneUrl from "../assets/icons/air-rune.png";
 import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
 import attackPotionUrl from "../assets/icons/attack-potion.png";
@@ -61,6 +71,16 @@ import rockGolemUrl from "../assets/icons/rock-golem.png";
 import rubyUrl from "../assets/icons/ruby.png";
 import rubyAmuletUrl from "../assets/icons/ruby-amulet.png";
 import rubyRingUrl from "../assets/icons/ruby-ring.png";
+import runeArrowUrl from "../assets/icons/rune-arrow.png";
+import runeBarUrl from "../assets/icons/rune-bar.png";
+import runeChainbodyUrl from "../assets/icons/rune-chainbody.png";
+import runeDaggerUrl from "../assets/icons/rune-dagger.png";
+import runeFullHelmUrl from "../assets/icons/rune-full-helm.png";
+import runeKiteshieldUrl from "../assets/icons/rune-kiteshield.png";
+import runeMaceUrl from "../assets/icons/rune-mace.png";
+import runeShortbowUrl from "../assets/icons/rune-shortbow.png";
+import runeStaffUrl from "../assets/icons/rune-staff.png";
+import runeSwordUrl from "../assets/icons/rune-sword.png";
 import sapphireUrl from "../assets/icons/sapphire.png";
 import sapphireAmuletUrl from "../assets/icons/sapphire-amulet.png";
 import sapphireRingUrl from "../assets/icons/sapphire-ring.png";
@@ -159,6 +179,29 @@ const icons: Record<string, string> = {
   "bronze-full-helm": bronzeFullHelmUrl,
   "steel-bar": steelBarUrl,
   "mithril-bar": mithrilBarUrl,
+  // Gear Tier ladder, tiers 5/6 (#252): the 16 adamant/rune Equipment items + adamant-bar/
+  // rune-bar + adamant-arrow/rune-arrow, source-driven icons conformed from the same shared
+  // golden-* sources via scripts/art/icons.mjs (see docs/assets.md) — recolors, not new drawings.
+  "adamant-dagger": adamantDaggerUrl,
+  "adamant-mace": adamantMaceUrl,
+  "adamant-sword": adamantSwordUrl,
+  "adamant-shortbow": adamantShortbowUrl,
+  "adamant-staff": adamantStaffUrl,
+  "adamant-chainbody": adamantChainbodyUrl,
+  "adamant-kiteshield": adamantKiteshieldUrl,
+  "adamant-full-helm": adamantFullHelmUrl,
+  "rune-dagger": runeDaggerUrl,
+  "rune-mace": runeMaceUrl,
+  "rune-sword": runeSwordUrl,
+  "rune-shortbow": runeShortbowUrl,
+  "rune-staff": runeStaffUrl,
+  "rune-chainbody": runeChainbodyUrl,
+  "rune-kiteshield": runeKiteshieldUrl,
+  "rune-full-helm": runeFullHelmUrl,
+  "adamant-bar": adamantBarUrl,
+  "rune-bar": runeBarUrl,
+  "adamant-arrow": adamantArrowUrl,
+  "rune-arrow": runeArrowUrl,
   // Cooking wave (#115) raw catches: source-driven icons conformed from committed golden-* sources
   // via scripts/art/icons.mjs (see docs/assets.md).
   "raw-beef": rawBeefUrl,

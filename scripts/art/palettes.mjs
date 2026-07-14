@@ -33,6 +33,11 @@ export const materialPalettes = {
   gold: { shadow: "#8f5b00", base: "#d49b00", light: "#f0bd36", glint: "#ffe18a" },
   blood: { shadow: "#71201d", base: "#a53026", light: "#d05c47", glint: "#f1a58c" },
   ember: { shadow: "#8a3c12", base: "#c56a1e", light: "#e99a37", glint: "#ffcf6f" },
+  // Gear Tier ladder, tiers 5/6 (#252): the two new material ramps the ladder's 5th/6th tier
+  // needs — quantization can only speak the named-ramp vocabulary (docs/icon-gen.md), so these
+  // must exist before any adamant/rune icon recolor is registered in icons.mjs.
+  adamant: { shadow: "#2e3d2a", base: "#4c6b45", light: "#7a9c6e", glint: "#b8d9a8" },
+  rune: { shadow: "#16505a", base: "#2a8a92", light: "#5fc4c9", glint: "#b8f2ec" },
 };
 
 /** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources

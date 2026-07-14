@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_LEVEL } from "../core/xp";
 import {
   ARMOUR_FAMILIES,
   BAR_ITEM_ID,
@@ -10,11 +11,15 @@ import {
   WEAPON_FAMILIES,
 } from "./tier-ladder";
 
-/** Issue #251: the Gear Tier ladder ("Full generated Equipment" table) expressed by construction.
- * Every worked value below is copied verbatim from the issue body, an independent source of truth
- * — not recomputed the way the builder computes it. These replace the invariants retired from
- * gap-fill-weapons.test.ts, armour-directional.test.ts, and ranged-magic-progression.test.ts (see
- * the issue's own "Tests to retire" section). */
+/** Issue #251/#252: the Gear Tier ladder ("Full generated Equipment" table) expressed by
+ * construction. Every worked value below is copied verbatim from the issue body, an independent
+ * source of truth — not recomputed the way the builder computes it. These replace the invariants
+ * retired from gap-fill-weapons.test.ts, armour-directional.test.ts, and
+ * ranged-magic-progression.test.ts (see the issue's own "Tests to retire" section).
+ *
+ * #252 appends adamant/rune (tier indices 4/5). The step steepens above mithril — see the issue's
+ * own "step (adamant, rune)" table — so bronze/iron/steel/mithril (indices 0-3) below are
+ * BYTE-IDENTICAL to what #251 shipped, and adamant/rune are the issue's own new numbers. */
 
 // atk/str per tier, copied verbatim from the issue's "Full generated Equipment" table.
 const WEAPON_ATK_STR: Record<string, [number, number][]> = {
@@ -23,30 +28,40 @@ const WEAPON_ATK_STR: Record<string, [number, number][]> = {
     [9, 7],
     [14, 11],
     [19, 15],
+    [27, 22],
+    [35, 29],
   ],
   mace: [
     [6, 5],
     [11, 9],
     [16, 13],
     [21, 17],
+    [29, 24],
+    [37, 31],
   ],
   sword: [
     [7, 6],
     [12, 10],
     [17, 14],
     [22, 18],
+    [30, 25],
+    [38, 32],
   ],
   shortbow: [
     [5, 4],
     [11, 9],
     [17, 14],
     [23, 19],
+    [32, 27],
+    [41, 35],
   ],
   staff: [
     [4, 5],
     [9, 11],
     [14, 17],
     [19, 23],
+    [27, 32],
+    [35, 41],
   ],
 };
 
@@ -57,30 +72,36 @@ const ARMOUR_DEF: Record<string, [number, number, number, number, number][]> = {
     [10, 10, 5, 8, -1],
     [16, 16, 8, 13, -2],
     [22, 22, 11, 18, -3],
+    [31, 31, 16, 26, -4],
+    [40, 40, 21, 34, -5],
   ],
   kiteshield: [
     [4, 4, 2, 3, 0],
     [9, 9, 4, 7, -1],
     [14, 14, 6, 11, -2],
     [19, 19, 8, 15, -3],
+    [27, 27, 11, 21, -4],
+    [35, 35, 14, 27, -5],
   ],
   "full-helm": [
     [2, 2, 1, 2, 0],
     [5, 5, 2, 4, -1],
     [8, 8, 3, 6, -2],
     [11, 11, 4, 8, -3],
+    [16, 16, 6, 11, -4],
+    [21, 21, 8, 14, -5],
   ],
 };
 
 const VALUES: Record<string, number[]> = {
-  dagger: [10, 20, 40, 80],
-  mace: [15, 30, 60, 120],
-  sword: [20, 40, 80, 160],
-  shortbow: [25, 50, 100, 200],
-  staff: [25, 50, 100, 200],
-  chainbody: [30, 60, 120, 240],
-  kiteshield: [12, 24, 48, 96],
-  "full-helm": [25, 50, 100, 200],
+  dagger: [10, 20, 40, 80, 160, 320],
+  mace: [15, 30, 60, 120, 240, 480],
+  sword: [20, 40, 80, 160, 320, 640],
+  shortbow: [25, 50, 100, 200, 400, 800],
+  staff: [25, 50, 100, 200, 400, 800],
+  chainbody: [30, 60, 120, 240, 480, 960],
+  kiteshield: [12, 24, 48, 96, 192, 384],
+  "full-helm": [25, 50, 100, 200, 400, 800],
 };
 
 describe("ladderWeapon", () => {
@@ -168,14 +189,36 @@ describe("ladderWeapon", () => {
     }
   });
 
-  it("every new ranged/magic tier out-bonuses its predecessor (iron < steel < mithril)", () => {
+  it("every new ranged/magic tier out-bonuses its predecessor, all the way to rune", () => {
     for (const family of ["shortbow", "staff"] as const) {
-      const [, iron, steel, mithril] = GEAR_TIERS.map((tier) => ladderWeapon(tier, family));
-      expect(steel!.atkBonus).toBeGreaterThan(iron!.atkBonus!);
-      expect(mithril!.atkBonus).toBeGreaterThan(steel!.atkBonus!);
-      expect(steel!.strBonus).toBeGreaterThan(iron!.strBonus!);
-      expect(mithril!.strBonus).toBeGreaterThan(steel!.strBonus!);
+      const items = GEAR_TIERS.map((tier) => ladderWeapon(tier, family));
+      for (let i = 1; i < items.length; i++) {
+        expect(items[i]!.atkBonus).toBeGreaterThan(items[i - 1]!.atkBonus!);
+        expect(items[i]!.strBonus).toBeGreaterThan(items[i - 1]!.strBonus!);
+      }
     }
+  });
+
+  // #252: the step steepens above mithril specifically so a rune sword — the tier's flagship
+  // melee weapon — stays just under shade-blade (the Bone Crypt boss unique, "the best weapon in
+  // the game") rather than out-classing it with routine ladder content. shade-blade's 40/34 is
+  // copied verbatim from src/data/index.ts, an independent source of truth from this builder.
+  it("rune-sword sits strictly below shade-blade (40/34) on both atkBonus and strBonus", () => {
+    const runeSword = ladderWeapon("rune", "sword");
+    expect(runeSword.atkBonus).toBe(38);
+    expect(runeSword.strBonus).toBe(32);
+    expect(runeSword.atkBonus).toBeLessThan(40);
+    expect(runeSword.strBonus).toBeLessThan(34);
+  });
+
+  it("iron/steel/mithril steps are unchanged by the adamant/rune extension (#252)", () => {
+    // Recomputed independently of the builder's own step table: the mithril entry (tierIndex 3)
+    // must still equal #251's shipped mithril-tier numbers now that two more tiers exist above it.
+    expect(ladderWeapon("mithril", "sword").atkBonus).toBe(22);
+    expect(ladderWeapon("mithril", "sword").strBonus).toBe(18);
+    expect(ladderWeapon("mithril", "dagger").atkBonus).toBe(19);
+    expect(ladderWeapon("mithril", "shortbow").atkBonus).toBe(23);
+    expect(ladderWeapon("mithril", "staff").strBonus).toBe(23);
   });
 });
 
@@ -200,10 +243,10 @@ describe("ladderArmour", () => {
     }
   });
 
-  it("metal armour def.magic is strictly decreasing across tiers (0, -1, -2, -3)", () => {
+  it("metal armour def.magic is strictly decreasing across all six tiers (0, -1, -2, -3, -4, -5)", () => {
     for (const family of ARMOUR_FAMILIES) {
       const magics = GEAR_TIERS.map((tier) => ladderArmour(tier, family).def.magic);
-      expect(magics).toEqual([0, -1, -2, -3]);
+      expect(magics).toEqual([0, -1, -2, -3, -4, -5]);
     }
   });
 
@@ -232,7 +275,7 @@ describe("ladderArmour", () => {
 });
 
 describe("ladderRecipe", () => {
-  it("generates 24 Smithing recipes: 6 metal families x 4 tiers, id equals outputItemId, skill smithing", () => {
+  it("generates 36 Smithing recipes: 6 metal families x 6 tiers, id equals outputItemId, skill smithing", () => {
     let count = 0;
     for (const family of METAL_FAMILIES) {
       for (const tier of GEAR_TIERS) {
@@ -242,7 +285,7 @@ describe("ladderRecipe", () => {
         count++;
       }
     }
-    expect(count).toBe(24);
+    expect(count).toBe(36);
   });
 
   it("shortbow and staff are not MetalFamily members — no recipe accessor exists for them", () => {
@@ -291,5 +334,28 @@ describe("ladderRecipe", () => {
         expect(levels[i]).toBeGreaterThan(levels[i - 1]!);
       }
     }
+  });
+
+  // #252: extending TIER_BASE_LEVEL to [1,15,30,45,60,75] puts the highest recipe (rune
+  // chainbody: 75 + chainbody's own +9 family offset) at level 84, comfortably under MAX_LEVEL 99
+  // — the issue's own worked example, copied verbatim.
+  it("rune-chainbody is the highest-level recipe at 84, under MAX_LEVEL", () => {
+    const runeChainbody = ladderRecipe("rune", "chainbody");
+    expect(runeChainbody.levelReq).toBe(84);
+    expect(runeChainbody.levelReq).toBeLessThan(MAX_LEVEL);
+
+    for (const family of METAL_FAMILIES) {
+      for (const tier of GEAR_TIERS) {
+        expect(ladderRecipe(tier, family).levelReq).toBeLessThanOrEqual(84);
+        expect(ladderRecipe(tier, family).levelReq).toBeLessThan(MAX_LEVEL);
+      }
+    }
+  });
+});
+
+describe("BAR_ITEM_ID (#252)", () => {
+  it("extends with adamant-bar and rune-bar", () => {
+    expect(BAR_ITEM_ID.adamant).toBe("adamant-bar");
+    expect(BAR_ITEM_ID.rune).toBe("rune-bar");
   });
 });

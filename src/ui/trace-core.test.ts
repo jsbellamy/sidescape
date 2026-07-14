@@ -438,3 +438,55 @@ describe("cropImage", () => {
     expect(sub.data[0]).toBe(4);
   });
 });
+
+/**
+ * Per-asset ramp scoping (#252). `quantizeGrid` snaps to the nearest entry of whatever palette it
+ * gets, so an unscoped palette makes every material ramp a candidate color for every asset — that
+ * is how adding `adamant`/`rune` silently recolored ~35 shipped icons and 4 sprites. These lock the
+ * `buildNamedPalette` half of the fix; `art-ramp-isolation.test.ts` locks the end-to-end property.
+ */
+describe("buildNamedPalette ramp scoping (#252)", () => {
+  // Material refs are `<lowercase ramp>.<role>` (e.g. `steel.base`); master refs are `P.*` and
+  // zone refs are `town[2]`, so neither is picked up here.
+  const materialRefs = (palette: { ref: string }[]) =>
+    palette.map((e) => e.ref).filter((ref) => /^[a-z][a-z-]*\./.test(ref));
+
+  it("includes every material ramp when no allowlist is given (authoring tools want the full vocabulary)", () => {
+    const refs = materialRefs(buildNamedPalette());
+    for (const ramp of ["steel", "water", "gold", "blood", "ember", "adamant", "rune"]) {
+      expect(refs).toContain(`${ramp}.base`);
+    }
+  });
+
+  it("includes ONLY the allowlisted material ramps, so an undeclared ramp can never win a cell", () => {
+    const refs = materialRefs(buildNamedPalette(["steel", "water"]));
+    expect(refs).toContain("steel.base");
+    expect(refs).toContain("water.base");
+    for (const excluded of ["gold", "blood", "ember", "adamant", "rune"]) {
+      expect(refs.some((ref) => ref.startsWith(`${excluded}.`))).toBe(false);
+    }
+  });
+
+  it("keeps master and zone colors regardless of the allowlist (they are the shared neutrals)", () => {
+    const palette = buildNamedPalette([]);
+    const refs = palette.map((e) => e.ref);
+    expect(refs).toContain("P.ink");
+    expect(refs).toContain("town[2]");
+    expect(materialRefs(palette)).toEqual([]);
+  });
+
+  it("emits ramps in declaration order, not argument order — a tie is broken by palette position", () => {
+    // quantizeGrid compares with a strict `<`, so the FIRST equidistant entry wins. If scoping
+    // honored the caller's argument order, a subset listed differently would flip a tied cell and
+    // change shipped art (the mace's one gold.shadow/ember.shadow tie is a real instance). Scoping
+    // must only remove candidates, never reorder the survivors.
+    const forward = materialRefs(buildNamedPalette(["gold", "ember"]));
+    const reversed = materialRefs(buildNamedPalette(["ember", "gold"]));
+    expect(forward).toEqual(reversed);
+    expect(forward.indexOf("gold.shadow")).toBeLessThan(forward.indexOf("ember.shadow"));
+  });
+
+  it("throws on an unknown ramp name rather than silently ignoring it", () => {
+    expect(() => buildNamedPalette(["steel", "not-a-ramp"])).toThrow(/unknown material ramp/);
+  });
+});

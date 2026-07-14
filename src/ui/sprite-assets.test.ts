@@ -5,8 +5,14 @@ import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { buildSpriteContactSheets } from "../../scripts/art/sprite-contact-sheet.mjs";
+import { materialPalettes } from "../../scripts/art/palettes.mjs";
 import { sprites, writeSprites } from "../../scripts/art/sprites.mjs";
 import { encodePng } from "../../scripts/art/write-png.mjs";
+
+/** These are synthetic writeSprites fixtures, not shipped art. Per-asset ramp scoping (#252) is
+ * exercised against the real registry by src/ui/art-ramp-isolation.test.ts; here we hand the
+ * fixture every ramp so each assertion below keeps testing exactly the color it always did. */
+const ALL_RAMPS = Object.keys(materialPalettes);
 
 const EXPECTED_SPRITES = [
   { name: "player", size: 32, alpha: "binary" },
@@ -57,7 +63,9 @@ describe("writeSprites", () => {
 
     await writeSprites(destDir, {
       sourceDir,
-      registry: [{ name: "fixture", source: "fixture.png", size: 32, alpha: "binary" }],
+      registry: [
+        { name: "fixture", source: "fixture.png", size: 32, alpha: "binary", ramps: ALL_RAMPS },
+      ],
     });
 
     const output = PNG.sync.read(readFileSync(join(destDir, "fixture.png")));
@@ -79,7 +87,9 @@ describe("writeSprites", () => {
     await expect(
       writeSprites(join(root, "output"), {
         sourceDir,
-        registry: [{ name: "fixture", source: "fixture.png", size: 32, alpha: "binary" }],
+        registry: [
+          { name: "fixture", source: "fixture.png", size: 32, alpha: "binary", ramps: ALL_RAMPS },
+        ],
       }),
     ).rejects.toThrow(/fixture.*31.32.*32.32/i);
   });
@@ -98,7 +108,9 @@ describe("writeSprites", () => {
     await expect(
       writeSprites(join(root, "output"), {
         sourceDir,
-        registry: [{ name: "fixture", source: "fixture.png", size: 32, alpha: "binary" }],
+        registry: [
+          { name: "fixture", source: "fixture.png", size: 32, alpha: "binary", ramps: ALL_RAMPS },
+        ],
       }),
     ).rejects.toThrow(/fixture.*binary.*128/i);
   });
@@ -112,6 +124,7 @@ describe("writeSprites", () => {
       source: "fixture.png",
       size: 32,
       alpha: "one-intermediate",
+      ramps: ALL_RAMPS,
     };
     writeFileSync(
       join(sourceDir, "fixture.png"),
@@ -164,7 +177,9 @@ describe("writeSprites", () => {
     );
     await writeSprites(destDir, {
       sourceDir,
-      registry: [{ name: "fixture", source: "fixture.png", size: 32, alpha: "binary" }],
+      registry: [
+        { name: "fixture", source: "fixture.png", size: 32, alpha: "binary", ramps: ALL_RAMPS },
+      ],
     });
 
     const output = PNG.sync.read(readFileSync(join(destDir, "fixture.png")));
@@ -186,7 +201,15 @@ describe("writeSprites", () => {
     await expect(
       writeSprites(join(root, "output"), {
         sourceDir,
-        registry: [{ name: "missing-beast", source: "missing.png", size: 32, alpha: "binary" }],
+        registry: [
+          {
+            name: "missing-beast",
+            source: "missing.png",
+            size: 32,
+            alpha: "binary",
+            ramps: ALL_RAMPS,
+          },
+        ],
       }),
     ).rejects.toThrow(/missing-beast.*missing\.png/i);
   });
@@ -202,7 +225,9 @@ describe("writeSprites", () => {
     await expect(
       writeSprites(join(root, "output"), {
         sourceDir,
-        registry: [{ name: "fixture", source: "fixture.png", size: 32, alpha: "soft" }],
+        registry: [
+          { name: "fixture", source: "fixture.png", size: 32, alpha: "soft", ramps: ALL_RAMPS },
+        ],
       }),
     ).rejects.toThrow(/fixture.*unknown alpha policy.*soft/i);
   });
@@ -218,7 +243,9 @@ describe("writeSprites", () => {
     await expect(
       writeSprites(join(root, "output"), {
         sourceDir,
-        registry: [{ name: "fixture", source: "fixture.png", size: 24, alpha: "binary" }],
+        registry: [
+          { name: "fixture", source: "fixture.png", size: 24, alpha: "binary", ramps: ALL_RAMPS },
+        ],
       }),
     ).rejects.toThrow(/fixture.*unsupported canvas size.*24/i);
   });

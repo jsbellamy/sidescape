@@ -98,14 +98,45 @@ describe("Bone Crypt content", () => {
     const mithrilDagger = content.items.find((i) => i.id === "mithril-dagger");
     expect(shadeBlade?.kind).toBe("equipment");
     expect(mithrilDagger?.kind).toBe("equipment");
+    // #252: adamant/rune are a LATER era, not "earlier weapons" — excluded from this scope. The
+    // ladder's own step steepens specifically so rune-sword still sits under shade-blade (see
+    // tier-ladder.test.ts), but rune-shortbow is a documented, accepted exception (issue's own
+    // "Rune shortbow at 41/35 does edge past it numerically; that is accepted"), asserted below.
     const weapons = content.items.filter(
-      (i) => i.kind === "equipment" && i.slot === "weapon" && i.id !== "shade-blade",
+      (i) =>
+        i.kind === "equipment" &&
+        i.slot === "weapon" &&
+        i.id !== "shade-blade" &&
+        !i.id.startsWith("adamant-") &&
+        !i.id.startsWith("rune-"),
     ) as { atkBonus: number; strBonus: number }[];
     expect(weapons.length).toBeGreaterThan(0);
     for (const weapon of weapons) {
       expect((shadeBlade as { atkBonus: number }).atkBonus).toBeGreaterThan(weapon.atkBonus);
       expect((shadeBlade as { strBonus: number }).strBonus).toBeGreaterThan(weapon.strBonus);
     }
+  });
+
+  // #252: the tier-5/6 (adamant/rune) equipment this slice adds vs. shade-blade — rune-sword is
+  // the load-bearing case (asserted here AND in tier-ladder.test.ts, since it's why the step
+  // steepens); rune-shortbow is the one documented, owner-accepted exception.
+  it("rune-sword stays under shade-blade; rune-shortbow is the one documented exception that exceeds it", () => {
+    const shadeBlade = content.items.find((i) => i.id === "shade-blade") as {
+      atkBonus: number;
+      strBonus: number;
+    };
+    const runeSword = content.items.find((i) => i.id === "rune-sword") as {
+      atkBonus: number;
+      strBonus: number;
+    };
+    const runeShortbow = content.items.find((i) => i.id === "rune-shortbow") as {
+      atkBonus: number;
+      strBonus: number;
+    };
+    expect(runeSword.atkBonus).toBeLessThan(shadeBlade.atkBonus);
+    expect(runeSword.strBonus).toBeLessThan(shadeBlade.strBonus);
+    expect(runeShortbow.atkBonus).toBeGreaterThan(shadeBlade.atkBonus);
+    expect(runeShortbow.strBonus).toBeGreaterThan(shadeBlade.strBonus);
   });
 
   it("mithril Equipment out-bonuses its steel equivalent", () => {

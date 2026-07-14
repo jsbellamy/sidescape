@@ -307,9 +307,27 @@ export function sampleCells(image, fg, bbox, { pitchX, phaseX, pitchY, phaseY })
 
 // --- stage 5: quantization to named ramps ---
 
-/** Every named palette color with the code expression that references it (`P.ink`, `town[2]`,
- * `steel.light`) — the vocabulary drafts are quantized into and emitted with. */
-export function buildNamedPalette() {
+/**
+ * Every named palette color with the code expression that references it (`P.ink`, `town[2]`,
+ * `steel.light`) — the vocabulary drafts are quantized into and emitted with.
+ *
+ * `materialRampNames` SCOPES the material ramps included (#252). `quantizeGrid` snaps every cell to
+ * the globally nearest entry of whatever palette it is handed, so any material ramp in that palette
+ * is a candidate color for every cell of every asset. Passing the whole project's ramps therefore
+ * makes each new ramp silently re-quantize UNRELATED shipped art: adding `adamant` (a green metal)
+ * pulled mithril-chainbody's blue-grey pixels onto it, and adding `rune` (a cyan metal) shifted the
+ * crypt-shade and zombie sprites. Generation callers must instead pass the ramps THAT asset's own
+ * source actually uses, so a ramp an asset does not use can never alter it (see
+ * `scripts/art/icons.mjs`'s SOURCE_RAMPS and `sprites.mjs`'s per-sprite `ramps`, and the
+ * `src/ui/art-ramp-isolation.test.ts` regression test that locks this property).
+ *
+ * Omitting the argument keeps the every-ramp behavior, which is what the AUTHORING tools want: an
+ * ingest/trace pass is precisely trying to discover which ramps a new source is closest to, and
+ * its >15%-off-ramp rejection (docs/icon-gen.md) is only meaningful against the full vocabulary.
+ *
+ * @param {readonly string[]} [materialRampNames] Material ramps to include; omit for all of them.
+ */
+export function buildNamedPalette(materialRampNames) {
   const out = [];
   for (const [name, hex] of masterPalette) {
     const ref = /^[a-zA-Z_$][\w$]*$/.test(name) ? `P.${name}` : `P[${JSON.stringify(name)}]`;
@@ -318,7 +336,24 @@ export function buildNamedPalette() {
   for (const [zone, colors] of Object.entries(zonePalettes)) {
     colors.forEach((hex, i) => out.push({ ref: `${zone}[${i}]`, hex, rgb: hexToRgb(hex) }));
   }
+  if (materialRampNames !== undefined) {
+    for (const name of materialRampNames) {
+      if (!materialPalettes[name]) {
+        throw new Error(
+          `buildNamedPalette: unknown material ramp ${JSON.stringify(name)} (known: ${Object.keys(materialPalettes).join(", ")})`,
+        );
+      }
+    }
+  }
+  // Emit ramps in `materialPalettes` DECLARATION order, never the caller's argument order.
+  // `quantizeGrid` breaks an exact distance tie by palette position (first entry wins, since it
+  // compares with a strict `<`), so the order here is load-bearing: listing a subset in a
+  // different order would silently flip a tied cell (the mace's one gold.shadow/ember.shadow tie
+  // is a real instance) and change shipped art. Scoping must only REMOVE candidates, never
+  // reorder the survivors.
+  const allowed = materialRampNames === undefined ? null : new Set(materialRampNames);
   for (const [mat, ramp] of Object.entries(materialPalettes)) {
+    if (allowed && !allowed.has(mat)) continue;
     for (const [role, hex] of Object.entries(ramp)) {
       out.push({ ref: `${mat}.${role}`, hex, rgb: hexToRgb(hex) });
     }
