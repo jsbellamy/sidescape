@@ -23,6 +23,7 @@ export function validateContent(content: Content): string[] {
   const itemIds = new Set(content.items.map((i) => i.id));
   const monsterIds = new Set(content.monsters.map((m) => m.id));
   const fishingSpotIds = new Set(content.fishingSpots.map((s) => s.id));
+  const areaIds = new Set(content.areas.map((a) => a.id));
 
   // Invariant 1: exactly one currency item (createEngine locates it by kind, never a hard-coded id).
   const currencyCount = content.items.filter((i) => i.kind === "currency").length;
@@ -238,6 +239,30 @@ export function validateContent(content: Content): string[] {
     }
   }
   violations.push(...duplicateIds(content.pets, "pets"));
+
+  // Dungeons (#250): mirrors every other collection's duplicate-id check, plus the referential
+  // checks below (areaId -> areas, waves -> monsters, chest itemId -> items) that no other
+  // collection needed done here — dungeons was the one collection with none until now.
+  violations.push(...duplicateIds(content.dungeons, "dungeons"));
+
+  for (const dungeon of content.dungeons) {
+    if (!areaIds.has(dungeon.areaId)) {
+      violations.push(`dungeon "${dungeon.id}" areaId "${dungeon.areaId}" not found`);
+    }
+    if (dungeon.waves.length === 0) {
+      violations.push(`dungeon "${dungeon.id}" has no waves`);
+    }
+    for (const monsterId of dungeon.waves) {
+      if (!monsterIds.has(monsterId)) {
+        violations.push(`dungeon "${dungeon.id}" wave references unknown monster "${monsterId}"`);
+      }
+    }
+    for (const entry of dungeon.chest) {
+      if (!itemIds.has(entry.itemId)) {
+        violations.push(`dungeon "${dungeon.id}" chest references unknown item "${entry.itemId}"`);
+      }
+    }
+  }
 
   return violations;
 }

@@ -556,6 +556,91 @@ describe("validateContent", () => {
     expect(validateContent(content)).toEqual([]);
   });
 
+  describe("Dungeons (#250)", () => {
+    it("reports a duplicate dungeon id", () => {
+      const gauntlet = fixtureContent.dungeons.find((d) => d.id === "gauntlet")!;
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: [...fixtureContent.dungeons, { ...gauntlet }],
+      };
+      expect(validateContent(content)).toContain('dungeons contains 2 entries with id "gauntlet"');
+    });
+
+    it("reports a dangling dungeon areaId reference", () => {
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet" ? { ...d, areaId: "no-such-area" } : d,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'dungeon "gauntlet" areaId "no-such-area" not found',
+      );
+    });
+
+    it("reports a dungeon with an empty waves array", () => {
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet" ? { ...d, waves: [] } : d,
+        ),
+      };
+      expect(validateContent(content)).toContain('dungeon "gauntlet" has no waves');
+    });
+
+    it("reports a dungeon wave that references an unknown monster", () => {
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet" ? { ...d, waves: [...d.waves, "no-such-monster"] } : d,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'dungeon "gauntlet" wave references unknown monster "no-such-monster"',
+      );
+    });
+
+    it("reports a dungeon chest entry that references an unknown item", () => {
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet"
+            ? {
+                ...d,
+                chest: [
+                  ...d.chest,
+                  { itemId: "no-such-item", qty: 1, chance: 1, band: "rare" as const },
+                ],
+              }
+            : d,
+        ),
+      };
+      expect(validateContent(content)).toContain(
+        'dungeon "gauntlet" chest references unknown item "no-such-item"',
+      );
+    });
+
+    it("aggregates every dungeon violation instead of failing fast", () => {
+      const content: Content = {
+        ...fixtureContent,
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet"
+            ? { ...d, areaId: "no-such-area", waves: [...d.waves, "no-such-monster"] }
+            : d,
+        ),
+      };
+      const violations = validateContent(content);
+      expect(violations).toContain('dungeon "gauntlet" areaId "no-such-area" not found');
+      expect(violations).toContain(
+        'dungeon "gauntlet" wave references unknown monster "no-such-monster"',
+      );
+    });
+
+    it("the fixture's own dungeon (gauntlet) reports nothing", () => {
+      expect(validateContent(fixtureContent)).toEqual([]);
+    });
+  });
+
   describe("Pets (#120)", () => {
     it("reports a pet that declares no icon", () => {
       const content: Content = {
