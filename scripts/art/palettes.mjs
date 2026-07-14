@@ -61,6 +61,14 @@ export const materialPalettes = {
   // must exist before any adamant/rune icon recolor is registered in icons.mjs.
   adamant: { shadow: "#2e3d2a", base: "#4c6b45", light: "#7a9c6e", glint: "#b8d9a8" },
   rune: { shadow: "#16505a", base: "#2a8a92", light: "#5fc4c9", glint: "#b8f2ec" },
+  // Player original art (#264): the character sources have no vocabulary for lit flesh or worn
+  // leather, so quantization pulled every face, hand, boot, belt, and strap into the master ramp's
+  // sand/cream/umber browns — the single biggest reason a rendered character reads as mud. Unlike
+  // zonePalettes, materialPalettes IS scoped per asset (writeSprites' materialRampNames,
+  // icons.mjs' SOURCE_PALETTES), so an entry here can only reach a sprite/icon that names it;
+  // appending these cannot touch the 16 existing sprites, none of which declare them.
+  skin: { shadow: "#8a5a45", base: "#c08a68", light: "#e0b48f", glint: "#f2d8bb" },
+  leather: { shadow: "#3f2a1c", base: "#6b452a", light: "#96683d", glint: "#c08f5a" },
 };
 
 /** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources

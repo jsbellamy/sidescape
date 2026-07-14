@@ -7,6 +7,22 @@ import { writePng } from "./write-png.mjs";
 const SPRITE_SOURCES_DIR = fileURLToPath(new URL("./sprite-sources", import.meta.url));
 
 /**
+ * Per-sprite finishing budget, overridable per registry entry (#264).
+ *
+ * These were hardcoded constants applied identically to every sprite, which is the right default
+ * for a 32x32 Monster read at a glance but actively destroys a hero sprite. `maxColors` merges the
+ * least-used colors away, so a rendered character's whole shading vocabulary — the second skin
+ * tone, the leather's highlight, the blade's glint — is exactly what falls off the bottom of a
+ * 12-color budget. `despecklePasses` then deletes any pixel with no matching 8-neighbor, and on a
+ * hand-authored source EVERY isolated pixel is deliberate (the eye, the buckle, the edge highlight)
+ * — the cleanup that rescues a machine downscale is vandalism on art someone placed by hand.
+ *
+ * The defaults reproduce the previously shipped bytes for every entry that does not override them.
+ */
+const DEFAULT_MAX_COLORS = 12;
+const DEFAULT_DESPECKLE_PASSES = 3;
+
+/**
  * Complete combat-sprite registry. Policies are explicit per entry so canvas and alpha behavior
  * never depend on filename conventions. The registry began with interim reconstructions of the
  * current CC0 sprites; issue #142 replaces them slice by slice with original art without changing
@@ -24,13 +40,22 @@ const SPRITE_SOURCES_DIR = fileURLToPath(new URL("./sprite-sources", import.meta
  * ownership claim.
  */
 export const sprites = [
+  // The player is the one sprite on screen 100% of the time, and the only one ingested from an
+  // original full-body generation rather than a CC0 tile crop (#264) — so she is also the only
+  // entry that overrides the finishing budget. `skin`/`leather` give quantization the vocabulary
+  // her render actually needs (without them her face, hands, belt, and boots all collapse into the
+  // master ramp's umber/shadow browns), the wider `maxColors` keeps the shading steps that a
+  // 12-color cap merges away, and `despecklePasses: 0` preserves the deliberate single pixels — the
+  // eye, the blade highlight — that the 3-pass cleanup deletes.
   {
     name: "player",
     source: "sprite-player.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
-    materialRampNames: ["steel"],
+    materialRampNames: ["steel", "skin", "leather"],
     zoneNames: ["forest"],
+    maxColors: 24,
+    despecklePasses: 0,
   },
   {
     name: "chicken",
@@ -241,8 +266,8 @@ export async function writeSprites(
       );
     }
     const { cells: quantized } = quantizeGrid(grid, named);
-    const { cells: reduced } = reducePalette(quantized, 12);
-    const { cells } = despeckle(reduced);
+    const { cells: reduced } = reducePalette(quantized, sprite.maxColors ?? DEFAULT_MAX_COLORS);
+    const { cells } = despeckle(reduced, sprite.despecklePasses ?? DEFAULT_DESPECKLE_PASSES);
     await writePng(`${destDir}/${sprite.name}.png`, png.width, png.height, (x, y) => {
       const cell = cells[y][x];
       return cell ? [...cell.rgb, alpha[y][x]] : [0, 0, 0, 0];
