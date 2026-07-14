@@ -371,18 +371,31 @@ describe("Shade Crypt Dungeon", () => {
     }
   });
 
-  it("a save that has never cleared it can obtain no adamant anywhere (it's the only adamant source)", () => {
-    // Every source of an adamant-prefixed item in Content is this Dungeon's own Chest — no
-    // Monster Drop Table and no other Dungeon's Chest yields adamant.
-    for (const monster of content.monsters) {
-      for (const entry of monster.dropTable) {
-        expect(entry.itemId.startsWith("adamant-"), `${monster.id} drops ${entry.itemId}`).toBe(
-          false,
-        );
-      }
+  it("was the only adamant source before #254; Frostspire's own open-world Monsters are now a second one, but both still require clearing this Dungeon first", () => {
+    // #254 retires the "shade-crypt is the ONLY adamant source in all of Content" invariant this
+    // test used to assert (Frostspire's frost-wolf/ice-wraith/frost-giant drop adamant gear too —
+    // see src/data/adamant-rune-reachability.test.ts, narrowed there for that slice's own scope).
+    // What survives is the GATING chain: every adamant source anywhere in Content sits behind
+    // this Dungeon — shade-crypt's own Chest directly, and Frostspire's Monsters transitively,
+    // since Frostspire itself is unlockedByDungeonId "shade-crypt". A fresh player reaches none
+    // of them.
+    const fresh = createEngine(content, seededRng(1));
+    for (const monsterId of ["frost-wolf", "ice-wraith", "frost-giant"]) {
+      expect(() => fresh.selectMonster(monsterId)).toThrow(
+        /Frostspire is locked — defeat Shade Crypt/,
+      );
     }
+    expect(() => createEngine(content, seededRng(1)).enterDungeon("frost-warden")).toThrow(
+      /Frostspire is locked — defeat Shade Crypt/,
+    );
+    expect(() => createEngine(content, seededRng(1)).enterDungeon("shade-crypt")).toThrow(
+      /Bone Crypt is locked — defeat Sewer King/,
+    );
+
+    // Every OTHER Dungeon's Chest (i.e. every one gated at or before Shade Crypt) still yields no
+    // adamant at all — the narrower invariant that does survive #254 unchanged.
     for (const dungeon of content.dungeons) {
-      if (dungeon.id === "shade-crypt") continue;
+      if (dungeon.id === "shade-crypt" || dungeon.id === "frost-warden") continue;
       for (const entry of dungeon.chest) {
         expect(
           entry.itemId.startsWith("adamant-"),

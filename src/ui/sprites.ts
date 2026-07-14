@@ -4,9 +4,13 @@ import chickenUrl from "../assets/sprites/chicken.png";
 import cowUrl from "../assets/sprites/cow.png";
 import cryptGhoulUrl from "../assets/sprites/crypt-ghoul.png";
 import cryptShadeUrl from "../assets/sprites/crypt-shade.png";
+import frostGiantUrl from "../assets/sprites/frost-giant.png";
+import frostWardenUrl from "../assets/sprites/frost-warden.png";
+import frostWolfUrl from "../assets/sprites/frost-wolf.png";
 import giantRatUrl from "../assets/sprites/giant-rat.png";
 import goblinUrl from "../assets/sprites/goblin.png";
 import goblinWarriorUrl from "../assets/sprites/goblin-warrior.png";
+import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
 import wolfUrl from "../assets/sprites/wolf.png";
@@ -35,6 +39,10 @@ const monsterSprites: Record<string, string> = {
   "crypt-shade": cryptShadeUrl,
   "crypt-ghoul": cryptGhoulUrl,
   "bone-knight": boneKnightUrl,
+  "frost-wolf": frostWolfUrl,
+  "ice-wraith": iceWraithUrl,
+  "frost-giant": frostGiantUrl,
+  "frost-warden": frostWardenUrl,
 };
 
 /** Looks up a Monster's combat-scene sprite by id, or undefined if it has none. */

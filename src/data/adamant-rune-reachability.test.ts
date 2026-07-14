@@ -3,17 +3,17 @@ import { GEAR_TIERS } from "./tier-ladder";
 import { content } from "./index";
 
 /**
- * Gear Tiers 5/6 (#252): adamant and rune shipped as data + art ONLY, unreachable by design (the
- * issue's own "Interim: this gear is unobtainable when this slice merges" section).
- *
- * Shade Crypt (#253) is the first slice that wires adamant in: its Chest is deliberately "the
- * first adamant a player can obtain" (see `bone-crypt.test.ts`'s own reachability test, which
- * proves the positive side — shade-crypt's chest actually contains adamant items). This file keeps
- * the narrower guardrail: adamant/rune stay absent from every Monster dropTable and every OTHER
- * Dungeon's Chest, so nothing quietly wires the tier in a second, earlier place while it's still
- * meant to gate the frozen Area (#254). rune remains fully unreachable — no Chest yields it yet.
+ * Gear Tiers 5/6 (#252/#253/#254): the full arc this guardrail has tracked across three slices.
+ * #252 shipped adamant/rune as data + art ONLY (nothing dropped either). #253 wired in the first
+ * adamant source (shade-crypt's own chest). #254 — this slice — is the one the whole arc was
+ * building to: Frostspire's three open-world Monsters (frost-wolf/ice-wraith/frost-giant) now
+ * drop adamant gear and adamant-bar directly, and the Frost Warden Dungeon's Chest is the ONLY
+ * source of rune-bar anywhere in Content (frostspire.test.ts's own "interim retired" test proves
+ * every adamant/rune item is reachable end to end; this file keeps the narrower, harder-to-fool
+ * guardrail: rune-bar specifically stays impossible to acquire from anywhere except Frost Warden).
+ * Narrowed rather than deleted, per #253's own precedent for narrowing this file.
  */
-describe("Adamant/rune gear reachability (#252/#253)", () => {
+describe("Adamant/rune gear reachability (#252/#253/#254)", () => {
   const newTierIds = new Set(
     content.items
       .filter((i) => i.id.startsWith("adamant-") || i.id.startsWith("rune-"))
@@ -21,43 +21,69 @@ describe("Adamant/rune gear reachability (#252/#253)", () => {
   );
   const runeIds = new Set(content.items.filter((i) => i.id.startsWith("rune-")).map((i) => i.id));
 
+  const ADAMANT_OPEN_WORLD_MONSTER_IDS = new Set(["frost-wolf", "ice-wraith", "frost-giant"]);
+  const ADAMANT_CHEST_DUNGEON_IDS = new Set(["shade-crypt", "frost-warden"]);
+
   it("the new tier actually exists (sanity: this guardrail isn't vacuously true)", () => {
     expect(newTierIds.size).toBeGreaterThanOrEqual(18); // 16 equipment + 2 bars (arrows also match the prefix)
     expect(GEAR_TIERS).toContain("adamant");
     expect(GEAR_TIERS).toContain("rune");
   });
 
-  it("no Monster dropTable contains any adamant/rune item id", () => {
+  it("no Monster dropTable contains a rune item, and any Monster dropping an adamant item is one of Frostspire's own open-world three", () => {
     const offenders: string[] = [];
     for (const monster of content.monsters) {
       for (const entry of monster.dropTable) {
-        if (newTierIds.has(entry.itemId)) {
-          offenders.push(`${monster.id} drops ${entry.itemId}`);
+        if (runeIds.has(entry.itemId)) {
+          offenders.push(`${monster.id} drops rune item ${entry.itemId}`);
+        } else if (
+          newTierIds.has(entry.itemId) &&
+          !ADAMANT_OPEN_WORLD_MONSTER_IDS.has(monster.id)
+        ) {
+          offenders.push(`${monster.id} drops adamant item ${entry.itemId}`);
         }
       }
     }
     expect(offenders, offenders.join("; ")).toEqual([]);
   });
 
-  it("no Dungeon chest other than shade-crypt contains any adamant/rune item id, and shade-crypt contains no rune", () => {
+  it("no Dungeon chest other than shade-crypt/frost-warden contains any adamant/rune item id, and only frost-warden's chest contains rune", () => {
     const offenders: string[] = [];
     for (const dungeon of content.dungeons) {
       for (const entry of dungeon.chest) {
         if (!newTierIds.has(entry.itemId)) continue;
-        if (dungeon.id === "shade-crypt" && !runeIds.has(entry.itemId)) continue; // adamant: OK here
-        offenders.push(`${dungeon.id} chest contains ${entry.itemId}`);
+        if (!ADAMANT_CHEST_DUNGEON_IDS.has(dungeon.id)) {
+          offenders.push(`${dungeon.id} chest contains ${entry.itemId}`);
+          continue;
+        }
+        if (runeIds.has(entry.itemId) && dungeon.id !== "frost-warden") {
+          offenders.push(`${dungeon.id} chest contains rune item ${entry.itemId}`);
+        }
       }
     }
     expect(offenders, offenders.join("; ")).toEqual([]);
   });
 
-  // adamant-bar/rune-bar are the Smithing input, so even a player who reaches the (currently
-  // nonexistent) required Smithing level has no way to acquire the Material to craft with.
-  it("adamant-bar and rune-bar specifically are unobtainable: not a Monster drop, not a Fishing catch, not a vendor item", () => {
-    for (const barId of ["adamant-bar", "rune-bar"]) {
-      expect(content.monsters.some((m) => m.dropTable.some((e) => e.itemId === barId))).toBe(false);
-      expect(content.fishingSpots.some((f) => f.itemId === barId)).toBe(false);
-      expect(content.vendor.some((v) => v.itemId === barId)).toBe(false);
+  it("adamant-bar is now obtainable (Frostspire's own open-world three), but rune-bar remains obtainable only via the frost-warden Dungeon Chest", () => {
+    expect(content.monsters.some((m) => m.dropTable.some((e) => e.itemId === "adamant-bar"))).toBe(
+      true,
+    );
+    expect(content.fishingSpots.some((f) => f.itemId === "adamant-bar")).toBe(false);
+    expect(content.vendor.some((v) => v.itemId === "adamant-bar")).toBe(false);
+
+    expect(content.monsters.some((m) => m.dropTable.some((e) => e.itemId === "rune-bar"))).toBe(
+      false,
+    );
+    expect(content.fishingSpots.some((f) => f.itemId === "rune-bar")).toBe(false);
+    expect(content.vendor.some((v) => v.itemId === "rune-bar")).toBe(false);
+    for (const dungeon of content.dungeons) {
+      const hasRuneBar = dungeon.chest.some((e) => e.itemId === "rune-bar");
+      expect(hasRuneBar && dungeon.id !== "frost-warden", dungeon.id).toBe(false);
     }
+    expect(
+      content.dungeons
+        .find((d) => d.id === "frost-warden")
+        ?.chest.some((e) => e.itemId === "rune-bar"),
+    ).toBe(true);
   });
 });

@@ -49,6 +49,17 @@ export const content: Content = {
       monsterIds: ["crypt-ghoul", "bone-knight"],
       theme: "crypt",
     },
+    // Frostspire (#254): the 5th and terminal Area, gated by the Shade Crypt Dungeon (#253) hosted
+    // in Bone Crypt. Adamant gear finally becomes obtainable here (open-world); rune is gated
+    // behind this Area's own Frost Warden Dungeon (see dungeons below) — retires #252's interim.
+    // No Fishing Spot (out of scope, per the issue).
+    {
+      id: "frostspire",
+      name: "Frostspire",
+      unlockedByDungeonId: "shade-crypt",
+      monsterIds: ["frost-wolf", "ice-wraith", "frost-giant"],
+      theme: "glacier",
+    },
   ],
   monsters: [
     {
@@ -442,6 +453,89 @@ export const content: Content = {
         // Gear Tier ladder (#251): mithril-bar Material, feeding the new mithril-tier Recipes.
         { itemId: "mithril-bar", qty: 1, chance: 0.25, band: "common" },
       ],
+    },
+    // Frostspire (#254): the 5th Area's own open-world cast, statted above Crypt Shade (hp 110 /
+    // atk 60 / def 44 / maxHit 22 — the previous era's boss). This is where adamant gear finally
+    // becomes obtainable outside Shade Crypt's own chest, retiring #252's interim. Frost Warden
+    // (below) is the dungeon-only boss, above all three of these.
+    {
+      id: "frost-wolf",
+      name: "Frost Wolf",
+      hp: 130,
+      attackLevel: 68,
+      defenceLevel: 50,
+      maxHit: 25,
+      attackSpeed: 4,
+      attackType: "slash",
+      // Fast, light beast, weak to slash (its own attack type — precedent: wolf/bandit).
+      def: { stab: 34, slash: 20, crush: 36, ranged: 32, magic: 28 },
+      dropTable: [
+        { itemId: "gold", qty: 180, chance: 1, band: "guaranteed" },
+        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "adamant-dagger", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "adamant-shortbow", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "adamant-bar", qty: 1, chance: 0.25, band: "common" },
+      ],
+    },
+    {
+      id: "ice-wraith",
+      name: "Ice Wraith",
+      hp: 140,
+      attackLevel: 72,
+      defenceLevel: 54,
+      maxHit: 27,
+      attackSpeed: 5,
+      attackType: "magic",
+      // Ethereal caster, defends melee well; weak to ranged (precedent: crypt-shade).
+      def: { stab: 40, slash: 42, crush: 38, ranged: 22, magic: 46 },
+      dropTable: [
+        { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },
+        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "adamant-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "adamant-chainbody", qty: 1, chance: 1 / 170, band: "rare" },
+        { itemId: "adamant-bar", qty: 1, chance: 0.25, band: "common" },
+      ],
+    },
+    {
+      id: "frost-giant",
+      name: "Frost Giant",
+      hp: 155,
+      attackLevel: 76,
+      defenceLevel: 58,
+      maxHit: 30,
+      attackSpeed: 6,
+      attackType: "crush",
+      // Heavy crush hitter; its icy hide shatters under blunt force, weak to crush (its own
+      // attack type — precedent: bone-knight).
+      def: { stab: 44, slash: 46, crush: 26, ranged: 40, magic: 36 },
+      dropTable: [
+        { itemId: "gold", qty: 230, chance: 1, band: "guaranteed" },
+        { itemId: "raw-pike", qty: 1, chance: 0.32, band: "common" },
+        { itemId: "adamant-mace", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "adamant-sword", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "adamant-kiteshield", qty: 1, chance: 1 / 170, band: "rare" },
+        { itemId: "adamant-full-helm", qty: 1, chance: 1 / 180, band: "rare" },
+        { itemId: "adamant-bar", qty: 1, chance: 0.28, band: "common" },
+      ],
+    },
+    // Frost Warden Dungeon (#254): dungeon-only boss hosted in Frostspire, absent from every
+    // Area's monsterIds, fought only inside "frost-warden" — like goblin-chief/hollow-warden/
+    // sewer-king, its own dropTable stays gold-only; the Dungeon's Chest (below) is the actual
+    // reward, and the ONLY source of rune-bar anywhere in Content.
+    {
+      id: "frost-warden",
+      name: "Frost Warden",
+      hp: 215,
+      attackLevel: 95,
+      defenceLevel: 70,
+      maxHit: 40,
+      attackSpeed: 5,
+      attackType: "magic",
+      // Ice-magic boss, defends melee's slash/crush well but cracks under a precise point strike;
+      // weak to stab. Carries a weakElement (fire, melts ice) as a boss.
+      def: { stab: 30, slash: 52, crush: 48, ranged: 44, magic: 60 },
+      weakElement: "fire",
+      dropTable: [{ itemId: "gold", qty: 260, chance: 1, band: "guaranteed" }],
     },
   ],
   items: [
@@ -1016,6 +1110,33 @@ export const content: Content = {
         { itemId: "mithril-full-helm", qty: 1, chance: 1 / 2, band: "common" },
         { itemId: "adamant-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
         { itemId: "adamant-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
+      ],
+    },
+    // Frostspire (#254): the terminal Dungeon. Its Chest is the only source of rune gear — the
+    // endgame prize. Frost Warden is a dungeon-only boss, never an open-world farmable. Mirrors
+    // sewer-king/shade-crypt exactly: the Dungeon id and its boss Monster id are both
+    // "frost-warden" (separate collections, same precedent as sewer-king). The issue's own chest
+    // gives the first five entries verbatim (gold/rune-bar guaranteed, one adamant common, one
+    // rune uncommon, one rune rare); rune-shortbow/rune-staff are appended here too because
+    // shortbow/staff are the two weapon families METAL_FAMILIES excludes from Smithing at every
+    // tier (tier-ladder.ts: "both stay drop-only") — with no Recipe to fall back on, they need a
+    // genuine drop/chest source or they would be permanently unobtainable, defeating the "every
+    // adamant and rune item is now reachable" retirement this issue promises. The progression
+    // diagram places rune strictly at "(boss chest)", so they land here rather than on an
+    // open-world Monster's own Drop Table.
+    {
+      id: "frost-warden",
+      name: "Frost Warden",
+      areaId: "frostspire",
+      waves: ["frost-wolf", "ice-wraith", "frost-giant", "frost-warden"],
+      chest: [
+        { itemId: "gold", qty: 800, chance: 1, band: "guaranteed" },
+        { itemId: "rune-bar", qty: 2, chance: 1, band: "guaranteed" },
+        { itemId: "adamant-full-helm", qty: 1, chance: 1 / 2, band: "common" },
+        { itemId: "rune-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
+        { itemId: "rune-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
+        { itemId: "rune-shortbow", qty: 1, chance: 1 / 16, band: "rare" },
+        { itemId: "rune-staff", qty: 1, chance: 1 / 16, band: "rare" },
       ],
     },
   ],

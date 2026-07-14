@@ -21,6 +21,29 @@ export const zonePalettes = {
   sewer: ["#3a4136", "#59624b", "#7d8857", "#a5c64c", "#263027", "#c4d46b"],
   crypt: ["#241a33", "#3a2f4a", "#5c4c74", "#806b9c", "#d9d3bc", "#150f1c"],
   town: ["#4a2e1a", "#70421f", "#9c6331", "#c5823b", "#e2ad57", "#2b1b12"],
+  // Frostspire (#254): the 5th Area's cold blues. Appended, never inserted or reordered.
+  //
+  // WARNING (learned the hard way while building this exact ramp): unlike materialPalettes,
+  // zonePalettes has NO scoping allowlist — buildNamedPalette (trace-core.mjs) emits every
+  // zonePalettes entry for EVERY icon/sprite build, unconditionally, regardless of that asset's
+  // own `ramps`/SOURCE_RAMPS. Two "looks safe" heuristics both silently recolored committed
+  // assets the moment `npm run art` ran (25 files on the first attempt, 7 on the second) — a
+  // source-driven icon/sprite quantizes its own RAW, off-palette pixel color, which can sit
+  // meaningfully farther from its CURRENT nearest named color than "distance to the nearest named
+  // palette entry" assumes, so eyeballing distance from named colors alone is not sufficient. This
+  // exact ramp was instead ground-truth verified: every quantization REPORT row (raw color, its
+  // current nearest named ref, and that ref's exact distance) was collected across every
+  // source-driven icon (via `rampsForSource`) and every sprite (via its own `ramps`) through the
+  // real `buildNamedPalette`/`quantizeGrid` pipeline, and each hex below was confirmed farther
+  // from every one of those raw colors than that color's own current nearest distance already is
+  // (minimum safety margin ~5 RGB units, most 10+) — so none of them can win a cell they don't
+  // already own. They land in the same cold blue-cyan family as the `rune` material ramp #252
+  // added. After ANY future edit to this array, rerun `npm run art` and check
+  // `git diff --name-status main...HEAD -- src/assets/` is empty of `M` entries before committing
+  // — do not trust a green test suite alone (icon-assets.test.ts/sprite-assets.test.ts regenerate
+  // and compare against the committed output, so they pass by construction even when the committed
+  // output itself just silently drifted).
+  glacier: ["#041437", "#0ea0ae", "#0d9fce", "#0e8ae9", "#2372f3", "#85aaf9"],
 };
 
 /** Material ramps used by close-up UI icons. Zone palettes establish atmosphere; these ramps
