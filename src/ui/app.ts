@@ -394,6 +394,10 @@ export function mountApp(
   // closes") — covers every path away from Bank (Back, Escape, the transparent-glass close, and
   // switching straight to another destination), since all of them funnel through this one function.
   let previousManagement: ManagementDestination | null = null;
+  // Invalidates an older expansion completion when a newer workspace action wins the race. This
+  // complements the desired-state comparison below: two transitions can target the same state at
+  // different moments, but only the newest one may reveal the staged Management Row.
+  let workspaceSyncRevision = 0;
 
   /** The single synchronization path (#206, ordering fixed by #242): notifies `WorkspaceChrome`
    * of the new open-card *count* exactly once — `(characterOpen ? 1 : 0) + (management ? 1 : 0)`
@@ -404,15 +408,14 @@ export function mountApp(
    * Back/second-card-close, transparent-glass close, Escape, and the initial boot sync (called
    * once up front with both cards closed).
    *
-   * #242: a newly opening card must never paint inside the old (smaller) Compact Widget rect and
-   * then snap into its final anchored position once the native window catches up — there is no
-   * opening animation, so the only fix is to not paint until the native move/resize (and
-   * `data-anchor` application) is actually done. Closing/same-count swaps stay immediate (hiding
-   * a departing card before the native window contracts is exactly the corrected order the
-   * original defect got backwards for expansions). A snapshot of `desired` plus a re-check right
-   * before the deferred render guards against a rapid re-entrant click's stale completion
-   * revealing state that is no longer current. */
+   * #242: an incoming card must never paint inside the old (smaller) Compact Widget rect and then
+   * snap into its final anchored position once the native window/webview catches up. There is no
+   * opening animation: already-open cards keep painting while only the incoming card stays hidden
+   * until native geometry, the target webview viewport, and one layout frame are settled.
+   * Closing/same-count swaps stay immediate. A revision plus a snapshot of `desired` prevents an
+   * older completion from revealing state after a rapid re-entrant click has already moved on. */
   function syncWorkspace(): void {
+    const revision = ++workspaceSyncRevision;
     if (previousManagement === "bank" && workspace.management !== "bank") {
       bankPresentation.clearSearch(); // #207: search is session-only and resets whenever Bank's page closes
       const searchInput = root.querySelector<HTMLInputElement>("#bank-search");
@@ -425,19 +428,29 @@ export function mountApp(
     const paintedCount =
       (el<HTMLElement>("#card-character").hidden ? 0 : 1) +
       (el<HTMLElement>("#card-management").hidden ? 0 : 1);
+    const expanding = desiredCount > paintedCount;
+    const needsNativePresentationCover = paintedCount === 1 && desiredCount === 2;
 
-    if (desiredCount <= paintedCount) {
-      renderWorkspace();
-    }
+    // On expansion, leave the currently painted composition alone. In particular, a 1->2 open
+    // keeps Character visible and stages only Management via its existing `hidden` attribute.
+    // Hiding the whole row caused a compact-only blank frame in real 60 fps recordings.
+    if (!expanding) renderWorkspace();
 
     const completion = windowChrome.setCardCount(desiredCount); // exactly one request per action
 
-    if (desiredCount > paintedCount) {
+    if (expanding) {
       void completion.then(() => {
         const stillDesired =
+          revision === workspaceSyncRevision &&
           workspace.characterOpen === desired.characterOpen &&
           workspace.management === desired.management;
-        if (stillDesired) renderWorkspace();
+        if (!stillDesired) return;
+        // WorkspaceChrome completion includes the webview's target viewport plus one full layout
+        // frame. The incoming card therefore first paints in its final row slot.
+        renderWorkspace();
+        // The macOS adapter may be holding a frozen copy of the old one-card workspace above the
+        // resized WKWebView. Retire it only after this final two-card DOM has had time to paint.
+        if (needsNativePresentationCover) void windowChrome.present?.();
       });
     }
   }

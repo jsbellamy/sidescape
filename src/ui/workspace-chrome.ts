@@ -10,6 +10,9 @@ export interface WorkspaceChrome {
    * position/size writes plus `data-anchor` application) — callers await it to know when it is
    * safe to reveal a newly opening card at its final Workspace Rect (#242). */
   setCardCount(cardCount: number): Promise<void>;
+  /** Retires any native transition cover after the caller has rendered the newly opened card.
+   * Browser/test adapters may omit this because they do not cross a native compositor boundary. */
+  present?(): Promise<void>;
   getScale?(): import("./window-geometry").UiScale;
   getScaleOptions?(): Promise<
     Array<{ value: import("./window-geometry").UiScale; supported: boolean }>
