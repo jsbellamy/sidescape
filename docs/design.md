@@ -20,6 +20,9 @@ fixed height, and a chosen scale is never silently reduced. **Workspace Chrome**
 selects a stable top/bottom **Vertical
 Anchor** when cards first open, so cards grow into the available half of the
 display; closing restores the scaled compact rect. Open cards do not persist.
+On macOS, the 1-to-2-card resize is covered for a couple of paint frames by a
+non-interactive snapshot of the old workspace; this masks WindowServer's stale
+WKWebView texture without introducing another game surface or state owner.
 
 The Compact Widget is visual rather than informational. Combat shows backdrop,
 player and Monster, small non-numeric HP bars, transient feedback, and a

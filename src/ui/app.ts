@@ -408,12 +408,12 @@ export function mountApp(
    * Back/second-card-close, transparent-glass close, Escape, and the initial boot sync (called
    * once up front with both cards closed).
    *
-   * #242: an expanding row must never paint inside the old (smaller) Compact Widget rect and then
+   * #242: an incoming card must never paint inside the old (smaller) Compact Widget rect and then
    * snap into its final anchored position once the native window/webview catches up. There is no
-   * opening animation: the row stays non-painting until the native geometry, target webview
-   * viewport, final card composition, and one layout frame are all settled. Closing/same-count
-   * swaps stay immediate. A revision plus a snapshot of `desired` prevents an older completion
-   * from revealing state after a rapid re-entrant click has already moved on. */
+   * opening animation: already-open cards keep painting while only the incoming card stays hidden
+   * until native geometry, the target webview viewport, and one layout frame are settled.
+   * Closing/same-count swaps stay immediate. A revision plus a snapshot of `desired` prevents an
+   * older completion from revealing state after a rapid re-entrant click has already moved on. */
   function syncWorkspace(): void {
     const revision = ++workspaceSyncRevision;
     if (previousManagement === "bank" && workspace.management !== "bank") {
@@ -428,18 +428,13 @@ export function mountApp(
     const paintedCount =
       (el<HTMLElement>("#card-character").hidden ? 0 : 1) +
       (el<HTMLElement>("#card-management").hidden ? 0 : 1);
-    const row = el<HTMLElement>("#management-row");
     const expanding = desiredCount > paintedCount;
+    const needsNativePresentationCover = paintedCount === 1 && desiredCount === 2;
 
-    if (expanding) {
-      // #242 follow-up: 1->2 changes both native width and flex-row composition. Hide the whole
-      // row while those two layers settle so the already-painted Character card cannot expose an
-      // intermediate centered layout. The Compact Widget remains visible and anchored.
-      row.style.visibility = "hidden";
-    } else {
-      row.style.removeProperty("visibility");
-      renderWorkspace();
-    }
+    // On expansion, leave the currently painted composition alone. In particular, a 1->2 open
+    // keeps Character visible and stages only Management via its existing `hidden` attribute.
+    // Hiding the whole row caused a compact-only blank frame in real 60 fps recordings.
+    if (!expanding) renderWorkspace();
 
     const completion = windowChrome.setCardCount(desiredCount); // exactly one request per action
 
@@ -450,12 +445,12 @@ export function mountApp(
           workspace.characterOpen === desired.characterOpen &&
           workspace.management === desired.management;
         if (!stillDesired) return;
-        // WorkspaceChrome completion now includes the webview's target viewport plus one full
-        // layout frame. Render the final card composition while the row is still non-painting,
-        // force that layout once, then reveal the already-positioned row with no animation.
+        // WorkspaceChrome completion includes the webview's target viewport plus one full layout
+        // frame. The incoming card therefore first paints in its final row slot.
         renderWorkspace();
-        row.getBoundingClientRect();
-        row.style.removeProperty("visibility");
+        // The macOS adapter may be holding a frozen copy of the old one-card workspace above the
+        // resized WKWebView. Retire it only after this final two-card DOM has had time to paint.
+        if (needsNativePresentationCover) void windowChrome.present?.();
       });
     }
   }

@@ -56,6 +56,7 @@ function spyWindowChrome(capacity: 1 | 2 = 2) {
  * earlier call after a later one has already been requested (rapid re-entrant clicks). */
 function deferredWindowChrome(capacity: 1 | 2 = 2) {
   const calls: number[] = [];
+  let presentCalls = 0;
   const deferreds: Array<{ resolve: () => void }> = [];
   const chrome: WorkspaceChrome = {
     getCapacity: () => Promise.resolve(capacity),
@@ -68,12 +69,23 @@ function deferredWindowChrome(capacity: 1 | 2 = 2) {
       deferreds.push({ resolve });
       return promise;
     },
+    present: () => {
+      presentCalls++;
+      return Promise.resolve();
+    },
   };
   /** Resolves the Nth (0-indexed, default: most recent) `setCardCount` call's Promise. */
   function resolveCall(index = deferreds.length - 1): void {
     deferreds[index]?.resolve();
   }
-  return { chrome, calls, resolveCall };
+  return {
+    chrome,
+    calls,
+    resolveCall,
+    get presentCalls() {
+      return presentCalls;
+    },
+  };
 }
 
 /** Pump Ticks until `itemId` shows up in either the Bank or the Loot Zone (or fail the test), then
@@ -1185,8 +1197,9 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(false));
   });
 
-  it("1->2: the row stays non-painting and Management stays hidden until settled completion, then both appear in canonical order", async () => {
-    const { chrome, calls, resolveCall } = deferredWindowChrome();
+  it("1->2: Character keeps painting while Management stays hidden until settled completion, then both appear in canonical order", async () => {
+    const deferred = deferredWindowChrome();
+    const { chrome, calls, resolveCall } = deferred;
     const { root } = mountWithChrome(chrome);
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
     resolveCall();
@@ -1195,13 +1208,13 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     destinationBtn(root, "world")?.click();
     await waitForCallCount(calls, 3); // [0, 1, 2]
     expect(calls[2]).toBe(2);
-    expect(cardHidden(root, "card-character")).toBe(false); // still mounted; row visibility gates paint
+    expect(cardHidden(root, "card-character")).toBe(false); // the already-open card never flashes away
     expect(cardHidden(root, "card-management")).toBe(true); // Management: not yet, native still moving
-    expect(root.querySelector<HTMLElement>("#management-row")?.style.visibility).toBe("hidden");
+    expect(root.querySelector<HTMLElement>("#management-row")?.style.visibility).toBe("");
 
     resolveCall();
     await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
-    expect(root.querySelector<HTMLElement>("#management-row")?.style.visibility).toBe("");
+    expect(deferred.presentCalls).toBe(1);
     // Canonical Character -> Management DOM order is preserved regardless of paint timing.
     const domOrder = [...root.querySelectorAll<HTMLElement>(".management-card")].map((c) => c.id);
     expect(domOrder).toEqual(["card-character", "card-management"]);

@@ -62,14 +62,16 @@ function fakePort(
     outerPosition: async () => new PhysicalPosition(rect.x, rect.y),
     outerSize: async () => new PhysicalSize(rect.width, rect.height),
     currentMonitor: async () => monitor,
-    setSize: async (s) => {
-      writes.push("size");
-      sizes.push(s);
-      rect = { ...rect, width: s.width, height: s.height };
+    beginTransition: async () => {
+      writes.push("begin-transition");
     },
-    setPosition: async (p) => {
-      writes.push("position");
-      rect = { ...rect, x: p.x, y: p.y };
+    setFrame: async (frame) => {
+      writes.push("frame");
+      sizes.push(new LogicalSize(frame.width, frame.height));
+      rect = { ...frame };
+    },
+    endTransition: async () => {
+      writes.push("end-transition");
     },
   };
 }
@@ -121,52 +123,12 @@ describe("WorkspaceChrome fixed scale", () => {
     await completion;
     expect(chrome.getScale?.()).toBe(1.5);
   });
-  it("moves before expanding so an open card never overlays the compact position", async () => {
+  it("applies expansion as one native frame write so no position-only or size-only state can paint", async () => {
     const port = fakePort();
     const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
     void chrome.setCardCount(1);
     await chrome.settled();
-    expect(port.writes.slice(-2)).toEqual(["position", "size"]);
-  });
-  it("issues position and size back-to-back on expansion, not fully sequenced — the second call starts before the first's round trip finishes (#242 follow-up: the 1->2 already-visible-card flash)", async () => {
-    // A port whose setPosition round trip is deliberately held open, so this test can observe
-    // whether setSize is dispatched while it's still pending (concurrent) or only after it settles
-    // (sequential) — the sequential form left a real gap during which the OS had only moved the
-    // window, not yet grown it, which read as a visible jump/flash for an already-open card (see
-    // the "moves before expanding" doc comment in `apply()` for the pre-existing evidence this must
-    // still hold true after the fix: position is still requested first, size still second).
-    const base = fakePort();
-    let releasePosition!: () => void;
-    const positionGate = new Promise<void>((resolve) => {
-      releasePosition = resolve;
-    });
-    const calls: string[] = [];
-    const port: NativeWindowPort = {
-      ...base,
-      setPosition: async (p) => {
-        calls.push("position-start");
-        await positionGate; // held open until the test releases it
-        await base.setPosition(p);
-        calls.push("position-end");
-      },
-      setSize: async (s) => {
-        calls.push("size-start");
-        await base.setSize(s);
-        calls.push("size-end");
-      },
-    };
-    const chrome = createTauriWindowChrome(document.createElement("main"), port, base.layout);
-    const completion = chrome.setCardCount(1); // expansion: position requested, then size
-
-    // setSize must get dispatched — and, since its own round trip is short, even finish — while
-    // setPosition's is still pending (`positionGate` is only released below): proof the two are
-    // not fully sequenced (no `await` of the whole first round trip before the second is even
-    // sent).
-    await vi.waitFor(() => expect(calls).toEqual(["position-start", "size-start", "size-end"]));
-
-    releasePosition();
-    await completion;
-    expect(calls).toEqual(["position-start", "size-start", "size-end", "position-end"]);
+    expect(port.writes.slice(-2)).toEqual(["end-transition", "frame"]);
   });
   it("setCardCount's returned Promise resolves only after native writes, data-anchor, and webview layout finish", async () => {
     const root = document.createElement("main");
@@ -178,9 +140,9 @@ describe("WorkspaceChrome fixed scale", () => {
     expect(port.writes).toEqual([]);
     expect(root.dataset["anchor"]).toBeUndefined();
     await completion;
-    // By the time the Promise resolves, both native writes, data-anchor, and the fake webview's
+    // By the time the Promise resolves, the native frame write, data-anchor, and the fake webview's
     // two consecutive matching layout frames have landed.
-    expect(port.writes.slice(-2)).toEqual(["position", "size"]);
+    expect(port.writes.slice(-2)).toEqual(["end-transition", "frame"]);
     expect(root.dataset["anchor"]).toBeDefined();
   });
   it("keeps 1->2 completion pending until the webview reaches the two-card viewport and lays it out for one more frame", async () => {
@@ -222,6 +184,27 @@ describe("WorkspaceChrome fixed scale", () => {
     await advanceFrame();
     await twoCards;
     expect(resolved).toBe(true);
+  });
+  it("covers only 1->2 and keeps the cover until two paints after the caller reveals Management", async () => {
+    const port = fakePort();
+    let presentationFrames = 0;
+    const nextFrame = port.layout.nextFrame;
+    port.layout.nextFrame = async () => {
+      presentationFrames++;
+      await nextFrame();
+    };
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
+
+    await chrome.setCardCount(1);
+    expect(port.writes).not.toContain("begin-transition");
+
+    await chrome.setCardCount(2);
+    expect(port.writes.slice(-3)).toEqual(["end-transition", "begin-transition", "frame"]);
+
+    presentationFrames = 0;
+    await chrome.present();
+    expect(presentationFrames).toBe(2);
+    expect(port.writes[port.writes.length - 1]).toBe("end-transition");
   });
   it("disables unsupported stops and never silently reduces the selected scale", async () => {
     const port = fakePort(320, 220, 1920, 1000);

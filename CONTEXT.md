@@ -162,9 +162,12 @@ workspace at the 100%, 150%, and 200% **UiScale** stops and cannot be freely
 resized.
 
 **Cards-on-Glass**:
-The single transparent native window model: opaque DOM cards float inside one
-window with transparent glass around and between them. Cards-on-Glass never
-creates child windows; it contains the Compact Widget and the Management Row.
+The single interactive transparent native window model: opaque DOM cards float
+inside one window with transparent glass around and between them. It contains
+the Compact Widget and the Management Row and never creates persistent or
+interactive child windows. On macOS only, a 1-to-2-card resize may briefly place
+a click-through snapshot cover above that same window while WebKit catches up;
+the cover owns no state or controls and is removed after the final layout paints.
 
 **Management Row**:
 The horizontal row of zero to two opaque management cards: the fixed
