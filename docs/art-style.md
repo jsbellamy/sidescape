@@ -82,7 +82,8 @@ change quantization or palette scoping, that is the test that must still pass.
 - Draw silhouette first: assets must read in the 320px-wide window. The UI applies
   `image-rendering: pixelated`, and source art assumes it.
 
-Combat sprites are **facing inward**: player right, Monsters left, including Boss-class sprites.
+Combat sprites are **facing inward** in the live scene layout: player left, Monsters right,
+including Boss-class sprites.
 
 ## Icon legibility (34×34)
 

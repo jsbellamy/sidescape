@@ -8,8 +8,9 @@ const SPRITE_SOURCES_DIR = fileURLToPath(new URL("./sprite-sources", import.meta
 
 /**
  * Complete combat-sprite registry. Policies are explicit per entry so canvas and alpha behavior
- * never depend on filename conventions. The committed sources are interim reconstructions of the
- * current CC0 sprites; issue #142 replaces their art without changing this runtime contract.
+ * never depend on filename conventions. The registry began with interim reconstructions of the
+ * current CC0 sprites; issue #142 replaces them slice by slice with original art without changing
+ * this runtime contract.
  *
  * `materialRampNames`/`zoneNames` (#252, #261) are the same per-asset quantization scoping the icon
  * pipeline uses (see `scripts/art/icons.mjs`'s SOURCE_PALETTES/`paletteForSource` and

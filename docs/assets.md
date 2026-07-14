@@ -389,7 +389,7 @@ padding, and approximate 64×64 in-app read. They are pipeline-proof assets rath
 ## Original combat sprite redraw (#142)
 
 The `player` row starts the split original-art redraw tracked by #142. Its committed source is
-original SideScape art on the shared 32×32 binary-alpha combat canvas, faces right toward Monsters,
+original SideScape art on the shared 32×32 binary-alpha combat canvas, faces left toward Monsters,
 and keeps its feet on the existing player baseline at native row 31. The generated `player.png`
 continues to use the unchanged 64×64 CSS presentation contract.
 
