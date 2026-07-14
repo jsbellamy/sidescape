@@ -32,6 +32,27 @@ describe("scene backdrop (#80)", () => {
     }
   });
 
+  it("keeps the meadow sky cool and confines saturated green to the foreground", () => {
+    const meadowSky = stylesheet.match(
+      /#backdrop\[data-theme="meadow"\] \.layer-sky\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const meadowMid = stylesheet.match(
+      /#backdrop\[data-theme="meadow"\] \.layer-mid\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const meadowNear = stylesheet.match(
+      /#backdrop\[data-theme="meadow"\] \.layer-near\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+
+    const meadowSkyDeclarations = meadowSky?.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(meadowSkyDeclarations).toContain("#86b6d8 0%, #a6cbdd 55%, #c8dfe2 100%");
+    expect(meadowSkyDeclarations).not.toContain("#cfe6a8");
+    expect(meadowMid).toContain("rgba(95, 138, 79, 0) var(--mid-fade)");
+    expect(meadowMid).toContain("filter: saturate(0.28) brightness(0.88)");
+    expect(meadowNear).toContain("rgba(44, 74, 38, 0) var(--near-fade)");
+    expect(stylesheet).toContain("--mid-fade: 70px;");
+    expect(stylesheet).toContain("--near-fade: 58px;");
+  });
+
   it("drifts only the mid and near layers at different slow speeds, with a seamless tile-width loop", () => {
     expect(stylesheet).toContain("inset: 0 -160px 0 0");
     expect(stylesheet).toContain("animation: backdrop-drift 90s linear infinite;");
