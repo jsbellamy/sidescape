@@ -385,6 +385,23 @@ export const icons = [
   },
   // --- Chainbody family ---
   {
+    // Gear Tier ladder (#251): bronze baseline, a recolor of the shared iron-chainbody source
+    // (bronze armour never existed before this slice — see the issue's "New items this slice").
+    // Mirrors the town[]-ramp mapping bronze-bar already uses for this same source family
+    // (steel.shadow -> town[0], steel.base -> town[2], steel.glint -> town[4]).
+    name: "bronze-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "town[0]",
+        "sewer[1]": "town[0]",
+        "sewer[0]": "P.outline",
+        'P["text-dim"]': "town[2]",
+        "P.text": "town[4]",
+      },
+    },
+  },
+  {
     name: "iron-chainbody",
     source: "golden-base-iron-chainbody.png",
     opts: {
@@ -430,6 +447,22 @@ export const icons = [
     },
   },
   // --- Full-helm family ---
+  {
+    // Gear Tier ladder (#251): bronze baseline, a recolor of the shared iron-full-helm source
+    // (bronze armour never existed before this slice). Mirrors mithril-full-helm's full
+    // steel.*->target-ramp recolor below, targeting town[] instead of water.*.
+    name: "bronze-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: {
+      recolor: {
+        'P["text-dim"]': "town[2]",
+        "steel.shadow": "town[0]",
+        "steel.base": "town[2]",
+        "steel.light": "town[3]",
+        "steel.glint": "town[4]",
+      },
+    },
+  },
   {
     name: "iron-full-helm",
     source: "golden-base-iron-full-helm.png",
@@ -557,6 +590,38 @@ export const icons = [
         "steel.base": "town[2]",
         "steel.light": "town[3]",
         "steel.glint": "town[4]",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder (#251): steel Equipment is now smithable, so a steel-bar Material must
+    // exist. Recolor of the shared iron-bar source, one step darker than iron — mirrors the
+    // steel-kiteshield/steel-full-helm "shift down" pattern (steel.shadow -> P.outline,
+    // steel.base -> steel.shadow, steel.light -> steel.base) applied to this bar source's own
+    // four-step ramp.
+    name: "steel-bar",
+    source: "golden-resource-iron-bar.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "P.outline",
+        "steel.base": "steel.shadow",
+        "steel.light": "steel.base",
+        "steel.glint": "steel.light",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder (#251): mithril Equipment is now smithable, so a mithril-bar Material must
+    // exist. Recolor of the shared iron-bar source, mapped straight to the water ramp — mirrors
+    // mithril-chainbody/mithril-kiteshield/mithril-full-helm's steel.*->water.* recolor.
+    name: "mithril-bar",
+    source: "golden-resource-iron-bar.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "water.shadow",
+        "steel.base": "water.base",
+        "steel.light": "water.light",
+        "steel.glint": "water.glint",
       },
     },
   },

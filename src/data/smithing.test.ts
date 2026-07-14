@@ -72,18 +72,11 @@ describe("Smithing content", () => {
     });
   });
 
-  it("every Recipe's inputs and outputItemId resolve to real Items", () => {
-    for (const recipe of content.recipes) {
-      for (const input of recipe.inputs) {
-        const item = content.items.find((i) => i.id === input.itemId);
-        expect(item, `${recipe.id} input ${input.itemId} not found`).toBeDefined();
-      }
-      const output = content.items.find((i) => i.id === recipe.outputItemId);
-      expect(output, `${recipe.id} outputItemId ${recipe.outputItemId} not found`).toBeDefined();
-    }
-  });
+  // Issue #251 retired the referential "every Recipe's inputs and outputItemId resolve to real
+  // Items" check from here — it duplicated validateContent, the single owner of referential
+  // integrity (src/core/validate-content.ts).
 
-  it("defines the five starter Recipes with the documented level gates and inputs", () => {
+  it("defines the five starter Recipes with the documented level gates and inputs (#251: bronze reproduces exactly; iron's levelReq/bar-cost move as part of the deliberate rebalance)", () => {
     const byId = Object.fromEntries(content.recipes.map((r) => [r.id, r]));
     expect(byId["bronze-dagger"]).toMatchObject({
       levelReq: 1,
@@ -100,13 +93,16 @@ describe("Smithing content", () => {
       inputs: [{ itemId: "bronze-bar", qty: 2 }],
       outputItemId: "bronze-sword",
     });
+    // #251: dagger's uniform bar-cost-1 (FAMILY_BAR_COST) drops iron-dagger from 2 bars to 1;
+    // levelReq (15) is unaffected, since the dagger family's level offset is 0 at every tier.
     expect(byId["iron-dagger"]).toMatchObject({
       levelReq: 15,
-      inputs: [{ itemId: "iron-bar", qty: 2 }],
+      inputs: [{ itemId: "iron-bar", qty: 1 }],
       outputItemId: "iron-dagger",
     });
+    // #251: chainbody's FAMILY_LEVEL_OFFSET (9) moves iron-chainbody's levelReq from 20 to 24.
     expect(byId["iron-chainbody"]).toMatchObject({
-      levelReq: 20,
+      levelReq: 24,
       inputs: [{ itemId: "iron-bar", qty: 3 }],
       outputItemId: "iron-chainbody",
     });
@@ -126,33 +122,33 @@ describe("Smithing content", () => {
     });
   });
 
-  it("a fresh (level 1) player is gated out of the level-20 Iron Chainbody recipe even with enough bars", () => {
+  it("a fresh (level 1) player is gated out of the level-24 Iron Chainbody recipe even with enough bars (#251: levelReq 20 -> 24)", () => {
     const engine = createEngine(
       content,
       seededRng(1),
       makeSnapshot({ bank: { items: [{ itemId: "iron-bar", qty: 5 }] } }),
     );
-    expect(() => engine.selectRecipe("iron-chainbody")).toThrow(/smithing level 20/i);
+    expect(() => engine.selectRecipe("iron-chainbody")).toThrow(/smithing level 24/i);
   });
 
-  it("a veteran Smith crafts an Iron Chainbody end-to-end: bars consumed, item granted, Smithing XP granted", () => {
+  it("a veteran Smith crafts an Iron Chainbody end-to-end: bars consumed, item granted, Smithing XP granted (#251: levelReq 20 -> 24, craftTicks 15 -> 13)", () => {
     const engine = createEngine(
       content,
       seededRng(1),
       makeSnapshot({
         player: {
-          skills: { smithing: { level: 20, xp: xpForLevel(20) } },
+          skills: { smithing: { level: 24, xp: xpForLevel(24) } },
         },
         bank: { items: [{ itemId: "iron-bar", qty: 3 }] },
       }),
     );
     engine.selectRecipe("iron-chainbody");
-    for (let i = 0; i < 15; i++) engine.tick(); // craftTicks === 15
+    for (let i = 0; i < 13; i++) engine.tick(); // craftTicks === 13
 
     const snap = engine.snapshot();
     expect(snap.bank.items.find((s) => s.itemId === "iron-bar")).toBeUndefined();
     expect(snap.bank.items.find((s) => s.itemId === "iron-chainbody")?.qty).toBe(1);
-    expect(snap.player.skills.smithing.xp).toBeGreaterThan(xpForLevel(20));
+    expect(snap.player.skills.smithing.xp).toBeGreaterThan(xpForLevel(24));
     expect(snap.production).toBeNull(); // no bars left for another craft
   });
 });
