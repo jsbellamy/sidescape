@@ -787,23 +787,18 @@ body {
   width: var(--sprite-edge, 64px);
   height: var(--sprite-edge, 64px);
   object-fit: contain;
-  animation: sprite-idle 1.8s ease-in-out infinite;
+  /* No idle float: the sprite stays anchored on the ground line (the #232 ground-plane contract
+     bottom-aligns #sprite-row; feet rest on the near-grass band). The old `sprite-idle` keyframe
+     lifted the whole figure up 3px on a loop, which read as floating. A grounded "breathing" idle
+     can't be faked with a transform here either — these are `.pixel` sprites (image-rendering:
+     pixelated), and a non-integer scaleY would smear the pixel grid — so a lively idle needs real
+     frame animation, not CSS. Static-planted is the first pass. */
   position: relative;
   z-index: 1;
 }
 
 .sprite[hidden] {
   display: none;
-}
-
-@keyframes sprite-idle {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-3px);
-  }
 }
 
 /* Combat feedback (#4): damage splats, level-up toast, rare-Drop flash. */
