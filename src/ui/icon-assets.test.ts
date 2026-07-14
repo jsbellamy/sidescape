@@ -95,6 +95,20 @@ describe("icon PNG lint (#166)", () => {
     }
   });
 
+  it("bronze-chainbody does not retain steel-ramp pixels", () => {
+    const bronze = decoded.get("bronze-chainbody")!;
+    const steel = new Set(["59636d", "8d99a3", "c4ccd1", "eef2f2"]);
+    const leaked = new Set<string>();
+    for (let i = 0; i < bronze.data.length; i += 4) {
+      if (!bronze.data[i + 3]) continue;
+      const hex = [bronze.data[i], bronze.data[i + 1], bronze.data[i + 2]]
+        .map((value) => (value ?? 0).toString(16).padStart(2, "0"))
+        .join("");
+      if (steel.has(hex)) leaked.add(hex);
+    }
+    expect([...leaked], "bronze-chainbody contains un-recolored steel pixels").toEqual([]);
+  });
+
   // The committed color and silhouette sheets are `npm run art` output, not hand-edited — this
   // fails if an icon changed without regenerating them, so visual review never uses stale inputs.
   it("committed contact sheets are in sync with src/assets/icons (regenerate with `npm run art`)", () => {
