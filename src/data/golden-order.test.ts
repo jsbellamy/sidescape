@@ -91,9 +91,36 @@ const PRE_251_ITEM_IDS = [
   "fire-rune",
 ] as const;
 
-/** The four new items this slice (issue's "New items this slice" section) — must appear only
- * after every PRE_251_ITEM_IDS entry, in this exact order (append-only). */
-const NEW_ITEM_IDS = ["bronze-chainbody", "bronze-full-helm", "steel-bar", "mithril-bar"] as const;
+/** The four new items #251 added, followed by #252's 20 new items (16 adamant/rune Equipment +
+ * adamant-bar/rune-bar + adamant-arrow/rune-arrow, issue's "Full generated Equipment" family
+ * order per tier, then the bars, then the arrows) — must appear only after every PRE_251_ITEM_IDS
+ * entry, in this exact order (append-only). */
+const NEW_ITEM_IDS = [
+  "bronze-chainbody",
+  "bronze-full-helm",
+  "steel-bar",
+  "mithril-bar",
+  "adamant-dagger",
+  "adamant-mace",
+  "adamant-sword",
+  "adamant-shortbow",
+  "adamant-staff",
+  "adamant-chainbody",
+  "adamant-kiteshield",
+  "adamant-full-helm",
+  "rune-dagger",
+  "rune-mace",
+  "rune-sword",
+  "rune-shortbow",
+  "rune-staff",
+  "rune-chainbody",
+  "rune-kiteshield",
+  "rune-full-helm",
+  "adamant-bar",
+  "rune-bar",
+  "adamant-arrow",
+  "rune-arrow",
+] as const;
 
 const PRE_251_RECIPE_IDS = [
   "bronze-dagger",
@@ -126,7 +153,8 @@ const PRE_251_RECIPE_IDS = [
   "brew-production-potion",
 ] as const;
 
-/** The 16 new Smithing recipes this slice (24 total - the 8 pre-existing above) — appended after
+/** The 16 new Smithing recipes #251 added (24 total - the 8 pre-existing above), followed by
+ * #252's 12 new recipes (6 METAL_FAMILIES-order families x adamant, then x rune) — appended after
  * every PRE_251_RECIPE_IDS entry. */
 const NEW_RECIPE_IDS = [
   "bronze-chainbody",
@@ -145,6 +173,18 @@ const NEW_RECIPE_IDS = [
   "mithril-mace",
   "mithril-chainbody",
   "mithril-full-helm",
+  "adamant-dagger",
+  "adamant-mace",
+  "adamant-sword",
+  "adamant-chainbody",
+  "adamant-kiteshield",
+  "adamant-full-helm",
+  "rune-dagger",
+  "rune-mace",
+  "rune-sword",
+  "rune-chainbody",
+  "rune-kiteshield",
+  "rune-full-helm",
 ] as const;
 
 describe("Golden order (#251): every pre-existing id keeps its exact array index", () => {

@@ -282,6 +282,32 @@ export const icons = [
       },
     },
   },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): recolor of the shared bronze-dagger source, mapped
+    // straight to the new adamant ramp — mirrors mithril-dagger's direct town[]->ramp mapping.
+    name: "adamant-dagger",
+    source: "golden-item-bronze-dagger.png",
+    opts: {
+      recolor: {
+        "town[2]": "adamant.shadow",
+        "town[3]": "adamant.base",
+        "P.cream": "adamant.light",
+        "ember.glint": "adamant.glint",
+      },
+    },
+  },
+  {
+    name: "rune-dagger",
+    source: "golden-item-bronze-dagger.png",
+    opts: {
+      recolor: {
+        "town[2]": "rune.shadow",
+        "town[3]": "rune.base",
+        "P.cream": "rune.light",
+        "ember.glint": "rune.glint",
+      },
+    },
+  },
   // --- Sword family ---
   {
     name: "iron-sword",
@@ -301,6 +327,18 @@ export const icons = [
     name: "mithril-sword",
     source: "golden-weapon-iron-sword.png",
     opts: { recolor: { "steel.base": "water.shadow", "P.text": "water.light" } },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-sword's steel.base->X.shadow,
+    // P.text->X.light mapping shape, retargeted at the new adamant/rune ramps.
+    name: "adamant-sword",
+    source: "golden-weapon-iron-sword.png",
+    opts: { recolor: { "steel.base": "adamant.shadow", "P.text": "adamant.light" } },
+  },
+  {
+    name: "rune-sword",
+    source: "golden-weapon-iron-sword.png",
+    opts: { recolor: { "steel.base": "rune.shadow", "P.text": "rune.light" } },
   },
   // --- Mace family ---
   {
@@ -352,6 +390,38 @@ export const icons = [
       },
     },
   },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-mace's mapping shape, retargeted at the
+    // new adamant ramp.
+    name: "adamant-mace",
+    source: "golden-item-bronze-mace.png",
+    opts: {
+      recolor: {
+        "ember.shadow": "P.outline",
+        "town[0]": "adamant.shadow",
+        "town[1]": "adamant.shadow",
+        "town[2]": "adamant.base",
+        "town[3]": "adamant.light",
+        "town[4]": "adamant.glint",
+        "ember.light": "adamant.glint",
+      },
+    },
+  },
+  {
+    name: "rune-mace",
+    source: "golden-item-bronze-mace.png",
+    opts: {
+      recolor: {
+        "ember.shadow": "P.outline",
+        "town[0]": "rune.shadow",
+        "town[1]": "rune.shadow",
+        "town[2]": "rune.base",
+        "town[3]": "rune.light",
+        "town[4]": "rune.glint",
+        "ember.light": "rune.glint",
+      },
+    },
+  },
   // --- Shield families ---
   {
     name: "bronze-shield",
@@ -380,6 +450,30 @@ export const icons = [
         "steel.shadow": "water.shadow",
         "steel.base": "water.base",
         "steel.light": "water.light",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-kiteshield's direct steel.*->ramp
+    // mapping, retargeted at the new adamant/rune ramps.
+    name: "adamant-kiteshield",
+    source: "golden-armor-kiteshield.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "adamant.shadow",
+        "steel.base": "adamant.base",
+        "steel.light": "adamant.light",
+      },
+    },
+  },
+  {
+    name: "rune-kiteshield",
+    source: "golden-armor-kiteshield.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "rune.shadow",
+        "steel.base": "rune.base",
+        "steel.light": "rune.light",
       },
     },
   },
@@ -446,6 +540,40 @@ export const icons = [
       },
     },
   },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-chainbody's full mapping shape,
+    // retargeted at the new adamant/rune ramps.
+    name: "adamant-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "adamant.shadow",
+        "sewer[1]": "adamant.shadow",
+        "sewer[0]": "P.outline",
+        "steel.shadow": "adamant.shadow",
+        "steel.base": "adamant.base",
+        "steel.light": "adamant.light",
+        'P["text-dim"]': "adamant.base",
+        "P.text": "adamant.glint",
+      },
+    },
+  },
+  {
+    name: "rune-chainbody",
+    source: "golden-base-iron-chainbody.png",
+    opts: {
+      recolor: {
+        "forest[1]": "rune.shadow",
+        "sewer[1]": "rune.shadow",
+        "sewer[0]": "P.outline",
+        "steel.shadow": "rune.shadow",
+        "steel.base": "rune.base",
+        "steel.light": "rune.light",
+        'P["text-dim"]': "rune.base",
+        "P.text": "rune.glint",
+      },
+    },
+  },
   // --- Full-helm family ---
   {
     // Gear Tier ladder (#251): bronze baseline, a recolor of the shared iron-full-helm source
@@ -494,6 +622,34 @@ export const icons = [
       },
     },
   },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-full-helm's mapping shape, retargeted
+    // at the new adamant/rune ramps.
+    name: "adamant-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: {
+      recolor: {
+        'P["text-dim"]': "adamant.base",
+        "steel.shadow": "adamant.shadow",
+        "steel.base": "adamant.base",
+        "steel.light": "adamant.light",
+        "steel.glint": "adamant.glint",
+      },
+    },
+  },
+  {
+    name: "rune-full-helm",
+    source: "golden-base-iron-full-helm.png",
+    opts: {
+      recolor: {
+        'P["text-dim"]': "rune.base",
+        "steel.shadow": "rune.shadow",
+        "steel.base": "rune.base",
+        "steel.light": "rune.light",
+        "steel.glint": "rune.glint",
+      },
+    },
+  },
   // --- Shortbow family ---
   {
     name: "shortbow",
@@ -535,6 +691,32 @@ export const icons = [
       },
     },
   },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-shortbow's mapping shape, retargeted at
+    // the new adamant/rune ramps.
+    name: "adamant-shortbow",
+    source: "golden-base-shortbow.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "adamant.shadow",
+        "town[2]": "adamant.base",
+        "town[3]": "adamant.light",
+      },
+    },
+  },
+  {
+    name: "rune-shortbow",
+    source: "golden-base-shortbow.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "rune.shadow",
+        "town[2]": "rune.base",
+        "town[3]": "rune.light",
+      },
+    },
+  },
   // --- Neutral staff family ---
   {
     name: "apprentice-staff",
@@ -573,6 +755,32 @@ export const icons = [
         "town[1]": "water.shadow",
         "town[2]": "water.base",
         "ember.light": "water.light",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): mirrors mithril-staff's mapping shape, retargeted at
+    // the new adamant/rune ramps.
+    name: "adamant-staff",
+    source: "golden-base-apprentice-staff.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "adamant.shadow",
+        "town[2]": "adamant.base",
+        "ember.light": "adamant.light",
+      },
+    },
+  },
+  {
+    name: "rune-staff",
+    source: "golden-base-apprentice-staff.png",
+    opts: {
+      recolor: {
+        "town[0]": "P.outline",
+        "town[1]": "rune.shadow",
+        "town[2]": "rune.base",
+        "ember.light": "rune.light",
       },
     },
   },
@@ -622,6 +830,35 @@ export const icons = [
         "steel.base": "water.base",
         "steel.light": "water.light",
         "steel.glint": "water.glint",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): adamant Equipment is smithable, so an adamant-bar
+    // Material must exist. Recolor of the shared iron-bar source, mapped straight to the new
+    // adamant ramp — mirrors mithril-bar's direct steel.*->ramp mapping.
+    name: "adamant-bar",
+    source: "golden-resource-iron-bar.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "adamant.shadow",
+        "steel.base": "adamant.base",
+        "steel.light": "adamant.light",
+        "steel.glint": "adamant.glint",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): rune Equipment is smithable, so a rune-bar Material
+    // must exist. Same mapping shape as adamant-bar, retargeted at the new rune ramp.
+    name: "rune-bar",
+    source: "golden-resource-iron-bar.png",
+    opts: {
+      recolor: {
+        "steel.shadow": "rune.shadow",
+        "steel.base": "rune.base",
+        "steel.light": "rune.light",
+        "steel.glint": "rune.glint",
       },
     },
   },
@@ -781,6 +1018,32 @@ export const icons = [
         "town[3]": "water.base",
         "town[4]": "water.light",
         "ember.base": "water.glint",
+      },
+    },
+  },
+  {
+    // Gear Tier ladder, tiers 5/6 (#252): ranged ammo parity with the new adamant/rune bows.
+    // Mirrors mithril-arrow's mapping shape, retargeted at the new adamant ramp.
+    name: "adamant-arrow",
+    source: "golden-base-bronze-arrow.png",
+    opts: {
+      recolor: {
+        "town[2]": "adamant.shadow",
+        "town[3]": "adamant.base",
+        "town[4]": "adamant.light",
+        "ember.base": "adamant.glint",
+      },
+    },
+  },
+  {
+    name: "rune-arrow",
+    source: "golden-base-bronze-arrow.png",
+    opts: {
+      recolor: {
+        "town[2]": "rune.shadow",
+        "town[3]": "rune.base",
+        "town[4]": "rune.light",
+        "ember.base": "rune.glint",
       },
     },
   },

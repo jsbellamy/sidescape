@@ -44,8 +44,9 @@ describe("Ranged and Magic starter weapons (#7)", () => {
   });
 
   it("every other weapon in Content declares a melee attackType (stab/slash/crush)", () => {
-    // Ranged/Magic weapons across #7 (starter tier) and #13 (iron/steel/mithril tiers) — every
-    // other weapon in Content must declare a melee attackType (#99 derives Combat Mode from it).
+    // Ranged/Magic weapons across #7 (starter tier), #13 (iron/steel/mithril tiers), and #252
+    // (adamant/rune tiers) — every other weapon in Content must declare a melee attackType (#99
+    // derives Combat Mode from it).
     const rangedAndMagicWeaponIds = new Set([
       "shortbow",
       "apprentice-staff",
@@ -55,6 +56,10 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       "steel-staff",
       "mithril-shortbow",
       "mithril-staff",
+      "adamant-shortbow",
+      "adamant-staff",
+      "rune-shortbow",
+      "rune-staff",
     ]);
     const otherWeapons = content.items.filter(
       (i) => i.kind === "equipment" && i.slot === "weapon" && !rangedAndMagicWeaponIds.has(i.id),

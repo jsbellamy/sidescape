@@ -838,6 +838,51 @@ export const content: Content = {
     ladderArmour("bronze", "full-helm"),
     { kind: "material", id: "steel-bar", name: "Steel Bar", icon: "steel-bar", value: 45 },
     { kind: "material", id: "mithril-bar", name: "Mithril Bar", icon: "mithril-bar", value: 90 },
+    // Gear Tier ladder, tiers 5/6 (#252): adamant + rune appended on top of #251's builder — see
+    // tier-ladder.ts's per-tier step table (the step steepens above mithril so rune gear still
+    // out-classes the previous era, keeping rune-sword just under shade-blade). INTERIM BY
+    // DESIGN: nothing yet drops adamant-bar/rune-bar and no chest contains this gear — see the
+    // "currently unreachable" test in tier-ladder-reachability.test.ts; #254 wires up the drops
+    // once the 5th Area lands. Family order per tier follows the issue's own "Full generated
+    // Equipment" table (dagger, mace, sword, shortbow, staff, chainbody, kiteshield, full-helm).
+    ladderWeapon("adamant", "dagger"),
+    ladderWeapon("adamant", "mace"),
+    ladderWeapon("adamant", "sword"),
+    ladderWeapon("adamant", "shortbow"),
+    ladderWeapon("adamant", "staff"),
+    ladderArmour("adamant", "chainbody"),
+    ladderArmour("adamant", "kiteshield"),
+    ladderArmour("adamant", "full-helm"),
+    ladderWeapon("rune", "dagger"),
+    ladderWeapon("rune", "mace"),
+    ladderWeapon("rune", "sword"),
+    ladderWeapon("rune", "shortbow"),
+    ladderWeapon("rune", "staff"),
+    ladderArmour("rune", "chainbody"),
+    ladderArmour("rune", "kiteshield"),
+    ladderArmour("rune", "full-helm"),
+    { kind: "material", id: "adamant-bar", name: "Adamant Bar", icon: "adamant-bar", value: 180 },
+    { kind: "material", id: "rune-bar", name: "Rune Bar", icon: "rune-bar", value: 360 },
+    // Ranged ammo parity with the new bows (#252) — mirrors the bronze/steel/mithril arrow shape
+    // above; both are sold by the vendor below, never dropped (same interim-unreachable note).
+    {
+      kind: "ammo",
+      id: "adamant-arrow",
+      name: "Adamant Arrow",
+      icon: "adamant-arrow",
+      ammoType: "arrow",
+      rangedStr: 14,
+      value: 8,
+    },
+    {
+      kind: "ammo",
+      id: "rune-arrow",
+      name: "Rune Arrow",
+      icon: "rune-arrow",
+      ammoType: "arrow",
+      rangedStr: 18,
+      value: 16,
+    },
   ],
   fishingSpots: [
     // #115: itemId flipped from the cooked Food to the matching raw Material — Cooking (recipes
@@ -1225,6 +1270,22 @@ export const content: Content = {
     ladderRecipe("mithril", "mace"),
     ladderRecipe("mithril", "chainbody"),
     ladderRecipe("mithril", "full-helm"),
+    // Gear Tier ladder, tiers 5/6 (#252): the 12 new Smithing Recipes this slice (6 metal
+    // families x 2 tiers). Highest levelReq is rune-chainbody at 84 (75 + chainbody's +9 family
+    // offset), comfortably under MAX_LEVEL 99 — see tier-ladder.test.ts. Appended at the end
+    // (append-only — existing recipe ids above keep their exact array index).
+    ladderRecipe("adamant", "dagger"),
+    ladderRecipe("adamant", "mace"),
+    ladderRecipe("adamant", "sword"),
+    ladderRecipe("adamant", "chainbody"),
+    ladderRecipe("adamant", "kiteshield"),
+    ladderRecipe("adamant", "full-helm"),
+    ladderRecipe("rune", "dagger"),
+    ladderRecipe("rune", "mace"),
+    ladderRecipe("rune", "sword"),
+    ladderRecipe("rune", "chainbody"),
+    ladderRecipe("rune", "kiteshield"),
+    ladderRecipe("rune", "full-helm"),
   ],
   // Starter spellbook (Combat Depth wave 3/4, #101): one Strike per Element up the Magic ladder.
   // Magic compensation tuning (#121): magic gear is drop-only — the owner cut a magic Crafting
@@ -1281,6 +1342,10 @@ export const content: Content = {
     { itemId: "water-rune", price: 3 },
     { itemId: "earth-rune", price: 3 },
     { itemId: "fire-rune", price: 3 },
+    // Gear Tier ladder, tiers 5/6 (#252): the adamant/rune arrow tiers, priced at roughly the
+    // same value-to-price ratio as mithril-arrow above (~2.5x value) — tuning, not spec.
+    { itemId: "adamant-arrow", price: 20 },
+    { itemId: "rune-arrow", price: 40 },
   ],
   // Starter pet roster (#120): one per source (combat/fishing/production) plus one boss pet, tied
   // to Bone Crypt's own boss-tier Monster ("crypt-shade" — see monsters above, "carries a real
