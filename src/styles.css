@@ -535,6 +535,15 @@ body {
   --tile-h: 120px; /* SPEC: native height of every backdrop tile (160×120px PNG). Not tuning. */
   --mid-horizon: 45px; /* tuning: px above the scene's bottom where .layer-mid goes solid */
   --near-horizon: 30px; /* tuning: px above the scene's bottom where .layer-near goes solid */
+  /* tuning: px above the scene's bottom where .layer-mid's colour fill is fully clear. The fill
+     exists to blend the tile's art into a solid ground colour, but .layer-mid paints OVER
+     .layer-sky (DOM order), so letting it fade out only at --tile-h drags a translucent veil of
+     the ground colour across the whole sky — the green cast on meadow. Clear it just above the
+     mid silhouette instead. */
+  --mid-fade: 70px;
+  /* The near fill only needs to bridge the foreground grass to the ground plane. Fading it all
+     the way to --tile-h lays a second dark-green veil across the distant hills and actors. */
+  --near-fade: 58px;
 }
 
 #backdrop .layer-sky,
@@ -545,6 +554,16 @@ body {
   background-repeat: repeat-x;
   background-position: bottom;
   image-rendering: pixelated; /* no-op on today's gradients; keeps a future sprite drop-in seamless */
+}
+
+/* The sky tile is the one layer anchored to the TOP, not the bottom. Bottom-anchoring it (as #140
+   shipped) buries it: all three tiles are 120px, so a bottom-anchored sky sits in the same band as
+   .layer-mid/.layer-near and is fully occluded by their opaque art, leaving only the gradient fill
+   visible in the band above the horizon. Anchoring to the top puts the sky art where sky belongs —
+   above the mid/near horizon — and lets the gradient fill below it instead. This must stay AFTER
+   the shared rule above: same specificity, so source order decides. */
+#backdrop .layer-sky {
+  background-position: top;
 }
 
 #backdrop .layer-mid,
@@ -575,18 +594,36 @@ body {
    scene should simply show more sky. Do not convert it to px "for consistency". */
 #backdrop[data-theme="meadow"] .layer-sky {
   background-image:
-    url("./assets/backdrops/meadow-sky.png"), linear-gradient(to bottom, #86b6d8, #cfe6a8);
+    url("./assets/backdrops/meadow-sky.png"),
+    /* The horizon stop is a COOL haze, not the warm green (#cfe6a8) #140 shipped. This gradient
+       spans the whole backdrop box, but the mid silhouette cuts the sky off at ~62% of the ramp —
+       so a green bottom stop doesn't sit politely at the horizon, it tints the open sky and the
+       clouds teal. Keep the far stop in the blue family; the grass supplies the green. */
+    linear-gradient(to bottom, #86b6d8 0%, #a6cbdd 55%, #c8dfe2 100%);
 }
 #backdrop[data-theme="meadow"] .layer-mid {
   background-image:
     url("./assets/backdrops/meadow-mid.png"),
-    linear-gradient(to top, #5f8a4f 0 var(--mid-horizon), rgba(95, 138, 79, 0) var(--tile-h));
+    linear-gradient(
+      to top,
+      #5f8a4f 0 var(--mid-horizon),
+      rgba(95, 138, 79, 0) var(--mid-fade),
+      rgba(95, 138, 79, 0) var(--tile-h)
+    );
   animation: backdrop-drift 90s linear infinite;
+  /* Push the distant hills back into atmospheric perspective. Their source tile is deliberately
+     vivid, but at full saturation it merges with the foreground grass into one green wall. */
+  filter: saturate(0.28) brightness(0.88);
 }
 #backdrop[data-theme="meadow"] .layer-near {
   background-image:
     url("./assets/backdrops/meadow-near.png"),
-    linear-gradient(to top, #2c4a26 0 var(--near-horizon), rgba(44, 74, 38, 0) var(--tile-h));
+    linear-gradient(
+      to top,
+      #2c4a26 0 var(--near-horizon),
+      rgba(44, 74, 38, 0) var(--near-fade),
+      rgba(44, 74, 38, 0) var(--tile-h)
+    );
   animation: backdrop-drift 60s linear infinite;
 }
 
