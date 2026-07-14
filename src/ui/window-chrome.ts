@@ -134,18 +134,18 @@ export function createTauriWindowChrome(
       anchor,
       monitor,
     });
-    // A previous, superseded expansion can leave its cover alive until the next queued action.
-    // Retiring it here also makes every non-expanding path self-cleaning.
+    // A previous, superseded geometry transition can leave its cover alive until the next queued
+    // action. Retiring it here also makes every uncovered path self-cleaning.
     try {
       await port.endTransition();
     } catch (error) {
       console.error(error);
     }
-    const preservesPaintedWorkspace = cardCount === 1 && nextCardCount === 2;
+    const preservesPaintedWorkspace = cardCount > 0 && cardCount !== nextCardCount;
     if (preservesPaintedWorkspace) {
-      // On macOS, WindowServer can present the old WKWebView backing texture at the new frame for
-      // one compositor tick even though setFrame is atomic. Freeze the current one-card pixels at
-      // their old screen position before moving the real window underneath them.
+      // On macOS, WindowServer can present a WKWebView backing texture at an intermediate frame
+      // even though setFrame is atomic. Freeze the current composition before moving the hidden
+      // real window underneath it; this applies in both expansion and contraction directions.
       try {
         await port.beginTransition();
       } catch (error) {
@@ -174,6 +174,7 @@ export function createTauriWindowChrome(
   }
 
   return {
+    stagesCardCountContractions: true,
     async getCapacity() {
       try {
         const monitor = await monitorRect();

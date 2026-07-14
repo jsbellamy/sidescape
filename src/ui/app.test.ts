@@ -54,11 +54,12 @@ function spyWindowChrome(capacity: 1 | 2 = 2) {
  * and snapping into place once the real `createTauriWindowChrome` finishes its queued native
  * writes. Each `setCardCount` call gets its own deferred Promise so a test can resolve an
  * earlier call after a later one has already been requested (rapid re-entrant clicks). */
-function deferredWindowChrome(capacity: 1 | 2 = 2) {
+function deferredWindowChrome(capacity: 1 | 2 = 2, stagesCardCountContractions = false) {
   const calls: number[] = [];
   let presentCalls = 0;
   const deferreds: Array<{ resolve: () => void }> = [];
   const chrome: WorkspaceChrome = {
+    stagesCardCountContractions,
     getCapacity: () => Promise.resolve(capacity),
     setCardCount: (count) => {
       calls.push(count);
@@ -1220,8 +1221,9 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     expect(domOrder).toEqual(["card-character", "card-management"]);
   });
 
-  it("2->1 and 1->0: departing cards hide synchronously before the deferred contraction resolves", async () => {
-    const { chrome, calls, resolveCall } = deferredWindowChrome();
+  it("2->1 and 1->0: the old composition remains painted until contraction settles, then the final state is presented", async () => {
+    const deferred = deferredWindowChrome(2, true);
+    const { chrome, calls, resolveCall } = deferred;
     const { root } = mountWithChrome(chrome);
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
     resolveCall();
@@ -1231,15 +1233,21 @@ describe("Atomic card reveal and active-destination re-click close (#242)", () =
     resolveCall();
     await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(false));
 
-    // 2->1: Back closes Management; it hides immediately, without waiting on the native contraction
-    // (its own setCardCount(1) request is left unresolved for the rest of this test).
+    // 2->1: keep both cards painted while the native adapter snapshots and contracts. Otherwise
+    // macOS presents a mostly-transparent expanded WKWebView as black/stale regions.
     root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
-    expect(cardHidden(root, "card-management")).toBe(true);
+    expect(cardHidden(root, "card-management")).toBe(false);
     expect(cardHidden(root, "card-character")).toBe(false);
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-management")).toBe(true));
+    expect(deferred.presentCalls).toBe(2); // one presentation for 1->2, one for 2->1
 
-    // 1->0: the menu button closes Character too, again hiding immediately.
+    // 1->0 uses the same handoff: Character remains until compact geometry is ready.
     root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
-    expect(cardHidden(root, "card-character")).toBe(true);
+    expect(cardHidden(root, "card-character")).toBe(false);
+    resolveCall();
+    await vi.waitFor(() => expect(cardHidden(root, "card-character")).toBe(true));
+    expect(deferred.presentCalls).toBe(3);
   });
 
   it("a stale opening completion cannot reveal a card after a rapid second click changed the desired workspace state", async () => {

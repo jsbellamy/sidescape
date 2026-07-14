@@ -165,9 +165,10 @@ resized.
 The single interactive transparent native window model: opaque DOM cards float
 inside one window with transparent glass around and between them. It contains
 the Compact Widget and the Management Row and never creates persistent or
-interactive child windows. On macOS only, a 1-to-2-card resize may briefly place
-a click-through snapshot cover above that same window while WebKit catches up;
-the cover owns no state or controls and is removed after the final layout paints.
+interactive child windows. On macOS only, a card-count resize from a non-empty
+workspace may briefly replace it with a click-through snapshot cover while the
+real window is transparent and WebKit catches up; the cover owns no state or
+controls and is removed as the real final layout is made visible.
 
 **Management Row**:
 The horizontal row of zero to two opaque management cards: the fixed
