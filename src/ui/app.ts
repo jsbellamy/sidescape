@@ -16,7 +16,13 @@ import type {
 } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
-import { monsterSprite, playerSprite } from "./sprites";
+import {
+  monsterSprite,
+  monsterSpriteSize,
+  playerSprite,
+  playerSpriteSize,
+  spriteEdgePx,
+} from "./sprites";
 import { SORT_KEYS } from "./sort";
 import type { SortKey } from "./sort";
 import { BANK_FILTERS, createBankPresentation } from "./bank-view";
@@ -809,6 +815,11 @@ export function mountApp(
       const sprite = monsterSprite(monster.id);
       if (sprite) {
         monsterImg.src = sprite;
+        // Size the box to this Monster's native canvas x grain (32-native → 64px, 48-native Boss →
+        // 96px), so a bigger Boss reads bigger without changing the shared pixel grain.
+        const nativeSize = monsterSpriteSize(monster.id);
+        if (nativeSize)
+          monsterImg.style.setProperty("--sprite-edge", `${spriteEdgePx(nativeSize)}px`);
         monsterImg.alt = monster.name;
         monsterImg.hidden = false;
       } else {
@@ -1435,7 +1446,7 @@ export function mountApp(
             <div id="monster-splats" class="splat-layer"></div>
           </div>
           <div id="player-sprite-wrap" class="sprite-wrap">
-            <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" />
+            <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" style="--sprite-edge: ${spriteEdgePx(playerSpriteSize)}px" />
             <div id="player-bar" class="sprite-hp" hidden aria-label="Player health"><div id="player-hp-fill" class="fill"></div></div>
             <div id="player-splats" class="splat-layer"></div>
           </div>
