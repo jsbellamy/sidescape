@@ -59,23 +59,24 @@ export function loadSourceGrid(pngPath) {
  *
  * @param {ReturnType<typeof import("./icon-canvas.mjs").createCanvas>} canvas
  * @param {(null | [number, number, number])[][]} grid
- * `ramps` (#252) scopes the QUANTIZATION vocabulary to the material ramps this icon's own source
- * actually uses (`scripts/art/icons.mjs`'s SOURCE_RAMPS). Quantization snaps each cell to the
- * globally nearest palette entry, so without this scoping every material ramp in the project is a
- * candidate color for every cell — and merely ADDING a ramp silently recolors unrelated shipped
- * icons (see `buildNamedPalette`'s doc). RECOLOR targets are resolved against the FULL palette:
- * remapping into a ramp the source does not itself quantize into is exactly what a tier recolor
- * does (a mithril icon's steel cells becoming `rune.*`), and a recolor is an explicit, per-icon
- * instruction rather than a global nearest-color accident.
+ * `scope` (#252, #261) scopes the QUANTIZATION vocabulary to the material ramps and zones this
+ * icon's own source actually uses (`scripts/art/icons.mjs`'s SOURCE_PALETTES/`paletteForSource`).
+ * Quantization snaps each cell to the globally nearest palette entry, so without this scoping
+ * every material ramp AND zone in the project is a candidate color for every cell — and merely
+ * ADDING one silently recolors unrelated shipped icons (see `buildNamedPalette`'s doc). RECOLOR
+ * targets are resolved against the FULL palette: remapping into a ramp the source does not itself
+ * quantize into is exactly what a tier recolor does (a mithril icon's steel cells becoming
+ * `rune.*`), and a recolor is an explicit, per-icon instruction rather than a global
+ * nearest-color accident.
  *
- * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, ramps?: readonly string[], recolor?: Record<string, string> }} [opts]
+ * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, scope?: { materialRampNames?: readonly string[], zoneNames?: readonly string[] }, recolor?: Record<string, string> }} [opts]
  */
 export function paintSourceIcon(
   canvas,
   grid,
-  { x0, y0, outline = P.ink, named, ramps, recolor = {} } = {},
+  { x0, y0, outline = P.ink, named, scope, recolor = {} } = {},
 ) {
-  const quantizePalette = named ?? buildNamedPalette(ramps);
+  const quantizePalette = named ?? buildNamedPalette(scope);
   // Full vocabulary — recolor may name any ramp, including one this source never quantizes into.
   const paletteByRef = new Map(buildNamedPalette().map((entry) => [entry.ref, entry]));
   for (const [from, to] of Object.entries(recolor)) {
