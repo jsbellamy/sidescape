@@ -9,82 +9,157 @@ import { writePng } from "./write-png.mjs";
 const ICON_SOURCES_DIR = fileURLToPath(new URL("./icon-sources", import.meta.url));
 
 /**
- * The material ramps each committed icon SOURCE quantizes into (#252) — the vocabulary
- * `paintSourceIcon` is allowed to snap that source's cells to.
+ * The material ramps AND zones each committed icon SOURCE quantizes into (#252, #261) — the
+ * vocabulary `paintSourceIcon` is allowed to snap that source's cells to.
  *
  * This is keyed by source, not by icon, because quantization reads the source art only: every tier
- * variant of a family shares one source and therefore one ramp set, and their differences come
- * later, from the explicit `opts.recolor` map. A ramp NOT listed here can never win a cell of this
- * source, which is the whole point: `quantizeGrid` picks the globally nearest palette entry, so
- * before this table existed, merely ADDING a ramp re-quantized unrelated shipped icons (adding
- * `adamant` put a green patch on mithril-chainbody; see `buildNamedPalette`'s doc and the
- * `src/ui/art-ramp-isolation.test.ts` regression test).
+ * variant of a family shares one source and therefore one palette scope, and their differences
+ * come later, from the explicit `opts.recolor` map. A material ramp or zone NOT listed here can
+ * never win a cell of this source, which is the whole point: `quantizeGrid` picks the globally
+ * nearest palette entry, so before this table existed, merely ADDING a ramp or zone re-quantized
+ * unrelated shipped icons (adding `adamant` — a green metal — put a green patch on
+ * mithril-chainbody; `zonePalettes` had no allowlist at all, so a new zone could do the same; see
+ * `buildNamedPalette`'s doc and the `src/ui/art-ramp-isolation.test.ts` regression test).
  *
- * Each entry lists exactly the ramps that actually win at least one cell of that source. Removing
- * the ramps that never win cannot change any cell's nearest color, so scoping reproduces the
- * pre-#252 shipped bytes exactly. To add a source: quantize it against the full palette once and
- * record the ramps it lands on. A source missing from this table throws in `writeIcons` rather
- * than silently falling back to the every-ramp palette.
+ * `zoneNames` is a PALETTE dependency, not a semantic Area ownership claim — a source may
+ * legitimately list several zones because its raw, off-palette pixels happen to quantize nearest
+ * to entries from each of them under today's full palette. Each entry's lists are exactly the
+ * material ramps and zones that actually win at least one cell of that source. Removing the ones
+ * that never win cannot change any cell's nearest color, so scoping reproduces the pre-#252/#261
+ * shipped bytes exactly. To add a source: quantize it against the full palette once and record
+ * what it lands on. A source missing from this table throws in `writeIcons` rather than silently
+ * falling back to the every-entry palette.
  */
-const SOURCE_RAMPS = {
-  "golden-armor-kiteshield.png": ["ember", "gold", "steel"],
-  "golden-base-air-rune.png": ["water"],
-  "golden-base-apprentice-staff.png": ["ember", "gold", "steel"],
-  "golden-base-bronze-arrow.png": ["ember"],
-  "golden-base-bronze-shield.png": ["ember", "gold", "steel"],
-  "golden-base-cowhide.png": ["blood"],
-  "golden-base-fishing-frog.png": [],
-  "golden-base-guam-herb.png": [],
-  "golden-base-iron-chainbody.png": ["steel"],
-  "golden-base-iron-full-helm.png": ["steel"],
-  "golden-base-kiln-cat.png": ["blood", "ember"],
-  "golden-base-leather-chaps.png": [],
-  "golden-base-leather-coif.png": [],
-  "golden-base-raw-pike.png": [],
-  "golden-base-raw-shrimp.png": ["blood", "ember"],
-  "golden-base-raw-trout.png": ["steel", "water"],
-  "golden-base-rock-golem.png": ["steel"],
-  "golden-base-sapphire-amulet.png": ["ember", "gold", "steel", "water"],
-  "golden-base-sapphire-ring.png": ["ember", "gold", "water"],
-  "golden-base-sapphire.png": ["water"],
-  "golden-base-shade-blade.png": [],
-  "golden-base-shade-wisp.png": ["steel"],
-  "golden-base-shortbow.png": [],
-  "golden-consumable-red-potion.png": ["blood", "ember"],
-  "golden-item-bronze-dagger.png": ["ember", "gold"],
-  "golden-item-bronze-mace.png": ["ember", "gold"],
-  "golden-item-goblin-charm.png": [],
-  "golden-item-gold.png": ["ember", "gold"],
-  "golden-item-leather-body.png": [],
-  "golden-item-raw-beef.png": ["blood"],
-  "golden-resource-iron-bar.png": ["steel"],
-  "golden-skill-cooking.png": ["blood", "ember", "gold"],
-  "golden-skill-crafting-v2.png": ["ember", "gold", "steel", "water"],
-  "golden-skill-herblore.png": [],
-  "golden-skill-hitpoints.png": ["ember", "gold"],
-  "golden-skill-smithing.png": ["steel"],
-  "golden-tab-bank.png": ["ember", "gold"],
-  "golden-tab-character.png": ["blood", "gold"],
-  "golden-tab-loot.png": ["ember", "gold"],
-  "golden-tab-skills.png": [],
-  "golden-tab-vendor.png": ["ember", "gold"],
-  "golden-tab-world-v2.png": ["ember", "steel", "water"],
-  "golden-weapon-iron-sword.png": ["gold", "steel"],
-  "skill-attack.png": ["ember", "gold", "steel"],
-  "skill-fishing.png": ["steel", "water"],
-  "skill-strength.png": ["ember"],
+const SOURCE_PALETTES = {
+  "golden-armor-kiteshield.png": {
+    materialRampNames: ["ember", "gold", "steel"],
+    zoneNames: ["town", "sewer", "meadow"],
+  },
+  "golden-base-air-rune.png": { materialRampNames: ["water"], zoneNames: ["meadow", "forest"] },
+  "golden-base-apprentice-staff.png": {
+    materialRampNames: ["ember", "gold", "steel"],
+    zoneNames: ["town", "crypt", "sewer"],
+  },
+  "golden-base-bronze-arrow.png": { materialRampNames: ["ember"], zoneNames: ["town"] },
+  "golden-base-bronze-shield.png": {
+    materialRampNames: ["ember", "gold", "steel"],
+    zoneNames: ["town", "meadow", "crypt", "sewer"],
+  },
+  "golden-base-cowhide.png": { materialRampNames: ["blood"], zoneNames: ["town"] },
+  "golden-base-fishing-frog.png": { materialRampNames: [], zoneNames: ["sewer", "meadow"] },
+  "golden-base-guam-herb.png": {
+    materialRampNames: [],
+    zoneNames: ["sewer", "forest", "meadow", "town"],
+  },
+  "golden-base-iron-chainbody.png": {
+    materialRampNames: ["steel"],
+    zoneNames: ["sewer", "forest", "crypt"],
+  },
+  "golden-base-iron-full-helm.png": { materialRampNames: ["steel"], zoneNames: ["sewer"] },
+  "golden-base-kiln-cat.png": { materialRampNames: ["blood", "ember"], zoneNames: ["town"] },
+  "golden-base-leather-chaps.png": { materialRampNames: [], zoneNames: ["town"] },
+  "golden-base-leather-coif.png": { materialRampNames: [], zoneNames: ["town"] },
+  "golden-base-raw-pike.png": {
+    materialRampNames: [],
+    zoneNames: ["forest", "crypt", "meadow", "sewer"],
+  },
+  "golden-base-raw-shrimp.png": { materialRampNames: ["blood", "ember"], zoneNames: ["town"] },
+  "golden-base-raw-trout.png": {
+    materialRampNames: ["steel", "water"],
+    zoneNames: ["town", "forest", "meadow", "crypt", "sewer"],
+  },
+  "golden-base-rock-golem.png": {
+    materialRampNames: ["steel"],
+    zoneNames: ["crypt", "sewer", "town"],
+  },
+  "golden-base-sapphire-amulet.png": {
+    materialRampNames: ["ember", "gold", "steel", "water"],
+    zoneNames: ["meadow"],
+  },
+  "golden-base-sapphire-ring.png": {
+    materialRampNames: ["ember", "gold", "water"],
+    zoneNames: ["meadow", "forest", "town"],
+  },
+  "golden-base-sapphire.png": { materialRampNames: ["water"], zoneNames: ["meadow", "crypt"] },
+  "golden-base-shade-blade.png": { materialRampNames: [], zoneNames: ["crypt"] },
+  "golden-base-shade-wisp.png": { materialRampNames: ["steel"], zoneNames: ["crypt"] },
+  "golden-base-shortbow.png": { materialRampNames: [], zoneNames: ["town"] },
+  "golden-consumable-red-potion.png": {
+    materialRampNames: ["blood", "ember"],
+    zoneNames: ["town", "crypt", "sewer"],
+  },
+  "golden-item-bronze-dagger.png": {
+    materialRampNames: ["ember", "gold"],
+    zoneNames: ["town", "meadow"],
+  },
+  "golden-item-bronze-mace.png": {
+    materialRampNames: ["ember", "gold"],
+    zoneNames: ["meadow", "town"],
+  },
+  "golden-item-goblin-charm.png": {
+    materialRampNames: [],
+    zoneNames: ["town", "meadow", "forest", "sewer"],
+  },
+  "golden-item-gold.png": {
+    materialRampNames: ["ember", "gold"],
+    zoneNames: ["town", "meadow", "sewer"],
+  },
+  "golden-item-leather-body.png": { materialRampNames: [], zoneNames: ["town"] },
+  "golden-item-raw-beef.png": { materialRampNames: ["blood"], zoneNames: [] },
+  "golden-resource-iron-bar.png": { materialRampNames: ["steel"], zoneNames: ["sewer", "crypt"] },
+  "golden-skill-cooking.png": {
+    materialRampNames: ["blood", "ember", "gold"],
+    zoneNames: ["town"],
+  },
+  "golden-skill-crafting-v2.png": {
+    materialRampNames: ["ember", "gold", "steel", "water"],
+    zoneNames: ["town", "sewer", "forest"],
+  },
+  "golden-skill-herblore.png": {
+    materialRampNames: [],
+    zoneNames: ["meadow", "forest", "town", "crypt"],
+  },
+  "golden-skill-hitpoints.png": { materialRampNames: ["ember", "gold"], zoneNames: ["town"] },
+  "golden-skill-smithing.png": {
+    materialRampNames: ["steel"],
+    zoneNames: ["sewer", "town", "crypt", "forest"],
+  },
+  "golden-tab-bank.png": { materialRampNames: ["ember", "gold"], zoneNames: ["meadow", "town"] },
+  "golden-tab-character.png": { materialRampNames: ["blood", "gold"], zoneNames: ["town"] },
+  "golden-tab-loot.png": {
+    materialRampNames: ["ember", "gold"],
+    zoneNames: ["town", "meadow", "sewer"],
+  },
+  "golden-tab-skills.png": { materialRampNames: [], zoneNames: ["town", "sewer", "meadow"] },
+  "golden-tab-vendor.png": { materialRampNames: ["ember", "gold"], zoneNames: ["town", "meadow"] },
+  "golden-tab-world-v2.png": {
+    materialRampNames: ["ember", "steel", "water"],
+    zoneNames: ["town", "forest", "meadow", "crypt", "sewer"],
+  },
+  "golden-weapon-iron-sword.png": {
+    materialRampNames: ["gold", "steel"],
+    zoneNames: ["sewer", "meadow", "town", "forest"],
+  },
+  "skill-attack.png": {
+    materialRampNames: ["ember", "gold", "steel"],
+    zoneNames: ["sewer", "town"],
+  },
+  "skill-fishing.png": { materialRampNames: ["steel", "water"], zoneNames: [] },
+  "skill-strength.png": { materialRampNames: ["ember"], zoneNames: ["town"] },
 };
 
-/** The material ramps a given icon source may quantize into. Exported for the ramp-isolation
- * regression test, which asserts no asset depends on a ramp it does not declare. */
-export function rampsForSource(source) {
-  const ramps = SOURCE_RAMPS[source];
-  if (!ramps) {
+/** The `{ materialRampNames, zoneNames }` scope a given icon source may quantize into. Exported
+ * for the ramp/zone-isolation regression test, which asserts no asset depends on a material ramp
+ * or zone it does not declare. Throws loudly rather than falling back to the every-entry palette,
+ * per this issue's acceptance criteria. */
+export function paletteForSource(source) {
+  const scope = SOURCE_PALETTES[source];
+  if (!scope) {
     throw new Error(
-      `icons.mjs: source ${JSON.stringify(source)} has no SOURCE_RAMPS entry — declare the material ramps it quantizes into (see SOURCE_RAMPS' doc)`,
+      `icons.mjs: source ${JSON.stringify(source)} has no SOURCE_PALETTES entry — declare the material ramps and zones it quantizes into (see SOURCE_PALETTES' doc)`,
     );
   }
-  return ramps;
+  return scope;
 }
 
 const sapphireToEmerald = {
@@ -1194,8 +1269,9 @@ export async function writeIcons(destDir) {
     if (icon.source) {
       const grid = loadSourceGrid(`${ICON_SOURCES_DIR}/${icon.source}`);
       const canvas = createCanvas();
-      // Quantize against ONLY the ramps this source uses (#252) — see SOURCE_RAMPS' doc.
-      paintSourceIcon(canvas, grid, { ...icon.opts, ramps: rampsForSource(icon.source) });
+      // Quantize against ONLY the material ramps and zones this source uses (#252, #261) — see
+      // SOURCE_PALETTES' doc.
+      paintSourceIcon(canvas, grid, { ...icon.opts, scope: paletteForSource(icon.source) });
       await writePng(`${destDir}/${icon.name}.png`, 34, 34, canvas.toPixelFn());
     } else {
       await writeIcon(`${destDir}/${icon.name}.png`, icon.paint);

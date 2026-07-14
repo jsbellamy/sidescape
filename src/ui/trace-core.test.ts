@@ -459,7 +459,7 @@ describe("buildNamedPalette ramp scoping (#252)", () => {
   });
 
   it("includes ONLY the allowlisted material ramps, so an undeclared ramp can never win a cell", () => {
-    const refs = materialRefs(buildNamedPalette(["steel", "water"]));
+    const refs = materialRefs(buildNamedPalette({ materialRampNames: ["steel", "water"] }));
     expect(refs).toContain("steel.base");
     expect(refs).toContain("water.base");
     for (const excluded of ["gold", "blood", "ember", "adamant", "rune"]) {
@@ -468,7 +468,7 @@ describe("buildNamedPalette ramp scoping (#252)", () => {
   });
 
   it("keeps master and zone colors regardless of the allowlist (they are the shared neutrals)", () => {
-    const palette = buildNamedPalette([]);
+    const palette = buildNamedPalette({ materialRampNames: [] });
     const refs = palette.map((e) => e.ref);
     expect(refs).toContain("P.ink");
     expect(refs).toContain("town[2]");
@@ -480,13 +480,80 @@ describe("buildNamedPalette ramp scoping (#252)", () => {
     // honored the caller's argument order, a subset listed differently would flip a tied cell and
     // change shipped art (the mace's one gold.shadow/ember.shadow tie is a real instance). Scoping
     // must only remove candidates, never reorder the survivors.
-    const forward = materialRefs(buildNamedPalette(["gold", "ember"]));
-    const reversed = materialRefs(buildNamedPalette(["ember", "gold"]));
+    const forward = materialRefs(buildNamedPalette({ materialRampNames: ["gold", "ember"] }));
+    const reversed = materialRefs(buildNamedPalette({ materialRampNames: ["ember", "gold"] }));
     expect(forward).toEqual(reversed);
     expect(forward.indexOf("gold.shadow")).toBeLessThan(forward.indexOf("ember.shadow"));
   });
 
   it("throws on an unknown ramp name rather than silently ignoring it", () => {
-    expect(() => buildNamedPalette(["steel", "not-a-ramp"])).toThrow(/unknown material ramp/);
+    expect(() => buildNamedPalette({ materialRampNames: ["steel", "not-a-ramp"] })).toThrow(
+      /unknown material ramp/,
+    );
+  });
+});
+
+/**
+ * Zone-palette scoping (#261). `zonePalettes` had NO allowlist at all — every zone in
+ * `zonePalettes` was emitted for every icon/sprite build regardless of that asset's own
+ * dependencies, so adding a new zone (like `glacier`, #254) could silently re-quantize unrelated
+ * shipped art the same way an unscoped material ramp could (#252). This locks the options-object
+ * API's zone half of that fix, parallel to the material-ramp cases above.
+ */
+describe("buildNamedPalette zone scoping (#261)", () => {
+  // Zone refs are `<zone>[<index>]`, e.g. `town[2]`; master refs are `P.*` and material refs are
+  // `<ramp>.<role>`, so neither is picked up here.
+  const zoneRefs = (palette: { ref: string }[]) =>
+    palette.map((e) => e.ref).filter((ref) => /^[a-z][a-z]*\[\d+\]$/.test(ref));
+
+  it("includes every zone when no allowlist is given (bare buildNamedPalette() stays full-vocabulary)", () => {
+    const refs = zoneRefs(buildNamedPalette());
+    for (const zone of ["meadow", "forest", "sewer", "crypt", "town", "glacier"]) {
+      expect(refs.some((ref) => ref.startsWith(`${zone}[`))).toBe(true);
+    }
+  });
+
+  it("includes ONLY the allowlisted zones, so an undeclared zone can never win a cell", () => {
+    const refs = zoneRefs(buildNamedPalette({ zoneNames: ["town", "meadow"] }));
+    expect(refs.some((ref) => ref.startsWith("town["))).toBe(true);
+    expect(refs.some((ref) => ref.startsWith("meadow["))).toBe(true);
+    for (const excluded of ["forest", "sewer", "crypt", "glacier"]) {
+      expect(refs.some((ref) => ref.startsWith(`${excluded}[`))).toBe(false);
+    }
+  });
+
+  it("zoneNames: [] excludes zones while retaining master and selected materials", () => {
+    const palette = buildNamedPalette({ zoneNames: [], materialRampNames: ["steel"] });
+    const refs = palette.map((e) => e.ref);
+    expect(refs).toContain("P.ink");
+    expect(refs).toContain("steel.base");
+    expect(zoneRefs(palette)).toEqual([]);
+  });
+
+  it("emits zones in zonePalettes declaration order regardless of caller order — a tie is broken by palette position", () => {
+    const forward = zoneRefs(buildNamedPalette({ zoneNames: ["crypt", "meadow"] }));
+    const reversed = zoneRefs(buildNamedPalette({ zoneNames: ["meadow", "crypt"] }));
+    expect(forward).toEqual(reversed);
+    expect(forward.indexOf("meadow[0]")).toBeLessThan(forward.indexOf("crypt[0]"));
+  });
+
+  it("throws on an unknown zone name rather than silently ignoring it", () => {
+    expect(() => buildNamedPalette({ zoneNames: ["town", "not-a-zone"] })).toThrow(/unknown zone/);
+  });
+
+  it("scopes materials and zones together, and master colors always come first", () => {
+    const palette = buildNamedPalette({ materialRampNames: ["steel"], zoneNames: ["town"] });
+    expect(palette[0]?.ref).toBe("P.bg");
+    const refs = palette.map((e) => e.ref);
+    expect(refs).toContain("town[0]");
+    expect(refs).toContain("steel.base");
+    expect(zoneRefs(palette)).toEqual([
+      "town[0]",
+      "town[1]",
+      "town[2]",
+      "town[3]",
+      "town[4]",
+      "town[5]",
+    ]);
   });
 });
