@@ -185,7 +185,7 @@ describe("WorkspaceChrome fixed scale", () => {
     await twoCards;
     expect(resolved).toBe(true);
   });
-  it("covers only 1->2 and keeps the cover until two paints after the caller reveals Management", async () => {
+  it("covers both 1->2 and 2->1 until two paints after the caller renders the destination state", async () => {
     const port = fakePort();
     let presentationFrames = 0;
     const nextFrame = port.layout.nextFrame;
@@ -205,6 +205,9 @@ describe("WorkspaceChrome fixed scale", () => {
     await chrome.present();
     expect(presentationFrames).toBe(2);
     expect(port.writes[port.writes.length - 1]).toBe("end-transition");
+
+    await chrome.setCardCount(1);
+    expect(port.writes.slice(-3)).toEqual(["end-transition", "begin-transition", "frame"]);
   });
   it("disables unsupported stops and never silently reduces the selected scale", async () => {
     const port = fakePort(320, 220, 1920, 1000);

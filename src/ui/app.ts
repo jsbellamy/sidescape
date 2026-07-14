@@ -394,7 +394,7 @@ export function mountApp(
   // closes") — covers every path away from Bank (Back, Escape, the transparent-glass close, and
   // switching straight to another destination), since all of them funnel through this one function.
   let previousManagement: ManagementDestination | null = null;
-  // Invalidates an older expansion completion when a newer workspace action wins the race. This
+  // Invalidates an older geometry-transition completion when a newer workspace action wins the race. This
   // complements the desired-state comparison below: two transitions can target the same state at
   // different moments, but only the newest one may reveal the staged Management Row.
   let workspaceSyncRevision = 0;
@@ -408,12 +408,12 @@ export function mountApp(
    * Back/second-card-close, transparent-glass close, Escape, and the initial boot sync (called
    * once up front with both cards closed).
    *
-   * #242: an incoming card must never paint inside the old (smaller) Compact Widget rect and then
-   * snap into its final anchored position once the native window/webview catches up. There is no
-   * opening animation: already-open cards keep painting while only the incoming card stays hidden
-   * until native geometry, the target webview viewport, and one layout frame are settled.
-   * Closing/same-count swaps stay immediate. A revision plus a snapshot of `desired` prevents an
-   * older completion from revealing state after a rapid re-entrant click has already moved on. */
+   * #242: a card-count change must not expose an intermediate WebView composition while native
+   * window geometry catches up. Openings are staged until the target viewport settles. The Tauri
+   * adapter also stages contractions behind its native snapshot cover; browser adapters contract
+   * immediately because they have no native compositor boundary. Same-count swaps stay immediate.
+   * A revision plus a snapshot of `desired` prevents an older completion from revealing state
+   * after a rapid re-entrant click has already moved on. */
   function syncWorkspace(): void {
     const revision = ++workspaceSyncRevision;
     if (previousManagement === "bank" && workspace.management !== "bank") {
@@ -429,16 +429,20 @@ export function mountApp(
       (el<HTMLElement>("#card-character").hidden ? 0 : 1) +
       (el<HTMLElement>("#card-management").hidden ? 0 : 1);
     const expanding = desiredCount > paintedCount;
-    const needsNativePresentationCover = paintedCount === 1 && desiredCount === 2;
+    const contracting = desiredCount < paintedCount;
+    const stagesContraction = contracting && windowChrome.stagesCardCountContractions === true;
+    const stagesGeometryChange = expanding || stagesContraction;
+    const needsNativePresentationCover = paintedCount > 0 && stagesGeometryChange;
 
-    // On expansion, leave the currently painted composition alone. In particular, a 1->2 open
-    // keeps Character visible and stages only Management via its existing `hidden` attribute.
-    // Hiding the whole row caused a compact-only blank frame in real 60 fps recordings.
-    if (!expanding) renderWorkspace();
+    // Leave the old composition painted for every geometry change. The native adapter snapshots
+    // it before hiding the real NSWindow; rendering a contraction first exposes a mostly-
+    // transparent expanded WKWebView as black/stale regions on macOS. Same-count swaps have no
+    // native geometry handoff and remain immediate.
+    if (!stagesGeometryChange) renderWorkspace();
 
     const completion = windowChrome.setCardCount(desiredCount); // exactly one request per action
 
-    if (expanding) {
+    if (stagesGeometryChange) {
       void completion.then(() => {
         const stillDesired =
           revision === workspaceSyncRevision &&

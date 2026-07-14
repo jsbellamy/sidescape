@@ -6,8 +6,8 @@ fn greet(name: &str) -> String {
 
 #[cfg(target_os = "macos")]
 thread_local! {
-    /// Main-thread-only storage for the non-interactive snapshot window used during a 1 -> 2
-    /// workspace expansion. Keeping it independent from the game window is important: AppKit
+    /// Main-thread-only storage for the non-interactive snapshot window used during card-count
+    /// geometry transitions. Keeping it independent from the game window is important: AppKit
     /// automatically moves child windows with their parent, which would recreate the defect.
     static WINDOW_TRANSITION_OVERLAY: std::cell::RefCell<
         Option<objc2::rc::Retained<objc2_app_kit::NSWindow>>
@@ -48,7 +48,8 @@ async fn begin_window_transition(window: tauri::WebviewWindow) -> Result<(), Str
                 close_window_transition_overlay();
 
                 let mtm = MainThreadMarker::new_unchecked();
-                let ns_window: &NSWindow = &*webview.ns_window().cast();
+                let main_window: *mut NSWindow = webview.ns_window().cast();
+                let ns_window: &NSWindow = &*main_window;
                 let web_view: &WKWebView = &*webview.inner().cast();
                 let frame = ns_window.frame();
                 let level = ns_window.level();
@@ -83,6 +84,13 @@ async fn begin_window_transition(window: tauri::WebviewWindow) -> Result<(), Str
                             image_view.setImageScaling(NSImageScaling::ScaleAxesIndependently);
                             overlay.setContentView(Some(&image_view));
                             overlay.orderFrontRegardless();
+
+                            // The snapshot contains transparency, so leaving the resized game
+                            // window visible underneath exposes both surfaces: a duplicate card on
+                            // expansion and black/stale WebView regions on contraction. Hide the
+                            // real window until `end_window_transition` swaps the two surfaces in
+                            // one AppKit turn.
+                            (&*main_window).setAlphaValue(0.0);
 
                             WINDOW_TRANSITION_OVERLAY.with_borrow_mut(|slot| {
                                 *slot = Some(overlay);
@@ -120,7 +128,11 @@ fn end_window_transition(window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         window
-            .with_webview(|_| close_window_transition_overlay())
+            .with_webview(|webview| unsafe {
+                let ns_window: &objc2_app_kit::NSWindow = &*webview.ns_window().cast();
+                ns_window.setAlphaValue(1.0);
+                close_window_transition_overlay();
+            })
             .map_err(|error| error.to_string())?;
     }
     #[cfg(not(target_os = "macos"))]
