@@ -108,6 +108,37 @@ export const sprites = [
     alpha: "binary",
     ramps: ["steel", "rune", "adamant"],
   },
+  // Frostspire (#254): the 5th Area's own cast. Interim CC0 derivatives, same provenance and
+  // derivation pattern as the rest of this registry's sources (see docs/assets.md); #142 replaces
+  // them along with the rest of the cast. frost-warden uses the sanctioned 48x48 Boss canvas.
+  {
+    name: "frost-wolf",
+    source: "sprite-frost-wolf.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["steel"],
+  },
+  {
+    name: "ice-wraith",
+    source: "sprite-ice-wraith.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["steel", "water"],
+  },
+  {
+    name: "frost-giant",
+    source: "sprite-frost-giant.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["steel", "rune", "blood"],
+  },
+  {
+    name: "frost-warden",
+    source: "sprite-frost-warden.png",
+    size: 48,
+    alpha: "binary",
+    ramps: ["steel"],
+  },
 ];
 
 /**

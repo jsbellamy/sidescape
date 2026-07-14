@@ -35,10 +35,10 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   expect(pageErrors).toEqual([]);
 
   // #208: the World page's selected-Area progression rail lists every real Area (the shipped
-  // Content currently has four), and the Management card fits the rail plus the selected-Area
-  // detail with no whole-card scrolling — a real-browser layout check, not just a happy-dom one
-  // (happy-dom has no real layout engine to measure overflow against).
-  await expect(page.locator("[data-area-select]")).toHaveCount(4);
+  // Content has five since Frostspire, #254), and the Management card fits the rail plus the
+  // selected-Area detail with no whole-card scrolling — a real-browser layout check, not just a
+  // happy-dom one (happy-dom has no real layout engine to measure overflow against).
+  await expect(page.locator("[data-area-select]")).toHaveCount(5);
   const overflow = await page
     .locator("#card-management")
     .evaluate((el) => el.scrollHeight - el.clientHeight);

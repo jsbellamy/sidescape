@@ -34,7 +34,7 @@ describe("scene backdrop (#80)", () => {
     expect(planeRule).not.toContain("animation:");
   });
   it("references a pixel-art sky, mid, and near tile for every theme", () => {
-    const themes = ["meadow", "forest", "sewer", "crypt", "town"];
+    const themes = ["meadow", "forest", "sewer", "crypt", "town", "glacier"];
     const layers = ["sky", "mid", "near"];
 
     for (const theme of themes) {

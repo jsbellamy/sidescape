@@ -102,10 +102,21 @@ Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs
 
 Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). No other alteration was made to the audio content.
 
-## Scene backdrops and activity overlays (#80, #141)
+## Scene backdrops and activity overlays (#80, #141, #254)
 
 The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
-Theme — meadow/forest/sewer/crypt/town) are original pixel-art PNG tiles. The five activity
+Theme — meadow/forest/sewer/crypt/town/glacier) are original pixel-art PNG tiles. Unlike icons and
+sprites, there is no backdrop generator (`scripts/art/generate.mjs` never touches
+`src/assets/backdrops/`) — every set is hand-assembled and committed directly. The `glacier` set
+(Frostspire, #254) was procedurally hand-assembled with a small throwaway script rather than
+painted pixel-by-pixel, drawing from the `glacier` zone sub-palette (`scripts/art/palettes.mjs`)
+plus plain white for snow highlights (backdrops bypass the quantization pipeline entirely, so they
+are not restricted to the named-ramp vocabulary icons/sprites use). Every repeating shape (cloud,
+mountain peak, foreground hummock/icicle) is drawn at every `k * period + phase` position across a
+working canvas several tiles wide, where `period` evenly divides the 160px tile width — this makes
+each 160×120 tile exactly horizontally periodic by construction rather than by eye, verified by
+asserting `pixel(x, y) === pixel(x + 160, y)` across the full working canvas before the final crop
+(zero mismatches for all three layers). The five activity
 overlays are original transparent 80×60 native-pixel assets under `src/assets/activity-overlays/`:
 Smithing's anvil, Cooking's campfire, Crafting's tanning rack, Herblore's cauldron, and Fishing's
 planted rod/line/ripple. They are not CSS shapes and require no third-party provenance.
@@ -313,15 +324,53 @@ Warrior, Zombie, and Skeleton (see "Darkroot Forest, Old Sewers, and Bone Crypt 
   `scripts/art/sprite-sources/`, these are interim CC0 derivatives; #142 replaces the whole cast
   with original art.
 
+### Frostspire's own cast: Frost Wolf, Ice Wraith, Frost Giant, and Frost Warden (#254)
+
+The 5th Area needed four new Monster sprites: three open-world (32×32) plus the dungeon-only Frost
+Warden boss (48×48, the sanctioned Boss canvas — `crypt-shade` is the existing precedent). Per the
+same owner placeholder-art decision #253 already applied, all four are further crops of the same
+**Tiny Creatures** sheet already used for Goblin Warrior, Zombie, Skeleton, Crypt Ghoul, and Bone
+Knight (see "Darkroot Forest, Old Sewers, and Bone Crypt Monsters" and "Bone Crypt's own cast"
+above):
+
+| Sprite       | Pack           | Author          | License | Source                                         |
+| ------------ | -------------- | --------------- | ------- | ---------------------------------------------- |
+| Frost Wolf   | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+| Ice Wraith   | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+| Frost Giant  | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+| Frost Warden | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+
+- **Tiny Creatures** (Clint Bellanger, CC0 1.0 Universal, per the pack's own `License.txt`,
+  re-fetched directly from `https://opengameart.org/sites/default/files/tiny-creatures.zip` for
+  this issue): all four crops come from `Tilemap/tilemap_packed.png`, the same 10-column, 18-row,
+  16×16 packed tilemap the earlier Monster crops came from, but a DIFFERENT source file within the
+  pack than #253 used — `tilemap_packed.png` already carries alpha-0 background outside each
+  tile's own art (unlike the raw individual `Tiles/tile_NNNN.png` files #253 cropped from, which
+  needed a manual flood-key of their card background), so no flood-fill step was needed this time.
+  `sprite-frost-wolf.png` is tile index 93 (a dark grey, armoured wolf-headed humanoid bust),
+  `sprite-ice-wraith.png` is tile index 48 (a pale icy-blue spiky elemental/ghost), and
+  `sprite-frost-giant.png` is tile index 43 (a white yeti/abominable-snowman with a blue eye) — all
+  three nearest-neighbor upscaled 2× from their native 16×16 cell to this registry's 32×32 native-
+  source contract. `sprite-frost-warden.png` is tile index 30 (a white/silver dragon head-and-neck
+  bust), nearest-neighbor upscaled 3× from its native 16×16 cell to the 48×48 Boss canvas — the
+  same normalization principle #253 used for 32×32, just a larger factor to fill the bigger canvas.
+  This pack's tiles are portrait/front-facing rather than a true left/right walk cycle, so "facing
+  left" (`docs/art-style.md`) is satisfied trivially, matching precedent. No other alteration was
+  made to any of the four. Like the rest of the sources under `scripts/art/sprite-sources/`, these
+  are interim CC0 derivatives; #142 (which explicitly says it "should absorb them") replaces the
+  whole cast with original art.
+
 ## Source-driven combat sprite pipeline (#188)
 
-The 11 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`.
-Its registry keeps the runtime ids and filenames in `src/ui/sprites.ts` unchanged while declaring
-each source's canvas and alpha policy explicitly: ten sprites use 32×32 binary-alpha canvases;
-`crypt-shade` uses the sanctioned 48×48 Boss canvas and may contain at most one intermediate alpha
-value. The writer rejects invalid sources, projects colors onto the named house ramps, reduces each
-sprite to at most 12 RGB colors, and despeckles color clusters without changing its alpha mask or
-source-authored outline geometry.
+The 17 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`
+(this count grew from 11 through #253's Crypt Ghoul/Bone Knight and #254's Frost Wolf/Ice
+Wraith/Frost Giant/Frost Warden). Its registry keeps the runtime ids and filenames in
+`src/ui/sprites.ts` unchanged while declaring each source's canvas and alpha policy explicitly:
+fifteen sprites use 32×32 binary-alpha canvases; `crypt-shade` and `frost-warden` use the
+sanctioned 48×48 Boss canvas — `crypt-shade` may contain at most one intermediate alpha value,
+`frost-warden` is binary-alpha. The writer rejects invalid sources, projects colors onto the named
+house ramps, reduces each sprite to at most 12 RGB colors, and despeckles color clusters without
+changing its alpha mask or source-authored outline geometry.
 
 The committed files under `scripts/art/sprite-sources/` are interim derivatives of the CC0 sprites
 documented in the Sprite packs sections above. They nearest-neighbor normalize the old mixed canvas

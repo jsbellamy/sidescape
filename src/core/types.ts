@@ -40,7 +40,8 @@ export type Element = (typeof ELEMENTS)[number];
  * (Smithing today; #76's other production Skills later). Theme resolution itself is a UI-only
  * concern (ADR-0001's #20 Engine/Snapshot boundary — see ui/theme.ts's `resolveTheme`); this type
  * lives in core/types.ts only because `AreaDef.theme` (below) needs it. */
-export const THEMES = ["meadow", "forest", "sewer", "crypt", "town"] as const;
+// Frostspire (#254): the 5th Area's glacial theme. Appended, never inserted.
+export const THEMES = ["meadow", "forest", "sewer", "crypt", "town", "glacier"] as const;
 export type Theme = (typeof THEMES)[number];
 
 export type CombatStyle = "accurate" | "aggressive" | "defensive";
