@@ -79,3 +79,25 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   await expect(page.locator("#card-character")).toBeHidden();
   await expect(page.locator("#card-management")).toBeHidden();
 });
+
+test("activity overlay composition remains player-plane pixel art at every UiScale stop", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // Activity selection is covered at the Snapshot/DOM seam. This visual smoke isolates the final
+  // player-plane composition and writes inspection screenshots at all supported scale stops.
+  await page.locator("#activity-prop").evaluate((element) => {
+    element.removeAttribute("hidden");
+    element.className = "prop-fishing";
+  });
+  for (const scale of ["1", "1.5", "2"]) {
+    await page
+      .locator("#app")
+      .evaluate((element, value) => element.style.setProperty("--ui-scale", value), scale);
+    await expect(page.locator("#activity-prop")).toBeVisible();
+    await page.screenshot({
+      path: `${screenshots}/activity-overlay-${scale}x.png`,
+      fullPage: true,
+    });
+  }
+});

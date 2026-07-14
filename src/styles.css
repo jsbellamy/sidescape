@@ -527,6 +527,7 @@ body {
 #backdrop {
   position: absolute;
   inset: 0;
+  bottom: var(--overlay-plane-bottom, 0px); /* zero-offset compatibility with #232's guard */
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
@@ -711,112 +712,46 @@ body {
   }
 }
 
-/* Activity foreground prop (#80): follows the ACTIVITY (unlike the backdrop, which follows the
-   Area) — see production.ts's PRODUCTION_SKILLS/resolveProp. Sits at the near-layer depth, beside the player sprite (right
-   side of #sprite-row, see the flex layout above), so still behind sprites/splats/bars like the
-   rest of #backdrop, never overlapping them. */
+/* Fixed activity-selected near-scene overlay (#141): follows the activity (unlike the backdrop,
+   which follows the Area). It is a full 80×60 native player-plane canvas rendered at 2× and
+   bottom-centred within the fixed backdrop band, so its focus shares the player's ground line.
+   It is inside #backdrop after the readability fade, but #backdrop remains behind sprites, bars,
+   splats, toasts, and every other transient foreground layer. */
 #activity-prop {
   position: absolute;
-  right: 16%; /* #scene's width is fixed at 320px and never flexes, so a % here cannot drift */
-  bottom: var(--near-horizon); /* #232: stands on the same ground line as the sprites */
-  width: 22px;
-  height: 18px;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: bottom center;
+  background-size: 160px 120px;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
 #activity-prop[hidden] {
   display: none;
 }
 
-/* Anvil prop (#80, Smithing): hand-built via `clip-path` (same CSS-shapes escape hatch as the
-   backdrop layers above) rather than a sourced sprite — a simple flat-top/narrow-waist/wide-base
-   silhouette reads clearly at this scale. */
+/* Kept as a separate declaration because #232's CSSOM regression guard reads the explicit bottom
+   property; the zero offset is identical to `inset: 0` and never depends on scene height. */
+#activity-prop {
+  bottom: 0px;
+}
+
+/* The original transparent PNGs are composited scene overlays, not cropped CSS props. */
 .prop-anvil {
-  background: linear-gradient(to bottom, #7a7a7a, #333);
-  clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 30%,
-    65% 30%,
-    65% 65%,
-    90% 65%,
-    90% 100%,
-    10% 100%,
-    10% 65%,
-    35% 65%,
-    35% 30%,
-    0% 30%
-  );
+  background-image: url("./assets/activity-overlays/activity-anvil-near.png");
 }
-
-/* Cooking range/campfire prop (#115): same hand-built CSS-shapes escape hatch as the anvil above
-   — a dark ring (the fire pit) topped with a warm flame silhouette. */
 .prop-cooking {
-  position: relative;
-  background: radial-gradient(circle at 50% 80%, #4a3a2a, #241a10);
-  clip-path: polygon(15% 100%, 0% 70%, 20% 55%, 80% 55%, 100% 70%, 85% 100%);
+  background-image: url("./assets/activity-overlays/activity-cooking-near.png");
 }
-
-.prop-cooking::after {
-  content: "";
-  position: absolute;
-  left: 30%;
-  bottom: 55%;
-  width: 40%;
-  height: 55%;
-  background: linear-gradient(to top, #ff8c1a, #ffd25a);
-  clip-path: polygon(50% 0%, 80% 45%, 65% 45%, 90% 100%, 10% 100%, 35% 45%, 20% 45%);
-}
-
-/* Crafting workbench/tanning-rack prop (#116): same hand-built CSS-shapes escape hatch as the
-   anvil/cooking props above — a wooden A-frame rack (the tanning frame) with a hide silhouette
-   pinned across it. */
 .prop-crafting {
-  position: relative;
-  background: linear-gradient(to bottom, #8a6339, #5c4023);
-  clip-path: polygon(
-    0% 100%,
-    15% 0%,
-    25% 0%,
-    50% 70%,
-    75% 0%,
-    85% 0%,
-    100% 100%,
-    80% 100%,
-    65% 45%,
-    35% 45%,
-    20% 100%
-  );
+  background-image: url("./assets/activity-overlays/activity-crafting-near.png");
 }
-
-.prop-crafting::after {
-  content: "";
-  position: absolute;
-  left: 22%;
-  top: 30%;
-  width: 56%;
-  height: 45%;
-  background: #c9a876;
-  clip-path: polygon(10% 0%, 90% 0%, 100% 40%, 85% 100%, 15% 100%, 0% 40%);
-}
-
-/* Herblore cauldron prop (#118): same hand-built CSS-shapes escape hatch as the anvil/cooking/
-   crafting props above — a round-bottomed pot on three short legs, topped with a bubbling green
-   brew highlight. */
 .prop-cauldron {
-  position: relative;
-  background: radial-gradient(circle at 50% 30%, #4a4a52, #1c1c22);
-  clip-path: polygon(10% 30%, 90% 30%, 100% 55%, 80% 100%, 75% 80%, 25% 80%, 20% 100%, 0% 55%);
+  background-image: url("./assets/activity-overlays/activity-cauldron-near.png");
 }
-
-.prop-cauldron::after {
-  content: "";
-  position: absolute;
-  left: 24%;
-  top: 14%;
-  width: 52%;
-  height: 26%;
-  background: radial-gradient(circle at 50% 40%, #8cff6a, #2e7d32);
-  border-radius: 50%;
+.prop-fishing {
+  background-image: url("./assets/activity-overlays/activity-fishing-near.png");
 }
 
 #sprite-row {

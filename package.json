@@ -11,6 +11,8 @@
     "art": "node scripts/art/generate.mjs",
     "art:trace": "node scripts/art/trace-reference.mjs",
     "art:ingest": "node scripts/art/ingest-icon.mjs",
+    "art:overlay": "node scripts/art/ingest-overlay.mjs",
+    "art:overlays": "node scripts/art/build-overlays.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

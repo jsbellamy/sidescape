@@ -20,6 +20,19 @@ const noopWindowChrome: WorkspaceChrome = {
 };
 
 describe("scene backdrop (#80)", () => {
+  it("uses one fixed, pixelated 2× near-scene overlay plane for every activity focus", () => {
+    const overlayNames = ["anvil", "cooking", "crafting", "cauldron", "fishing"];
+    for (const name of overlayNames) {
+      expect(stylesheet).toContain(`.prop-${name}`);
+      expect(stylesheet).toContain(`url("./assets/activity-overlays/activity-${name}-near.png")`);
+    }
+    expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?inset:\s*0;/);
+    expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?background-size:\s*160px 120px;/);
+    expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?image-rendering:\s*pixelated;/);
+    const planeRule = stylesheet.match(/#activity-prop\s*\{([\s\S]*?)\}/)?.[1];
+    expect(planeRule).toBeDefined();
+    expect(planeRule).not.toContain("animation:");
+  });
   it("references a pixel-art sky, mid, and near tile for every theme", () => {
     const themes = ["meadow", "forest", "sewer", "crypt", "town"];
     const layers = ["sky", "mid", "near"];
@@ -124,6 +137,8 @@ describe("scene backdrop (#80)", () => {
     engine.selectFishingSpot("shrimp-pool"); // lumbry-meadows
     app.render();
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe("prop-fishing");
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
   });
 
   it("switches to the town theme and shows the anvil prop when Smithing starts, switching cleanly from whatever theme was showing before", () => {
@@ -166,6 +181,29 @@ describe("scene backdrop (#80)", () => {
     const prop = root.querySelector<HTMLElement>("#activity-prop");
     expect(prop?.hidden).toBe(false);
     expect(prop?.classList.contains("prop-cooking")).toBe(true);
+  });
+
+  it("shows exactly the mapped near-scene overlay for every Production Skill", () => {
+    const activities = [
+      { recipeId: "test-sword", itemId: "bar", prop: "anvil" },
+      { recipeId: "test-cook", itemId: "raw-fish", prop: "cooking" },
+      { recipeId: "test-craft", itemId: "hide", prop: "crafting" },
+      { recipeId: "test-brew", itemId: "herb", prop: "cauldron" },
+    ];
+    for (const activity of activities) {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: activity.itemId, qty: 1 }] } }),
+      );
+      const root = document.createElement("main");
+      const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+      engine.selectRecipe(activity.recipeId);
+      app.render();
+      const prop = root.querySelector<HTMLElement>("#activity-prop");
+      expect(prop?.className).toBe(`prop-${activity.prop}`);
+      expect(prop?.hidden).toBe(false);
+    }
   });
 
   it("shows the host Area's theme for the whole Dungeon run, including on its dungeon-only Boss wave", () => {

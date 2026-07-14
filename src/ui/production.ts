@@ -25,19 +25,22 @@ export const PRODUCTION_SKILLS: readonly ProductionSkillDescriptor[] = [
 export type ProductionSkill = (typeof PRODUCTION_SKILLS)[number]["skill"];
 
 /**
- * Foreground-prop registry (#80): which activity gets a prop beside the player sprite, and which
+ * Fixed near-scene overlay registry (#141): which activity paints environmental artwork beside the
+ * separately-rendered player, and which
  * one. A prop follows the ACTIVITY (unlike the backdrop Theme, which follows the AREA — see
  * theme.ts), keyed off `production.skill` since #113 made production multi-skill — descriptor-
  * backed (#181) rather than hand-listing each Skill: Smithing gets its anvil, Cooking (#115) gets
  * a range/campfire, Crafting (#116) gets a workbench/tanning rack, Herblore (#118) gets a
- * cauldron. Combat needs no prop (the Monster IS the foreground, per the owner framing); Fishing
- * has no CC0/hand-built prop yet, so it's skipped rather than shipping a placeholder.
+ * cauldron. Fishing has its one reusable planted-rod/ripple overlay. Combat needs no overlay (the
+ * Monster is its foreground focus).
  *
  * Returns a `prop-<key>` CSS class suffix (see styles.css), or null for "no prop this activity".
  */
 export function resolveProp(snap: Snapshot): string | null {
   const skill = snap.production?.skill;
-  return PRODUCTION_SKILLS.find((d) => d.skill === skill)?.prop ?? null;
+  return (
+    PRODUCTION_SKILLS.find((d) => d.skill === skill)?.prop ?? (snap.fishing ? "fishing" : null)
+  );
 }
 
 /** Replaces the `renderScene` emoji ternary: the production scene label for `skill`, or the raw

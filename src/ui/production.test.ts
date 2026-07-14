@@ -56,9 +56,9 @@ describe("resolveProp (#80)", () => {
     expect(resolveProp(snap)).toBeNull();
   });
 
-  it("shows no prop while fishing (no CC0/hand-built prop registered yet)", () => {
+  it("shows the reusable fishing overlay while Fishing", () => {
     const snap = makeSnapshot({ fishing: { spotId: "pond", name: "Test Pond" } });
-    expect(resolveProp(snap)).toBeNull();
+    expect(resolveProp(snap)).toBe("fishing");
   });
 
   it("shows no prop while idle", () => {

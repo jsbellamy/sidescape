@@ -102,21 +102,26 @@ Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs
 
 Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). No other alteration was made to the audio content.
 
-## Scene backdrops and props (#80)
+## Scene backdrops and activity overlays (#80, #141)
 
 The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
-Theme — meadow/forest/sewer/crypt/town), the Smithing anvil foreground prop
-(`#activity-prop.prop-anvil`), the Cooking range/campfire foreground prop
-(`#activity-prop.prop-cooking`, #115), and the Crafting workbench/tanning-rack foreground prop
-(`#activity-prop.prop-crafting`, #116) are **hand-built with plain CSS** (`linear-gradient` layers,
-`clip-path` silhouettes) — no third-party image asset, so no license/provenance entry is needed for
-them. This invokes the issue's own escape hatch verbatim: "if a decent CC0 set can't
-be found for a theme, hand-build that theme's layers with CSS gradients/shapes — plain-CSS is
-CLAUDE.md-native and better than a license risk." All five themes went this route rather than
-sourcing five more pixel-art packs, for the same reason CLAUDE.md's "no game engine, plain DOM/CSS
-rendering" already prefers — zero license risk, and swapping any one theme to a real sprite sheet
-later is a one-line `background-image` change per layer (see the comment above the per-theme rules
-in `src/styles.css`), no structural change.
+Theme — meadow/forest/sewer/crypt/town) are original pixel-art PNG tiles. The five activity
+overlays are original transparent 80×60 native-pixel assets under `src/assets/activity-overlays/`:
+Smithing's anvil, Cooking's campfire, Crafting's tanning rack, Herblore's cauldron, and Fishing's
+planted rod/line/ripple. They are not CSS shapes and require no third-party provenance.
+
+Backdrops use one native pixel per CSS pixel (160×120), while player/Monster sprites and activity
+overlays use the player grain: the overlay's 80×60 source is rendered at 2× as a 160×120 fixed,
+bottom-centred near-scene plane. Its subject is placed beside the separately-rendered player at
+native ground line y=50; it never embeds a player or maps Fishing variants per Area.
+
+`scripts/art/ingest-overlay.mjs` is the reproducible sibling of the icon ingest pipeline. It keys a
+flat-background source generation from the git-ignored `scripts/art/icon-gen-inbox/`, reuses
+`trace-core.mjs` to recover its chunky grid, then bottom-anchors the fitted subject onto a
+transparent 80×60 canvas. Run it manually (or `npm run art:overlay -- ...`) when an overlay needs
+adjustment. `scripts/art/overlays.mjs` records the five committed placements and fits; `npm run
+art:overlays` rebuilds all five once their raw inbox generations are present. `npm run art` remains
+the icon-only deterministic build.
 
 ## Item icons (#78)
 
