@@ -764,8 +764,8 @@ export function mountApp(
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
    * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
    * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
-   * and shows/hides the activity's foreground prop (Smithing's anvil, this wave — see
-   * production.ts's `resolveProp`).
+   * and shows/hides the fixed activity-selected near-scene overlay (kept behind the independently
+   * rendered player and transient foreground effects — see production.ts's `resolveProp`).
    * Updates `lastAreaId` whenever an Area-following activity resolves one, so later idle stretches
    * keep showing the most recently visited Area rather than flashing back to the first-unlocked. */
   function renderBackdrop(snap: Snapshot): void {
