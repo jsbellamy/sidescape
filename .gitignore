@@ -22,6 +22,12 @@ scripts/art/trace-out/
 # ingested compact source (scripts/art/icon-sources/) is committed (docs/icon-gen.md).
 scripts/art/icon-gen-inbox/
 
+# Source-driven combat sprite generation (#264), same contract as the icon inbox above: the raw
+# generation and the Stage-2 preview stay local, and only the ingested compact source
+# (scripts/art/sprite-sources/) is committed.
+scripts/art/sprite-gen-inbox/
+scripts/art/sprite-gen-out/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

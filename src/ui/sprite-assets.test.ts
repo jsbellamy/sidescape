@@ -17,7 +17,7 @@ const ALL_RAMPS = Object.keys(materialPalettes);
 const ALL_ZONES = Object.keys(zonePalettes);
 
 const EXPECTED_SPRITES = [
-  { name: "player", size: 32, alpha: "binary" },
+  { name: "player", size: 48, alpha: "binary" },
   { name: "chicken", size: 32, alpha: "binary" },
   { name: "cow", size: 32, alpha: "binary" },
   { name: "goblin", size: 32, alpha: "binary" },
@@ -316,7 +316,9 @@ describe("writeSprites", () => {
         colors.add(`${output.data[at]},${output.data[at + 1]},${output.data[at + 2]}`);
         if (alpha !== 255) intermediate.add(alpha);
       }
-      expect(colors.size, `${sprite.name} color budget`).toBeLessThanOrEqual(12);
+      expect(colors.size, `${sprite.name} color budget`).toBeLessThanOrEqual(
+        sprite.maxColors ?? 12,
+      );
       expect(intermediate.size, `${sprite.name} intermediate alpha steps`).toBeLessThanOrEqual(
         sprite.alpha === "one-intermediate" ? 1 : 0,
       );

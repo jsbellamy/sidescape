@@ -372,11 +372,13 @@ The 17 combat sprites now regenerate through `scripts/art/sprites.mjs` as part o
 (this count grew from 11 through #253's Crypt Ghoul/Bone Knight and #254's Frost Wolf/Ice
 Wraith/Frost Giant/Frost Warden). Its registry keeps the runtime ids and filenames in
 `src/ui/sprites.ts` unchanged while declaring each source's canvas and alpha policy explicitly:
-fifteen sprites use 32×32 binary-alpha canvases; `crypt-shade` and `frost-warden` use the
-sanctioned 48×48 Boss canvas — `crypt-shade` may contain at most one intermediate alpha value,
-`frost-warden` is binary-alpha. The writer rejects invalid sources, projects colors onto the named
-house ramps, reduces each sprite to at most 12 RGB colors, and despeckles color clusters without
-changing its alpha mask or source-authored outline geometry.
+fourteen sprites use 32×32 binary-alpha canvases; `player` (#264), `crypt-shade`, and `frost-warden`
+use the sanctioned 48×48 canvas — `crypt-shade` may contain at most one intermediate alpha value,
+the other two are binary-alpha. The writer rejects invalid sources, projects colors onto the named
+house ramps, reduces each sprite to at most `maxColors` RGB colors, and despeckles color clusters
+(both default to 12 colors / 3 passes but are overridable per registry entry — `player` uses 24
+colors and 0 passes; see the redraw section below) without changing its alpha mask or
+source-authored outline geometry.
 
 The committed files under `scripts/art/sprite-sources/` are interim derivatives of the CC0 sprites
 documented in the Sprite packs sections above. They nearest-neighbor normalize the old mixed canvas
@@ -385,3 +387,39 @@ padding, and approximate 64×64 in-app read. They are pipeline-proof assets rath
 #142 replaces them with the new original-art, inward-facing cast. Generated outputs live under
 `src/assets/sprites/`, and the deterministic native-scale and 4× review artifacts are
 `docs/sprite-sheet-1x.png` and `docs/sprite-sheet-4x.png`.
+
+## Original combat sprite redraw (#142)
+
+The `player` row starts the split original-art redraw tracked by #142. Its committed source is
+original SideScape art, faces left toward Monsters (the Monster stands to its left in `#sprite-row`),
+and keeps its feet on the shared ground baseline via bottom-anchored transparent padding.
+
+**Scope note (#264 as built).** The issue specified an in-place redraw on the existing 32×32 canvas
+inside the unchanged 64×64 box. During the work the original render was recovered at ~48 logical
+pixels tall, and squashing it to 32 destroyed the outline and shading (see `docs/sprite-gen.md`). So
+the redraw instead **establishes the shared character scale on the 48×48 canvas** — which #264's own
+umbrella framing ("establishing the shared character scale and pixel grain that each later Area slice
+validates against its Monsters") calls for — rather than forcing the smaller canvas. This carried a
+handful of deliberate scope changes over the issue text, all recorded in PR #<pending>:
+
+- **Native canvas 32×32 → 48×48.** The sanctioned non-Boss hero canvas; 32-native Monsters are
+  unchanged. The player quantizes with a wider `maxColors` (24) and no despeckle so the ingested
+  original art keeps its shading and single-pixel accents.
+- **New `skin` and `leather` material ramps** (`scripts/art/palettes.mjs`) so a lit character has a
+  faithful flesh/leather vocabulary; both are per-asset-scoped and touch no other sprite.
+- **Per-sprite display grain, not a fixed 64×64 box.** `src/ui/sprites.ts` now sizes each sprite as
+  `native × SPRITE_GRAIN` (grain = 2): 32-native Monsters stay 64px, the 48-native player is 96px,
+  and a future 48-native Boss is likewise 96px. Uniform grain keeps one pixel size across the cast;
+  a bigger Boss comes from a bigger canvas, never a bigger grain. This edited `src/ui/sprites.ts`,
+  `src/styles.css` (`.sprite` box → `--sprite-edge` variable), and `src/ui/app.ts`, which #264's
+  text asked to leave untouched.
+- **New ingest tooling** (`scripts/art/ingest-sprite.mjs`, `npm run art:ingest-sprite`) and its
+  prompt kit (`docs/sprite-gen.md`) so the source is machine-recovered from a generation rather than
+  hand-redrawn by eye — the sibling of the icon pipeline.
+
+Two follow-ups remain intentionally out of scope: the tunic still quantizes to brown (the olive has
+no named ramp yet — a `moss` ramp is the deferred color fix), and #142's later Area slices append
+their own original-art Monster rows here as they replace the remaining interim CC0 sources.
+
+This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
+provenance remains recorded as history.

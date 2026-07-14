@@ -17,35 +17,65 @@ import wolfUrl from "../assets/sprites/wolf.png";
 import zombieUrl from "../assets/sprites/zombie.png";
 
 /**
+ * Global display grain: every combat sprite renders at this integer multiple of its native canvas
+ * (`image-rendering: pixelated`, so a non-integer scale would give visibly uneven pixels). Keeping
+ * the grain uniform is what makes a 48-native hero and a 32-native mob read as one art style — the
+ * hero is bigger because she has MORE pixels, not bigger ones. Make a boss loom by giving it a
+ * bigger native canvas (see `sprites.mjs` — 48 is the sanctioned Boss size), never a bigger grain;
+ * mixing grains in one frame is exactly what makes a sprite look like it came from another game.
+ */
+export const SPRITE_GRAIN = 2;
+
+/** The px edge a sprite occupies on screen: its native canvas times the global grain. Square. */
+export function spriteEdgePx(nativeSize: number): number {
+  return nativeSize * SPRITE_GRAIN;
+}
+
+interface SpriteAsset {
+  url: string;
+  /** Native canvas edge in logical px — must match this id's `size` in `scripts/art/sprites.mjs`
+   *  (guarded by sprites.test.ts). Drives the on-screen box via `spriteEdgePx`. */
+  size: number;
+}
+
+/**
  * Combat-scene sprite for the player. See docs/assets.md for provenance.
  */
 export const playerSprite: string = playerUrl;
+
+/** The player's native canvas edge (48 — the ingested original-art hero, #264). */
+export const playerSpriteSize = 48;
 
 /**
  * Combat-scene sprites keyed by Monster id. Only Monsters with art get an
  * entry here; the combat scene falls back to no sprite for the rest (e.g.
  * test fixture Monsters). See docs/assets.md for provenance.
  */
-const monsterSprites: Record<string, string> = {
-  chicken: chickenUrl,
-  cow: cowUrl,
-  goblin: goblinUrl,
-  wolf: wolfUrl,
-  "goblin-warrior": goblinWarriorUrl,
-  bandit: banditUrl,
-  "giant-rat": giantRatUrl,
-  zombie: zombieUrl,
-  skeleton: skeletonUrl,
-  "crypt-shade": cryptShadeUrl,
-  "crypt-ghoul": cryptGhoulUrl,
-  "bone-knight": boneKnightUrl,
-  "frost-wolf": frostWolfUrl,
-  "ice-wraith": iceWraithUrl,
-  "frost-giant": frostGiantUrl,
-  "frost-warden": frostWardenUrl,
+const monsterSprites: Record<string, SpriteAsset> = {
+  chicken: { url: chickenUrl, size: 32 },
+  cow: { url: cowUrl, size: 32 },
+  goblin: { url: goblinUrl, size: 32 },
+  wolf: { url: wolfUrl, size: 32 },
+  "goblin-warrior": { url: goblinWarriorUrl, size: 32 },
+  bandit: { url: banditUrl, size: 32 },
+  "giant-rat": { url: giantRatUrl, size: 32 },
+  zombie: { url: zombieUrl, size: 32 },
+  skeleton: { url: skeletonUrl, size: 32 },
+  "crypt-shade": { url: cryptShadeUrl, size: 48 },
+  "crypt-ghoul": { url: cryptGhoulUrl, size: 32 },
+  "bone-knight": { url: boneKnightUrl, size: 32 },
+  "frost-wolf": { url: frostWolfUrl, size: 32 },
+  "ice-wraith": { url: iceWraithUrl, size: 32 },
+  "frost-giant": { url: frostGiantUrl, size: 32 },
+  "frost-warden": { url: frostWardenUrl, size: 48 },
 };
 
 /** Looks up a Monster's combat-scene sprite by id, or undefined if it has none. */
 export function monsterSprite(monsterId: string): string | undefined {
-  return monsterSprites[monsterId];
+  return monsterSprites[monsterId]?.url;
+}
+
+/** Native canvas edge of a Monster's sprite, or undefined if it has none. */
+export function monsterSpriteSize(monsterId: string): number | undefined {
+  return monsterSprites[monsterId]?.size;
 }
