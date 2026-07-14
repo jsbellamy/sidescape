@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { writeBackdrops } from "./backdrops.mjs";
 import { writeContactSheets } from "./contact-sheet.mjs";
 import { writeIcons } from "./icons.mjs";
 import { masterPalette, materialPalettes, zonePalettes } from "./palettes.mjs";
@@ -47,3 +48,9 @@ await writeSpriteContactSheets(resolve("src/assets/sprites"), resolve("docs"), s
 // Icon legibility rails (#166): regenerate the committed contact sheets so every icon PR shows
 // them in the diff. Must run after writeIcons above so the sheets reflect the current icon set.
 await writeContactSheets(resolve("src/assets/icons"), resolve("docs"));
+
+// Reusable deterministic backdrop generator infrastructure (#263), parallel to the icon/sprite
+// writers above. The production registry is deliberately empty until the Frostspire slice (#142)
+// registers its first definition, so this call writes nothing and leaves every hand-assembled
+// backdrop under src/assets/backdrops/ byte-identical.
+await writeBackdrops(resolve("src/assets/backdrops"));
