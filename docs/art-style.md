@@ -32,6 +32,44 @@ intentionally. The ramps are also the entire hue vocabulary build-time quantizat
 subject whose dominant hue has no ramp (the red potion, before `blood` existed) silently ships
 recolored into the nearest ramp, so add a ramp here rather than letting an off-hue subject drift.
 
+## ⚠️ Adding a palette ramp can silently recolor art that already ships
+
+Read this before touching `scripts/art/palettes.mjs`.
+
+`quantizeGrid` (`scripts/art/trace-core.mjs`) snaps every cell to the nearest color in the palette
+it is handed, so **every ramp in that palette is a candidate color for every cell of every asset.**
+Merely _adding_ a ramp can therefore repaint art you never meant to touch. This is not theoretical:
+
+- **#252** added the `adamant` and `rune` material ramps and silently recolored ~35 icons and 4
+  sprites — a mottled olive patch across 5.5% of `mithril-chainbody`, a visible cyan shift on the
+  `crypt-shade` and `zombie` sprites.
+- **#254** added the `glacier` zone palette; its first two color choices drifted 25 and then 7
+  committed files.
+
+**The art tests cannot catch this.** `icon-assets.test.ts` and `sprite-assets.test.ts` regenerate
+the art and compare it to the committed sheets — both sides are produced with the new ramp, so they
+pass _by construction_. Green CI proves nothing here. The only reliable check is git:
+
+```sh
+npm run art
+git diff --name-status main...HEAD -- src/assets/   # every line must be A; zero M
+```
+
+Any `M` on a pre-existing asset is a regression. Diagnose and scope it — never commit the drift,
+and never rationalize it as expected.
+
+Two rules when scoping:
+
+- **`materialPalettes` has an allowlist; `zonePalettes` does not.** `buildNamedPalette(rampNames)`
+  scopes material ramps per asset, so an icon only competes against its own ramps plus shared
+  neutrals. Zone palettes are still emitted in full for _every_ build — see #261.
+- **Scoping may only remove candidates, never reorder survivors.** `quantizeGrid` compares with a
+  strict `<`, so equidistant colors resolve by palette _position_. Emit in `materialPalettes`
+  declaration order; reordering flips real ties (it silently moved all four mace icons in #252).
+
+`src/ui/art-ramp-isolation.test.ts` locks this behavior with a decoy ramp and a control case. If you
+change quantization or palette scoping, that is the test that must still pass.
+
 ## Grids and pixel rules
 
 - Icons: native 34×34 canvas, with art confined to the inner 32×32 area.
