@@ -91,6 +91,23 @@ export const sprites = [
     alpha: "one-intermediate",
     ramps: ["blood", "ember", "steel", "water"],
   },
+  // Shade Crypt (#253): two new open-world Bone Crypt Monsters. Interim CC0 derivatives, same
+  // provenance and derivation pattern as the rest of this registry's sources (see docs/assets.md);
+  // #142 replaces them along with the rest of the cast.
+  {
+    name: "crypt-ghoul",
+    source: "sprite-crypt-ghoul.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["steel", "blood", "rune", "adamant"],
+  },
+  {
+    name: "bone-knight",
+    source: "sprite-bone-knight.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["steel", "rune", "adamant"],
+  },
 ];
 
 /**

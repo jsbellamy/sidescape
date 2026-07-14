@@ -14,7 +14,7 @@ describe("resolveTheme (#80)", () => {
       { monsterId: "chicken", areaId: "lumbry-meadows", theme: "meadow" },
       { monsterId: "wolf", areaId: "darkroot-forest", theme: "forest" },
       { monsterId: "giant-rat", areaId: "old-sewers", theme: "sewer" },
-      { monsterId: "crypt-shade", areaId: "bone-crypt", theme: "crypt" },
+      { monsterId: "crypt-ghoul", areaId: "bone-crypt", theme: "crypt" },
     ];
     for (const { monsterId, areaId, theme } of cases) {
       const snap = makeSnapshot({ monster: { id: monsterId, name: "?", hp: 1, maxHp: 1 } });

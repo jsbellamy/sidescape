@@ -283,6 +283,36 @@ reusing `skillIcon`'s own URL for those four keys — see that file's `tabIcons`
 is assets + registries only; rendering the Skills panel and three-card workspace navigation with
 these icons is `#135`/`#136`.
 
+### Bone Crypt's own cast: Crypt Ghoul and Bone Knight (#253)
+
+Shade Crypt (the Bone Crypt Dungeon) needed two new open-world Monsters to replace Crypt Shade,
+which this issue promotes to that Dungeon's boss. Per the owner's placeholder-art decision (#253),
+both sprites are further crops of the same **Tiny Creatures** sheet already used for Goblin
+Warrior, Zombie, and Skeleton (see "Darkroot Forest, Old Sewers, and Bone Crypt Monsters" above):
+
+| Sprite      | Pack           | Author          | License | Source                                         |
+| ----------- | -------------- | --------------- | ------- | ---------------------------------------------- |
+| Crypt Ghoul | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+| Bone Knight | Tiny Creatures | Clint Bellanger | CC0 1.0 | https://opengameart.org/content/tiny-creatures |
+
+- **Tiny Creatures** (Clint Bellanger, CC0 1.0 Universal, per the pack's own `License.txt`,
+  re-confirmed on this fetch): `scripts/art/sprite-sources/sprite-crypt-ghoul.png` is tile index 69
+  (a green-headed decayed humanoid) and `sprite-bone-knight.png` is tile index 96 (an armoured
+  bone-pale sentinel holding a weapon) of the same 10-column, 18-row, 16×16 packed tilemap the
+  earlier Monster crops came from. Both tiles ship on the pack's own rounded-card background (solid
+  near-black corners over a maroon body panel, not transparency); this pack's tiles are portrait/
+  front-facing rather than a true left/right walk cycle — the same is already true of the committed
+  zombie and skeleton sources from this pack — so "facing left" (`docs/art-style.md:46`) is
+  satisfied trivially, matching precedent. The card background was flood-keyed to alpha 0 (a
+  neighbor-relative tolerance flood from the border, the same treatment implied by the existing
+  zombie/skeleton/goblin-warrior sources, whose committed bytes also carry alpha-0 background
+  pixels rather than a hard crop) and the resulting 16×16 cutout was nearest-neighbor upscaled to
+  32×32 to match this registry's native-source contract, exactly as the interim derivatives
+  documented in "Source-driven combat sprite pipeline" below were normalized from this same pack's
+  mixed native sizes. No other alteration was made. Like the rest of the sources under
+  `scripts/art/sprite-sources/`, these are interim CC0 derivatives; #142 replaces the whole cast
+  with original art.
+
 ## Source-driven combat sprite pipeline (#188)
 
 The 11 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`.

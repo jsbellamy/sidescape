@@ -26,6 +26,10 @@ const WEAK_SPOT_TABLE: {
   { id: "skeleton", attackType: "slash", weakTo: "crush" },
   { id: "hollow-warden", attackType: "magic", weakTo: "crush", weakElement: "fire" },
   { id: "sewer-king", attackType: "crush", weakTo: "stab", weakElement: "earth" },
+  // Shade Crypt (#253): Bone Crypt's new open-world cast, statted between Skeleton and Crypt
+  // Shade. Neither is a boss, so neither carries a weakElement.
+  { id: "crypt-ghoul", attackType: "slash", weakTo: "stab" },
+  { id: "bone-knight", attackType: "crush", weakTo: "crush" },
   { id: "crypt-shade", attackType: "magic", weakTo: "ranged", weakElement: "fire" },
 ];
 
@@ -36,8 +40,8 @@ function lowestDefType(def: Record<AttackType, number>): AttackType {
 }
 
 describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
-  it("covers all 14 Monsters from the table", () => {
-    expect(WEAK_SPOT_TABLE).toHaveLength(14);
+  it("covers all 16 Monsters from the table", () => {
+    expect(WEAK_SPOT_TABLE).toHaveLength(16);
   });
 
   for (const row of WEAK_SPOT_TABLE) {

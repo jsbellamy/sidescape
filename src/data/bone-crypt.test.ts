@@ -2,10 +2,19 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 
 const SEWER_KING_WAVES = ["giant-rat", "zombie", "skeleton", "sewer-king"];
+
+// #253: the new shade-crypt Dungeon plus crypt-ghoul/bone-knight must be well-formed Content —
+// every id cross-reference (waves, chest, dropTable, monsterIds) resolves.
+describe("resolveContent(content)", () => {
+  it("does not throw with the Shade Crypt Dungeon and its new Monsters added", () => {
+    expect(() => resolveContent(content)).not.toThrow();
+  });
+});
 
 describe("Sewer King Dungeon", () => {
   it("is hosted in Old Sewers with Old-Sewers-Monster waves plus the Sewer King boss", () => {
@@ -52,14 +61,41 @@ describe("Bone Crypt content", () => {
     const boneCrypt = areas.find((a) => a.id === "bone-crypt");
     expect(boneCrypt).toBeDefined();
     expect(boneCrypt?.name).toBe("Bone Crypt");
-    expect(boneCrypt?.monsterIds).toEqual(["crypt-shade"]);
+    expect(boneCrypt?.monsterIds).toEqual(["crypt-ghoul", "bone-knight"]);
     expect(boneCrypt?.unlocked).toBe(false);
   });
 
-  it("gates a fresh player out of the Crypt Shade", () => {
-    expect(() => createEngine(content, seededRng(1)).selectMonster("crypt-shade")).toThrow(
+  it("gates a fresh player out of Bone Crypt's open-world Monsters", () => {
+    expect(() => createEngine(content, seededRng(1)).selectMonster("crypt-ghoul")).toThrow(
       /Bone Crypt is locked — defeat Sewer King/,
     );
+    expect(() => createEngine(content, seededRng(1)).selectMonster("bone-knight")).toThrow(
+      /Bone Crypt is locked — defeat Sewer King/,
+    );
+  });
+
+  it("Crypt Ghoul and Bone Knight both drop mithril Equipment and mithril-bar", () => {
+    for (const monsterId of ["crypt-ghoul", "bone-knight"]) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      expect(monster, monsterId).toBeDefined();
+      let mithrilEquipmentSeen = false;
+      let mithrilBarSeen = false;
+      for (const entry of monster.dropTable) {
+        const item = content.items.find((i) => i.id === entry.itemId);
+        expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
+        if (item?.kind === "equipment" && item.id.startsWith("mithril-"))
+          mithrilEquipmentSeen = true;
+        if (entry.itemId === "mithril-bar") mithrilBarSeen = true;
+      }
+      expect(mithrilEquipmentSeen, `${monsterId} drops no mithril Equipment`).toBe(true);
+      expect(mithrilBarSeen, `${monsterId} drops no mithril-bar`).toBe(true);
+    }
+  });
+
+  // #253: Crypt Shade is promoted to the shade-crypt Dungeon's boss — dungeon-only, exactly like
+  // goblin-chief/hollow-warden/sewer-king, so it no longer lives in any Area's monsterIds.
+  it("Crypt Shade is dungeon-only: absent from every Area's monsterIds", () => {
+    expect(content.areas.some((a) => a.monsterIds.includes("crypt-shade"))).toBe(false);
   });
 
   it("Crypt Shade exists with roughly double Old Sewers' top stats (Skeleton: hp 48 / maxHit 10)", () => {
@@ -237,7 +273,7 @@ function boneCryptFarmerSave() {
 describe("Bone Crypt tier balance", () => {
   it(
     "a steel-geared tier-3 (Sewers) graduate completes the Sewer King dungeon run, flipping " +
-      "Bone Crypt unlocked on dungeon-completed, then farms the Crypt Shade",
+      "Bone Crypt unlocked on dungeon-completed, then farms the Crypt Ghoul",
     () => {
       const engine = createEngine(content, seededRng(2024), sewersGraduateSave());
 
@@ -261,10 +297,10 @@ describe("Bone Crypt tier balance", () => {
       expect(afterDungeon.player.completedDungeonIds).toContain("sewer-king");
       expect(afterDungeon.areas.find((a) => a.id === "bone-crypt")?.unlocked).toBe(true);
 
-      expect(() => engine.selectMonster("crypt-shade")).not.toThrow();
+      expect(() => engine.selectMonster("crypt-ghoul")).not.toThrow();
       let kills = 0;
       engine.on("kill", (e) => {
-        if (e.monsterId === "crypt-shade") kills++;
+        if (e.monsterId === "crypt-ghoul") kills++;
       });
       for (let i = 0; i < 40000; i++) engine.tick();
 
@@ -272,14 +308,149 @@ describe("Bone Crypt tier balance", () => {
     },
   );
 
-  it("a fresh (unequipped, level-1) player cannot even enter Sewer King or select a Crypt Shade", () => {
+  it("a fresh (unequipped, level-1) player cannot even enter Sewer King or select a Crypt Ghoul", () => {
     expect(() => createEngine(content, seededRng(2024)).enterDungeon("sewer-king")).toThrow(
       /Old Sewers is locked — defeat Darkroot Hollow/,
     );
-    expect(() => createEngine(content, seededRng(2024)).selectMonster("crypt-shade")).toThrow(
+    expect(() => createEngine(content, seededRng(2024)).selectMonster("crypt-ghoul")).toThrow(
       /Bone Crypt is locked — defeat Sewer King/,
     );
   });
+});
+
+/** A saved Snapshot for a mithril-geared Bone Crypt graduate: cleared Sewer King (so Bone Crypt is
+ * unlocked) and mithril-geared — used to drive a full Shade Crypt Dungeon clear (skeleton ->
+ * crypt-ghoul -> bone-knight -> crypt-shade) without dying mid-run. */
+function mithrilGraduateSave() {
+  return makeSnapshot({
+    player: {
+      hp: 70,
+      maxHp: 70,
+      skills: {
+        attack: { level: 58, xp: xpForLevel(58) },
+        strength: { level: 60, xp: xpForLevel(60) },
+        defence: { level: 52, xp: xpForLevel(52) },
+        hitpoints: { level: 70, xp: xpForLevel(70) },
+      },
+      equipment: {
+        weapon: "mithril-dagger",
+        shield: "mithril-kiteshield",
+        body: "mithril-chainbody",
+        head: "mithril-full-helm",
+      },
+      autoEatThreshold: 0.5,
+      completedDungeonIds: ["darkroot-hollow", "sewer-king"],
+      foodSlots: [{ itemId: "cooked-pike", qty: 5000 }, null, null],
+    },
+  });
+}
+
+// Shade Crypt (#253): Bone Crypt's own Dungeon. skeleton/crypt-ghoul/bone-knight waves plus the
+// dungeon-only Crypt Shade boss, mirroring Sewer King's structure exactly.
+describe("Shade Crypt Dungeon", () => {
+  it("is hosted in Bone Crypt with skeleton/crypt-ghoul/bone-knight waves plus the Crypt Shade boss", () => {
+    const dungeon = content.dungeons.find((d) => d.id === "shade-crypt");
+    expect(dungeon).toBeDefined();
+    expect(dungeon?.areaId).toBe("bone-crypt");
+    expect(dungeon?.waves).toEqual(["skeleton", "crypt-ghoul", "bone-knight", "crypt-shade"]);
+    const boss = content.monsters.find((m) => m.id === "crypt-shade");
+    expect(boss).toBeDefined();
+    expect(boss!.hp).toBeGreaterThan(content.monsters.find((m) => m.id === "bone-knight")!.hp);
+  });
+
+  it("its Chest bridges the mithril -> adamant transition, and every entry resolves to a real item", () => {
+    const dungeon = content.dungeons.find((d) => d.id === "shade-crypt")!;
+    const chestItemIds = dungeon.chest.map((e) => e.itemId);
+    const mithrilItems = chestItemIds.filter((id) => id.startsWith("mithril-"));
+    const adamantItems = chestItemIds.filter((id) => id.startsWith("adamant-"));
+    expect(mithrilItems.length).toBeGreaterThan(0);
+    expect(adamantItems.length).toBeGreaterThan(0);
+    for (const entry of dungeon.chest) {
+      const item = content.items.find((i) => i.id === entry.itemId);
+      expect(item, `chest entry ${entry.itemId} not found`).toBeDefined();
+    }
+  });
+
+  it("a save that has never cleared it can obtain no adamant anywhere (it's the only adamant source)", () => {
+    // Every source of an adamant-prefixed item in Content is this Dungeon's own Chest — no
+    // Monster Drop Table and no other Dungeon's Chest yields adamant.
+    for (const monster of content.monsters) {
+      for (const entry of monster.dropTable) {
+        expect(entry.itemId.startsWith("adamant-"), `${monster.id} drops ${entry.itemId}`).toBe(
+          false,
+        );
+      }
+    }
+    for (const dungeon of content.dungeons) {
+      if (dungeon.id === "shade-crypt") continue;
+      for (const entry of dungeon.chest) {
+        expect(
+          entry.itemId.startsWith("adamant-"),
+          `${dungeon.id}'s chest yields ${entry.itemId}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("entering it requires Bone Crypt unlocked (a player without Sewer King cleared is locked out)", () => {
+    expect(() => createEngine(content, seededRng(1)).enterDungeon("shade-crypt")).toThrow(
+      /Bone Crypt is locked — defeat Sewer King/,
+    );
+  });
+
+  it("a player who unlocked Bone Crypt but hasn't cleared Shade Crypt can still enter it (Dungeon entry only requires the host Area unlocked)", () => {
+    const engine = createEngine(content, seededRng(1), mithrilGraduateSave());
+    expect(() => engine.enterDungeon("shade-crypt")).not.toThrow();
+  });
+
+  it('a save with state.monster.id === "crypt-shade" (a player mid-fight from before this slice) loads without throwing', () => {
+    // A genuine captured Snapshot, not hand-rolled: crypt-shade is dungeon-only now (absent from
+    // every Area's monsterIds, like every other dungeon boss), but direct selectMonster by id is
+    // still legal at the Engine layer — exactly how goblin-chief/hollow-warden/sewer-king already
+    // behave — so this reproduces a real pre-#253 open-world Crypt Shade fight.
+    const fighting = createEngine(content, seededRng(1));
+    fighting.selectMonster("crypt-shade");
+    fighting.tick();
+    const saved = fighting.snapshot();
+    expect(saved.monster?.id).toBe("crypt-shade");
+
+    let restored: ReturnType<typeof createEngine> | undefined;
+    expect(() => {
+      restored = createEngine(content, seededRng(1), saved);
+    }).not.toThrow();
+    // loadState resolves the monster by id from content.monsters, which still contains it (id and
+    // stats unchanged) — the fight resumes rather than falling back idle.
+    expect(restored!.snapshot().monster?.id).toBe("crypt-shade");
+  });
+
+  it("a mithril-geared fixture clears Shade Crypt end to end: dungeon-completed then chest-opened", () => {
+    const engine = createEngine(content, seededRng(7), mithrilGraduateSave());
+
+    let completedDungeonId: string | null = null;
+    let chestItems: { itemId: string; qty: number }[] | null = null;
+    engine.on("dungeon-completed", (e) => {
+      if (e.dungeonId === "shade-crypt") completedDungeonId = e.dungeonId;
+    });
+    engine.on("chest-opened", (e) => {
+      if (e.dungeonId === "shade-crypt") chestItems = e.items;
+    });
+
+    expect(() => engine.enterDungeon("shade-crypt")).not.toThrow();
+
+    for (let i = 0; i < 200000 && completedDungeonId === null; i++) {
+      engine.tick();
+      const snap = engine.snapshot();
+      // Re-enter if a death (or a fully-drained food stash) ejected the run back to idle before
+      // it completed — Dungeon runs are all-or-nothing, so a failed attempt just retries.
+      if (completedDungeonId === null && snap.dungeon === null && snap.monster === null) {
+        engine.enterDungeon("shade-crypt");
+      }
+    }
+
+    expect(completedDungeonId).toBe("shade-crypt");
+    expect(chestItems).not.toBeNull();
+    expect(chestItems!.length).toBeGreaterThan(0);
+  }, 15000);
 });
 
 describe("Shade Blade drop-rate convergence", () => {

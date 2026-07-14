@@ -26,6 +26,8 @@ const EXPECTED_SPRITES = [
   { name: "zombie", size: 32, alpha: "binary" },
   { name: "skeleton", size: 32, alpha: "binary" },
   { name: "crypt-shade", size: 48, alpha: "one-intermediate" },
+  { name: "crypt-ghoul", size: 32, alpha: "binary" },
+  { name: "bone-knight", size: 32, alpha: "binary" },
 ] as const;
 
 const SPRITES_DIR = fileURLToPath(new URL("../assets/sprites", import.meta.url));
