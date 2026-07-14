@@ -28,8 +28,8 @@ export const sprites = [
     source: "sprite-player.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["blood", "ember", "steel"],
-    zoneNames: ["forest", "town"],
+    materialRampNames: ["steel"],
+    zoneNames: ["forest"],
   },
   {
     name: "chicken",

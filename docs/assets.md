@@ -385,3 +385,14 @@ padding, and approximate 64×64 in-app read. They are pipeline-proof assets rath
 #142 replaces them with the new original-art, inward-facing cast. Generated outputs live under
 `src/assets/sprites/`, and the deterministic native-scale and 4× review artifacts are
 `docs/sprite-sheet-1x.png` and `docs/sprite-sheet-4x.png`.
+
+## Original combat sprite redraw (#142)
+
+The `player` row starts the split original-art redraw tracked by #142. Its committed source is
+original SideScape art on the shared 32×32 binary-alpha combat canvas, faces right toward Monsters,
+and keeps its feet on the existing player baseline at native row 31. The generated `player.png`
+continues to use the unchanged 64×64 CSS presentation contract.
+
+This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
+provenance remains recorded as history. Later Area slices append their own original-art Monster rows
+to this section as they replace the remaining interim CC0-derived sources.
