@@ -10,28 +10,86 @@ const SPRITE_SOURCES_DIR = fileURLToPath(new URL("./sprite-sources", import.meta
  * Complete combat-sprite registry. Policies are explicit per entry so canvas and alpha behavior
  * never depend on filename conventions. The committed sources are interim reconstructions of the
  * current CC0 sprites; issue #142 replaces their art without changing this runtime contract.
+ *
+ * `ramps` (#252) is the same per-asset quantization scoping the icon pipeline uses (see
+ * `scripts/art/icons.mjs`'s SOURCE_RAMPS and `buildNamedPalette`'s doc): each sprite quantizes
+ * only against the material ramps its own source actually lands on, so a ramp it does not use can
+ * never alter it. Before this, quantizing against every ramp in the project meant adding `rune`
+ * (a cyan metal) visibly shifted the crypt-shade and zombie sprites. Each list is exactly the set
+ * of ramps that win at least one cell of that source; dropping the never-winning ramps cannot
+ * change any cell's nearest color, so this reproduces the shipped bytes exactly.
  */
 export const sprites = [
-  { name: "player", source: "sprite-player.png", size: 32, alpha: "binary" },
-  { name: "chicken", source: "sprite-chicken.png", size: 32, alpha: "binary" },
-  { name: "cow", source: "sprite-cow.png", size: 32, alpha: "binary" },
-  { name: "goblin", source: "sprite-goblin.png", size: 32, alpha: "binary" },
-  { name: "wolf", source: "sprite-wolf.png", size: 32, alpha: "binary" },
+  {
+    name: "player",
+    source: "sprite-player.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "ember", "steel"],
+  },
+  {
+    name: "chicken",
+    source: "sprite-chicken.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "ember", "steel"],
+  },
+  {
+    name: "cow",
+    source: "sprite-cow.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "ember", "steel"],
+  },
+  {
+    name: "goblin",
+    source: "sprite-goblin.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "steel"],
+  },
+  { name: "wolf", source: "sprite-wolf.png", size: 32, alpha: "binary", ramps: ["gold", "steel"] },
   {
     name: "goblin-warrior",
     source: "sprite-goblin-warrior.png",
     size: 32,
     alpha: "binary",
+    ramps: ["blood", "water"],
   },
-  { name: "bandit", source: "sprite-bandit.png", size: 32, alpha: "binary" },
-  { name: "giant-rat", source: "sprite-giant-rat.png", size: 32, alpha: "binary" },
-  { name: "zombie", source: "sprite-zombie.png", size: 32, alpha: "binary" },
-  { name: "skeleton", source: "sprite-skeleton.png", size: 32, alpha: "binary" },
+  {
+    name: "bandit",
+    source: "sprite-bandit.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "gold", "steel"],
+  },
+  {
+    name: "giant-rat",
+    source: "sprite-giant-rat.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "steel"],
+  },
+  {
+    name: "zombie",
+    source: "sprite-zombie.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "steel", "water"],
+  },
+  {
+    name: "skeleton",
+    source: "sprite-skeleton.png",
+    size: 32,
+    alpha: "binary",
+    ramps: ["blood", "ember", "steel"],
+  },
   {
     name: "crypt-shade",
     source: "sprite-crypt-shade.png",
     size: 48,
     alpha: "one-intermediate",
+    ramps: ["blood", "ember", "steel", "water"],
   },
 ];
 
@@ -44,7 +102,6 @@ export async function writeSprites(
   destDir,
   { sourceDir = SPRITE_SOURCES_DIR, registry = sprites } = {},
 ) {
-  const named = buildNamedPalette();
   for (const sprite of registry) {
     if (sprite.size !== 32 && sprite.size !== 48) {
       throw new Error(
@@ -56,6 +113,14 @@ export async function writeSprites(
         `writeSprites: ${sprite.name} has unknown alpha policy ${JSON.stringify(sprite.alpha)}`,
       );
     }
+    if (!sprite.ramps) {
+      throw new Error(
+        `writeSprites: ${sprite.name} declares no material ramps — list the ramps its source quantizes into (see the registry's doc)`,
+      );
+    }
+    // Quantize against ONLY the ramps this sprite's source uses (#252) — a ramp it does not
+    // declare can never win one of its cells.
+    const named = buildNamedPalette(sprite.ramps);
     const sourcePath = `${sourceDir}/${sprite.source}`;
     if (!existsSync(sourcePath)) {
       throw new Error(`writeSprites: ${sprite.name} source ${sprite.source} is missing`);

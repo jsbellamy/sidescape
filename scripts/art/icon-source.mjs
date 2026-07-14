@@ -59,15 +59,25 @@ export function loadSourceGrid(pngPath) {
  *
  * @param {ReturnType<typeof import("./icon-canvas.mjs").createCanvas>} canvas
  * @param {(null | [number, number, number])[][]} grid
- * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, recolor?: Record<string, string> }} [opts]
+ * `ramps` (#252) scopes the QUANTIZATION vocabulary to the material ramps this icon's own source
+ * actually uses (`scripts/art/icons.mjs`'s SOURCE_RAMPS). Quantization snaps each cell to the
+ * globally nearest palette entry, so without this scoping every material ramp in the project is a
+ * candidate color for every cell — and merely ADDING a ramp silently recolors unrelated shipped
+ * icons (see `buildNamedPalette`'s doc). RECOLOR targets are resolved against the FULL palette:
+ * remapping into a ramp the source does not itself quantize into is exactly what a tier recolor
+ * does (a mithril icon's steel cells becoming `rune.*`), and a recolor is an explicit, per-icon
+ * instruction rather than a global nearest-color accident.
+ *
+ * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, ramps?: readonly string[], recolor?: Record<string, string> }} [opts]
  */
 export function paintSourceIcon(
   canvas,
   grid,
-  { x0, y0, outline = P.ink, named, recolor = {} } = {},
+  { x0, y0, outline = P.ink, named, ramps, recolor = {} } = {},
 ) {
-  const palette = named ?? buildNamedPalette();
-  const paletteByRef = new Map(palette.map((entry) => [entry.ref, entry]));
+  const quantizePalette = named ?? buildNamedPalette(ramps);
+  // Full vocabulary — recolor may name any ramp, including one this source never quantizes into.
+  const paletteByRef = new Map(buildNamedPalette().map((entry) => [entry.ref, entry]));
   for (const [from, to] of Object.entries(recolor)) {
     if (!paletteByRef.has(from)) {
       throw new Error(`paintSourceIcon: unknown named palette ref ${JSON.stringify(from)}`);
@@ -76,7 +86,7 @@ export function paintSourceIcon(
       throw new Error(`paintSourceIcon: unknown named palette ref ${JSON.stringify(to)}`);
     }
   }
-  const { cells } = quantizeGrid(grid, palette);
+  const { cells } = quantizeGrid(grid, quantizePalette);
   // Strip the traced exterior ink first (it is re-derived as one clean ring), THEN reduce the
   // remaining body fills to the color budget, so a budget slot is never spent on ink that is
   // about to be peeled away.

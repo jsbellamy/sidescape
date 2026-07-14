@@ -8,6 +8,85 @@ import { writePng } from "./write-png.mjs";
  * house style at build by `paintSourceIcon`. */
 const ICON_SOURCES_DIR = fileURLToPath(new URL("./icon-sources", import.meta.url));
 
+/**
+ * The material ramps each committed icon SOURCE quantizes into (#252) — the vocabulary
+ * `paintSourceIcon` is allowed to snap that source's cells to.
+ *
+ * This is keyed by source, not by icon, because quantization reads the source art only: every tier
+ * variant of a family shares one source and therefore one ramp set, and their differences come
+ * later, from the explicit `opts.recolor` map. A ramp NOT listed here can never win a cell of this
+ * source, which is the whole point: `quantizeGrid` picks the globally nearest palette entry, so
+ * before this table existed, merely ADDING a ramp re-quantized unrelated shipped icons (adding
+ * `adamant` put a green patch on mithril-chainbody; see `buildNamedPalette`'s doc and the
+ * `src/ui/art-ramp-isolation.test.ts` regression test).
+ *
+ * Each entry lists exactly the ramps that actually win at least one cell of that source. Removing
+ * the ramps that never win cannot change any cell's nearest color, so scoping reproduces the
+ * pre-#252 shipped bytes exactly. To add a source: quantize it against the full palette once and
+ * record the ramps it lands on. A source missing from this table throws in `writeIcons` rather
+ * than silently falling back to the every-ramp palette.
+ */
+const SOURCE_RAMPS = {
+  "golden-armor-kiteshield.png": ["ember", "gold", "steel"],
+  "golden-base-air-rune.png": ["water"],
+  "golden-base-apprentice-staff.png": ["ember", "gold", "steel"],
+  "golden-base-bronze-arrow.png": ["ember"],
+  "golden-base-bronze-shield.png": ["ember", "gold", "steel"],
+  "golden-base-cowhide.png": ["blood"],
+  "golden-base-fishing-frog.png": [],
+  "golden-base-guam-herb.png": [],
+  "golden-base-iron-chainbody.png": ["steel"],
+  "golden-base-iron-full-helm.png": ["steel"],
+  "golden-base-kiln-cat.png": ["blood", "ember"],
+  "golden-base-leather-chaps.png": [],
+  "golden-base-leather-coif.png": [],
+  "golden-base-raw-pike.png": [],
+  "golden-base-raw-shrimp.png": ["blood", "ember"],
+  "golden-base-raw-trout.png": ["steel", "water"],
+  "golden-base-rock-golem.png": ["steel"],
+  "golden-base-sapphire-amulet.png": ["ember", "gold", "steel", "water"],
+  "golden-base-sapphire-ring.png": ["ember", "gold", "water"],
+  "golden-base-sapphire.png": ["water"],
+  "golden-base-shade-blade.png": [],
+  "golden-base-shade-wisp.png": ["steel"],
+  "golden-base-shortbow.png": [],
+  "golden-consumable-red-potion.png": ["blood", "ember"],
+  "golden-item-bronze-dagger.png": ["ember", "gold"],
+  "golden-item-bronze-mace.png": ["ember", "gold"],
+  "golden-item-goblin-charm.png": [],
+  "golden-item-gold.png": ["ember", "gold"],
+  "golden-item-leather-body.png": [],
+  "golden-item-raw-beef.png": ["blood"],
+  "golden-resource-iron-bar.png": ["steel"],
+  "golden-skill-cooking.png": ["blood", "ember", "gold"],
+  "golden-skill-crafting-v2.png": ["ember", "gold", "steel", "water"],
+  "golden-skill-herblore.png": [],
+  "golden-skill-hitpoints.png": ["ember", "gold"],
+  "golden-skill-smithing.png": ["steel"],
+  "golden-tab-bank.png": ["ember", "gold"],
+  "golden-tab-character.png": ["blood", "gold"],
+  "golden-tab-loot.png": ["ember", "gold"],
+  "golden-tab-skills.png": [],
+  "golden-tab-vendor.png": ["ember", "gold"],
+  "golden-tab-world-v2.png": ["ember", "steel", "water"],
+  "golden-weapon-iron-sword.png": ["gold", "steel"],
+  "skill-attack.png": ["ember", "gold", "steel"],
+  "skill-fishing.png": ["steel", "water"],
+  "skill-strength.png": ["ember"],
+};
+
+/** The material ramps a given icon source may quantize into. Exported for the ramp-isolation
+ * regression test, which asserts no asset depends on a ramp it does not declare. */
+export function rampsForSource(source) {
+  const ramps = SOURCE_RAMPS[source];
+  if (!ramps) {
+    throw new Error(
+      `icons.mjs: source ${JSON.stringify(source)} has no SOURCE_RAMPS entry — declare the material ramps it quantizes into (see SOURCE_RAMPS' doc)`,
+    );
+  }
+  return ramps;
+}
+
 const sapphireToEmerald = {
   "forest[1]": "meadow[4]",
   "water.shadow": "meadow[4]",
@@ -1111,7 +1190,8 @@ export async function writeIcons(destDir) {
     if (icon.source) {
       const grid = loadSourceGrid(`${ICON_SOURCES_DIR}/${icon.source}`);
       const canvas = createCanvas();
-      paintSourceIcon(canvas, grid, icon.opts);
+      // Quantize against ONLY the ramps this source uses (#252) — see SOURCE_RAMPS' doc.
+      paintSourceIcon(canvas, grid, { ...icon.opts, ramps: rampsForSource(icon.source) });
       await writePng(`${destDir}/${icon.name}.png`, 34, 34, canvas.toPixelFn());
     } else {
       await writeIcon(`${destDir}/${icon.name}.png`, icon.paint);
