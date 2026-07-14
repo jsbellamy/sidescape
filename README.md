@@ -47,6 +47,35 @@ npm run build      # typecheck + bundle the frontend
 
 A husky pre-commit hook runs Prettier (staged files), then `typecheck`, then the full test suite — commits are blocked if any fail. Don't bypass it with `--no-verify`. See `AGENTS.md` for working conventions (test-first via the Engine interface, branch-per-issue, CI must be green to merge).
 
+## Get the app without building from source
+
+If you just want to run SideScape on macOS without installing Rust, `.github/workflows/release.yml` builds a packaged `.app`/`.dmg` in CI and attaches it to a draft GitHub Release.
+
+### Cutting a release
+
+The workflow only runs on `workflow_dispatch` — there is no tag-push trigger. Run it manually:
+
+- GitHub UI: **Actions** tab → **Release** → **Run workflow**, or
+- CLI: `gh workflow run release.yml`
+
+This produces a **draft** GitHub Release with the `.app`/`.dmg` attached, not a published one. Open the repo's Releases page and click **Publish release** to make it visible (or leave it as a draft for yourself).
+
+Before running the workflow, bump the version by hand in all three of these files — nothing keeps them in sync automatically:
+
+- `package.json` (`version` field)
+- `src-tauri/tauri.conf.json` (`version` field)
+- `src-tauri/Cargo.toml` (`version` field)
+
+The release's tag and name are generated from `src-tauri/tauri.conf.json`'s version specifically (`tagName: app-v__VERSION__`, `releaseName: "SideScape v__VERSION__"`), so that file's version in particular must be correct for the release to be named right.
+
+### Installing
+
+Download the `.dmg` from the release, open it, and drag `sidescape.app` to `Applications` (or run the `.app` directly from wherever it was downloaded). Note the bundle is named `sidescape.app` (matching `productName` in `src-tauri/tauri.conf.json`), even though the app window itself is titled "SideScape".
+
+### First launch: Gatekeeper warning
+
+macOS's Gatekeeper will block the first launch, reporting that `sidescape.app` is from an unidentified developer, because this build is intentionally unsigned — per `AGENTS.md`, the transparent-window `macOSPrivateApi` setup this app relies on is "suitable for personal distribution" rather than notarized App Store distribution. To bypass it (only needed once per machine): right-click (Control-click) `sidescape.app` → **Open** → confirm **Open** in the dialog.
+
 ## Project layout
 
 - `src/core/` — headless game Engine: combat ticks, XP curve, drop rolls, save serialization. Pure TS, no DOM, unit-tested. Caller-pumped `tick()` (see `docs/adr/0001-caller-pumped-deep-engine.md`).
