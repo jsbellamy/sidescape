@@ -1,6 +1,8 @@
 import banditUrl from "../assets/sprites/bandit.png";
+import boneKnightUrl from "../assets/sprites/bone-knight.png";
 import chickenUrl from "../assets/sprites/chicken.png";
 import cowUrl from "../assets/sprites/cow.png";
+import cryptGhoulUrl from "../assets/sprites/crypt-ghoul.png";
 import cryptShadeUrl from "../assets/sprites/crypt-shade.png";
 import giantRatUrl from "../assets/sprites/giant-rat.png";
 import goblinUrl from "../assets/sprites/goblin.png";
@@ -31,6 +33,8 @@ const monsterSprites: Record<string, string> = {
   zombie: zombieUrl,
   skeleton: skeletonUrl,
   "crypt-shade": cryptShadeUrl,
+  "crypt-ghoul": cryptGhoulUrl,
+  "bone-knight": boneKnightUrl,
 };
 
 /** Looks up a Monster's combat-scene sprite by id, or undefined if it has none. */

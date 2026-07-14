@@ -39,13 +39,14 @@ export const content: Content = {
       monsterIds: ["giant-rat", "zombie", "skeleton"],
       theme: "sewer",
     },
-    // Bone Crypt (#11): endgame Area holding the single boss-tier Crypt Shade, gated by the
-    // Sewer King Dungeon (hosted in Old Sewers) rather than an Old Sewers Monster.
+    // Bone Crypt (#11): endgame Area, gated by the Sewer King Dungeon (hosted in Old Sewers)
+    // rather than an Old Sewers Monster. Shade Crypt (#253) is its own Dungeon: Crypt Shade moved
+    // there as its boss, so Bone Crypt's open-world cast is now crypt-ghoul/bone-knight instead.
     {
       id: "bone-crypt",
       name: "Bone Crypt",
       unlockedByDungeonId: "sewer-king",
-      monsterIds: ["crypt-shade"],
+      monsterIds: ["crypt-ghoul", "bone-knight"],
       theme: "crypt",
     },
   ],
@@ -349,9 +350,60 @@ export const content: Content = {
       weakElement: "earth",
       dropTable: [{ itemId: "gold", qty: 70, chance: 1, band: "guaranteed" }],
     },
-    // Bone Crypt (#11): the endgame Area's single boss-tier Monster, roughly double Old Sewers'
-    // top stats (Skeleton: hp 48 / maxHit 10). Open-world Area boss, NOT a dungeon boss — the
-    // Shade Blade sits in its normal Drop Table at a ~1/512 rare band.
+    // Shade Crypt (#253): Bone Crypt's own open-world cast, statted between Skeleton (Old Sewers:
+    // hp 48/atk 28/def 20/maxHit 10) and Crypt Shade (hp 110/atk 60/def 44/maxHit 22, now the
+    // Shade Crypt Dungeon's boss below). crypt-ghoul is the lighter of the two; bone-knight is the
+    // heavier armoured melee, also fought as a Dungeon wave. Both drop mithril gear/mithril-bar,
+    // the tier this Area represents.
+    {
+      id: "crypt-ghoul",
+      name: "Crypt Ghoul",
+      hp: 65,
+      attackLevel: 34,
+      defenceLevel: 24,
+      maxHit: 13,
+      attackSpeed: 5,
+      attackType: "slash",
+      // Decayed flesh, easily punctured; weak to stab.
+      def: { stab: 10, slash: 22, crush: 18, ranged: 16, magic: 14 },
+      dropTable: [
+        { itemId: "gold", qty: 90, chance: 1, band: "guaranteed" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.28, band: "common" },
+        { itemId: "mithril-dagger", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "mithril-shortbow", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "mithril-full-helm", qty: 1, chance: 1 / 160, band: "rare" },
+        // Gear Tier ladder (#251): mithril-bar Material, feeding the mithril-tier Recipes.
+        { itemId: "mithril-bar", qty: 1, chance: 0.25, band: "common" },
+      ],
+    },
+    {
+      id: "bone-knight",
+      name: "Bone Knight",
+      hp: 85,
+      attackLevel: 46,
+      defenceLevel: 34,
+      maxHit: 17,
+      attackSpeed: 5,
+      attackType: "crush",
+      // Bone armour, like Skeleton's, shatters under blunt force; weak to crush.
+      def: { stab: 24, slash: 28, crush: 12, ranged: 20, magic: 16 },
+      dropTable: [
+        { itemId: "gold", qty: 120, chance: 1, band: "guaranteed" },
+        // #115: cooked-pike -> raw-pike.
+        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "mithril-chainbody", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "mithril-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 150, band: "rare" },
+        // Gear Tier ladder (#251): mithril-bar Material, feeding the mithril-tier Recipes.
+        { itemId: "mithril-bar", qty: 1, chance: 0.28, band: "common" },
+      ],
+    },
+    // Shade Crypt (#253): Crypt Shade is promoted to that Dungeon's boss — dungeon-only, absent
+    // from every Area's monsterIds, exactly like goblin-chief/hollow-warden/sewer-king. Id and
+    // stats are UNCHANGED from the open-world-farmable era; roughly double Old Sewers' top stats
+    // (Skeleton: hp 48 / maxHit 10). The Shade Blade still sits in its normal Drop Table at a
+    // ~1/512 rare band.
     {
       id: "crypt-shade",
       name: "Crypt Shade",
@@ -948,6 +1000,22 @@ export const content: Content = {
         { itemId: "steel-full-helm", qty: 1, chance: 1 / 2, band: "common" },
         { itemId: "mithril-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
         { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
+      ],
+    },
+    // Bone Crypt (#253): the crypt's own Dungeon. Its Chest bridges the mithril -> adamant
+    // transition (a mithril item at common, adamant at uncommon/rare), and clearing it is what
+    // gates the frozen Area (#254). Crypt Shade is the boss here, not an open-world farmable.
+    {
+      id: "shade-crypt",
+      name: "Shade Crypt",
+      areaId: "bone-crypt",
+      waves: ["skeleton", "crypt-ghoul", "bone-knight", "crypt-shade"],
+      chest: [
+        { itemId: "gold", qty: 500, chance: 1, band: "guaranteed" },
+        { itemId: "cooked-pike", qty: 3, chance: 1, band: "guaranteed" },
+        { itemId: "mithril-full-helm", qty: 1, chance: 1 / 2, band: "common" },
+        { itemId: "adamant-dagger", qty: 1, chance: 1 / 4, band: "uncommon" },
+        { itemId: "adamant-kiteshield", qty: 1, chance: 1 / 8, band: "rare" },
       ],
     },
   ],
