@@ -3,7 +3,9 @@ import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
 import attackPotionUrl from "../assets/icons/attack-potion.png";
 import bronzeArrowUrl from "../assets/icons/bronze-arrow.png";
 import bronzeBarUrl from "../assets/icons/bronze-bar.png";
+import bronzeChainbodyUrl from "../assets/icons/bronze-chainbody.png";
 import bronzeDaggerUrl from "../assets/icons/bronze-dagger.png";
+import bronzeFullHelmUrl from "../assets/icons/bronze-full-helm.png";
 import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
 import bronzeShieldUrl from "../assets/icons/bronze-shield.png";
 import bronzeSwordUrl from "../assets/icons/bronze-sword.png";
@@ -41,6 +43,7 @@ import leatherChapsUrl from "../assets/icons/leather-chaps.png";
 import leatherCoifUrl from "../assets/icons/leather-coif.png";
 import marrentillHerbUrl from "../assets/icons/marrentill-herb.png";
 import mithrilArrowUrl from "../assets/icons/mithril-arrow.png";
+import mithrilBarUrl from "../assets/icons/mithril-bar.png";
 import mithrilChainbodyUrl from "../assets/icons/mithril-chainbody.png";
 import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
@@ -65,6 +68,7 @@ import shadeBladeUrl from "../assets/icons/shade-blade.png";
 import shadeWispUrl from "../assets/icons/shade-wisp.png";
 import shortbowUrl from "../assets/icons/shortbow.png";
 import steelArrowUrl from "../assets/icons/steel-arrow.png";
+import steelBarUrl from "../assets/icons/steel-bar.png";
 import steelChainbodyUrl from "../assets/icons/steel-chainbody.png";
 import steelDaggerUrl from "../assets/icons/steel-dagger.png";
 import steelFullHelmUrl from "../assets/icons/steel-full-helm.png";
@@ -149,6 +153,12 @@ const icons: Record<string, string> = {
   "steel-sword": steelSwordUrl,
   "mithril-mace": mithrilMaceUrl,
   "mithril-sword": mithrilSwordUrl,
+  // Gear Tier ladder (#251): the four new items this slice, source-driven icons conformed from
+  // committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
+  "bronze-chainbody": bronzeChainbodyUrl,
+  "bronze-full-helm": bronzeFullHelmUrl,
+  "steel-bar": steelBarUrl,
+  "mithril-bar": mithrilBarUrl,
   // Cooking wave (#115) raw catches: source-driven icons conformed from committed golden-* sources
   // via scripts/art/icons.mjs (see docs/assets.md).
   "raw-beef": rawBeefUrl,

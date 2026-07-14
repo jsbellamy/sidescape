@@ -5,7 +5,14 @@ import { content } from "./index";
  * defends stab/slash/ranged well but is noticeably weaker vs crush and weak (low/negative) vs
  * magic; leather (leather-body) is the anti-caster choice — modest melee def, magic def that
  * beats every metal body's own tier. Tuning-flagged exact numbers; this test only asserts the
- * directional shape. */
+ * directional shape.
+ *
+ * Issue #251 retired two assertions from this file into src/data/tier-ladder.test.ts, where they
+ * now hold by construction: "at each metal body tier, magic def is lower than stab def" (replaced
+ * by the stronger "metal armour def.magic is strictly decreasing across tiers (0, -1, -2, -3)")
+ * and "each metal body tier dominates the previous tier's def in stab/slash/crush/ranged". The
+ * leather-beats-metal invariant below survives unchanged (leather-body's magic def 5 still beats
+ * every metal body's, per the issue's own text). */
 
 const METAL_BODY_IDS = ["iron-chainbody", "steel-chainbody", "mithril-chainbody"];
 
@@ -17,28 +24,11 @@ function equipment(id: string) {
 }
 
 describe("Armour directional rules (Combat Depth #102)", () => {
-  it("at each metal body tier, magic def is lower than stab def", () => {
-    for (const id of METAL_BODY_IDS) {
-      const body = equipment(id);
-      expect(body.def.magic, `${id}: magic def should be < stab def`).toBeLessThan(body.def.stab);
-    }
-  });
-
   it("leather-body's magic def beats every metal body's magic def", () => {
     const leather = equipment("leather-body");
     for (const id of METAL_BODY_IDS) {
       const body = equipment(id);
       expect(leather.def.magic, `leather-body vs ${id}`).toBeGreaterThan(body.def.magic);
-    }
-  });
-
-  it("each metal body tier dominates the previous tier's def in stab/slash/crush/ranged", () => {
-    const iron = equipment(METAL_BODY_IDS[0]!);
-    const steel = equipment(METAL_BODY_IDS[1]!);
-    const mithril = equipment(METAL_BODY_IDS[2]!);
-    for (const type of ["stab", "slash", "crush", "ranged"] as const) {
-      expect(steel.def[type], `steel vs iron (${type})`).toBeGreaterThan(iron.def[type]);
-      expect(mithril.def[type], `mithril vs steel (${type})`).toBeGreaterThan(steel.def[type]);
     }
   });
 

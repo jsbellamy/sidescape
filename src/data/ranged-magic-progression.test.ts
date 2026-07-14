@@ -48,30 +48,9 @@ describe("Ranged/Magic tier weapons in Drop Tables (#13)", () => {
     expect(staff?.kind === "equipment" && staff.attackType).toBe("magic");
   });
 
-  it("every new tier weapon out-bonuses its predecessor tier (iron < steel < mithril, bow and staff alike)", () => {
-    const ironBow = content.items.find((i) => i.id === "iron-shortbow") as {
-      atkBonus: number;
-      strBonus: number;
-    };
-    const steelBow = content.items.find((i) => i.id === "steel-shortbow") as {
-      atkBonus: number;
-      strBonus: number;
-    };
-    const mithrilBow = content.items.find((i) => i.id === "mithril-shortbow") as {
-      atkBonus: number;
-      strBonus: number;
-    };
-    expect(steelBow.atkBonus).toBeGreaterThan(ironBow.atkBonus);
-    expect(mithrilBow.atkBonus).toBeGreaterThan(steelBow.atkBonus);
-
-    const ironStaff = content.items.find((i) => i.id === "iron-staff") as { strBonus: number };
-    const steelStaff = content.items.find((i) => i.id === "steel-staff") as { strBonus: number };
-    const mithrilStaff = content.items.find((i) => i.id === "mithril-staff") as {
-      strBonus: number;
-    };
-    expect(steelStaff.strBonus).toBeGreaterThan(ironStaff.strBonus);
-    expect(mithrilStaff.strBonus).toBeGreaterThan(steelStaff.strBonus);
-  });
+  // Issue #251 retired "every new tier weapon out-bonuses its predecessor tier" from here into
+  // src/data/tier-ladder.test.ts's "every new ranged/magic tier out-bonuses its predecessor",
+  // where it now holds by construction (base + step * tierIndex, step always positive).
 
   it("new items are appended after apprentice-staff (append-only: existing entries never reorder)", () => {
     const ids = content.items.map((i) => i.id);
