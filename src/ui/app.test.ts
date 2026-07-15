@@ -4251,6 +4251,11 @@ describe("Vendor bulk buy (#283)", () => {
 
     typeQty(root, "arrow", "0");
     expect(buyBtn(root, "arrow").disabled).toBe(true);
+    expect(qtyInput(root, "arrow").value).toBe("");
+
+    typeQty(root, "arrow", "-1");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+    expect(qtyInput(root, "arrow").value).toBe("");
 
     typeQty(root, "arrow", "");
     expect(buyBtn(root, "arrow").disabled).toBe(true);

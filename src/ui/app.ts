@@ -891,6 +891,11 @@ export function mountApp(
     gold: number,
     itemId: string,
   ): VendorBuyState {
+    // An empty field is allowed while replacing the default value, but a quantity itself may
+    // never remain zero or negative.
+    if (elements.quantity.value === "0" || elements.quantity.value.startsWith("-")) {
+      elements.quantity.value = "";
+    }
     elements.owned.textContent = `Owned: ${bank.items.find((s) => s.itemId === itemId)?.qty ?? 0}`;
     let state = vendorBuyState(price, elements.quantity.value, gold, bankHasRoom(bank, itemId));
     if (state.clampedQuantity !== null) {
