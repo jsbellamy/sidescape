@@ -20,21 +20,13 @@ describe("sprites", () => {
     expect(playerSprite.length).toBeGreaterThan(0);
   });
 
-  it("maps each Lumbry Meadows Monster to a distinct sprite URL", () => {
-    const chicken = monsterSprite("chicken");
-    const cow = monsterSprite("cow");
-    const goblin = monsterSprite("goblin");
-
-    expect(chicken).toEqual(expect.any(String));
-    expect(cow).toEqual(expect.any(String));
-    expect(goblin).toEqual(expect.any(String));
-
-    const urls = new Set([chicken, cow, goblin]);
-    expect(urls.size).toBe(3);
-  });
-
-  it("maps every Darkroot Forest, Old Sewers, and Bone Crypt Monster to a distinct sprite URL", () => {
+  it("maps every production Monster sprite, including Meadow Depths' dungeon-only goblins, to a distinct URL", () => {
     const ids = [
+      "chicken",
+      "cow",
+      "goblin",
+      "goblin-brute",
+      "goblin-chief",
       "wolf",
       "goblin-warrior",
       "bandit",
@@ -42,6 +34,12 @@ describe("sprites", () => {
       "zombie",
       "skeleton",
       "crypt-shade",
+      "crypt-ghoul",
+      "bone-knight",
+      "frost-wolf",
+      "ice-wraith",
+      "frost-giant",
+      "frost-warden",
     ];
     const urls = ids.map(monsterSprite);
 
@@ -49,24 +47,6 @@ describe("sprites", () => {
       expect(url).toEqual(expect.any(String));
     }
     expect(new Set(urls).size).toBe(ids.length);
-  });
-
-  it("gives every Monster a sprite distinct from every other Monster's", () => {
-    const allIds = [
-      "chicken",
-      "cow",
-      "goblin",
-      "wolf",
-      "goblin-warrior",
-      "bandit",
-      "giant-rat",
-      "zombie",
-      "skeleton",
-      "crypt-shade",
-    ];
-    const urls = allIds.map(monsterSprite);
-
-    expect(new Set(urls).size).toBe(allIds.length);
   });
 
   it("returns undefined for a Monster with no sprite (e.g. test fixtures)", () => {

@@ -29,9 +29,9 @@ describe("combat scene sprites", () => {
     expect(playerImg?.classList.contains("pixel")).toBe(true);
   });
 
-  it("renders a distinct, pixelated sprite for Chicken, Cow, and Goblin", () => {
+  it("renders a distinct, pixelated sprite for every Meadow Depths Monster", () => {
     const seen = new Set<string>();
-    for (const monsterId of ["chicken", "cow", "goblin"]) {
+    for (const monsterId of ["chicken", "cow", "goblin", "goblin-brute", "goblin-chief"]) {
       const engine = createEngine(meadowsContent, seededRng(1));
       const root = document.createElement("main");
       const app = mountApp(engine, root, resolvedMeadowsContent, noopWindowChrome);
@@ -45,7 +45,7 @@ describe("combat scene sprites", () => {
       expect(monsterImg?.classList.contains("pixel")).toBe(true);
       seen.add(src!);
     }
-    expect(seen.size).toBe(3);
+    expect(seen.size).toBe(5);
   });
 
   it("hides the Monster sprite before a Monster is selected", () => {

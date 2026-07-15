@@ -9,6 +9,8 @@ import frostWardenUrl from "../assets/sprites/frost-warden.png";
 import frostWolfUrl from "../assets/sprites/frost-wolf.png";
 import giantRatUrl from "../assets/sprites/giant-rat.png";
 import goblinUrl from "../assets/sprites/goblin.png";
+import goblinBruteUrl from "../assets/sprites/goblin-brute.png";
+import goblinChiefUrl from "../assets/sprites/goblin-chief.png";
 import goblinWarriorUrl from "../assets/sprites/goblin-warrior.png";
 import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
@@ -53,8 +55,10 @@ export const playerSpriteSize = 48;
  */
 const monsterSprites: Record<string, SpriteAsset> = {
   chicken: { url: chickenUrl, size: 32 },
-  cow: { url: cowUrl, size: 32 },
+  cow: { url: cowUrl, size: 48 },
   goblin: { url: goblinUrl, size: 32 },
+  "goblin-brute": { url: goblinBruteUrl, size: 48 },
+  "goblin-chief": { url: goblinChiefUrl, size: 48 },
   wolf: { url: wolfUrl, size: 32 },
   "goblin-warrior": { url: goblinWarriorUrl, size: 32 },
   bandit: { url: banditUrl, size: 32 },
