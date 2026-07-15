@@ -20,7 +20,7 @@ describe("sprites", () => {
     expect(playerSprite.length).toBeGreaterThan(0);
   });
 
-  it("maps every production Monster sprite, including Meadow Depths' dungeon-only goblins, to a distinct URL", () => {
+  it("maps every production Monster sprite, including dungeon-only bosses, to a distinct URL", () => {
     const ids = [
       "chicken",
       "cow",
@@ -30,6 +30,7 @@ describe("sprites", () => {
       "wolf",
       "goblin-warrior",
       "bandit",
+      "hollow-warden",
       "giant-rat",
       "zombie",
       "skeleton",
@@ -71,6 +72,7 @@ describe("sprites", () => {
     expect(spriteEdgePx(playerSpriteSize)).toBe(96);
     expect(spriteEdgePx(32)).toBe(64);
     expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(96);
+    expect(spriteEdgePx(monsterSpriteSize("hollow-warden")!)).toBe(128);
   });
 });
 
