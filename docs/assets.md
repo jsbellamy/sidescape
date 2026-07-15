@@ -105,15 +105,12 @@ Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-
 ## Scene backdrops and activity overlays (#80, #141, #254)
 
 The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
-Theme — meadow/forest/sewer/crypt/town/glacier) are original pixel-art PNG tiles. As of #263, a
-reusable deterministic backdrop generator exists (`scripts/art/backdrops.mjs`, wired into
-`scripts/art/generate.mjs` and `npm run art`) parallel to the icon and sprite writers, but its
-production registry (`backdrops`) is **deliberately empty** — none of the six sets above have been
-migrated to it. `npm run art` therefore still writes nothing under `src/assets/backdrops/`, and
-every one of them remains hand-assembled and committed directly, exactly as before this issue. The
-Frostspire slice (#142) is the named follow-up that registers the first real definition
-(`glacier`) and retires its hand-assembled bytes; until then, all six sets stay on the old
-hand-assembled path this section documents. The `glacier` set
+Theme) are original pixel-art PNG tiles. #305 adds a source-driven backdrop pipeline
+(`docs/backdrop-gen.md`, `scripts/art/ingest-backdrop.mjs`, and deterministic source support in
+`scripts/art/backdrops.mjs`), but the production registry remains **deliberately empty** here.
+The five approved existing biomes remain hand-committed and `npm run art` writes no backdrop bytes;
+#293 is the first planned source-driven consumer. This preserves all historical provenance below.
+The `glacier` set
 (Frostspire, #254) was procedurally hand-assembled with a small throwaway script rather than
 painted pixel-by-pixel, drawing from the `glacier` zone sub-palette (`scripts/art/palettes.mjs`)
 plus plain white for snow highlights (backdrops bypass the quantization pipeline entirely, so they

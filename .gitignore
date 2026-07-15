@@ -28,6 +28,9 @@ scripts/art/icon-gen-inbox/
 scripts/art/sprite-gen-inbox/
 scripts/art/sprite-gen-out/
 
+# Source-driven backdrop generation (#305): raw generations and review previews are inputs only.
+scripts/art/backdrop-gen-inbox/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
