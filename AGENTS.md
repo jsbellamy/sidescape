@@ -71,6 +71,10 @@ behaviour with DOM integration tests.
 - **Assets** are original art following `docs/art-style.md`, generated via
   `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with
   provenance recorded in `docs/assets.md`.
+- **Asset workflow.** For generated or ingested icons and combat sprites, follow
+  `.agents/skills/asset-pipeline/SKILL.md`; it owns the source-driven execution and evidence gates,
+  while `docs/art-style.md`, `docs/icon-gen.md`, and `docs/sprite-gen.md` remain the technical source
+  of truth.
 - **New icons.** The fastest path is the **source-driven** pipeline (`docs/icon-gen.md`): generate a
   chunky-pixel image from the committed prompt kit, `npm run art:ingest -- --name <icon>` to reconstruct
   its native grid into a committed compact source under `scripts/art/icon-sources/`, and add a

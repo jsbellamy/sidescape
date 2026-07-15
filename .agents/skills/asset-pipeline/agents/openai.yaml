@@ -1,0 +1,4 @@
+interface:
+  display_name: "SideScape Asset Pipeline"
+  short_description: "Generate, ingest, and verify SideScape art"
+  default_prompt: "Use $asset-pipeline to create and validate a SideScape sprite or icon through the source-driven art pipeline."
