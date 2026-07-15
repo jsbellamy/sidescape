@@ -4424,6 +4424,37 @@ describe("Combat feedback (#4)", () => {
     vi.advanceTimersByTime(1000); // > the flash duration
     expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(false);
   });
+
+  it("floats a +N XP number over the player on a combat-style xp-gained event, but not for hitpoints (#285)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 40, false);
+
+    const xpSplats = [...root.querySelectorAll("#player-splats .splat-xp")];
+    expect(xpSplats.length).toBeGreaterThan(0);
+    expect(xpSplats.every((el) => /^\+\d+$/.test(el.textContent ?? ""))).toBe(true);
+
+    // Exactly one floated XP number per landed hit (the style skill's grant), never two: the same
+    // hit's Hitpoints trickle (awardCombatXp's second grantXp call) must not also float. A landed
+    // player hit is a non-"0" hit splat over the Monster; damage-0 hits/misses grant no XP at all
+    // (awardCombatXp returns early), so the counts must match exactly.
+    const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
+      (el) => el.textContent !== "0",
+    );
+    expect(xpSplats.length).toBe(landedHits.length);
+  });
+
+  it("does not float an XP number for fishing xp-gained events", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    engine.selectFishingSpot("pond"); // pond: catchChance 1, xp 10 per Catch (fixtureContent)
+
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    expect(root.querySelectorAll("#player-splats .splat-xp").length).toBe(0);
+  });
 });
 
 describe("Loot Feed band styling (#9)", () => {

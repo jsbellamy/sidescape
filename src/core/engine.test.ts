@@ -284,6 +284,29 @@ describe("XP", () => {
     expect(levelups).toContainEqual({ skill: "strength", level: 2 });
     expect(engine.snapshot().player.skills.strength.level).toBeGreaterThanOrEqual(2);
   });
+
+  it("every damaging hit emits xp-gained for the style skill AND its own hitpoints event (#285)", () => {
+    const engine = freshEngine();
+    const gains: { skill: string; amount: number }[] = [];
+    engine.on("xp-gained", (e) => gains.push({ skill: e.skill, amount: e.amount }));
+    engine.selectMonster("dummy");
+    for (let i = 0; i < 40; i++) engine.tick();
+
+    const strengthGains = gains.filter((g) => g.skill === "strength");
+    const hpGains = gains.filter((g) => g.skill === "hitpoints");
+    expect(strengthGains.length).toBeGreaterThan(0);
+    expect(hpGains.length).toBeGreaterThan(0);
+    expect(strengthGains.length).toBe(hpGains.length);
+    // 4*damage for strength, (4/3)*damage for hitpoints, on the same hit: hitpoints = strength/3
+    for (let i = 0; i < strengthGains.length; i++) {
+      const strengthGain = strengthGains[i];
+      const hpGain = hpGains[i];
+      expect(strengthGain).toBeDefined();
+      expect(hpGain).toBeDefined();
+      expect(hpGain!.amount).toBeCloseTo(strengthGain!.amount / 3, 6);
+      expect(strengthGain!.amount).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("Drops", () => {

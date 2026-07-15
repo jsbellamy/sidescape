@@ -1313,6 +1313,7 @@ export function createEngine(
     const before = level(skill);
     state.xp[skill] += amount;
     const after = level(skill);
+    emit({ type: "xp-gained", skill, amount });
     if (after > before) emit({ type: "levelup", skill, level: after });
   }
 
