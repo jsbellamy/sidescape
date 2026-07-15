@@ -26,19 +26,21 @@ async function spriteWrapGapAboveBackdropBottom(
   });
 }
 
-test("the player sprite stands 20px above #backdrop's bottom edge — the pre-#226 ground position", async ({
+test("the player sprite stands --actor-ground-inset (4px) above #backdrop's bottom edge", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator("#sprite-row")).toBeVisible();
 
-  // 10px #sprite-row bottom padding + 10px #scene padding — see styles.css's ground-plane
-  // contract comment on #scene.
+  // The actors sit on #backdrop's ground plane: #scene now has 0 bottom padding, so the gap is
+  // exactly #sprite-row's `--actor-ground-inset` (styles.css). Was 20px (10px row padding + 10px
+  // #scene bottom padding), which read as floating; dropped to plant the cast on the floor. If you
+  // retune --actor-ground-inset, update this number to match — it pins the ground position.
   const gap = await spriteWrapGapAboveBackdropBottom(page);
-  expect(Math.round(gap)).toBe(20);
+  expect(Math.round(gap)).toBe(4);
 });
 
-test("that 20px gap is invariant to #scene's height — the #226 regression guard", async ({
+test("that ground gap is invariant to #scene's height — the #226 regression guard", async ({
   page,
 }) => {
   await page.goto("/");
