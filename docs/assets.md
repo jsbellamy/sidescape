@@ -448,3 +448,15 @@ The registry scopes each source to the material and zone palette entries that ac
 after quantization; the regular-Monster 12-color / 3-pass cleanup defaults remain in force. This
 subsection supersedes the historical Tiny Farm Chicken/Cow and Goblin Free Pixelart Goblin outputs
 documented above, while preserving their CC0 provenance as history.
+
+### Meadows completion (#292)
+
+Cow supersedes the #265 32×32 source with a corrected-scale 48×48 original brown-and-cream dairy
+silhouette. Goblin Brute and Goblin Chief add original 48×48 Meadows Depths combat sprites: the
+Brute keeps the landed goblin family's green skin, low brow, pointed ears, leather, and heavy wooden
+club while scaling up its shoulders and forearms; the Chief adds a fur mantle, bone-and-brass brow
+crown, decorated leather, and ceremonial iron-headed club. All three sources began as untouched raw
+model PNGs in the ignored sprite-generation inbox, passed mandatory dry-run ingest, then recovered
+to bottom-anchored binary-alpha compact sources. They face right toward the player and use the
+standard 12-color, three-pass finishing defaults. The previous #265 entry and every historical CC0
+provenance record remain historical context; only Cow's supplied source has been superseded.

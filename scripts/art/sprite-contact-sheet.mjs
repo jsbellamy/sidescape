@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import { PNG } from "pngjs";
 import { encodePng, hex } from "./write-png.mjs";
 
-const CELL = 48;
 const GUTTER = 4;
 const SCALE_4X = 4;
 const PANEL_BG = "#262019";
@@ -21,21 +20,22 @@ export function buildSpriteContactSheets(spritesDir, registry) {
     name,
     png: PNG.sync.read(readFileSync(resolve(spritesDir, `${name}.png`))),
   }));
+  const cell = Math.max(1, ...entries.map(({ png }) => Math.max(png.width, png.height)));
   const { columns, rows } = layoutGrid(entries.length);
-  const width = columns * CELL + (columns - 1) * GUTTER;
-  const height = rows * CELL + (rows - 1) * GUTTER;
+  const width = columns * cell + (columns - 1) * GUTTER;
+  const height = rows * cell + (rows - 1) * GUTTER;
   const [bgR, bgG, bgB] = hex(PANEL_BG);
   const pixel = (x, y) => {
-    const stride = CELL + GUTTER;
+    const stride = cell + GUTTER;
     const column = Math.floor(x / stride);
     const row = Math.floor(y / stride);
     const localX = x - column * stride;
     const localY = y - row * stride;
     const entry = entries[row * columns + column];
-    if (!entry || localX >= CELL || localY >= CELL) return [bgR, bgG, bgB, 255];
+    if (!entry || localX >= cell || localY >= cell) return [bgR, bgG, bgB, 255];
 
-    const offsetX = Math.floor((CELL - entry.png.width) / 2);
-    const offsetY = CELL - entry.png.height;
+    const offsetX = Math.floor((cell - entry.png.width) / 2);
+    const offsetY = cell - entry.png.height;
     const sourceX = localX - offsetX;
     const sourceY = localY - offsetY;
     if (sourceX < 0 || sourceY < 0 || sourceX >= entry.png.width || sourceY >= entry.png.height) {

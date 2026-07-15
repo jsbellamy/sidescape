@@ -89,9 +89,9 @@ half). Get it right in the prompt if you can; `--flip` mirrors a recovered grid 
   measured ~5.5× closer to `leather.base` than to any `forest` green — the `forest` zone ramp is
   _teal_-green — so her entire tunic shipped brown. Either dress the character in hues the palette
   already speaks, or add a material ramp first.
-- **Adding a material ramp is safe; adding a zone is not.** `materialPalettes` is scoped per asset
-  (`materialRampNames`), so a new ramp can only reach a sprite that names it. `zonePalettes` has no
-  allowlist and applies to every asset unconditionally — see the warning in `palettes.mjs`.
+- **Palette scopes are exact dependencies.** Both `materialRampNames` and `zoneNames` are scoped
+  per asset, so a material ramp or zone can only reach a sprite that names it. Copy the arrays
+  reported by ingest exactly; they are the full named palette vocabulary Stage 2 may use.
 - **Keep limbs ≥2 logical pixels thick.** A 1px limb or blade survives 1:1 ingest but nothing else.
 
 ## Ingesting

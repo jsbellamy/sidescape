@@ -60,9 +60,10 @@ and never rationalize it as expected.
 
 Two rules when scoping:
 
-- **`materialPalettes` has an allowlist; `zonePalettes` does not.** `buildNamedPalette(rampNames)`
-  scopes material ramps per asset, so an icon only competes against its own ramps plus shared
-  neutrals. Zone palettes are still emitted in full for _every_ build — see #261.
+- **Both material and zone palettes have allowlists.** `buildNamedPalette` scopes material ramps
+  through `materialRampNames` and zone palettes through `zoneNames`, so an asset competes only
+  against its declared entries plus shared neutrals. Copy the exact arrays reported by ingest;
+  they are ordered dependencies, not broad theme hints.
 - **Scoping may only remove candidates, never reorder survivors.** `quantizeGrid` compares with a
   strict `<`, so equidistant colors resolve by palette _position_. Emit in `materialPalettes`
   declaration order; reordering flips real ties (it silently moved all four mace icons in #252).

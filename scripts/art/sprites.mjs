@@ -73,10 +73,10 @@ export const sprites = [
   {
     name: "cow",
     source: "sprite-cow.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
-    materialRampNames: ["blood", "leather", "skin"],
-    zoneNames: ["sewer"],
+    materialRampNames: ["blood", "skin", "leather"],
+    zoneNames: ["town"],
   },
   {
     name: "goblin",
@@ -85,6 +85,22 @@ export const sprites = [
     alpha: "binary",
     materialRampNames: ["leather", "moss"],
     zoneNames: ["sewer", "town"],
+  },
+  {
+    name: "goblin-brute",
+    source: "sprite-goblin-brute.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["blood", "skin", "leather", "moss"],
+    zoneNames: ["sewer", "town"],
+  },
+  {
+    name: "goblin-chief",
+    source: "sprite-goblin-chief.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["steel", "leather", "moss"],
+    zoneNames: ["crypt"],
   },
   {
     name: "wolf",
