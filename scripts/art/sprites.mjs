@@ -163,8 +163,8 @@ export const sprites = [
     source: "sprite-sewer-king.png",
     size: 48,
     alpha: "binary",
-    materialRampNames: ["steel", "blood", "leather", "moss"],
-    zoneNames: ["sewer", "crypt", "town"],
+    materialRampNames: ["steel", "blood", "leather"],
+    zoneNames: ["crypt", "town"],
   },
   {
     name: "crypt-shade",
