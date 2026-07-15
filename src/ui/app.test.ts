@@ -4266,6 +4266,21 @@ describe("Vendor bulk buy (#283)", () => {
     expect(engine.snapshot().bank.items).toEqual([]);
   });
 
+  it("blocks non-numeric quantity keys and clears non-numeric pasted values", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    const input = qtyInput(root, "arrow");
+    const minus = new KeyboardEvent("keydown", { key: "-", bubbles: true, cancelable: true });
+    const decimal = new KeyboardEvent("keydown", { key: ".", bubbles: true, cancelable: true });
+
+    input.dispatchEvent(minus);
+    input.dispatchEvent(decimal);
+    expect(minus.defaultPrevented).toBe(true);
+    expect(decimal.defaultPrevented).toBe(true);
+
+    typeQty(root, "arrow", "1.5");
+    expect(input.value).toBe("");
+  });
+
   it("keeps the exact focused input through repeated Tick renders while keyboard editing", () => {
     const { engine, root, app } = ammoMount({ player: { gold: 100 } });
     document.body.append(root); // happy-dom only tracks focus for connected controls

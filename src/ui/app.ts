@@ -891,9 +891,9 @@ export function mountApp(
     gold: number,
     itemId: string,
   ): VendorBuyState {
-    // An empty field is allowed while replacing the default value, but a quantity itself may
-    // never remain zero or negative.
-    if (elements.quantity.value === "0" || elements.quantity.value.startsWith("-")) {
+    // An empty field is allowed while replacing the default value, but a quantity itself may only
+    // contain positive decimal digits. This also sanitizes pasted values that bypass key handling.
+    if (!/^\d*$/.test(elements.quantity.value) || elements.quantity.value === "0") {
       elements.quantity.value = "";
     }
     elements.owned.textContent = `Owned: ${bank.items.find((s) => s.itemId === itemId)?.qty ?? 0}`;
@@ -2031,6 +2031,14 @@ export function mountApp(
   // Crafting/Herblore recipe lists' single Craft-button dispatch shape. Bulk buy (#283) adds a
   // per-row qty field the click reads.
   const vendorListEl = el("#vendor-list");
+
+  // `type=number` still accepts exponent/sign/decimal editing keys in browsers. Vendor quantities
+  // are whole positive numbers, so keep those characters out before they reach the input.
+  vendorListEl.addEventListener("keydown", (event) => {
+    const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-vendor-qty]");
+    if (!input) return;
+    if (["-", "+", "e", "E", "."].includes(event.key)) event.preventDefault();
+  });
 
   // Live label / disabled / clamp as the player edits a row's qty (#283): recompute just that
   // row's Buy button (a full re-render would reset every field), and clamp an over-affordable
