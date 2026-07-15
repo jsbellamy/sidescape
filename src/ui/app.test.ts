@@ -4108,6 +4108,102 @@ describe("Vendor tab panel (#119)", () => {
   });
 });
 
+describe("Vendor bulk buy (#283)", () => {
+  /** Reads a vendor row's editable quantity field. */
+  function qtyInput(root: HTMLElement, itemId: string): HTMLInputElement {
+    const input = root.querySelector<HTMLInputElement>(`[data-vendor-qty="${itemId}"]`);
+    if (!input) throw new Error(`no qty input for ${itemId}`);
+    return input;
+  }
+
+  /** Sets a qty field's value and fires the `input` event the way a user typing would, so the
+   * live-label / disabled / clamp handler runs. */
+  function typeQty(root: HTMLElement, itemId: string, value: string): void {
+    const input = qtyInput(root, itemId);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function buyBtn(root: HTMLElement, itemId: string): HTMLButtonElement {
+    const btn = root.querySelector<HTMLButtonElement>(`[data-vendor-buy="${itemId}"]`);
+    if (!btn) throw new Error(`no buy button for ${itemId}`);
+    return btn;
+  }
+
+  it("gives each vendor row an integer qty field with min=1 defaulting to 1", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    const input = qtyInput(root, "arrow");
+    expect(input.type).toBe("number");
+    expect(input.min).toBe("1");
+    expect(input.step).toBe("1");
+    expect(input.value).toBe("1");
+  });
+
+  it("labels the Buy button with the live total cost = price × qty", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    // fixture arrow price is 2; default qty 1 -> total 2
+    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(2g\)/);
+
+    typeQty(root, "arrow", "5");
+    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(10g\)/); // 2 × 5
+  });
+
+  it("buys exactly qty via engine.buy(itemId, qty): qty 5 of a 3g item costs 15g, adds 5, one item-bought event", () => {
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
+    const events: { itemId: string; qty: number; gold: number }[] = [];
+    engine.on("item-bought", (e) => events.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
+
+    typeQty(root, "air-rune", "5"); // fixture air-rune price 3
+    buyBtn(root, "air-rune").click();
+
+    expect(engine.snapshot().player.gold).toBe(85); // 100 − 3×5
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 5 }]);
+    expect(events).toEqual([{ itemId: "air-rune", qty: 5, gold: 15 }]);
+  });
+
+  it("disables Buy when the total cost would exceed gold", () => {
+    const { root } = ammoMount({ player: { gold: 2 } }); // air-rune price 3 — cannot afford one
+    expect(buyBtn(root, "air-rune").disabled).toBe(true);
+  });
+
+  it("clamps an over-affordable qty down to floor(gold/price) instead of overspending", () => {
+    const { engine, root } = ammoMount({ player: { gold: 10 } }); // air-rune 3 -> max affordable 3
+    typeQty(root, "air-rune", "5");
+
+    expect(qtyInput(root, "air-rune").value).toBe("3"); // clamped
+    expect(buyBtn(root, "air-rune").textContent).toMatch(/Buy \(9g\)/);
+    expect(buyBtn(root, "air-rune").disabled).toBe(false);
+
+    buyBtn(root, "air-rune").click();
+    expect(engine.snapshot().player.gold).toBe(1); // 10 − 9, never overspent
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 3 }]);
+  });
+
+  it("disables Buy when the Bank has no room for the resulting new stack", () => {
+    // capacity 1, already holding one non-vendor stack -> a brand-new arrow stack has no room
+    const { root } = ammoMount({
+      player: { gold: 100 },
+      bank: { items: [{ itemId: "meat", qty: 1 }], capacity: 1 },
+    });
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+  });
+
+  it("treats a non-integer or < 1 qty as invalid: Buy is disabled and a click cannot purchase", () => {
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
+
+    typeQty(root, "arrow", "0");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+
+    typeQty(root, "arrow", "");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+
+    // Even if a click reaches the handler, an invalid qty must not purchase.
+    buyBtn(root, "arrow").click();
+    expect(engine.snapshot().player.gold).toBe(100);
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+});
+
 describe("Combat feedback (#4)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
