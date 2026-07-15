@@ -428,3 +428,21 @@ scoping means adding it recolors nothing else. The regenerated `player.png` tuni
 
 This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
 provenance remains recorded as history.
+
+### Lumbry Meadows (#265)
+
+Chicken, Cow, and Goblin now form the first original-art Monster mini-set. Each source began as a
+raw 1254×1254 RGB model PNG on a uniform `#ff00ff` key background, retained unchanged in the
+git-ignored sprite-generation inbox, then passed through `npm run art:ingest-sprite -- --name <id>
+--size 32`. The ingest recovered the generation's own chunky cell grid and bottom-anchored it on a
+32×32 binary-alpha source canvas; it did not downsample or hand-place source pixels. The compact
+chicken, low broad cow, and unarmoured, club-bearing goblin all face right toward the left-facing
+player. Their warm outline, upper-left light, and muted meadow-adjacent materials make them read as
+one set at the scene's native scale. The goblin's exposed green skin, ragged brown cloth, and crude
+wooden club deliberately leave room for Darkroot's Goblin Warrior to tier up through armour and
+stronger proportions.
+
+The registry scopes each source to the material and zone palette entries that actually win cells
+after quantization; the regular-Monster 12-color / 3-pass cleanup defaults remain in force. This
+subsection supersedes the historical Tiny Farm Chicken/Cow and Goblin Free Pixelart Goblin outputs
+documented above, while preserving their CC0 provenance as history.
