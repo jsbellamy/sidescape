@@ -305,7 +305,193 @@ export function sampleCells(image, fg, bbox, { pitchX, phaseX, pitchY, phaseY })
   return grid;
 }
 
-// --- stage 5: quantization to named ramps ---
+// --- stage 5: source-local palette normalization ---
+
+/**
+ * Reduces sampled source colors before the later named-palette projection. Its medoids are always
+ * exact recovered RGB triples, and grids already within budget remain unchanged.
+ */
+export function normalizeCellPalette(cells, { maxColors } = {}) {
+  if (!Number.isInteger(maxColors) || maxColors <= 0) {
+    throw new Error("maxColors must be a positive integer");
+  }
+
+  const colors = new Map();
+  for (const row of cells)
+    for (const rgb of row) {
+      if (rgb === null) continue;
+      const key = rgb.join(",");
+      colors.set(key, (colors.get(key) ?? 0) + 1);
+    }
+
+  const observations = [...colors.entries()]
+    .map(([key, weight]) => {
+      const rgb = key.split(",").map(Number);
+      return { key, rgb, lab: srgbToOklab(rgb), weight };
+    })
+    .sort((a, b) => compareRgb(a.rgb, b.rgb));
+  if (observations.length <= maxColors) {
+    return {
+      cells,
+      inputColorCount: observations.length,
+      outputColorCount: observations.length,
+      changedCellCount: 0,
+      medoids: observations.map(({ rgb }) => rgb),
+    };
+  }
+
+  let medoids = [selectFirstMedoid(observations)];
+  while (medoids.length < maxColors) medoids.push(selectNextMedoid(observations, medoids));
+
+  const iterationLimit = 1_000;
+  for (let iteration = 0; iteration < iterationLimit; iteration++) {
+    const clusters = medoids.map(() => []);
+    for (const observation of observations) {
+      clusters[nearestMedoidIndex(observation, medoids)].push(observation);
+    }
+    const nextMedoids = clusters.map((cluster, index) =>
+      cluster.length === 0 ? medoids[index] : selectClusterMedoid(cluster),
+    );
+    if (nextMedoids.every((medoid, index) => medoid.key === medoids[index].key)) {
+      medoids = nextMedoids;
+      break;
+    }
+    medoids = nextMedoids;
+    if (iteration === iterationLimit - 1) {
+      throw new Error("palette normalization did not converge");
+    }
+  }
+
+  let changedCellCount = 0;
+  const normalizedCells = cells.map((row) =>
+    row.map((rgb) => {
+      if (rgb === null) return null;
+      const source = observations.find((observation) => observation.key === rgb.join(","));
+      const medoid = medoids[nearestMedoidIndex(source, medoids)];
+      if (source.key !== medoid.key) changedCellCount++;
+      return medoid.rgb;
+    }),
+  );
+  const orderedMedoids = [...medoids].sort((a, b) => compareRgb(a.rgb, b.rgb));
+  return {
+    cells: normalizedCells,
+    inputColorCount: observations.length,
+    outputColorCount: medoids.length,
+    changedCellCount,
+    medoids: orderedMedoids.map(({ rgb }) => rgb),
+  };
+}
+
+function compareRgb(a, b) {
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
+function srgbToOklab([r, g, b]) {
+  const linear = (channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const lr = linear(r),
+    lg = linear(g),
+    lb = linear(b);
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function oklabDistanceSquared(a, b) {
+  const dl = a[0] - b[0],
+    da = a[1] - b[1],
+    db = a[2] - b[2];
+  return dl * dl + da * da + db * db;
+}
+
+function isDistanceTie(a, b) {
+  return Number.isFinite(a) && Number.isFinite(b) && a === b;
+}
+
+function selectFirstMedoid(observations) {
+  let best = observations[0];
+  let bestCost = Infinity;
+  for (const candidate of observations) {
+    const cost = observations.reduce(
+      (sum, observation) =>
+        sum + observation.weight * oklabDistanceSquared(candidate.lab, observation.lab),
+      0,
+    );
+    if (cost < bestCost && !isDistanceTie(cost, bestCost)) {
+      best = candidate;
+      bestCost = cost;
+    }
+  }
+  return best;
+}
+
+function selectNextMedoid(observations, selected) {
+  let best = null;
+  let bestDistance = -Infinity;
+  for (const candidate of observations) {
+    if (selected.some((medoid) => medoid.key === candidate.key)) continue;
+    const distance = Math.min(
+      ...selected.map((medoid) => oklabDistanceSquared(candidate.lab, medoid.lab)),
+    );
+    if (
+      (distance > bestDistance && !isDistanceTie(distance, bestDistance)) ||
+      (isDistanceTie(distance, bestDistance) &&
+        (best === null ||
+          candidate.weight > best.weight ||
+          (candidate.weight === best.weight && compareRgb(candidate.rgb, best.rgb) < 0)))
+    ) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function nearestMedoidIndex(observation, medoids) {
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+  for (let index = 0; index < medoids.length; index++) {
+    const distance = oklabDistanceSquared(observation.lab, medoids[index].lab);
+    if (
+      (distance < bestDistance && !isDistanceTie(distance, bestDistance)) ||
+      (isDistanceTie(distance, bestDistance) &&
+        compareRgb(medoids[index].rgb, medoids[bestIndex].rgb) < 0)
+    ) {
+      bestIndex = index;
+      bestDistance = distance;
+    }
+  }
+  return bestIndex;
+}
+
+function selectClusterMedoid(cluster) {
+  let best = cluster[0];
+  let bestCost = Infinity;
+  for (const candidate of cluster) {
+    const cost = cluster.reduce(
+      (sum, observation) =>
+        sum + observation.weight * oklabDistanceSquared(candidate.lab, observation.lab),
+      0,
+    );
+    if (
+      (cost < bestCost && !isDistanceTie(cost, bestCost)) ||
+      (isDistanceTie(cost, bestCost) && compareRgb(candidate.rgb, best.rgb) < 0)
+    ) {
+      best = candidate;
+      bestCost = cost;
+    }
+  }
+  return best;
+}
+
+// --- stage 6: quantization to named ramps ---
 
 /**
  * Every named palette color with the code expression that references it (`P.ink`, `town[2]`,
