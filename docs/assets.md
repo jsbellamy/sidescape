@@ -330,6 +330,26 @@ Warrior, Zombie, and Skeleton (see "Darkroot Forest, Old Sewers, and Bone Crypt 
   `scripts/art/sprite-sources/`, these are interim CC0 derivatives; #142 replaces the whole cast
   with original art.
 
+### Bone Crypt / Shade Crypt original-art combat cast (#268)
+
+The historical **Tiny Creatures** CC0 provenance above is retained for the superseded placeholder
+sources. #268 replaces `crypt-ghoul`, `bone-knight`, and `crypt-shade` with original built-in
+image-generation art recovered through the source-driven sprite pipeline. Each untouched raw lives
+only in the ignored sprite-generation inbox; the committed compact sources and generated outputs
+are the deterministic production assets.
+
+- Crypt Ghoul and Bone Knight now use 48×48 binary-alpha canvases, are bottom-anchored, and face
+  right from the Monster side. At 1× the Ghoul stays a hunched flesh-and-wrap silhouette, while the
+  Knight remains a separate blue-steel, exposed-bone figure with a raised flanged mace.
+- Crypt Shade now uses a 64×64 canvas and the generic one-intermediate-alpha policy: its
+  8-neighbour outer and hole boundaries stay opaque while only enclosed foreground receives
+  `interiorAlpha: 160`. Its original art is a large hooded, legless specter with skeletal hands and
+  one pale soul-flame, rather than a migration of the former Wraith placeholder.
+- The compact pass uses the standard tight 12-color, three-despeckle budget. The exact per-sprite
+  material and zone ramp allowlists in `scripts/art/sprites.mjs` are the successful ingest audits;
+  the Bone Knight retry intentionally keeps the output blue-and-bone at 1× rather than allowing a
+  muddy green read.
+
 ### Frostspire's own cast: Frost Wolf, Ice Wraith, Frost Giant, and Frost Warden (#254)
 
 The 5th Area needed four new Monster sprites: three open-world (32×32) plus the dungeon-only Frost

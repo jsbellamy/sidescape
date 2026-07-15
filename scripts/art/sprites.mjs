@@ -169,29 +169,28 @@ export const sprites = [
   {
     name: "crypt-shade",
     source: "sprite-crypt-shade.png",
-    size: 48,
+    size: 64,
     alpha: "one-intermediate",
-    materialRampNames: ["blood", "ember", "steel", "water"],
-    zoneNames: ["forest", "town", "meadow"],
+    interiorAlpha: 160,
+    materialRampNames: ["steel", "adamant"],
+    zoneNames: ["forest", "sewer", "crypt"],
   },
-  // Shade Crypt (#253): two new open-world Bone Crypt Monsters. Interim CC0 derivatives, same
-  // provenance and derivation pattern as the rest of this registry's sources (see docs/assets.md);
-  // #142 replaces them along with the rest of the cast.
+  // Bone Crypt (#268): original-art player-scale open-world cast.
   {
     name: "crypt-ghoul",
     source: "sprite-crypt-ghoul.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
-    materialRampNames: ["steel", "blood", "rune", "adamant"],
-    zoneNames: ["forest"],
+    materialRampNames: ["blood", "skin", "leather"],
+    zoneNames: ["sewer", "town"],
   },
   {
     name: "bone-knight",
     source: "sprite-bone-knight.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
-    materialRampNames: ["steel", "rune", "adamant"],
-    zoneNames: ["forest"],
+    materialRampNames: ["steel", "water", "rune", "skin"],
+    zoneNames: ["meadow", "forest", "sewer", "crypt"],
   },
   // Frostspire (#254): the 5th Area's own cast. Interim CC0 derivatives, same provenance and
   // derivation pattern as the rest of this registry's sources (see docs/assets.md); #142 replaces

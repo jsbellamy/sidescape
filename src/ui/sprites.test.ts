@@ -72,7 +72,7 @@ describe("sprites", () => {
     expect(SPRITE_GRAIN).toBe(2);
     expect(spriteEdgePx(playerSpriteSize)).toBe(96);
     expect(spriteEdgePx(32)).toBe(64);
-    expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(96);
+    expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(128);
     expect(spriteEdgePx(monsterSpriteSize("sewer-king")!)).toBe(96);
     expect(spriteEdgePx(monsterSpriteSize("hollow-warden")!)).toBe(128);
   });
