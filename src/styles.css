@@ -466,7 +466,12 @@ body {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 10px;
+  /* No bottom padding: #backdrop is `inset: 0` and paints the ground to the padding-box bottom,
+     so any bottom padding here would hold #sprite-row's feet up above the drawn floor (that was
+     ~10px of the hover). Dropping it aligns the actor plane's origin with #backdrop's ground
+     plane — feet-above-floor is then exactly #sprite-row's own bottom padding (--actor-ground-
+     inset). Top/side padding is unchanged (HP bars, warnings key off it). */
+  padding: 10px 10px 0;
   overflow: hidden; /* backdrop layers must never push the 320px layout */
   /* #232 ground-plane contract: #scene's height is variable (`flex: 1 1 auto`, from #220 — see
      below). Anything that must sit on the ground plane is positioned in px measured from the
@@ -777,7 +782,12 @@ body {
   align-items: flex-end;
   justify-content: center;
   gap: 24px;
-  padding: 6px 0 10px;
+  /* --actor-ground-inset: px of floor left visible below the actors' feet, measured straight up
+     from #backdrop's ground plane (see #scene: bottom padding is 0, so this bottom padding IS the
+     feet-to-floor gap). Raise it to lift the cast off the floor, lower it to sink them onto it.
+     Was effectively ~20px (10px here + 10px #scene bottom padding), which read as floating. */
+  --actor-ground-inset: 4px;
+  padding: 6px 0 var(--actor-ground-inset);
 }
 
 .sprite {
