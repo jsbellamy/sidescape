@@ -42,17 +42,18 @@ const DEFAULT_DESPECKLE_PASSES = 3;
 export const sprites = [
   // The player is the one sprite on screen 100% of the time, and the only one ingested from an
   // original full-body generation rather than a CC0 tile crop (#264) — so she is also the only
-  // entry that overrides the finishing budget. `skin`/`leather` give quantization the vocabulary
-  // her render actually needs (without them her face, hands, belt, and boots all collapse into the
-  // master ramp's umber/shadow browns), the wider `maxColors` keeps the shading steps that a
-  // 12-color cap merges away, and `despecklePasses: 0` preserves the deliberate single pixels — the
-  // eye, the blade highlight — that the 3-pass cleanup deletes.
+  // entry that overrides the finishing budget. `skin`/`leather`/`moss` give quantization the
+  // vocabulary her render actually needs (without them her face, hands, belt, boots, and tunic all
+  // collapse into the master ramp's umber/shadow browns — `moss` closes that last gap, #278), the
+  // wider `maxColors` keeps the shading steps that a 12-color cap merges away, and
+  // `despecklePasses: 0` preserves the deliberate single pixels — the eye, the blade highlight —
+  // that the 3-pass cleanup deletes.
   {
     name: "player",
     source: "sprite-player.png",
     size: 48,
     alpha: "binary",
-    materialRampNames: ["steel", "skin", "leather"],
+    materialRampNames: ["steel", "skin", "leather", "moss"],
     zoneNames: ["forest"],
     maxColors: 24,
     despecklePasses: 0,

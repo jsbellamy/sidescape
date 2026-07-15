@@ -417,9 +417,14 @@ handful of deliberate scope changes over the issue text, all recorded in PR #<pe
   prompt kit (`docs/sprite-gen.md`) so the source is machine-recovered from a generation rather than
   hand-redrawn by eye — the sibling of the icon pipeline.
 
-Two follow-ups remain intentionally out of scope: the tunic still quantizes to brown (the olive has
-no named ramp yet — a `moss` ramp is the deferred color fix), and #142's later Area slices append
-their own original-art Monster rows here as they replace the remaining interim CC0 sources.
+One follow-up remains intentionally out of scope: #142's later Area slices append their own
+original-art Monster rows here as they replace the remaining interim CC0 sources.
+
+**Tunic recolor (#278).** The player's tunic originally quantized to brown for lack of a green
+material ramp. A `moss` ramp (`scripts/art/palettes.mjs`) closes that gap — four cold, desaturated
+olive-green steps in the same value/saturation family as the `forest`/`meadow` zone greens — and the
+`player` row now lists `moss` alongside `skin`/`leather`/`steel` in `materialRampNames`. Per-asset
+scoping means adding it recolors nothing else. The regenerated `player.png` tunic reads green.
 
 This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
 provenance remains recorded as history.
