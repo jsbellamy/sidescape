@@ -1,14 +1,16 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
 import { makeSnapshot } from "../core/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { SKILL_NAMES } from "../core/types";
+import type { EngineEvent, SkillName } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
-import { slotSilhouette } from "./icons";
+import { skillIcon, slotSilhouette } from "./icons";
 import { PRODUCTION_SKILLS } from "./production";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -4393,6 +4395,40 @@ describe("Combat feedback (#4)", () => {
     }
   }
 
+  type XpGainedEvent = Extract<EngineEvent, { type: "xp-gained" }>;
+
+  /** Mounts the real app while capturing its xp-gained subscriber. This drives the UI at the
+   * event-subscription seam without changing the Engine's deliberately append-only event union. */
+  function mountWithXpEmitter(seed: number) {
+    const engine = createEngine(fixtureContent, seededRng(seed));
+    const root = document.createElement("main");
+    const xpHandlers: Array<(event: XpGainedEvent) => void> = [];
+    type UntypedSubscriber = (
+      type: EngineEvent["type"],
+      handler: (event: EngineEvent) => void,
+    ) => void;
+    const subscribe = engine.on as unknown as UntypedSubscriber;
+    const interceptedEngine = new Proxy(engine, {
+      get(target, property, receiver) {
+        if (property !== "on") return Reflect.get(target, property, receiver);
+        return (type: EngineEvent["type"], handler: (event: EngineEvent) => void) => {
+          if (type === "xp-gained") xpHandlers.push(handler as (event: XpGainedEvent) => void);
+          subscribe(type, handler);
+        };
+      },
+    });
+    const app = mountApp(interceptedEngine, root, resolveContent(fixtureContent), noopWindowChrome);
+    return {
+      engine,
+      root,
+      app,
+      emitXp(skill: SkillName, amount: number) {
+        expect(xpHandlers).toHaveLength(1);
+        xpHandlers[0]?.({ type: "xp-gained", skill, amount });
+      },
+    };
+  }
+
   it("shows a red hit splat with the damage number over the Monster as the player's attacks land", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
@@ -4550,14 +4586,66 @@ describe("Combat feedback (#4)", () => {
     expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(false);
   });
 
-  it("floats a +N XP number over the player on a combat-style xp-gained event, but not for hitpoints (#285)", () => {
+  it("places one dedicated XP lane before the player health bar and keeps splats damage-only (#308)", () => {
+    const { root } = mount(1);
+    const playerWrap = root.querySelector("#player-sprite-wrap");
+    const playerChildren = [...(playerWrap?.children ?? [])].map((child) => child.id);
+
+    expect(playerChildren).toEqual([
+      "player-sprite",
+      "player-xp-lane",
+      "player-bar",
+      "player-splats",
+    ]);
+    expect(root.querySelector("#monster-sprite-wrap #player-xp-lane")).toBeNull();
+    expect(root.querySelector("#player-xp-lane")?.getAttribute("aria-hidden")).toBe("true");
+    expect(root.querySelector("#player-splats .xp-gain")).toBeNull();
+  });
+
+  it("renders every eligible Skill XP gain with its icon, rounded amount, and no inline jitter (#308)", () => {
+    const { root, emitXp } = mountWithXpEmitter(1);
+    const skills: SkillName[] = ["attack", "strength", "defence", "ranged", "magic"];
+
+    skills.forEach((skill, index) => emitXp(skill, index + 0.6));
+
+    const gains = [...root.querySelectorAll<HTMLElement>("#player-xp-lane .xp-gain")];
+    expect(gains).toHaveLength(skills.length);
+    gains.forEach((gain, index) => {
+      const skill = skills[index]!;
+      expect(gain.dataset["xpSkill"]).toBe(skill);
+      const icon = gain.querySelector<HTMLImageElement>(".xp-gain-icon");
+      expect(icon?.getAttribute("src")).toBe(skillIcon(skill));
+      expect(icon?.alt).toBe("");
+      expect(gain.querySelector(".xp-gain-amount")?.textContent).toBe(`+${index + 1}`);
+      expect(gain.style.top).toBe("");
+      expect(gain.style.left).toBe("");
+    });
+  });
+
+  it("filters Hitpoints and every non-combat Skill (#308)", () => {
+    const { root, emitXp } = mountWithXpEmitter(1);
+    const combatStyleSkills = new Set<SkillName>([
+      "attack",
+      "strength",
+      "defence",
+      "ranged",
+      "magic",
+    ]);
+    SKILL_NAMES.filter((skill) => !combatStyleSkills.has(skill)).forEach((skill) => {
+      emitXp(skill, 10);
+    });
+
+    expect(root.querySelectorAll("#player-xp-lane .xp-gain")).toHaveLength(0);
+  });
+
+  it("shows exactly one XP row for each landed combat attack, excluding its Hitpoints grant (#308)", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     pump(engine, app, 40, false);
 
-    const xpSplats = [...root.querySelectorAll("#player-splats .splat-xp")];
-    expect(xpSplats.length).toBeGreaterThan(0);
-    expect(xpSplats.every((el) => /^\+\d+$/.test(el.textContent ?? ""))).toBe(true);
+    const xpGains = [...root.querySelectorAll("#player-xp-lane .xp-gain")];
+    expect(xpGains.length).toBeGreaterThan(0);
+    expect(xpGains.every((el) => /^\+\d+$/.test(el.textContent ?? ""))).toBe(true);
 
     // Exactly one floated XP number per landed hit (the style skill's grant), never two: the same
     // hit's Hitpoints trickle (awardCombatXp's second grantXp call) must not also float. A landed
@@ -4566,19 +4654,48 @@ describe("Combat feedback (#4)", () => {
     const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
       (el) => el.textContent !== "0",
     );
-    expect(xpSplats.length).toBe(landedHits.length);
+    expect(xpGains.length).toBe(landedHits.length);
   });
 
-  it("does not float an XP number for fishing xp-gained events", () => {
-    const engine = createEngine(fixtureContent, seededRng(1));
-    const root = document.createElement("main");
-    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    engine.selectFishingSpot("pond"); // pond: catchChance 1, xp 10 per Catch (fixtureContent)
+  it("keeps concurrent gains ordered with the newest nearest the bar and removes each independently (#308)", () => {
+    const { root, emitXp } = mountWithXpEmitter(1);
+    emitXp("attack", 10);
+    vi.advanceTimersByTime(300);
+    emitXp("strength", 20);
 
-    for (let i = 0; i < 20; i++) engine.tick();
-    app.render();
+    const lane = root.querySelector("#player-xp-lane");
+    expect(
+      [...lane!.querySelectorAll<HTMLElement>(".xp-gain")].map((gain) => gain.dataset["xpSkill"]),
+    ).toEqual(["attack", "strength"]);
+    expect((lane?.lastElementChild as HTMLElement | null)?.dataset["xpSkill"]).toBe("strength");
 
-    expect(root.querySelectorAll("#player-splats .splat-xp").length).toBe(0);
+    vi.advanceTimersByTime(399);
+    expect(lane?.children).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(lane?.children).toHaveLength(1);
+    expect((lane?.firstElementChild as HTMLElement | null)?.dataset["xpSkill"]).toBe("strength");
+    vi.advanceTimersByTime(299);
+    expect(lane?.children).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(lane?.children).toHaveLength(0);
+  });
+
+  it("makes a missing XP lane a safe no-op and pins the lane and unbacked-row CSS contract (#308)", () => {
+    const { root, emitXp } = mountWithXpEmitter(1);
+    root.querySelector("#player-xp-lane")?.remove();
+    expect(() => emitXp("attack", 10)).not.toThrow();
+
+    const css = readFileSync("src/styles.css", "utf8");
+    expect(css).toMatch(
+      /\.player-xp-lane\s*\{[\s\S]*?left:\s*50%;[\s\S]*?bottom:\s*calc\(100% \+ 10px\);[\s\S]*?pointer-events:\s*none;/,
+    );
+    expect(css).toMatch(/\.xp-gain-icon\s*\{[\s\S]*?width:\s*17px;[\s\S]*?height:\s*17px;/);
+    expect(css).toMatch(/\.xp-gain\s*\{[\s\S]*?animation:\s*xp-gain-rise 700ms ease-out forwards;/);
+    expect(css).toMatch(/@keyframes xp-gain-rise\s*\{[\s\S]*?translateY\(-8px\)/);
+    expect(css).not.toContain(".splat-xp");
+    const xpGainRule = css.match(/\.xp-gain\s*\{([\s\S]*?)\n\}/)?.[1];
+    expect(xpGainRule).toBeDefined();
+    expect(xpGainRule).not.toMatch(/(background|border|box-shadow):/);
   });
 });
 

@@ -817,6 +817,49 @@ body {
   position: relative;
 }
 
+/* Combat-style XP feedback (#308): a centred, bottom-anchored lane above the player health bar.
+ * It is deliberately separate from `.splat-layer`, which remains damage-only. */
+.player-xp-lane {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.xp-gain {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: max-content;
+  height: 18px;
+  color: #9fda72;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  animation: xp-gain-rise 700ms ease-out forwards;
+}
+
+.xp-gain-icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
 .splat-layer {
   position: absolute;
   inset: 0;
@@ -863,15 +906,6 @@ body {
   border: 1.5px solid #1e4f7a;
 }
 
-/* Floating combat-style XP number (#285): a distinct green pill so it reads as XP rather than a
- * hit/miss splat, using the same rise/fade shape via splat-xp-fade (bigger vertical rise so it
- * doesn't visually collide with the hit/miss splat firing on the same swing). */
-.splat-xp {
-  background: #3fae4a;
-  border: 1.5px solid #1c5f22;
-  animation: splat-xp-fade 700ms ease-out forwards;
-}
-
 @keyframes splat-fade {
   0% {
     opacity: 1;
@@ -883,14 +917,14 @@ body {
   }
 }
 
-@keyframes splat-xp-fade {
-  0% {
+@keyframes xp-gain-rise {
+  from {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateY(0);
   }
-  100% {
+  to {
     opacity: 0;
-    transform: translate(-50%, -140%) scale(1.1);
+    transform: translateY(-8px);
   }
 }
 

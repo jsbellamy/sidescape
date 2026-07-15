@@ -683,19 +683,26 @@ export function mountApp(
     setTimeout(() => splat.remove(), SPLAT_FADE_MS);
   }
 
-  /** Appends a floating `+N` XP number to `layer` (#285), mirroring `showSplat`'s jitter/fade/
-   * auto-removal shape but visually distinct (`.splat-xp`, styled green/rising in styles.css) so
-   * it reads as XP rather than a hit/miss splat. Caller decides which Skills qualify. */
-  function showXpSplat(layer: HTMLElement, amount: number): void {
-    const splat = document.createElement("span");
-    splat.className = "splat splat-xp";
-    splat.textContent = `+${Math.round(amount)}`;
-    const jitterX = Math.random() * 24 - 12; // ±12px
-    const jitterY = Math.random() * 14 - 7; // ±7px, still biased upper-half by the 38% base
-    splat.style.left = `calc(50% + ${jitterX.toFixed(1)}px)`;
-    splat.style.top = `calc(38% + ${jitterY.toFixed(1)}px)`;
-    layer.appendChild(splat);
-    setTimeout(() => splat.remove(), SPLAT_FADE_MS);
+  /** Appends a Skill-labelled `+N` XP row above the player's health bar. The lane is a normal
+   * bottom-anchored column, so appending leaves newer gains nearest the bar while each row keeps
+   * its own fade/removal timer. */
+  function showXpGain(lane: HTMLElement, skill: SkillName, amount: number): void {
+    const gain = document.createElement("span");
+    gain.className = "xp-gain";
+    gain.dataset["xpSkill"] = skill;
+
+    const icon = document.createElement("img");
+    icon.className = "xp-gain-icon pixel";
+    icon.src = skillIcon(skill);
+    icon.alt = "";
+
+    const amountLabel = document.createElement("span");
+    amountLabel.className = "xp-gain-amount";
+    amountLabel.textContent = `+${Math.round(amount)}`;
+
+    gain.append(icon, amountLabel);
+    lane.appendChild(gain);
+    setTimeout(() => gain.remove(), SPLAT_FADE_MS);
   }
 
   /** Appends a toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each toast owns
@@ -1596,6 +1603,7 @@ export function mountApp(
           </div>
           <div id="player-sprite-wrap" class="sprite-wrap">
             <img id="player-sprite" class="sprite pixel" src="${playerSprite}" alt="Player" style="--sprite-edge: ${spriteEdgePx(playerSpriteSize)}px" />
+            <div id="player-xp-lane" class="player-xp-lane" aria-hidden="true"></div>
             <div id="player-bar" class="sprite-hp" hidden aria-label="Player health"><div id="player-hp-fill" class="fill"></div></div>
             <div id="player-splats" class="splat-layer"></div>
           </div>
@@ -1644,15 +1652,15 @@ export function mountApp(
   engine.on("attack", (e) => {
     showSplat(el(e.actor === "player" ? "#monster-splats" : "#player-splats"), e.damage);
   });
-  // Floating combat-style XP number above the player (#285) — only for attack/strength/defence/
-  // ranged/magic; never Hitpoints (one number per hit, the style skill's grant) and never
-  // fishing/production XP. #player-splats only exists while the combat card is mounted, so guard
-  // rather than assume (mirrors why `el` isn't used here — it casts instead of returning null).
+  // Skill-labelled combat XP above the player health bar (#308) — only for attack/strength/
+  // defence/ranged/magic; never Hitpoints (one row per hit) or fishing/production XP. The lane
+  // can be absent while markup is being changed in development, so this is intentionally a safe
+  // query instead of `el()`, which assumes presence.
   engine.on("xp-gained", (e) => {
     if (!COMBAT_STYLE_SKILLS.has(e.skill)) return;
-    const layer = root.querySelector<HTMLElement>("#player-splats");
-    if (!layer) return;
-    showXpSplat(layer, e.amount);
+    const lane = root.querySelector<HTMLElement>("#player-xp-lane");
+    if (!lane) return;
+    showXpGain(lane, e.skill, e.amount);
   });
   engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));

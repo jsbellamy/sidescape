@@ -8,6 +8,17 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   const pageErrors: Error[] = [];
   page.on("pageerror", (error) => pageErrors.push(error));
 
+  // #308: the compact screenshot needs an actual landed player attack. Alternate a low accuracy
+  // roll with a high damage roll before boot so the browser-degraded capture cannot flake on a
+  // run of misses or zero-damage hits.
+  await page.addInitScript(() => {
+    let callCount = 0;
+    Math.random = () => {
+      callCount++;
+      return callCount % 2 === 1 ? 0.1 : 0.9;
+    };
+  });
+
   await page.goto("/");
 
   // Smoke 1: the compact widget still mounts in the plain-browser fallback. Mute/Export/Import
@@ -18,6 +29,16 @@ test("browser-degraded layout mounts, remains interactive, and records screensho
   for (const selector of ["#close-btn", "#menu-toggle"]) {
     await expect(page.locator(selector)).toBeVisible();
   }
+
+  // #308: select an unlocked Monster through the real browser-degraded UI and wait for the
+  // caller-pumped Engine to produce a combat-style XP gain. Closing the cards again leaves the
+  // compact screenshot as direct visual evidence that the row sits above the player health bar.
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="world"]').click();
+  await page.locator("[data-monster]").first().click();
+  await expect(page.locator("#player-xp-lane .xp-gain")).toBeVisible({ timeout: 10_000 });
+  await page.locator("#menu-toggle").click();
+  await expect(page.locator("#management-row")).toBeHidden();
   await page.screenshot({ path: `${screenshots}/compact.png`, fullPage: true });
 
   // #206: the menu button opens the Character hub; its own header nav then opens the Management
