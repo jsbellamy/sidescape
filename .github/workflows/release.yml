@@ -5,7 +5,17 @@ on:
 
 jobs:
   release:
-    runs-on: macos-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: ""
+          - platform: windows-latest
+            args: "--bundles nsis"
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +33,7 @@ jobs:
         with:
           tagName: app-v__VERSION__
           releaseName: "SideScape v__VERSION__"
-          releaseBody: "Unsigned macOS build — see README for install/Gatekeeper instructions."
+          releaseBody: "Unsigned personal-distribution builds for macOS and Windows."
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
