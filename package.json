@@ -12,6 +12,7 @@
     "art:trace": "node scripts/art/trace-reference.mjs",
     "art:ingest": "node scripts/art/ingest-icon.mjs",
     "art:ingest-sprite": "node scripts/art/ingest-sprite.mjs",
+    "art:ingest-backdrop": "node scripts/art/ingest-backdrop.mjs",
     "art:overlay": "node scripts/art/ingest-overlay.mjs",
     "art:overlays": "node scripts/art/build-overlays.mjs",
     "preview": "vite preview",

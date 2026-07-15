@@ -12,6 +12,8 @@ import {
   renderPeriodicLayer,
   writeBackdrops,
 } from "../../scripts/art/backdrops.mjs";
+import { prepareBackdropIngest } from "../../scripts/art/ingest-backdrop.mjs";
+import { encodePng } from "../../scripts/art/write-png.mjs";
 
 /** A synthetic registry independent of the real (deliberately empty) production `backdrops`
  * registry (#263) — infra tests must never depend on a real theme so they can't accidentally
@@ -19,12 +21,14 @@ import {
 function makeSyntheticRegistry(): [
   {
     theme: string;
+    kind: "paint";
     layers: Record<string, (px: { localX: number; y: number }) => number[]>;
   },
 ] {
   return [
     {
       theme: "test-theme",
+      kind: "paint",
       layers: {
         sky: ({ localX, y }: { localX: number; y: number }) => [localX % 256, y % 256, 10, 255],
         mid: () => [20, 30, 40, 255],
@@ -155,5 +159,105 @@ describe("backdrop generator infrastructure (#263)", () => {
     await writeFile(sentinelPath, "sentinel-bytes");
     await writeBackdrops(destDir); // default registry = production `backdrops`, which is []
     expect(await readFile(sentinelPath, "utf8")).toBe("sentinel-bytes");
+  });
+});
+
+function sourceRegistry() {
+  return [
+    {
+      theme: "source-theme",
+      kind: "source",
+      layers: {
+        sky: { source: "source-theme-sky.png", alpha: "opaque", maxColors: 4 },
+        mid: { source: "source-theme-mid.png", alpha: "binary", maxColors: 4 },
+        near: { source: "source-theme-near.png", alpha: "binary", maxColors: 4 },
+      },
+    },
+  ];
+}
+
+async function writeFixture(dir: string, name: string, alpha: number) {
+  await writeFile(
+    join(dir, name),
+    encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, (x: number, y: number) => [
+      x % 2 ? 10 : 20,
+      y % 2 ? 30 : 40,
+      50,
+      alpha,
+    ]),
+  );
+}
+
+describe("source-driven backdrop definitions (#305)", () => {
+  it("reads injected compact sources outside the repository and writes identical decoded RGBA", async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-source-test-"));
+    try {
+      await writeFixture(sourceDir, "source-theme-sky.png", 255);
+      await writeFixture(sourceDir, "source-theme-mid.png", 0);
+      await writeFixture(sourceDir, "source-theme-near.png", 255);
+      await writeBackdrops(destDir, { registry: sourceRegistry(), sourceDir });
+      const input = PNG.sync.read(await readFile(join(sourceDir, "source-theme-sky.png")));
+      const output = PNG.sync.read(await readFile(join(destDir, "source-theme-sky.png")));
+      expect(Array.from(output.data)).toEqual(Array.from(input.data));
+      const first = await readFile(join(destDir, "source-theme-near.png"));
+      await writeBackdrops(destDir, { registry: sourceRegistry(), sourceDir });
+      expect((await readFile(join(destDir, "source-theme-near.png"))).equals(first)).toBe(true);
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects partial alpha, bad dimensions, excess colors, traversal, mixed shapes, and invalid caps before output", async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-invalid-source-"));
+    try {
+      await writeFixture(sourceDir, "source-theme-sky.png", 255);
+      await writeFixture(sourceDir, "source-theme-mid.png", 128);
+      await writeFixture(sourceDir, "source-theme-near.png", 255);
+      await expect(
+        writeBackdrops(destDir, { registry: sourceRegistry(), sourceDir }),
+      ).rejects.toThrow(/binary alpha/i);
+      expect(await readdir(destDir)).toEqual([]);
+      const bad = sourceRegistry()[0]!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (bad.layers.sky as any).source = "../escape.png";
+      await expect(writeBackdrops(destDir, { registry: [bad], sourceDir })).rejects.toThrow(
+        /unsafe/i,
+      );
+      const mixed = sourceRegistry()[0]!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (mixed.layers.mid as any) = () => [0, 0, 0, 255];
+      await expect(writeBackdrops(destDir, { registry: [mixed], sourceDir })).rejects.toThrow(
+        /source layer/i,
+      );
+      const cap = sourceRegistry()[0]!;
+      cap.layers.near.maxColors = 0;
+      await expect(writeBackdrops(destDir, { registry: [cap], sourceDir })).rejects.toThrow(
+        /positive integer/i,
+      );
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers a chunky 160x120 grid by majority vote without resampling", () => {
+    const raw = PNG.sync.read(
+      encodePng(BACKDROP_WIDTH * 2, BACKDROP_HEIGHT * 2, (x: number, y: number) => {
+        const gx = Math.floor(x / 2),
+          gy = Math.floor(y / 2);
+        return gx < 8 && gy < 8 ? [20, 40, 60, 255] : [255, 0, 255, 255];
+      }),
+    );
+    const result = prepareBackdropIngest({
+      image: raw,
+      theme: "source-theme",
+      layer: "mid",
+      registry: sourceRegistry(),
+      pitch: 2,
+      pitchY: 2,
+    });
+    expect(result.compact.width).toBe(BACKDROP_WIDTH);
+    expect(result.compact.height).toBe(BACKDROP_HEIGHT);
+    expect(result.compact.data[3]).toBe(255);
+    expect(result.compact.data[(20 * BACKDROP_WIDTH + 20) * 4 + 3]).toBe(0);
   });
 });
