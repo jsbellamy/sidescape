@@ -73,6 +73,29 @@ describe("combat scene sprites", () => {
     expect(seen.size).toBe(4);
   });
 
+  it("renders a distinct, pixelated sprite for every Old Sewers Monster and its Dungeon Boss", () => {
+    const seen = new Set<string>();
+    for (const monsterId of ["giant-rat", "zombie", "skeleton", "sewer-king"]) {
+      const engine = createEngine(
+        darkrootContent,
+        seededRng(1),
+        makeSnapshot({ player: { completedDungeonIds: ["darkroot-hollow"] } }),
+      );
+      const root = document.createElement("main");
+      const app = mountApp(engine, root, resolvedDarkrootContent, noopWindowChrome);
+
+      engine.selectMonster(monsterId);
+      app.render();
+
+      const monsterImg = root.querySelector<HTMLImageElement>("#monster-sprite");
+      const src = monsterImg?.getAttribute("src");
+      expect(src, `${monsterId} should render a sprite`).toBeTruthy();
+      expect(monsterImg?.classList.contains("pixel")).toBe(true);
+      seen.add(src!);
+    }
+    expect(seen.size).toBe(4);
+  });
+
   it("hides the Monster sprite before a Monster is selected", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
