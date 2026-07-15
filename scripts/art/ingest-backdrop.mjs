@@ -16,6 +16,7 @@ import {
   cropImage,
   detectPitch,
   keyBackground,
+  normalizeCellPalette,
   sampleBackground,
   sampleCells,
 } from "./trace-core.mjs";
@@ -92,6 +93,18 @@ function gridToImage(cells) {
   return { width, height, data };
 }
 
+function assertExactGrid(cells) {
+  const height = cells.length;
+  const width = height === 0 ? 0 : cells[0].length;
+  if (!width || cells.some((row) => row.length !== width))
+    throw new Error("recovered a non-rectangular or empty grid");
+  if (width !== BACKDROP_WIDTH || height !== BACKDROP_HEIGHT) {
+    throw new Error(
+      `recovered grid is ${width}x${height}; expected exactly ${BACKDROP_WIDTH}x${BACKDROP_HEIGHT}`,
+    );
+  }
+}
+
 function preview(image, periods = 1) {
   return encodePng(image.width * periods, image.height, (x, y) => {
     const at = (y * image.width + (x % image.width)) * 4;
@@ -133,18 +146,21 @@ export function prepareBackdropIngest(input) {
   const py = pitchY
     ? { pitch: pitchY, phase: 0, score: "manual" }
     : detectPitch(tile, keyed.fg, "y", pitchBand);
-  const cells = sampleCells(tile, keyed.fg, fullGridBBox(tile), {
+  const sampledCells = sampleCells(tile, keyed.fg, fullGridBBox(tile), {
     pitchX: px.pitch,
     phaseX: px.phase,
     pitchY: py.pitch,
     phaseY: py.phase,
   });
-  const compact = gridToImage(cells);
-  if (compact.width !== BACKDROP_WIDTH || compact.height !== BACKDROP_HEIGHT) {
+  try {
+    assertExactGrid(sampledCells);
+  } catch (error) {
     throw new Error(
-      `recovered grid is ${compact.width}x${compact.height}; expected exactly ${BACKDROP_WIDTH}x${BACKDROP_HEIGHT} (detected pitch ${px.pitch.toFixed(2)}×${py.pitch.toFixed(2)}). Adjust --crop, --pitch, or --pitch-y; do not resize or downsample the raw raster.`,
+      `${error.message} (detected pitch ${px.pitch.toFixed(2)}×${py.pitch.toFixed(2)}). Adjust --crop, --pitch, or --pitch-y; do not resize or downsample the raw raster.`,
     );
   }
+  const normalized = normalizeCellPalette(sampledCells, { maxColors: target.maxColors });
+  const compact = gridToImage(normalized.cells);
   const { colorCount } = validateBackdropImage(compact, {
     layerName: layer,
     maxColors: target.maxColors,
@@ -158,6 +174,10 @@ export function prepareBackdropIngest(input) {
       pitchX: px,
       pitchY: py,
       enclosedBgCount: keyed.enclosedBgCount,
+      sampledColors: normalized.inputColorCount,
+      normalizedColors: normalized.outputColorCount,
+      maxColors: target.maxColors,
+      changedCellCount: normalized.changedCellCount,
     },
   };
 }
@@ -172,6 +192,15 @@ async function atomicWrite(path, buffer) {
     await rm(temporary, { force: true });
     throw error;
   }
+}
+
+/** Writes the compact source and its previews only after deriving every buffer from one compact image. */
+export async function writeBackdropIngestArtifacts({ sourcePath, oneXPath, stripPath, compact }) {
+  const oneX = preview(compact);
+  const strip = preview(compact, REVIEW_PERIODS);
+  await atomicWrite(sourcePath, oneX);
+  await atomicWrite(oneXPath, oneX);
+  await atomicWrite(stripPath, strip);
 }
 
 export async function main(values = options(), { registry = backdrops } = {}) {
@@ -213,13 +242,14 @@ export async function main(values = options(), { registry = backdrops } = {}) {
   });
   const sourcePath = resolve(defaultSources, `${values.theme}-${values.layer}.png`);
   const previewDir = resolve(defaultInbox, "preview");
-  const oneX = preview(result.compact);
-  const strip = preview(result.compact, REVIEW_PERIODS);
-  await atomicWrite(sourcePath, oneX);
-  await atomicWrite(resolve(previewDir, `${values.theme}-${values.layer}@1x.png`), oneX);
-  await atomicWrite(resolve(previewDir, `${values.theme}-${values.layer}@3x-strip.png`), strip);
+  await writeBackdropIngestArtifacts({
+    sourcePath,
+    oneXPath: resolve(previewDir, `${values.theme}-${values.layer}@1x.png`),
+    stripPath: resolve(previewDir, `${values.theme}-${values.layer}@3x-strip.png`),
+    compact: result.compact,
+  });
   console.log(
-    `ingest-backdrop: ${values.theme}-${values.layer}\n  input: ${rawPath}\n  grid: ${result.compact.width}x${result.compact.height}, colors: ${result.colorCount}/${definitionFor(registry, values.theme).layers[values.layer].maxColors}\n  pitch: ${result.report.pitchX.pitch.toFixed(2)} × ${result.report.pitchY.pitch.toFixed(2)}\n  wrote compact source: ${sourcePath}\n  previews (ignored): ${resolve(previewDir, `${values.theme}-${values.layer}@1x.png`)} and @3x-strip`,
+    `ingest-backdrop: ${values.theme}-${values.layer}\n  input: ${rawPath}\n  grid: ${result.compact.width}x${result.compact.height}\n  cells: ${result.report.sampledColors} sampled -> ${result.report.normalizedColors} normalized (ceiling ${result.report.maxColors}, ${result.report.changedCellCount} changed)\n  pitch: ${result.report.pitchX.pitch.toFixed(2)} × ${result.report.pitchY.pitch.toFixed(2)}\n  wrote compact source: ${sourcePath}\n  previews (ignored): ${resolve(previewDir, `${values.theme}-${values.layer}@1x.png`)} and @3x-strip`,
   );
 }
 

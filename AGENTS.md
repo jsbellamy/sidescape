@@ -99,6 +99,12 @@ behaviour with DOM integration tests.
   `docs/icon-silhouette-sheet-1x.png` first, then `docs/icon-sheet-1x.png` beside
   `docs/icon-style-golden-master.png`, before treating an icon as complete. Shipped icons remain
   deterministic `npm run art` output.
+- **New backdrops.** Follow `docs/backdrop-gen.md`: preserve the untouched raw PNG, recover its
+  logical grid by majority vote, then deterministically normalize source-local RGB variation to
+  the layer's single `maxColors` ceiling. High sampled RGB variety is expected and is not itself a
+  rejection reason. Approve the normalized native 1× and unscaled three-period previews; never
+  resize, downsample, or hand-edit the raw or compact source. Stage 2 copies the compact source
+  exactly and rejects an over-cap committed source.
 
 ## Commands
 

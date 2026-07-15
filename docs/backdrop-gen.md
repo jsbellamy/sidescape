@@ -17,7 +17,9 @@ scripts/art/backdrop-gen-inbox/preview/<theme>-<layer>@1x.png
 scripts/art/backdrop-gen-inbox/preview/<theme>-<layer>@3x-strip.png
 ```
 
-Use `--in`, `--crop x0,y0,x1,y1`, `--tolerance`, `--pitch`, and `--pitch-y` only to correct a reported input/grid issue. The ingest recovers logical cells by majority vote; it never continuously resizes or downscales a smooth raster. A result other than exactly 160×120 is rejected without replacing the compact source.
+Use `--in`, `--crop x0,y0,x1,y1`, `--tolerance`, `--pitch`, and `--pitch-y` only to correct a reported input/grid issue. The ingest recovers logical cells by majority vote, then deterministically normalizes recovered RGB cells to the layer's single `maxColors` ceiling using source-local Oklab medoids. Subtle RGB variation in an untouched image-generator raw is expected: a high sampled-color count alone is not a rejection reason. It never continuously resizes or downscales a smooth raster. A result other than exactly 160×120 is rejected without replacing the compact source.
+
+Keep the raw PNG untouched: never resize, re-export, downsample, or hand-edit it. The normalized native 1× preview and unscaled three-period strip are the visual approval surfaces. If normalization visibly flattens the image, regenerate the raw or change the cap only through evidence in the consuming art issue; never hand-paint the compact source. Stage 2 copies the committed compact source exactly and rejects a source that is over its registered cap.
 
 ## Prompt kits
 
