@@ -8,6 +8,7 @@ import {
   detectPitch,
   emitDraft,
   keyBackground,
+  normalizeCellPalette,
   quantizeGrid,
   reducePalette,
   sampleBackground,
@@ -76,6 +77,121 @@ const TOWN3 = "#c5823b";
 const TOWN4 = "#e2ad57";
 const INK = "#110d0a";
 const HEX: Record<string, string> = { A: TOWN0, B: TOWN2, C: TOWN3, D: TOWN4, K: INK };
+
+describe("normalizeCellPalette", () => {
+  it("preserves an already-within-budget grid and reports an identity normalization", () => {
+    const cells: (RGB | null)[][] = [
+      [[12, 34, 56], null],
+      [
+        [200, 210, 220],
+        [12, 34, 56],
+      ],
+    ];
+
+    expect(normalizeCellPalette(cells, { maxColors: 2 })).toEqual({
+      cells,
+      inputColorCount: 2,
+      outputColorCount: 2,
+      changedCellCount: 0,
+      medoids: [
+        [12, 34, 56],
+        [200, 210, 220],
+      ],
+    });
+  });
+
+  it("collapses noisy source colors into exact input medoids without changing geometry", () => {
+    const cells: (RGB | null)[][] = [
+      [[16, 19, 25], [18, 20, 26], null, [228, 80, 48]],
+      [[16, 19, 25], [17, 18, 25], null, [230, 82, 49]],
+    ];
+
+    const normalized = normalizeCellPalette(cells, { maxColors: 2 });
+    const input = new Set(
+      cells
+        .flat()
+        .filter((rgb): rgb is RGB => rgb !== null)
+        .map((rgb) => rgb.join(",")),
+    );
+    const output: RGB[] = normalized.cells
+      .flat()
+      .filter((rgb: RGB | null): rgb is RGB => rgb !== null);
+
+    expect(normalized.outputColorCount).toBe(2);
+    expect(normalized.changedCellCount).toBeGreaterThan(0);
+    expect(normalized.cells).toHaveLength(cells.length);
+    expect(normalized.cells[0]).toHaveLength(cells[0]!.length);
+    expect(normalized.cells[0]![2]).toBeNull();
+    expect(normalized.cells[1]![2]).toBeNull();
+    expect(output.every((rgb) => input.has(rgb.join(",")))).toBe(true);
+    expect(new Set(output.filter((rgb) => rgb[0] < 100).map((rgb) => rgb.join(","))).size).toBe(1);
+    expect(new Set(output.filter((rgb) => rgb[0] > 100).map((rgb) => rgb.join(","))).size).toBe(1);
+  });
+
+  it("is deterministic, idempotent, and orders the final medoid report by RGB", () => {
+    const cells: (RGB | null)[][] = [
+      [
+        [0, 0, 0],
+        [128, 128, 128],
+        [255, 255, 255],
+      ],
+      [[0, 0, 0], null, [255, 255, 255]],
+    ];
+
+    const first = normalizeCellPalette(cells, { maxColors: 2 });
+    const second = normalizeCellPalette(cells, { maxColors: 2 });
+    const renormalized = normalizeCellPalette(first.cells, { maxColors: 2 });
+
+    expect(second).toEqual(first);
+    expect(first.medoids).toEqual([
+      [0, 0, 0],
+      [255, 255, 255],
+    ]);
+    expect(renormalized.cells).toEqual(first.cells);
+    expect(renormalized.changedCellCount).toBe(0);
+  });
+
+  it("uses stable RGB tie breaks for one-medoid refinement and two-medoid assignment", () => {
+    const grayscale = (value: number): RGB => [value, value, value];
+
+    // With one medoid, 128 minimizes the histogram-weighted OKLab cost; this pins first-seed and
+    // refinement selection. With two medoids, black wins the farthest-first tie from 128 by RGB.
+    expect(
+      normalizeCellPalette([[grayscale(0), grayscale(128), grayscale(255)]], { maxColors: 1 }),
+    ).toMatchObject({
+      medoids: [grayscale(128)],
+    });
+    expect(
+      normalizeCellPalette([[grayscale(0), grayscale(128), grayscale(255)]], { maxColors: 2 }),
+    ).toMatchObject({
+      cells: [[grayscale(0), grayscale(128), grayscale(128)]],
+      medoids: [grayscale(0), grayscale(128)],
+    });
+  });
+
+  it("returns valid transparent and one-color reports, and rejects invalid budgets", () => {
+    const transparent: (RGB | null)[][] = [
+      [null, null],
+      [null, null],
+    ];
+    expect(normalizeCellPalette(transparent, { maxColors: 3 })).toEqual({
+      cells: transparent,
+      inputColorCount: 0,
+      outputColorCount: 0,
+      changedCellCount: 0,
+      medoids: [],
+    });
+    expect(normalizeCellPalette([[[7, 8, 9]]], { maxColors: 1 })).toMatchObject({
+      inputColorCount: 1,
+      outputColorCount: 1,
+      changedCellCount: 0,
+      medoids: [[7, 8, 9]],
+    });
+    for (const maxColors of [undefined, 0, -1, 1.5, Number.NaN, "2"]) {
+      expect(() => normalizeCellPalette([[[7, 8, 9]]], { maxColors })).toThrow("positive integer");
+    }
+  });
+});
 
 describe("detectPitch + sampleCells round-trip", () => {
   // A 6×5 grid where every 4-neighbour differs, so each cell boundary yields a strong edge comb.
