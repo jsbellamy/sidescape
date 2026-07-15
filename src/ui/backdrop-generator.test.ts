@@ -12,7 +12,10 @@ import {
   renderPeriodicLayer,
   writeBackdrops,
 } from "../../scripts/art/backdrops.mjs";
-import { prepareBackdropIngest } from "../../scripts/art/ingest-backdrop.mjs";
+import {
+  prepareBackdropIngest,
+  writeBackdropIngestArtifacts,
+} from "../../scripts/art/ingest-backdrop.mjs";
 import { encodePng } from "../../scripts/art/write-png.mjs";
 
 /** A synthetic registry independent of the real (deliberately empty) production `backdrops`
@@ -259,5 +262,160 @@ describe("source-driven backdrop definitions (#305)", () => {
     expect(result.compact.height).toBe(BACKDROP_HEIGHT);
     expect(result.compact.data[3]).toBe(255);
     expect(result.compact.data[(20 * BACKDROP_WIDTH + 20) * 4 + 3]).toBe(0);
+  });
+});
+
+function recoveredRaw(
+  layer: "sky" | "mid" | "near",
+  cell: (x: number, y: number) => [number, number, number] | null,
+) {
+  return PNG.sync.read(
+    encodePng(BACKDROP_WIDTH * 2, BACKDROP_HEIGHT * 2, (x: number, y: number) => {
+      const rgb = cell(Math.floor(x / 2), Math.floor(y / 2));
+      return rgb ? [...rgb, 255] : layer === "sky" ? [0, 0, 0, 0] : [255, 0, 255, 255];
+    }),
+  );
+}
+
+function ingestFixture({
+  layer = "sky",
+  maxColors = 4,
+  cell,
+}: {
+  layer?: "sky" | "mid" | "near";
+  maxColors?: number;
+  cell: (x: number, y: number) => [number, number, number] | null;
+}) {
+  return prepareBackdropIngest({
+    image: recoveredRaw(layer, cell),
+    theme: "source-theme",
+    layer,
+    registry: sourceRegistry().map((definition) => ({
+      ...definition,
+      layers: Object.fromEntries(
+        Object.entries(definition.layers).map(([name, target]) => [name, { ...target, maxColors }]),
+      ),
+    })),
+    pitch: 2,
+    pitchY: 2,
+  });
+}
+
+describe("backdrop ingest palette normalization (#311)", () => {
+  it("normalizes an over-cap recovered sky and reports the source-local change", () => {
+    const result = ingestFixture({
+      maxColors: 3,
+      cell: (x, y) => {
+        const color = (x + y) % 5;
+        return [color * 40, color * 30, color * 20];
+      },
+    });
+    expect(result.report.sampledColors).toBeGreaterThan(result.report.maxColors);
+    expect(result.report.normalizedColors).toBeLessThanOrEqual(result.report.maxColors);
+    expect(result.report.changedCellCount).toBeGreaterThan(0);
+    expect(result.colorCount).toBeLessThanOrEqual(result.report.maxColors);
+    expect(
+      result.compact.data.every(
+        (_, index) => index % 4 !== 3 || result.compact.data[index] === 255,
+      ),
+    ).toBe(true);
+  });
+
+  it("preserves a within-cap recovered grid byte-for-byte", () => {
+    const raw = recoveredRaw("sky", (x, y) => ((x + y) % 2 ? [10, 20, 30] : [40, 50, 60]));
+    const result = prepareBackdropIngest({
+      image: raw,
+      theme: "source-theme",
+      layer: "sky",
+      registry: sourceRegistry(),
+      pitch: 2,
+      pitchY: 2,
+    });
+    const expected = PNG.sync.read(
+      encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, (x: number, y: number) =>
+        (x + y) % 2 ? [10, 20, 30, 255] : [40, 50, 60, 255],
+      ),
+    );
+    expect(Array.from(result.compact.data)).toEqual(Array.from(expected.data));
+    expect(result.report.changedCellCount).toBe(0);
+  });
+
+  it("is deterministic and keeps binary-alpha transparent masks out of palette counts", () => {
+    const fixture = {
+      layer: "mid" as const,
+      maxColors: 3,
+      cell: (x: number, y: number) =>
+        x < 20 || x >= 139 || y < 20 || y >= 99
+          ? null
+          : ([((x + y) % 5) * 40, ((x + y) % 5) * 30, ((x + y) % 5) * 20] as [
+              number,
+              number,
+              number,
+            ]),
+    };
+    const first = ingestFixture(fixture);
+    const second = ingestFixture(fixture);
+    expect(Array.from(second.compact.data)).toEqual(Array.from(first.compact.data));
+    expect(second.report).toEqual(first.report);
+    expect(first.compact.data[3]).toBe(0);
+    expect(first.compact.data[(50 * BACKDROP_WIDTH + 50) * 4 + 3]).toBe(255);
+    expect(first.report.sampledColors).toBeGreaterThan(first.report.maxColors);
+    expect(first.report.normalizedColors).toBeLessThanOrEqual(first.report.maxColors);
+  });
+
+  it("uses identical normalized pixels for compact, 1x, and every 3x preview period", async () => {
+    const result = ingestFixture({
+      maxColors: 3,
+      cell: (x, y) => {
+        const color = (x + y) % 5;
+        return [color * 40, color * 30, color * 20];
+      },
+    });
+    const sourcePath = join(destDir, "source.png");
+    const oneXPath = join(destDir, "preview.png");
+    const stripPath = join(destDir, "strip.png");
+    await writeBackdropIngestArtifacts({
+      sourcePath,
+      oneXPath,
+      stripPath,
+      compact: result.compact,
+    });
+    const oneX = PNG.sync.read(await readFile(oneXPath));
+    const strip = PNG.sync.read(await readFile(stripPath));
+    expect(Array.from(oneX.data)).toEqual(Array.from(result.compact.data));
+    for (let period = 0; period < REVIEW_PERIODS; period++)
+      for (let y = 0; y < BACKDROP_HEIGHT; y++)
+        for (let x = 0; x < BACKDROP_WIDTH; x++) {
+          const compactAt = (y * BACKDROP_WIDTH + x) * 4;
+          const stripAt = (y * strip.width + period * BACKDROP_WIDTH + x) * 4;
+          expect(Array.from(strip.data.slice(stripAt, stripAt + 4))).toEqual(
+            Array.from(result.compact.data.slice(compactAt, compactAt + 4)),
+          );
+        }
+  });
+
+  it("keeps existing artifacts untouched when post-recovery validation fails", async () => {
+    const sourcePath = join(destDir, "source.png");
+    const oneXPath = join(destDir, "preview.png");
+    const stripPath = join(destDir, "strip.png");
+    await Promise.all(
+      [sourcePath, oneXPath, stripPath].map((path) => writeFile(path, "unchanged")),
+    );
+    const wrongGeometry = PNG.sync.read(
+      encodePng(BACKDROP_WIDTH * 2 - 2, BACKDROP_HEIGHT * 2 - 2, () => [20, 30, 40, 255]),
+    );
+    expect(() =>
+      prepareBackdropIngest({
+        image: wrongGeometry,
+        theme: "source-theme",
+        layer: "sky",
+        registry: sourceRegistry(),
+        pitch: 2,
+        pitchY: 2,
+      }),
+    ).toThrow(/recovered grid/i);
+    await expect(
+      Promise.all([sourcePath, oneXPath, stripPath].map((path) => readFile(path, "utf8"))),
+    ).resolves.toEqual(["unchanged", "unchanged", "unchanged"]);
   });
 });
