@@ -80,15 +80,15 @@ scene.
 
 ## Audio packs
 
-Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs, both licensed CC0 1.0 Universal:
+Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs, both licensed CC0 1.0 Universal. Re-sourced in #282 for higher-quality, more distinct clips (same 5 keys and files, new source samples within the same two packs):
 
 | Event (Engine)          | File                         | Source pack                                        |
 | ----------------------- | ---------------------------- | -------------------------------------------------- |
-| `kill`                  | `public/audio/kill.wav`      | Kenney Impact Sounds — `impactPunch_heavy_002.ogg` |
-| `food-eaten`            | `public/audio/eat.wav`       | Kenney Impact Sounds — `impactSoft_medium_000.ogg` |
-| `levelup`               | `public/audio/levelup.wav`   | Kenney Digital Audio — `powerUp1.ogg`              |
-| `drop` (rare band only) | `public/audio/rare-drop.wav` | Kenney Digital Audio — `twoTone1.ogg`              |
-| `death`                 | `public/audio/death.wav`     | Kenney Digital Audio — `lowDown.ogg`               |
+| `kill`                  | `public/audio/kill.wav`      | Kenney Impact Sounds — `impactPunch_heavy_004.ogg` |
+| `food-eaten`            | `public/audio/eat.wav`       | Kenney Impact Sounds — `impactSoft_medium_001.ogg` |
+| `levelup`               | `public/audio/levelup.wav`   | Kenney Digital Audio — `phaserUp3.ogg`             |
+| `drop` (rare band only) | `public/audio/rare-drop.wav` | Kenney Digital Audio — `threeTone2.ogg`            |
+| `death`                 | `public/audio/death.wav`     | Kenney Digital Audio — `lowThreeTone.ogg`          |
 
 - **Pack**: Impact Sounds
   **Author**: Kenney Vleugels (kenney.nl)
@@ -100,7 +100,7 @@ Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs
   **URL**: https://kenney.nl/assets/digital-audio
   **License**: CC0 1.0 Universal (public domain dedication) — confirmed via the pack's bundled `License.txt`
 
-Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). No other alteration was made to the audio content.
+Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit, 44.1 kHz) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). Each clip was also loudness-matched via a single-pass EBU R128 normalization (`ffmpeg ... loudnorm=I=-16:TP=-1.5:LRA=11`, integrated target -16 LUFS / true peak -1.5 dBTP) so no one cue sits jarringly louder than the others; no other alteration was made to the audio content.
 
 ## Scene backdrops and activity overlays (#80, #141, #254)
 
