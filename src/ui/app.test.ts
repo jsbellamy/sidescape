@@ -4251,6 +4251,11 @@ describe("Vendor bulk buy (#283)", () => {
 
     typeQty(root, "arrow", "0");
     expect(buyBtn(root, "arrow").disabled).toBe(true);
+    expect(qtyInput(root, "arrow").value).toBe("");
+
+    typeQty(root, "arrow", "-1");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+    expect(qtyInput(root, "arrow").value).toBe("");
 
     typeQty(root, "arrow", "");
     expect(buyBtn(root, "arrow").disabled).toBe(true);
@@ -4259,6 +4264,107 @@ describe("Vendor bulk buy (#283)", () => {
     buyBtn(root, "arrow").click();
     expect(engine.snapshot().player.gold).toBe(100);
     expect(engine.snapshot().bank.items).toEqual([]);
+  });
+
+  it("blocks non-numeric quantity keys and clears non-numeric pasted values", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    const input = qtyInput(root, "arrow");
+    const minus = new KeyboardEvent("keydown", { key: "-", bubbles: true, cancelable: true });
+    const decimal = new KeyboardEvent("keydown", { key: ".", bubbles: true, cancelable: true });
+
+    input.dispatchEvent(minus);
+    input.dispatchEvent(decimal);
+    expect(minus.defaultPrevented).toBe(true);
+    expect(decimal.defaultPrevented).toBe(true);
+
+    typeQty(root, "arrow", "1.5");
+    expect(input.value).toBe("");
+  });
+
+  it("keeps the exact focused input through repeated Tick renders while keyboard editing", () => {
+    const { engine, root, app } = ammoMount({ player: { gold: 100 } });
+    document.body.append(root); // happy-dom only tracks focus for connected controls
+    const input = qtyInput(root, "air-rune");
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    typeQty(root, "air-rune", "");
+    app.render();
+    expect(qtyInput(root, "air-rune")).toBe(input);
+    expect(input.isConnected).toBe(true);
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("");
+
+    typeQty(root, "air-rune", "2");
+    engine.tick(); // closest app-test equivalent of boot's 600ms Tick/render cadence
+    app.render();
+    typeQty(root, "air-rune", "25");
+    app.render();
+
+    expect(qtyInput(root, "air-rune")).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("25");
+    expect(buyBtn(root, "air-rune").textContent).toMatch(/Buy \(75g\)/);
+  });
+
+  it("updates live ownership and affordability on the same focused input", () => {
+    const { engine, root, app } = ammoMount({ player: { gold: 100 } });
+    document.body.append(root);
+    const input = qtyInput(root, "arrow"); // 2g each
+    typeQty(root, "arrow", "40");
+    input.focus();
+    engine.buy("air-rune", 30); // unrelated Vendor action leaves 10g
+    engine.tick(); // combat state can also change without rebuilding Vendor rows
+    app.render();
+
+    expect(qtyInput(root, "arrow")).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("5"); // falling affordability clamps this same node
+    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(10g\)/);
+    expect(root.querySelector('[data-vendor-row="air-rune"] .recipe-inputs')?.textContent).toBe(
+      "Owned: 30",
+    );
+  });
+
+  it("strictly rejects malformed quantities without purchasing", () => {
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
+    for (const value of ["", "0", "-1", "1.5", "1e2", " 2", "2 ", "+2", "9007199254740992"]) {
+      typeQty(root, "arrow", value);
+      expect(buyBtn(root, "arrow").disabled, value).toBe(true);
+      buyBtn(root, "arrow").click();
+    }
+    expect(engine.snapshot().player.gold).toBe(100);
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+
+  it("keeps valid existing stacks eligible in a full Bank and returns focus after Buy", () => {
+    const { engine, root } = ammoMount({
+      player: { gold: 100 },
+      bank: { items: [{ itemId: "arrow", qty: 1 }], capacity: 1 },
+    });
+    document.body.append(root);
+    const input = qtyInput(root, "arrow");
+    typeQty(root, "arrow", "5");
+    input.focus();
+    buyBtn(root, "arrow").click();
+
+    expect(engine.snapshot().player.gold).toBe(90);
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 6 }]);
+    expect(qtyInput(root, "arrow")).toBe(input);
+    expect(input.value).toBe("5");
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("reconciles Vendor rows in Content order without duplicate rows after rerenders", () => {
+    const { root, app } = ammoMount({ player: { gold: 100 } });
+    const expected = fixtureContent.vendor.map((entry) => entry.itemId);
+    app.render();
+    app.render();
+    expect(
+      [...root.querySelectorAll<HTMLElement>("[data-vendor-row]")].map(
+        (row) => row.dataset["vendorRow"],
+      ),
+    ).toEqual(expected);
   });
 });
 
