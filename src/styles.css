@@ -863,6 +863,15 @@ body {
   border: 1.5px solid #1e4f7a;
 }
 
+/* Floating combat-style XP number (#285): a distinct green pill so it reads as XP rather than a
+ * hit/miss splat, using the same rise/fade shape via splat-xp-fade (bigger vertical rise so it
+ * doesn't visually collide with the hit/miss splat firing on the same swing). */
+.splat-xp {
+  background: #3fae4a;
+  border: 1.5px solid #1c5f22;
+  animation: splat-xp-fade 700ms ease-out forwards;
+}
+
 @keyframes splat-fade {
   0% {
     opacity: 1;
@@ -871,6 +880,17 @@ body {
   100% {
     opacity: 0;
     transform: translate(-50%, -85%) scale(1.2);
+  }
+}
+
+@keyframes splat-xp-fade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -140%) scale(1.1);
   }
 }
 

@@ -71,6 +71,17 @@ const SPLAT_FADE_MS = 700;
 const TOAST_DISMISS_MS = 2500;
 /** Rare-Drop screen-flash duration (#4); mirrors styles.css's `rare-flash` keyframes. */
 const FLASH_DURATION_MS = 400;
+/** Combat-style Skills (#285) — the only Skills a floating xp-gained number renders for. Excludes
+ * Hitpoints (pinned decision: exactly one floated number per hit, the style skill's 4*damage
+ * grant; the ~1.33x damage Hitpoints trickle never floats) and non-combat Skills (fishing,
+ * production, …). */
+const COMBAT_STYLE_SKILLS: ReadonlySet<SkillName> = new Set([
+  "attack",
+  "strength",
+  "defence",
+  "ranged",
+  "magic",
+]);
 
 /** Abbreviated Attack Type labels for the compact defence-vector readout (#99) — terse to fit the
  * 320px Character panel budget. Rendered inside the shared hover panel/Bank detail strip since
@@ -650,6 +661,21 @@ export function mountApp(
     const splat = document.createElement("span");
     splat.className = amount > 0 ? "splat splat-hit" : "splat splat-miss";
     splat.textContent = String(amount);
+    const jitterX = Math.random() * 24 - 12; // ±12px
+    const jitterY = Math.random() * 14 - 7; // ±7px, still biased upper-half by the 38% base
+    splat.style.left = `calc(50% + ${jitterX.toFixed(1)}px)`;
+    splat.style.top = `calc(38% + ${jitterY.toFixed(1)}px)`;
+    layer.appendChild(splat);
+    setTimeout(() => splat.remove(), SPLAT_FADE_MS);
+  }
+
+  /** Appends a floating `+N` XP number to `layer` (#285), mirroring `showSplat`'s jitter/fade/
+   * auto-removal shape but visually distinct (`.splat-xp`, styled green/rising in styles.css) so
+   * it reads as XP rather than a hit/miss splat. Caller decides which Skills qualify. */
+  function showXpSplat(layer: HTMLElement, amount: number): void {
+    const splat = document.createElement("span");
+    splat.className = "splat splat-xp";
+    splat.textContent = `+${Math.round(amount)}`;
     const jitterX = Math.random() * 24 - 12; // ±12px
     const jitterY = Math.random() * 14 - 7; // ±7px, still biased upper-half by the 38% base
     splat.style.left = `calc(50% + ${jitterX.toFixed(1)}px)`;
@@ -1543,6 +1569,16 @@ export function mountApp(
   // often render() happens to run.
   engine.on("attack", (e) => {
     showSplat(el(e.actor === "player" ? "#monster-splats" : "#player-splats"), e.damage);
+  });
+  // Floating combat-style XP number above the player (#285) — only for attack/strength/defence/
+  // ranged/magic; never Hitpoints (one number per hit, the style skill's grant) and never
+  // fishing/production XP. #player-splats only exists while the combat card is mounted, so guard
+  // rather than assume (mirrors why `el` isn't used here — it casts instead of returning null).
+  engine.on("xp-gained", (e) => {
+    if (!COMBAT_STYLE_SKILLS.has(e.skill)) return;
+    const layer = root.querySelector<HTMLElement>("#player-splats");
+    if (!layer) return;
+    showXpSplat(layer, e.amount);
   });
   engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));

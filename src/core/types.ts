@@ -414,7 +414,11 @@ export type EngineEvent =
   /** A never-before-owned Pet (#120) just rolled on a qualifying action (a kill, a Catch, or a
    * craft completion) — see `PetDef.source`. Fires once per NEW pet only; an already-owned pet
    * never re-rolls, so this never fires twice for the same `petId`. */
-  | { type: "pet-dropped"; petId: string };
+  | { type: "pet-dropped"; petId: string }
+  /** Every XP grant (#285), general-purpose — fired for all Skills regardless of whether the same
+   * grant also crosses a level boundary (`levelup` still fires independently, unchanged). The UI
+   * decides what to render from it (e.g. floating combat-style XP above the player). */
+  | { type: "xp-gained"; skill: SkillName; amount: number };
 
 export interface SkillSnapshot {
   level: number;
