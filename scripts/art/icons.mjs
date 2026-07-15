@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
-import { createCanvas, writeIcon } from "./icon-canvas.mjs";
+import { createMask, createCanvas, writeIcon } from "./icon-canvas.mjs";
 import { loadSourceGrid, paintSourceIcon } from "./icon-source.mjs";
+import { P } from "./palettes.mjs";
 import { writePng } from "./write-png.mjs";
 
 /** Directory holding committed compact icon sources (`<name>.png`) for source-driven icons —
@@ -178,6 +179,130 @@ const sapphireToRuby = {
   "water.glint": "blood.glint",
   "meadow[0]": "blood.light",
 };
+
+/** A filled-ring mask (outer radius minus inner radius) — `createMask()` only unions solid
+ * primitives, with no subtraction, so `slot-ring`'s donut silhouette is built as a plain `{ has }`
+ * object instead. `canvas.paintMask`/`outlineMask` only ever call `.has(x, y)`, so this satisfies
+ * the same contract a `createMask()` result does. */
+function ringMask(cx, cy, rOuter, rInner) {
+  return {
+    has(x, y) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const d2 = dx * dx + dy * dy;
+      return d2 <= rOuter * rOuter && d2 >= rInner * rInner;
+    },
+  };
+}
+
+/** Two-tone ghost fill: one derived warm-ink outline ring around the mask, then a flat
+ * `text-dim` fill inside it — the shared paint shape every slot silhouette below uses. */
+function paintSilhouette(canvas, mask) {
+  canvas.outlineMask(mask, P.ink);
+  canvas.paintMask(mask, P["text-dim"]);
+}
+
+// --- Slot silhouette masks (#286) — one hand-authored native-grid shape per Gear/Loadout Slot
+// kind, deliberately blocky and detail-free (a "ghosted outline" placeholder reads at a glance,
+// it does not need the material shading a real item icon carries).
+
+function paintSlotWeapon(canvas) {
+  const mask = createMask();
+  mask.rect(15, 3, 18, 20); // blade
+  mask.rect(10, 21, 23, 23); // crossguard
+  mask.rect(15, 24, 18, 28); // grip
+  mask.circle(16.5, 29, 2); // pommel
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotShield(canvas) {
+  const mask = createMask();
+  mask.rect(9, 3, 24, 17); // body
+  mask.rect(11, 18, 22, 21); // taper 1
+  mask.rect(13, 22, 20, 24); // taper 2
+  mask.rect(15, 25, 18, 29); // point
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotHead(canvas) {
+  const mask = createMask();
+  mask.circle(16.5, 16, 12); // dome
+  mask.rect(9, 26, 24, 30); // neck guard
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotBody(canvas) {
+  const mask = createMask();
+  mask.rect(10, 4, 23, 29); // torso
+  mask.rect(7, 4, 9, 11); // left shoulder pad
+  mask.rect(24, 4, 26, 11); // right shoulder pad
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotLegs(canvas) {
+  const mask = createMask();
+  mask.rect(11, 3, 22, 9); // waist band
+  mask.rect(11, 10, 15, 30); // left leg
+  mask.rect(18, 10, 22, 30); // right leg
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotAmulet(canvas) {
+  const mask = createMask();
+  mask.rect(9, 3, 24, 6); // neck strap
+  mask.rect(15, 7, 18, 15); // hanger
+  mask.circle(16.5, 23, 8); // pendant
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotRing(canvas) {
+  paintSilhouette(canvas, ringMask(16.5, 17, 14, 8));
+}
+
+function paintSlotFood(canvas) {
+  const mask = createMask();
+  mask.circle(16.5, 5, 3); // bone knob
+  mask.rect(15, 5, 18, 14); // bone shaft
+  mask.circle(17, 21, 9); // meat mass
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotPotion(canvas) {
+  const mask = createMask();
+  mask.rect(14, 3, 19, 5); // cap
+  mask.rect(15, 6, 18, 11); // neck
+  mask.circle(16.5, 21, 9); // flask body
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotQuiver(canvas) {
+  const mask = createMask();
+  mask.rect(16, 3, 17, 4); // arrowhead tip point
+  mask.rect(15, 5, 18, 6); // arrowhead taper
+  mask.rect(13, 7, 20, 9); // arrowhead base (widest)
+  mask.rect(15, 10, 18, 25); // shaft
+  // Fletching: two stepped fins flaring outward from the shaft's foot — each step overlaps the
+  // previous in both axes, so the taper stays 4-connected without a true diagonal stroke.
+  mask.rect(13, 23, 15, 24);
+  mask.rect(11, 25, 14, 26);
+  mask.rect(9, 27, 12, 28);
+  mask.rect(8, 29, 10, 29);
+  mask.rect(18, 23, 20, 24);
+  mask.rect(19, 25, 22, 26);
+  mask.rect(21, 27, 24, 28);
+  mask.rect(23, 29, 25, 29);
+  paintSilhouette(canvas, mask);
+}
+
+function paintSlotRune(canvas) {
+  const mask = createMask();
+  mask.rect(15, 3, 18, 6); // tip
+  mask.rect(11, 7, 22, 11); // upper shoulder
+  mask.rect(7, 12, 26, 21); // widest band
+  mask.rect(11, 22, 22, 26); // lower shoulder
+  mask.rect(15, 27, 18, 30); // point
+  paintSilhouette(canvas, mask);
+}
 
 /**
  * Complete production registry for Skill, workspace/navigation, item, and pet icons. Each entry
@@ -1257,6 +1382,25 @@ export const icons = [
   { name: "fishing-frog", source: "golden-base-fishing-frog.png" },
   { name: "kiln-cat", source: "golden-base-kiln-cat.png" },
   { name: "shade-wisp", source: "golden-base-shade-wisp.png" },
+  // --- Slot silhouettes (#286): greyed, type-hinting placeholders for empty Gear/Loadout Slots
+  // (src/ui/icons.ts's slotSilhouette registry), NOT ItemDef.icon keys (no-fallback policy #78 —
+  // these never route through itemIcon). Hand-authored native-grid masks rather than the
+  // source-driven pipeline: there is no external image-gen tool available in this environment, and
+  // a flat two-tone ghost shape (fill P["text-dim"], one derived P.ink outline ring) is a natural
+  // fit for the hand-authored workflow art-style.md documents as the alternative route. Every
+  // shape stays within a single connected mask so it clears the same lint suite (icon-assets.test)
+  // as every other icon in this registry.
+  { name: "slot-weapon", paint: paintSlotWeapon },
+  { name: "slot-shield", paint: paintSlotShield },
+  { name: "slot-head", paint: paintSlotHead },
+  { name: "slot-body", paint: paintSlotBody },
+  { name: "slot-legs", paint: paintSlotLegs },
+  { name: "slot-amulet", paint: paintSlotAmulet },
+  { name: "slot-ring", paint: paintSlotRing },
+  { name: "slot-food", paint: paintSlotFood },
+  { name: "slot-potion", paint: paintSlotPotion },
+  { name: "slot-quiver", paint: paintSlotQuiver },
+  { name: "slot-rune", paint: paintSlotRune },
 ];
 
 /** Writes every icon in `icons` to `src/assets/icons/<name>.png` on the shared 34×34 canvas.

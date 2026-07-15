@@ -11,6 +11,7 @@
 import type { Engine } from "../core/engine";
 import type { Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
+import { slotSilhouette, type LoadoutSlotKind } from "./icons";
 
 /** The slice of `Snapshot["player"]` every Loadout Slot kind's render/gating logic reads —
  * `skills` for the Rune Slot's Magic-level gate, the rest for each kind's own filled/empty state. */
@@ -96,6 +97,9 @@ interface TileShellConfig {
   chooserItems: ChooserRow[];
   assignAttr: (itemId: string) => string;
   emptyHint: string;
+  /** Which Loadout Slot kind this tile is, so the empty state can render `slotSilhouette`'s
+   * matching greyed placeholder (#286) — the 3 Food Slots all pass "food" and share one asset. */
+  silhouetteKind: LoadoutSlotKind;
 }
 
 /** The shared filled/empty/chooser tile shape, byte-for-byte what the pre-#235 exported
@@ -127,7 +131,10 @@ function tileShellMarkup(config: TileShellConfig, filled: boolean): string {
     : "";
 
   return `<div class="${config.wrapperClass} empty"${keyAttr}>
-            <button class="${config.addClass}" ${config.addAttr}>+</button>
+            <button class="${config.addClass}" ${config.addAttr}>
+              <img class="icon pixel slot-silhouette" src="${slotSilhouette(config.silhouetteKind)}" alt="" aria-hidden="true" />
+              <span class="slot-add-mark" aria-hidden="true">+</span>
+            </button>
             ${chooser}
           </div>`;
 }
@@ -179,6 +186,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
             chooserItems,
             assignAttr: (itemId) => `data-assign="${i}" data-item="${itemId}"`,
             emptyHint: "No Food in Bank",
+            silhouetteKind: "food",
           },
           slot !== null,
         ),
@@ -228,6 +236,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
         chooserItems,
         assignAttr: (itemId) => `data-potion-assign="${itemId}"`,
         emptyHint: "No Potions in Bank",
+        silhouetteKind: "potion",
       },
       potionSlot !== null,
     );
@@ -264,6 +273,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
         chooserItems,
         assignAttr: (itemId) => `data-quiver-assign="${itemId}"`,
         emptyHint: "No Arrows in Bank",
+        silhouetteKind: "quiver",
       },
       quiver !== null,
     );
@@ -306,6 +316,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
         chooserItems,
         assignAttr: (itemId) => `data-rune-assign="${itemId}"`,
         emptyHint: "No Runes in Bank",
+        silhouetteKind: "rune",
       },
       runeSlot !== null,
     );
