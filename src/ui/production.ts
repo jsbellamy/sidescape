@@ -59,6 +59,7 @@ export function productionPanelMarkup(
   content: Content,
   bankItems: Snapshot["bank"]["items"],
   level: number,
+  activeProduction: Snapshot["production"] = null,
 ): string {
   const owned = (itemId: string) => bankItems.find((s) => s.itemId === itemId)?.qty ?? 0;
   const itemName = (itemId: string) => content.items.find((i) => i.id === itemId)?.name ?? itemId;
@@ -72,10 +73,17 @@ export function productionPanelMarkup(
       const underLeveled = level < recipe.levelReq;
       const shortOnInputs = recipe.inputs.some((input) => owned(input.itemId) < input.qty);
       const disabled = underLeveled || shortOnInputs;
+      // #284: the active Recipe's own progress bar fills toward the next craft completion,
+      // resetting every auto-repeat cycle.
+      const active = activeProduction?.recipeId === recipe.id;
+      const bar = active
+        ? `<div class="action-progress" aria-label="Craft progress"><div class="fill" style="width:${activeProduction.progress * 100}%"></div></div>`
+        : "";
       return `<li data-recipe-row="${recipe.id}">
                   <p class="recipe-name">${recipe.name} <span class="recipe-level">Lvl ${recipe.levelReq}</span></p>
                   <p class="recipe-inputs">${inputsLine}</p>
                   <button class="craft-btn" data-recipe="${recipe.id}" ${disabled ? "disabled" : ""}>Craft</button>
+                  ${bar}
                 </li>`;
     })
     .join("");

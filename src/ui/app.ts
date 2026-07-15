@@ -1059,6 +1059,7 @@ export function mountApp(
       content,
       snap.bank.items,
       level,
+      snap.production,
     );
   }
 
@@ -1237,7 +1238,13 @@ export function mountApp(
       .map(({ id, unlocked }) => {
         const def = content.fishingSpotsById.get(id);
         const active = snap.fishing?.spotId === id;
-        return `<button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
+        // #284: the active spot's own progress bar fills toward the next catch attempt, resetting
+        // every cycle whether or not the roll succeeds — sits right under its button.
+        const bar =
+          active && snap.fishing
+            ? `<div class="action-progress" aria-label="Catch progress"><div class="fill" style="width:${snap.fishing.progress * 100}%"></div></div>`
+            : "";
+        return `<span class="fishing-spot-item"><button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>${bar}</span>`;
       })
       .join("");
     const dungeonButtons = content.dungeons

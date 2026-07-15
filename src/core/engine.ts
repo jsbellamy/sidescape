@@ -58,6 +58,12 @@ interface FishingActivity {
   kind: "fishing";
   spotId: string;
   catchCooldown: number;
+  /** The exact value `catchCooldown` was last armed to (#284) — set at every arm/re-arm site in
+   * lockstep with `catchCooldown` itself, so `snapshot()` can derive `progress` as
+   * `(cooldownTotal - catchCooldown) / cooldownTotal`. Internal only, never persisted — a resumed
+   * activity always re-arms both fields together (see loadState), so there is no save-compat
+   * concern and no stale-total risk. */
+  cooldownTotal: number;
 }
 
 /** A Recipe in progress (#113: generalised from the old Smithing-only SmithingActivity — the
@@ -66,6 +72,9 @@ interface ProductionActivity {
   kind: "production";
   recipeId: string;
   craftCooldown: number;
+  /** Mirrors FishingActivity.cooldownTotal (#284): the exact value `craftCooldown` was last armed
+   * to, kept in lockstep at every arm/re-arm site. Internal only, never persisted. */
+  cooldownTotal: number;
 }
 
 /** The Engine's single "what is the player doing right now" value (#29): at most one of
@@ -669,7 +678,12 @@ function loadProduction(
   if (!recipe) return null;
   if (levelForXp(xp[recipe.skill]) < recipe.levelReq) return null;
   if (!canCraftFromBank(recipe, bank)) return null;
-  return { kind: "production", recipeId: recipe.id, craftCooldown: recipe.craftTicks };
+  return {
+    kind: "production",
+    recipeId: recipe.id,
+    craftCooldown: recipe.craftTicks,
+    cooldownTotal: recipe.craftTicks,
+  };
 }
 
 /** Tolerant validation of every saved field (ADR-0001 extended: loaded save data never throws,
@@ -721,7 +735,12 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
       monsterCooldown: monster.attackSpeed,
     };
   } else if (spot) {
-    activity = { kind: "fishing", spotId: spot.id, catchCooldown: spot.catchTicks };
+    activity = {
+      kind: "fishing",
+      spotId: spot.id,
+      catchCooldown: spot.catchTicks,
+      cooldownTotal: spot.catchTicks,
+    };
   } else if (production) {
     activity = production;
   }
@@ -1576,7 +1595,18 @@ export function createEngine(
                 : {}),
             }
           : null,
-      fishing: spotDef ? { spotId: spotDef.id, name: spotDef.name } : null,
+      fishing:
+        spotDef && fishingSpotActivity
+          ? {
+              spotId: spotDef.id,
+              name: spotDef.name,
+              // #284: elapsed fraction of the current catch-attempt cycle, 0..1. cooldownTotal is
+              // always >= 1 (Math.max(1, ...) at every re-arm site), so this never divides by zero.
+              progress:
+                (fishingSpotActivity.cooldownTotal - fishingSpotActivity.catchCooldown) /
+                fishingSpotActivity.cooldownTotal,
+            }
+          : null,
       dungeon:
         dungeonRun && dungeonRunDef
           ? {
@@ -1592,6 +1622,11 @@ export function createEngine(
               recipeId: productionRecipeDef.id,
               name: productionRecipeDef.name,
               skill: productionRecipeDef.skill,
+              // #284: elapsed fraction of the current craft cycle, 0..1 — mirrors fishing's
+              // progress derivation above. cooldownTotal is always >= 1, so never divide-by-zero.
+              progress:
+                (productionActivity.cooldownTotal - productionActivity.craftCooldown) /
+                productionActivity.cooldownTotal,
             }
           : null,
       bank: {
@@ -1685,6 +1720,7 @@ export function createEngine(
       1,
       Math.round(spot.catchTicks / actionSpeedMultiplier("fishing")),
     );
+    activity.cooldownTotal = activity.catchCooldown;
     // Charge decrement (#118): the qualifying action for a "fishing-speed" potion is a catch
     // ATTEMPT, not a successful Catch — decremented here regardless of the roll below.
     decrementPotionCharge((target) => target === "fishing-speed");
@@ -1745,6 +1781,7 @@ export function createEngine(
         1,
         Math.round(recipe.craftTicks / actionSpeedMultiplier("production")),
       );
+      activity.cooldownTotal = activity.craftCooldown;
     } else {
       state.activity = null;
     }
@@ -1840,7 +1877,12 @@ export function createEngine(
       state.hp = Math.max(state.hp, 1);
       // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
       sweepLootZone();
-      state.activity = { kind: "fishing", spotId, catchCooldown: spot.catchTicks };
+      state.activity = {
+        kind: "fishing",
+        spotId,
+        catchCooldown: spot.catchTicks,
+        cooldownTotal: spot.catchTicks,
+      };
     },
     enterDungeon(dungeonId) {
       const dungeon = dungeonDef(dungeonId); // throws on unknown id
@@ -1875,6 +1917,7 @@ export function createEngine(
         kind: "production",
         recipeId: recipe.id,
         craftCooldown: recipe.craftTicks,
+        cooldownTotal: recipe.craftTicks,
       };
     },
     setCombatStyle(style) {

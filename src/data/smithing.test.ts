@@ -119,6 +119,7 @@ describe("Smithing content", () => {
       recipeId: "bronze-dagger",
       name: "Bronze Dagger",
       skill: "smithing",
+      progress: 0,
     });
   });
 

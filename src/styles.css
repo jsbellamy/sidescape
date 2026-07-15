@@ -1411,6 +1411,32 @@ body {
   font-weight: 700;
 }
 
+/* Wraps one Fishing Spot button + its own action-progress bar (#284) so the bar sits directly
+   under that spot's button inside the flex-wrapping `.fishing-buttons` row, instead of spanning
+   the whole row. */
+.fishing-spot-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Action progress bar (#284): fills as the active Fishing Spot's catch attempt or the active
+   Recipe's craft advances toward completion — reuses the `.sprite-hp`/`.fill` bar family's shape
+   (bordered track + colored fill) rather than introducing a new visual language. Used in the
+   World page's fishing-buttons row (`#area-detail`) and the Workshop's active recipe row
+   (`#workshop-recipes`). */
+.action-progress {
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #241b18;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+.action-progress .fill {
+  height: 100%;
+  background: #9fbc62;
+}
+
 /* The World page's own fixed shell (#208): mirrors `.bank-page-body` (#207) — the progression
    rail (`.area-rail`, a `card-fixed`-equivalent non-scrolling strip) never scrolls away, only the
    selected-Area detail (`.area-detail`, reuses `.card-scroll`) does. Sits alongside

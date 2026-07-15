@@ -2266,7 +2266,7 @@ describe("Fishing", () => {
       caught.push({ spotId: e.spotId, itemId: e.itemId, qty: e.qty }),
     );
     engine.selectFishingSpot("pond");
-    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond", progress: 0 });
 
     for (let i = 0; i < 3; i++) engine.tick(); // pond.catchTicks === 3
     expect(caught).toEqual([{ spotId: "pond", itemId: "raw-fish", qty: 1 }]);
@@ -2297,7 +2297,11 @@ describe("Fishing", () => {
   it("succeeds once both the Area and Fishing level gates are met", () => {
     const engine = createEngine(fixtureContent, seededRng(1), veteranSnapshot(20, xpForLevel(20)));
     expect(() => engine.selectFishingSpot("deep-pond")).not.toThrow();
-    expect(engine.snapshot().fishing).toEqual({ spotId: "deep-pond", name: "Test Deep Pond" });
+    expect(engine.snapshot().fishing).toEqual({
+      spotId: "deep-pond",
+      name: "Test Deep Pond",
+      progress: 0,
+    });
   });
 
   it("derives locked/unlocked Fishing Spot gates in the Snapshot, independent of the Area gate", () => {
@@ -2332,7 +2336,7 @@ describe("Fishing", () => {
 
     engine.selectFishingSpot("pond");
     expect(engine.snapshot().monster).toBeNull();
-    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+    expect(engine.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond", progress: 0 });
 
     engine.selectMonster("dummy");
     expect(engine.snapshot().fishing).toBeNull();
@@ -2461,14 +2465,21 @@ describe("Fishing", () => {
       original.selectFishingSpot("pond");
       original.tick(); // 1 tick into a 3-tick cooldown; not yet due for a Catch
       const saved = original.snapshot();
-      expect(saved.fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+      // 1/3 elapsed, not persisted (#284) — the field isn't even part of the saved shape below.
+      expect(saved.fishing).toEqual({ spotId: "pond", name: "Test Pond", progress: 1 / 3 });
 
       const restored = createEngine(
         fixtureContent,
         seededRng(7),
         JSON.parse(JSON.stringify(saved)),
       );
-      expect(restored.snapshot().fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+      // Resume always re-arms the cooldown fresh (#28), so progress restarts cleanly at 0 (#284) —
+      // never resumes mid-cycle, never NaN, never >1.
+      expect(restored.snapshot().fishing).toEqual({
+        spotId: "pond",
+        name: "Test Pond",
+        progress: 0,
+      });
 
       const caught: unknown[] = [];
       restored.on("fish-caught", (e) => caught.push(e));
@@ -3742,9 +3753,16 @@ describe("Smithing", () => {
       recipeId: "test-sword",
       name: "Test Sword",
       skill: "smithing",
+      progress: 0,
     });
 
-    for (let i = 0; i < 3; i++) engine.tick(); // test-sword.craftTicks === 3
+    // #284: progress climbs 0..1 across the 3-tick cooldown, resetting back near 0 the instant
+    // the re-armed cycle begins (never >1, never NaN).
+    engine.tick();
+    expect(engine.snapshot().production?.progress).toBeCloseTo(1 / 3);
+    engine.tick();
+    expect(engine.snapshot().production?.progress).toBeCloseTo(2 / 3);
+    engine.tick(); // completes the craft and re-arms
     expect(crafted).toEqual([{ recipeId: "test-sword", itemId: "bronze-sword" }]);
     let snap = engine.snapshot();
     expect(snap.bank.items.find((s) => s.itemId === "bar")?.qty).toBe(1);
@@ -3754,7 +3772,8 @@ describe("Smithing", () => {
       recipeId: "test-sword",
       name: "Test Sword",
       skill: "smithing",
-    }); // 1 bar left: re-armed
+      progress: 0,
+    }); // 1 bar left: re-armed, progress back at 0
 
     for (let i = 0; i < 3; i++) engine.tick();
     expect(crafted).toHaveLength(2);
@@ -3790,6 +3809,7 @@ describe("Smithing", () => {
       recipeId: "test-charm",
       name: "Test Charm",
       skill: "smithing",
+      progress: 0,
     });
   });
 
@@ -3891,6 +3911,7 @@ describe("Smithing", () => {
         recipeId: "test-sword",
         name: "Test Sword",
         skill: "smithing",
+        progress: 0,
       });
 
       engine.selectFishingSpot("pond");
@@ -3908,6 +3929,7 @@ describe("Smithing", () => {
         recipeId: "test-sword",
         name: "Test Sword",
         skill: "smithing",
+        progress: 0,
       });
     });
 
@@ -3965,7 +3987,7 @@ describe("Smithing", () => {
       const snap = restored.snapshot();
       expect(snap.player.skills.smithing).toEqual({ level: 1, xp: 0 });
       expect(snap.production).toBeNull();
-      expect(snap.fishing).toEqual({ spotId: "pond", name: "Test Pond" });
+      expect(snap.fishing).toEqual({ spotId: "pond", name: "Test Pond", progress: 0 });
     });
 
     it("a save made while smithing resumes smithing on load, re-arming the cooldown to craftTicks", () => {
@@ -3973,10 +3995,12 @@ describe("Smithing", () => {
       original.selectRecipe("test-sword");
       original.tick(); // 1 tick into a 3-tick cooldown; not yet due for a craft
       const saved = original.snapshot();
+      // 1/3 elapsed — not persisted (#284), gone from the round-tripped save entirely.
       expect(saved.production).toEqual({
         recipeId: "test-sword",
         name: "Test Sword",
         skill: "smithing",
+        progress: 1 / 3,
       });
 
       const restored = createEngine(
@@ -3984,10 +4008,12 @@ describe("Smithing", () => {
         seededRng(7),
         JSON.parse(JSON.stringify(saved)),
       );
+      // Resume re-arms the cooldown fresh (#28), so progress restarts cleanly at 0 (#284).
       expect(restored.snapshot().production).toEqual({
         recipeId: "test-sword",
         name: "Test Sword",
         skill: "smithing",
+        progress: 0,
       });
 
       const crafted: unknown[] = [];
@@ -4066,7 +4092,13 @@ describe("Smithing", () => {
         JSON.parse(JSON.stringify(saved)),
         () => 0,
       );
-      expect(restored.snapshot()).toEqual(saved);
+      // Everything round-trips unchanged EXCEPT production.progress (#284): it's derived from
+      // internal-only, un-persisted cooldown state, so a resume always re-arms fresh and restarts
+      // progress at 0 rather than resuming mid-cycle.
+      expect(restored.snapshot()).toEqual({
+        ...saved,
+        production: { ...saved.production, progress: 0 },
+      });
     });
   });
 });
@@ -4128,6 +4160,7 @@ describe("Production skill chassis (#113)", () => {
       recipeId: "test-sword",
       name: "Test Sword",
       skill: "smithing",
+      progress: 0,
     });
   });
 });
@@ -5540,6 +5573,30 @@ describe("Herblore and Potion Slot (#118)", () => {
       engine.selectRecipe("test-sword"); // skill "smithing" — the wiring is skill-agnostic
       for (let i = 0; i < 3; i++) engine.tick(); // one craft completion (craftTicks 3)
       expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
+    });
+
+    it("progress stays in 0..1 (never >1, never NaN) after a fishing-speed potion shortens the re-armed cooldown (#284)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "fishing-potion", qty: 1 }] } }),
+      );
+      engine.assignPotionSlot("fishing-potion"); // boostPct 0.5 -> multiplier 1.5
+      engine.selectFishingSpot("pond"); // catchTicks 3, first cycle arms to the raw 3
+      for (let i = 0; i < 3; i++) engine.tick(); // completes the un-boosted first cycle, re-arms
+      // Math.round(3 / 1.5) = 2: the re-armed cooldownTotal shrinks to 2, and progress derives
+      // from the NEW total, so it never exceeds 1 even though the cycle got shorter.
+      const afterRearm = engine.snapshot().fishing;
+      expect(afterRearm?.progress).toBe(0);
+      engine.tick();
+      expect(engine.snapshot().fishing?.progress).toBeCloseTo(0.5); // 1 of 2 ticks elapsed
+      engine.tick(); // completes the 2-tick cycle, re-arms again
+      expect(engine.snapshot().fishing?.progress).toBe(0);
+      for (const p of [afterRearm?.progress, engine.snapshot().fishing?.progress]) {
+        expect(p).not.toBeNaN();
+        expect(p).toBeGreaterThanOrEqual(0);
+        expect(p).toBeLessThanOrEqual(1);
+      }
     });
 
     it("a potion whose target doesn't match the current activity never drains (a Strength potion untouched while fishing)", () => {
