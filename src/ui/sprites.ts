@@ -12,6 +12,7 @@ import goblinUrl from "../assets/sprites/goblin.png";
 import goblinBruteUrl from "../assets/sprites/goblin-brute.png";
 import goblinChiefUrl from "../assets/sprites/goblin-chief.png";
 import goblinWarriorUrl from "../assets/sprites/goblin-warrior.png";
+import hollowWardenUrl from "../assets/sprites/hollow-warden.png";
 import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
@@ -23,7 +24,7 @@ import zombieUrl from "../assets/sprites/zombie.png";
  * (`image-rendering: pixelated`, so a non-integer scale would give visibly uneven pixels). Keeping
  * the grain uniform is what makes a 48-native hero and a 32-native mob read as one art style — the
  * hero is bigger because she has MORE pixels, not bigger ones. Make a boss loom by giving it a
- * bigger native canvas (see `sprites.mjs` — 48 is the sanctioned Boss size), never a bigger grain;
+ * bigger native canvas (see `sprites.mjs` — canvas size is explicit visual scale), never a bigger grain;
  * mixing grains in one frame is exactly what makes a sprite look like it came from another game.
  */
 export const SPRITE_GRAIN = 2;
@@ -61,7 +62,8 @@ const monsterSprites: Record<string, SpriteAsset> = {
   "goblin-chief": { url: goblinChiefUrl, size: 48 },
   wolf: { url: wolfUrl, size: 32 },
   "goblin-warrior": { url: goblinWarriorUrl, size: 32 },
-  bandit: { url: banditUrl, size: 32 },
+  bandit: { url: banditUrl, size: 48 },
+  "hollow-warden": { url: hollowWardenUrl, size: 64 },
   "giant-rat": { url: giantRatUrl, size: 32 },
   zombie: { url: zombieUrl, size: 32 },
   skeleton: { url: skeletonUrl, size: 32 },

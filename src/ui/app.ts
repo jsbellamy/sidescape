@@ -815,8 +815,8 @@ export function mountApp(
       const sprite = monsterSprite(monster.id);
       if (sprite) {
         monsterImg.src = sprite;
-        // Size the box to this Monster's native canvas x grain (32-native → 64px, 48-native Boss →
-        // 96px), so a bigger Boss reads bigger without changing the shared pixel grain.
+        // Size the box to this Monster's native canvas x grain (32-native → 64px, 48-native →
+        // 96px, 64-native → 128px), so visual scale never changes the shared pixel grain.
         const nativeSize = monsterSpriteSize(monster.id);
         if (nativeSize)
           monsterImg.style.setProperty("--sprite-edge", `${spriteEdgePx(nativeSize)}px`);

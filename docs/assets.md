@@ -368,13 +368,13 @@ above):
 
 ## Source-driven combat sprite pipeline (#188)
 
-The 17 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`
-(this count grew from 11 through #253's Crypt Ghoul/Bone Knight and #254's Frost Wolf/Ice
-Wraith/Frost Giant/Frost Warden). Its registry keeps the runtime ids and filenames in
+The 20 combat sprites now regenerate through `scripts/art/sprites.mjs` as part of `npm run art`
+(this count grew from 11 through #253's Crypt Ghoul/Bone Knight, #254's Frost cast, #292's Meadows
+completion, and #266's Darkroot redraw). Its registry keeps the runtime ids and filenames in
 `src/ui/sprites.ts` unchanged while declaring each source's canvas and alpha policy explicitly:
-fourteen sprites use 32×32 binary-alpha canvases; `player` (#264), `crypt-shade`, and `frost-warden`
-use the sanctioned 48×48 canvas — `crypt-shade` may contain at most one intermediate alpha value,
-the other two are binary-alpha. The writer rejects invalid sources, projects colors onto the named
+12 sprites use 32×32 binary-alpha canvases, seven use 48×48, and `hollow-warden` uses 64×64. Canvas
+size is explicit visual scale rather than a Monster or Boss classification; `crypt-shade` may contain
+at most one intermediate alpha value, while every other entry is binary-alpha. The writer rejects invalid sources, projects colors onto the named
 house ramps, reduces each sprite to at most `maxColors` RGB colors, and despeckles color clusters
 (both default to 12 colors / 3 passes but are overridable per registry entry — `player` uses 24
 colors and 0 passes; see the redraw section below) without changing its alpha mask or
@@ -409,7 +409,7 @@ handful of deliberate scope changes over the issue text, all recorded in PR #<pe
   faithful flesh/leather vocabulary; both are per-asset-scoped and touch no other sprite.
 - **Per-sprite display grain, not a fixed 64×64 box.** `src/ui/sprites.ts` now sizes each sprite as
   `native × SPRITE_GRAIN` (grain = 2): 32-native Monsters stay 64px, the 48-native player is 96px,
-  and a future 48-native Boss is likewise 96px. Uniform grain keeps one pixel size across the cast;
+  and any 48-native Monster is likewise 96px. Uniform grain keeps one pixel size across the cast;
   a bigger Boss comes from a bigger canvas, never a bigger grain. This edited `src/ui/sprites.ts`,
   `src/styles.css` (`.sprite` box → `--sprite-edge` variable), and `src/ui/app.ts`, which #264's
   text asked to leave untouched.
@@ -460,3 +460,19 @@ model PNGs in the ignored sprite-generation inbox, passed mandatory dry-run inge
 to bottom-anchored binary-alpha compact sources. They face right toward the player and use the
 standard 12-color, three-pass finishing defaults. The previous #265 entry and every historical CC0
 provenance record remain historical context; only Cow's supplied source has been superseded.
+
+### Darkroot Forest (#266)
+
+Wolf, Goblin Warrior, Bandit, and the dungeon-only Hollow Warden now form one original Darkroot
+Forest combat set. Each compact source was recovered from one untouched built-in image-generation
+PNG on the ignored `sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized,
+re-exported, downsampled, or hand-edited. Wolf and Goblin Warrior use 32×32 binary canvases, Bandit
+uses a player-scale 48×48 canvas, and Hollow Warden uses a looming 64×64 canvas. Their sources are
+bottom-anchored and face right toward the left-facing player. At 1×, the low charcoal wolf, compact
+armoured green goblin, crouched hooded dagger Bandit, and root-bound hollow-armour Warden remain
+distinct; the Warden's blank chest cavity, antlers, and raised pale-green spell establish the Dungeon
+Boss read without a different pixel grain. All four retain the standard `maxColors: 12` and three-pass
+cleanup defaults because the compact previews retained their defining silhouettes.
+
+This subsection supersedes only the historical CC0 Wolf, Goblin Warrior, and Bandit outputs recorded
+above. Their provenance remains preserved as historical context; Hollow Warden is new original art.

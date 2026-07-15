@@ -2,7 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/fixture-content";
-import { content as meadowsContent } from "../data";
+import { makeSnapshot } from "../core/make-snapshot";
+import { content as darkrootContent, content as meadowsContent } from "../data";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
@@ -10,6 +11,7 @@ import type { WorkspaceChrome } from "./workspace-chrome";
 import { playerSprite } from "./sprites";
 
 const resolvedMeadowsContent = resolveContent(meadowsContent);
+const resolvedDarkrootContent = resolveContent(darkrootContent);
 const resolvedFixtureContent = resolveContent(fixtureContent);
 
 const noopWindowChrome: WorkspaceChrome = {
@@ -46,6 +48,29 @@ describe("combat scene sprites", () => {
       seen.add(src!);
     }
     expect(seen.size).toBe(5);
+  });
+
+  it("renders a distinct, pixelated sprite for every Darkroot Forest Monster and its Dungeon Boss", () => {
+    const seen = new Set<string>();
+    for (const monsterId of ["wolf", "goblin-warrior", "bandit", "hollow-warden"]) {
+      const engine = createEngine(
+        darkrootContent,
+        seededRng(1),
+        makeSnapshot({ player: { completedDungeonIds: ["meadow-depths"] } }),
+      );
+      const root = document.createElement("main");
+      const app = mountApp(engine, root, resolvedDarkrootContent, noopWindowChrome);
+
+      engine.selectMonster(monsterId);
+      app.render();
+
+      const monsterImg = root.querySelector<HTMLImageElement>("#monster-sprite");
+      const src = monsterImg?.getAttribute("src");
+      expect(src, `${monsterId} should render a sprite`).toBeTruthy();
+      expect(monsterImg?.classList.contains("pixel")).toBe(true);
+      seen.add(src!);
+    }
+    expect(seen.size).toBe(4);
   });
 
   it("hides the Monster sprite before a Monster is selected", () => {

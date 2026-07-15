@@ -792,7 +792,7 @@ body {
 
 .sprite {
   /* On-screen box = native canvas x SPRITE_GRAIN, set inline per sprite by app.ts (a 48-native
-     hero is 96px; a 32-native mob 64px) so every sprite keeps the same pixel grain. The 64px
+     hero is 96px; a 64-native Warden is 128px) so every sprite keeps the same pixel grain. The 64px
      fallback is the 32-native default for the first paint before app.ts sets the variable. */
   width: var(--sprite-edge, 64px);
   height: var(--sprite-edge, 64px);

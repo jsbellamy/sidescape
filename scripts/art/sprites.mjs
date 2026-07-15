@@ -107,24 +107,32 @@ export const sprites = [
     source: "sprite-wolf.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["gold", "steel"],
-    zoneNames: ["sewer", "forest"],
+    materialRampNames: ["steel"],
+    zoneNames: ["forest", "crypt", "town"],
   },
   {
     name: "goblin-warrior",
     source: "sprite-goblin-warrior.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["blood", "water"],
-    zoneNames: ["forest", "crypt"],
+    materialRampNames: ["gold", "moss"],
+    zoneNames: ["sewer", "town"],
   },
   {
     name: "bandit",
     source: "sprite-bandit.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
-    materialRampNames: ["blood", "gold", "steel"],
-    zoneNames: ["town", "crypt", "meadow"],
+    materialRampNames: ["steel", "blood", "adamant", "leather"],
+    zoneNames: ["sewer", "town"],
+  },
+  {
+    name: "hollow-warden",
+    source: "sprite-hollow-warden.png",
+    size: 64,
+    alpha: "binary",
+    materialRampNames: ["leather", "moss"],
+    zoneNames: ["forest", "sewer"],
   },
   {
     name: "giant-rat",
@@ -179,7 +187,8 @@ export const sprites = [
   },
   // Frostspire (#254): the 5th Area's own cast. Interim CC0 derivatives, same provenance and
   // derivation pattern as the rest of this registry's sources (see docs/assets.md); #142 replaces
-  // them along with the rest of the cast. frost-warden uses the sanctioned 48x48 Boss canvas.
+  // them along with the rest of the cast. Frost Warden's 48x48 canvas is its explicit visual
+  // scale; canvas size is not a Boss-only allowance.
   {
     name: "frost-wolf",
     source: "sprite-frost-wolf.png",
