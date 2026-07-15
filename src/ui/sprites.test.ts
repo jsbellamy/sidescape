@@ -34,6 +34,7 @@ describe("sprites", () => {
       "giant-rat",
       "zombie",
       "skeleton",
+      "sewer-king",
       "crypt-shade",
       "crypt-ghoul",
       "bone-knight",
@@ -67,11 +68,12 @@ describe("sprites", () => {
     expect(playerSpriteSize).toBe(registryPlayer?.size);
   });
 
-  it("scales the on-screen box by the global grain (48-native hero is 96px, 32-native mob 64px)", () => {
+  it("scales the on-screen box by the global grain (48-native figures are 96px, 32-native mobs 64px)", () => {
     expect(SPRITE_GRAIN).toBe(2);
     expect(spriteEdgePx(playerSpriteSize)).toBe(96);
     expect(spriteEdgePx(32)).toBe(64);
     expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(96);
+    expect(spriteEdgePx(monsterSpriteSize("sewer-king")!)).toBe(96);
     expect(spriteEdgePx(monsterSpriteSize("hollow-warden")!)).toBe(128);
   });
 });

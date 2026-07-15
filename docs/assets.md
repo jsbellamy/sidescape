@@ -476,3 +476,21 @@ cleanup defaults because the compact previews retained their defining silhouette
 
 This subsection supersedes only the historical CC0 Wolf, Goblin Warrior, and Bandit outputs recorded
 above. Their provenance remains preserved as historical context; Hollow Warden is new original art.
+
+### Old Sewers (#267)
+
+Giant Rat, Zombie, Skeleton, and the dungeon-only Sewer King now form a coherent original Old
+Sewers combat set. Each compact source was recovered from one untouched built-in image-generation
+PNG on the ignored `sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized,
+re-exported, downsampled, or hand-edited. Giant Rat uses a low 32×32 binary canvas, while the
+broad dock-worker Zombie, narrow sword-bearing Skeleton, and proud human scavenger King use
+player-scale 48×48 binary canvases. Their sources are bottom-anchored and face right toward the
+left-facing player. At 1×, the four silhouettes stay distinct, and the King’s bent-scrap crown,
+leather layers, steel shoulder, narrow sewer-green cape accent, and rusted cudgel establish rank
+without a Boss-only canvas.
+All four retain the standard `maxColors: 12` and three-pass cleanup defaults because their compact
+previews retained their defining silhouettes.
+
+This subsection supersedes only the historical CC0 Giant Rat, Zombie, and Skeleton outputs
+recorded above. Their provenance remains preserved as historical context; Sewer King is new
+original art.
