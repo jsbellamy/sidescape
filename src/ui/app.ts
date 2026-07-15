@@ -33,7 +33,7 @@ import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { resolveActiveAreaId } from "./area-context";
-import { itemIcon, skillIcon, tabIcon } from "./icons";
+import { itemIcon, skillIcon, slotSilhouette, tabIcon } from "./icons";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -1004,7 +1004,9 @@ export function mountApp(
           : "";
       return `<div class="tile tile-empty" data-slot="${slot}">
                 <button class="gear-slot-add" data-gear-add="${slot}" aria-label="Equip ${slot}">
-                  <span class="tile-empty-mark" aria-label="${slot} (empty)">—</span>
+                  <span class="tile-empty-mark" aria-label="${slot} (empty)">
+                    <img class="icon pixel slot-silhouette" src="${slotSilhouette(slot)}" alt="" aria-hidden="true" />
+                  </span>
                 </button>
                 ${chooser}
               </div>`;

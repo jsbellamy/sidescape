@@ -121,7 +121,20 @@ import tabCharacterUrl from "../assets/icons/tab-character.png";
 import tabBankUrl from "../assets/icons/tab-bank.png";
 import tabVendorUrl from "../assets/icons/tab-vendor.png";
 import tabLootUrl from "../assets/icons/tab-loot.png";
-import type { SkillName } from "../core/types";
+import type { GearSlot, SkillName } from "../core/types";
+
+// Slot silhouettes (#286): greyed, type-hinting placeholders for empty Gear/Loadout Slots.
+import slotWeaponUrl from "../assets/icons/slot-weapon.png";
+import slotShieldUrl from "../assets/icons/slot-shield.png";
+import slotHeadUrl from "../assets/icons/slot-head.png";
+import slotBodyUrl from "../assets/icons/slot-body.png";
+import slotLegsUrl from "../assets/icons/slot-legs.png";
+import slotAmuletUrl from "../assets/icons/slot-amulet.png";
+import slotRingUrl from "../assets/icons/slot-ring.png";
+import slotFoodUrl from "../assets/icons/slot-food.png";
+import slotPotionUrl from "../assets/icons/slot-potion.png";
+import slotQuiverUrl from "../assets/icons/slot-quiver.png";
+import slotRuneUrl from "../assets/icons/slot-rune.png";
 
 /**
  * Item-icon registry (#78), keyed by `ItemDef.icon` (a key, not a URL — Core never touches the
@@ -330,5 +343,42 @@ const tabIcons: Record<string, string> = {
 export function tabIcon(tabId: string): string {
   const url = tabIcons[tabId];
   if (!url) throw new Error(`icons.ts registry has no entry for tab icon "${tabId}"`);
+  return url;
+}
+
+/** The four Loadout Slot kinds (#235's `OpenLoadoutChooser["kind"]` vocabulary) — the 3 indexed
+ * Food Slots share one kind/silhouette, since they're the same slot TYPE repeated three times. */
+export type LoadoutSlotKind = "food" | "potion" | "quiver" | "rune";
+
+/** Slot-silhouette registry (#286), keyed by Gear/Loadout Slot TYPE — deliberately separate from
+ * `icons` above and NEVER routed through `itemIcon`. `itemIcon` is keyed by `ItemDef.icon` and
+ * exists to resolve a real Item's icon; it throws on an unknown key by design (#78's no-fallback
+ * policy) precisely because every real Item must have a registered icon. A slot silhouette is not
+ * an item icon at all — it's a placeholder painted for an EMPTY slot, keyed by the slot's own type
+ * (`GearSlot` or a `LoadoutSlotKind`), so folding it into `icons`/`itemIcon` would either weaken
+ * that throw into an implicit fallback branch or require inventing fake item keys. Assets are the
+ * hand-authored `slot-*.png` icons in `scripts/art/icons.mjs` (native-grid masks, not the
+ * source-driven pipeline — see that file's own doc for why). */
+const slotSilhouettes: Record<GearSlot | LoadoutSlotKind, string> = {
+  weapon: slotWeaponUrl,
+  shield: slotShieldUrl,
+  head: slotHeadUrl,
+  body: slotBodyUrl,
+  legs: slotLegsUrl,
+  amulet: slotAmuletUrl,
+  ring: slotRingUrl,
+  food: slotFoodUrl,
+  potion: slotPotionUrl,
+  quiver: slotQuiverUrl,
+  rune: slotRuneUrl,
+};
+
+/** Resolves a Gear/Loadout Slot type to its greyed silhouette placeholder URL — rendered only for
+ * an EMPTY slot (see `renderCharacter`'s gear tiles and `loadout-slot.ts`'s `tileShellMarkup`).
+ * Throws for an unknown key (same discipline as `itemIcon`/`skillIcon`/`tabIcon`), but this is a
+ * DIFFERENT registry from `itemIcon`'s — see the doc above. */
+export function slotSilhouette(slot: GearSlot | LoadoutSlotKind): string {
+  const url = slotSilhouettes[slot];
+  if (!url) throw new Error(`icons.ts registry has no entry for slot silhouette "${slot}"`);
   return url;
 }

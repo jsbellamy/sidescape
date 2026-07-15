@@ -8,6 +8,7 @@ import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
+import { slotSilhouette } from "./icons";
 import { PRODUCTION_SKILLS } from "./production";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -2921,6 +2922,24 @@ describe("Character panel (#26)", () => {
       const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
       expect(tile?.classList.contains("tile-empty")).toBe(true);
       expect(tile?.dataset["item"]).toBeUndefined();
+    }
+  });
+
+  // #286: an empty Gear Slot shows the slot's greyed, type-hinting silhouette instead of the old
+  // text em-dash — replaces the pre-#283/#284/#285 assertion this test file used to make at this
+  // seam (see the issue's own note that the app.ts line numbers it cites have since shifted).
+  it("shows the slot's silhouette image (not a text em-dash) in every empty Gear Slot's [+] add button, with the [+] add button still wired for its slot", () => {
+    const { root } = mount(1);
+    for (const slot of ["weapon", "shield", "head", "body", "legs", "amulet", "ring"] as const) {
+      const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
+      const mark = tile?.querySelector(".tile-empty-mark");
+      expect(mark?.textContent?.trim()).toBe(""); // no more literal "—"
+      const img = mark?.querySelector<HTMLImageElement>("img.slot-silhouette");
+      expect(img?.getAttribute("src")).toBe(slotSilhouette(slot));
+      expect(mark?.getAttribute("aria-label")).toBe(`${slot} (empty)`);
+
+      const addBtn = tile?.querySelector<HTMLButtonElement>(`[data-gear-add="${slot}"]`);
+      expect(addBtn?.getAttribute("aria-label")).toBe(`Equip ${slot}`);
     }
   });
 
