@@ -2080,6 +2080,18 @@ button.tile:hover {
   margin: 2px 0 4px;
 }
 
+/* Bulk-buy qty field (#283): a compact per-vendor-row integer input sitting beside its Buy button. */
+.vendor-qty {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 4px;
+  width: 48px;
+  margin-right: 6px;
+}
+
 .craft-btn {
   background: var(--bg-panel);
   border: 1px solid var(--border);

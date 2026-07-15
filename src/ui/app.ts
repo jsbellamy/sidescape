@@ -755,16 +755,62 @@ export function mountApp(
    * command. */
   function renderVendor(bank: Snapshot["bank"], gold: number): void {
     const owned = (itemId: string) => bank.items.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#vendor-list").innerHTML = content.vendor
+    const listEl = el("#vendor-list");
+    // Preserve any qty a player has already typed across this re-render (#283): toggling the tab
+    // re-renders the whole workspace, so snapshot the current field values first and reuse them as
+    // each row's default, falling back to "1" for rows not yet on the page.
+    const prevQty = new Map<string, string>();
+    listEl.querySelectorAll<HTMLInputElement>("[data-vendor-qty]").forEach((input) => {
+      const id = input.dataset["vendorQty"];
+      if (id) prevQty.set(id, input.value);
+    });
+    listEl.innerHTML = content.vendor
       .map((entry) => {
-        const disabled = gold < entry.price;
+        const rawQty = prevQty.get(entry.itemId) ?? "1";
+        const state = vendorBuyState(entry.price, rawQty, gold, bankHasRoom(bank, entry.itemId));
+        // `rawQty` is always a number input's own `.value` (a numeric string or ""), never
+        // attribute-unsafe; the clamp result replaces it when the entry overshot affordability.
+        const inputVal = state.clampedQty !== null ? String(state.clampedQty) : rawQty;
         return `<li data-vendor-row="${entry.itemId}">
                   <p class="recipe-name">${itemName(entry.itemId)} <span class="recipe-level">${entry.price}g</span></p>
                   <p class="recipe-inputs">Owned: ${owned(entry.itemId)}</p>
-                  <button class="craft-btn" data-vendor-buy="${entry.itemId}" ${disabled ? "disabled" : ""}>Buy</button>
+                  <input class="vendor-qty" type="number" min="1" step="1" value="${inputVal}" data-vendor-qty="${entry.itemId}">
+                  <button class="craft-btn" data-vendor-buy="${entry.itemId}" ${state.disabled ? "disabled" : ""}>${state.label}</button>
                 </li>`;
       })
       .join("");
+  }
+
+  /** Whether the Bank can hold the vendor Item's resulting stack (#283): an existing stack always
+   * has room; a brand-new stack needs a free Bank Slot. Mirrors the Engine's private
+   * `hasRoomForNewStack` against the public Snapshot's `bank` view — no Engine internals imported,
+   * so this stays a pure UI guard keeping the Engine throw a never-hit backstop. */
+  function bankHasRoom(bank: Snapshot["bank"], itemId: string): boolean {
+    if (bank.items.some((s) => s.itemId === itemId)) return true;
+    return bank.items.length < bank.capacity;
+  }
+
+  /** Resolves a vendor row's Buy button state (#283) from the entered quantity string. Clamps an
+   * over-affordable qty down to `floor(gold / price)` (tuning: clamp, don't merely disable) so a
+   * click never asks the Engine to overspend; treats empty / non-integer / `< 1` as invalid and
+   * disables Buy, and also disables when the Bank has no room. `clampedQty` is non-null only when
+   * the entered value was pulled down, signalling the caller to rewrite the field. */
+  function vendorBuyState(
+    price: number,
+    rawQty: string,
+    gold: number,
+    hasRoom: boolean,
+  ): { label: string; disabled: boolean; qty: number | null; clampedQty: number | null } {
+    const parsed = Number.parseInt(rawQty, 10);
+    const validInt = Number.isInteger(parsed) && parsed >= 1;
+    if (!validInt) return { label: "Buy", disabled: true, qty: null, clampedQty: null };
+
+    const maxAffordable = Math.floor(gold / price);
+    const clampedQty = parsed > maxAffordable && maxAffordable >= 1 ? maxAffordable : null;
+    const qty = clampedQty ?? parsed;
+    const total = price * qty;
+    const disabled = !hasRoom || total > gold;
+    return { label: `Buy (${total}g)`, disabled, qty, clampedQty };
   }
 
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
@@ -1865,11 +1911,48 @@ export function mountApp(
   // stable roots. See loadout-slot.ts's own doc comment for the shared dispatch order and state.
 
   // Vendor tab panel (#119): a fixed-price Buy control per row, mirroring the Smithing/Cooking/
-  // Crafting/Herblore recipe lists' single Craft-button dispatch shape.
-  el("#vendor-list").addEventListener("click", (event) => {
+  // Crafting/Herblore recipe lists' single Craft-button dispatch shape. Bulk buy (#283) adds a
+  // per-row qty field the click reads.
+  const vendorListEl = el("#vendor-list");
+
+  // Live label / disabled / clamp as the player edits a row's qty (#283): recompute just that
+  // row's Buy button (a full re-render would reset every field), and clamp an over-affordable
+  // entry down so the button's total never exceeds gold.
+  vendorListEl.addEventListener("input", (event) => {
+    const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-vendor-qty]");
+    if (!input) return;
+    const itemId = input.dataset["vendorQty"];
+    if (!itemId) return;
+    const entry = content.vendor.find((v) => v.itemId === itemId);
+    if (!entry) return;
+    const snap = engine.snapshot();
+    const state = vendorBuyState(
+      entry.price,
+      input.value,
+      snap.player.gold,
+      bankHasRoom(snap.bank, itemId),
+    );
+    if (state.clampedQty !== null) input.value = String(state.clampedQty);
+    const button = input
+      .closest("[data-vendor-row]")
+      ?.querySelector<HTMLButtonElement>("[data-vendor-buy]");
+    if (button) {
+      button.textContent = state.label;
+      button.disabled = state.disabled;
+    }
+  });
+
+  vendorListEl.addEventListener("click", (event) => {
     const itemId = (event.target as HTMLElement).dataset["vendorBuy"];
     if (!itemId) return;
-    engine.buy(itemId, 1); // logs its own feed line via the item-bought subscription below
+    const input = (event.target as HTMLElement)
+      .closest("[data-vendor-row]")
+      ?.querySelector<HTMLInputElement>("[data-vendor-qty]");
+    const qty = Number.parseInt(input?.value ?? "", 10);
+    // UI guard: the button is disabled for invalid qtys, but never let a stray click reach the
+    // Engine with a bad quantity — keep the Engine throw a backstop, not a normal path (#283).
+    if (!Number.isInteger(qty) || qty < 1) return;
+    engine.buy(itemId, qty); // logs its own feed line via the item-bought subscription below
     render();
   });
 
