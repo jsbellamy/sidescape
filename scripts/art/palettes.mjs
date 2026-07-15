@@ -69,6 +69,11 @@ export const materialPalettes = {
   // appending these cannot touch the 16 existing sprites, none of which declare them.
   skin: { shadow: "#8a5a45", base: "#c08a68", light: "#e0b48f", glint: "#f2d8bb" },
   leather: { shadow: "#3f2a1c", base: "#6b452a", light: "#96683d", glint: "#c08f5a" },
+  // Moss (#278, #264 follow-up): the player redraw's tunic has no green material vocabulary, so
+  // quantization pulled it into the master ramp's shadow/umber browns instead. Scoped per asset
+  // like skin/leather above, so it can only reach a sprite that names it. Cold, desaturated
+  // olive-green steps in the same value/saturation family as the forest/meadow zone greens.
+  moss: { shadow: "#2f3a1c", base: "#465825", light: "#657c37", glint: "#8ba054" },
 };
 
 /** `masterPalette` as a name -> hex lookup (e.g. `P.ink`, `P.accent`), for icon/sprite sources

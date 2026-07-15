@@ -73,7 +73,10 @@ change quantization or palette scoping, that is the test that must still pass.
 ## Grids and pixel rules
 
 - Icons: native 34×34 canvas, with art confined to the inner 32×32 area.
-- Combat sprites: shared 32×32 grid; Boss-class sprites may be 48×48.
+- Combat sprites: three native-canvas tiers, one uniform `SPRITE_GRAIN` (2) applied on top —
+  regular Monsters 32×32 native (64px on screen), the player hero 48×48 native (96px), and
+  Dungeon Bosses 64×64 native (128px). A Boss looms via a bigger native canvas, never a bigger
+  grain.
 - Backdrops: horizontally tileable 160×120 strips.
 - Scene props: approximately 24×20.
 - Use a selective 1px warm-dark outline, thickening to 2px only at important silhouette corners,
@@ -82,8 +85,9 @@ change quantization or palette scoping, that is the test that must still pass.
 - Draw silhouette first: assets must read in the 320px-wide window. The UI applies
   `image-rendering: pixelated`, and source art assumes it.
 
-Combat sprites are **facing inward** in the live scene layout: player left, Monsters right,
-including Boss-class sprites.
+Combat sprites are **facing inward** in the live scene layout: the player stands on the right,
+facing left; Monsters stand on the left and face right, toward the player — including Boss-class
+sprites.
 
 ## Icon legibility (34×34)
 
