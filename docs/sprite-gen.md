@@ -18,7 +18,8 @@ sprites. This kit exists so a generation reaches the canvas by machine instead.
  generate ──► scripts/art/sprite-gen-inbox/<name>.png   (raw image, git-ignored)
     │
     ├─ npm run art:ingest-sprite -- --name <name>
-    │      keys background → detects the pseudo-pixel grid → votes each cell →
+    │      keys background → detects the pseudo-pixel grid → votes each cell → normalizes
+    │      recovered cell colors deterministically →
     │      bottom-anchors on the canvas → writes:
     │
     ├──► scripts/art/sprite-sources/sprite-<name>.png   (compact 1px/cell source — COMMITTED)
@@ -52,10 +53,12 @@ is pinning the logical grid in the prompt (below), not choosing a smaller render
 **Do not downscale a large render to hit a "nicer" number.** A resave is exactly what smeared the
 first render into 63k colors. Feed ingest the model's raw output at whatever size it came out.
 
-**Save the model's PNG directly.** Do not upscale it, open it in an editor, or re-export it. The
-first player generation arrived with an `eXIf` chunk and **63,272 distinct colors**; a genuine
-flat-block sprite has more like 15. Something re-encoded it and smeared every edge into a gradient,
-which is what majority-vote sampling then turned into speckle.
+**Save the model's PNG directly.** Do not resize, open it in an editor, re-export it, downsample it,
+or hand-edit it. Keep that raw PNG in the git-ignored inbox. Built-in image generation can produce
+tens of thousands of subtly different RGB values even when its logical grid is recoverable; that is
+expected and not itself a failure. Ingest first recovers the logical cells, then deterministically
+normalizes their source-local palette (16 colors by default; the player explicitly uses 24). This
+is neither raster downscaling nor hand editing. The later Stage-2 named-ramp projection is separate.
 
 ## Prompt template
 
@@ -103,8 +106,9 @@ The sprite is bottom-anchored (characters stand on the combat scene's ground pla
 centred sprite floats) and horizontally centred.
 
 Useful overrides: `--crop x0,y0,x1,y1`, `--tolerance` (background key spread, default 40),
-`--pitch`/`--pitch-y` (force the grid pitch), `--flip` (mirror horizontally), `--size` (32 or 48,
-defaults to the registry entry), `--min-long`/`--max-long` (the pitch search band).
+`--pitch`/`--pitch-y` (force the grid pitch), `--flip` (mirror horizontally), `--size` (32, 48, or
+64; it must match the registry entry's declared canvas), `--min-long`/`--max-long` (the pitch search band), and
+`--dry-run` (runs the complete validation/preview pipeline without creating or altering outputs).
 
 ## Per-sprite finishing budget
 
@@ -124,9 +128,9 @@ are right for a 32×32 Monster read at a glance and wrong for an ingested hero:
 - **Figure taller than the canvas.** The generation ignored the logical grid (94 tall for a 48
   canvas). There is no rescue — regenerate with the grid line pinned. Ingest reports the recovered
   grid so you can see it immediately.
-- **Continuous tone, not flat blocks.** Tens of thousands of distinct colors, no flat cells, every
-  recovered cell a different muddy average. The generation had gradients/anti-aliasing, or was
-  resaved lossily. Regenerate; do not re-export.
+- **Wrong subject or unreadable silhouette.** Normalization cannot repair a wrong subject, lost
+  defining feature, incorrect facing, or an unreadable silhouette. Review the Stage-2 preview at
+  1x and regenerate when it fails artistically.
 - **Everything ships brown.** A dominant hue has no named ramp and collapsed into the master ramp's
   umber/shadow browns. Add a material ramp, or recolor the generation.
 - **Empty grid.** Key/pitch detection found nothing — usually a background that is not flat or not

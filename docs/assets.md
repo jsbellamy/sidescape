@@ -402,7 +402,7 @@ umbrella framing ("establishing the shared character scale and pixel grain that 
 validates against its Monsters") calls for — rather than forcing the smaller canvas. This carried a
 handful of deliberate scope changes over the issue text, all recorded in PR #<pending>:
 
-- **Native canvas 32×32 → 48×48.** The sanctioned non-Boss hero canvas; 32-native Monsters are
+- **Native canvas 32×32 → 48×48.** An explicitly declared visual scale; 32-native Monsters are
   unchanged. The player quantizes with a wider `maxColors` (24) and no despeckle so the ingested
   original art keeps its shading and single-pixel accents.
 - **New `skin` and `leather` material ramps** (`scripts/art/palettes.mjs`) so a lit character has a
@@ -435,7 +435,9 @@ Chicken, Cow, and Goblin now form the first original-art Monster mini-set. Each 
 raw 1254×1254 RGB model PNG on a uniform `#ff00ff` key background, retained unchanged in the
 git-ignored sprite-generation inbox, then passed through `npm run art:ingest-sprite -- --name <id>
 --size 32`. The ingest recovered the generation's own chunky cell grid and bottom-anchored it on a
-32×32 binary-alpha source canvas; it did not downsample or hand-place source pixels. The compact
+32×32 binary-alpha source canvas, then normalized the recovered source-local cell palette; it did
+not downsample or hand-place source pixels. Raw RGB variety is expected and the later named-ramp
+projection remains a separate Stage-2 build step. The compact
 chicken, low broad cow, and unarmoured, club-bearing goblin all face right toward the left-facing
 player. Their warm outline, upper-left light, and muted meadow-adjacent materials make them read as
 one set at the scene's native scale. The goblin's exposed green skin, ragged brown cloth, and crude

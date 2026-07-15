@@ -74,9 +74,10 @@ change quantization or palette scoping, that is the test that must still pass.
 
 - Icons: native 34×34 canvas, with art confined to the inner 32×32 area.
 - Combat sprites: three native-canvas tiers, one uniform `SPRITE_GRAIN` (2) applied on top —
-  regular Monsters 32×32 native (64px on screen), the player hero 48×48 native (96px), and
-  Dungeon Bosses 64×64 native (128px). A Boss looms via a bigger native canvas, never a bigger
-  grain.
+  32×32 (64px on screen), 48×48 (96px), and 64×64 (128px). Canvas size is explicit visual scale,
+  not a Monster/Boss role: any combat sprite may declare any supported size, and never changes
+  grain. Raw generator PNGs remain untouched in the git-ignored inbox; ingest recovers cells and
+  source-locally normalizes their colors before the separate named-ramp Stage-2 build.
 - Backdrops: horizontally tileable 160×120 strips.
 - Scene props: approximately 24×20.
 - Use a selective 1px warm-dark outline, thickening to 2px only at important silhouette corners,

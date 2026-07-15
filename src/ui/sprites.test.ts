@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { sprites } from "../../scripts/art/sprites.mjs";
+import { writeSprites } from "../../scripts/art/sprites.mjs";
+import { encodePng } from "../../scripts/art/write-png.mjs";
 import {
   monsterSprite,
   monsterSpriteSize,
@@ -86,5 +91,40 @@ describe("sprites", () => {
     expect(spriteEdgePx(playerSpriteSize)).toBe(96);
     expect(spriteEdgePx(32)).toBe(64);
     expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(96);
+  });
+});
+
+describe("writeSprites canvas sizes", () => {
+  it("accepts an explicitly declared 64px canvas without treating it as a Boss-only size", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sidescape-sprites-"));
+    const sourceDir = join(root, "sources");
+    const destDir = join(root, "dest");
+    await mkdir(sourceDir);
+    await writeFile(
+      join(sourceDir, "sprite-large-monster.png"),
+      encodePng(64, 64, (x: number, y: number) =>
+        x === 0 && y === 0 ? [74, 46, 26, 255] : [0, 0, 0, 0],
+      ),
+    );
+
+    try {
+      await writeSprites(destDir, {
+        sourceDir,
+        registry: [
+          {
+            name: "large-monster",
+            source: "sprite-large-monster.png",
+            size: 64,
+            alpha: "binary",
+            materialRampNames: [],
+            zoneNames: [],
+          },
+        ],
+      });
+
+      expect(await readFile(join(destDir, "large-monster.png"))).toBeInstanceOf(Buffer);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

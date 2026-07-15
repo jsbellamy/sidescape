@@ -37,7 +37,10 @@ const DEFAULT_DESPECKLE_PASSES = 3;
  * could do the same. Each list is exactly the set of ramps/zones that win at least one cell of
  * that source; dropping the never-winning ones cannot change any cell's nearest color, so this
  * reproduces the shipped bytes exactly. `zoneNames` is a palette dependency, not a semantic Area
- * ownership claim.
+ * ownership claim. `sourceMaxColors` is a separate Stage-1 recovered-cell normalization ceiling
+ * (default 16); it does not change the Stage-2 `maxColors` shipped-art budget. `interiorAlpha`
+ * is optional authoring metadata for one-intermediate sources: ingest derives it from the placed
+ * silhouette, keeping every 8-neighbour boundary opaque.
  */
 export const sprites = [
   // The player is the one sprite on screen 100% of the time, and the only one ingested from an
@@ -55,6 +58,7 @@ export const sprites = [
     alpha: "binary",
     materialRampNames: ["steel", "skin", "leather", "moss"],
     zoneNames: ["forest"],
+    sourceMaxColors: 24,
     maxColors: 24,
     despecklePasses: 0,
   },
@@ -204,7 +208,7 @@ export async function writeSprites(
   { sourceDir = SPRITE_SOURCES_DIR, registry = sprites } = {},
 ) {
   for (const sprite of registry) {
-    if (sprite.size !== 32 && sprite.size !== 48) {
+    if (sprite.size !== 32 && sprite.size !== 48 && sprite.size !== 64) {
       throw new Error(
         `writeSprites: ${sprite.name} has unsupported canvas size ${JSON.stringify(sprite.size)}`,
       );
@@ -212,6 +216,25 @@ export async function writeSprites(
     if (sprite.alpha !== "binary" && sprite.alpha !== "one-intermediate") {
       throw new Error(
         `writeSprites: ${sprite.name} has unknown alpha policy ${JSON.stringify(sprite.alpha)}`,
+      );
+    }
+    if (
+      sprite.sourceMaxColors !== undefined &&
+      (!Number.isInteger(sprite.sourceMaxColors) || sprite.sourceMaxColors <= 0)
+    ) {
+      throw new Error(
+        `writeSprites: ${sprite.name} sourceMaxColors must be a positive integer when declared`,
+      );
+    }
+    if (
+      sprite.interiorAlpha !== undefined &&
+      (sprite.alpha !== "one-intermediate" ||
+        !Number.isInteger(sprite.interiorAlpha) ||
+        sprite.interiorAlpha < 1 ||
+        sprite.interiorAlpha > 254)
+    ) {
+      throw new Error(
+        `writeSprites: ${sprite.name} interiorAlpha must be an integer from 1 to 254 and requires one-intermediate alpha`,
       );
     }
     if (!sprite.materialRampNames) {
