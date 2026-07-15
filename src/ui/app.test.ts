@@ -8,6 +8,7 @@ import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
+import { slotSilhouette } from "./icons";
 import { PRODUCTION_SKILLS } from "./production";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -2866,6 +2867,25 @@ describe("Fishing", () => {
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "raw-fish")?.qty).toBe(1);
   });
 
+  it("renders an .action-progress bar under the active Fishing Spot's button, filling toward the next catch (#284)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+    app.render();
+
+    // Fresh start: fill width 0%.
+    const bar = root.querySelector<HTMLElement>('[data-spot="pond"] + .action-progress');
+    expect(bar).not.toBeNull();
+    const fill = bar?.querySelector<HTMLElement>(".fill");
+    expect(fill?.style.width).toBe("0%");
+
+    engine.tick(); // 1 of pond.catchTicks (3) elapsed
+    app.render();
+    const fillAfterOneTick = root
+      .querySelector('[data-spot="pond"] + .action-progress')
+      ?.querySelector<HTMLElement>(".fill");
+    expect(fillAfterOneTick?.style.width).toBe(`${(1 / 3) * 100}%`);
+  });
+
   it("World page still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
     const engine = createEngine(
       fixtureContent,
@@ -2902,6 +2922,24 @@ describe("Character panel (#26)", () => {
       const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
       expect(tile?.classList.contains("tile-empty")).toBe(true);
       expect(tile?.dataset["item"]).toBeUndefined();
+    }
+  });
+
+  // #286: an empty Gear Slot shows the slot's greyed, type-hinting silhouette instead of the old
+  // text em-dash — replaces the pre-#283/#284/#285 assertion this test file used to make at this
+  // seam (see the issue's own note that the app.ts line numbers it cites have since shifted).
+  it("shows the slot's silhouette image (not a text em-dash) in every empty Gear Slot's [+] add button, with the [+] add button still wired for its slot", () => {
+    const { root } = mount(1);
+    for (const slot of ["weapon", "shield", "head", "body", "legs", "amulet", "ring"] as const) {
+      const tile = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
+      const mark = tile?.querySelector(".tile-empty-mark");
+      expect(mark?.textContent?.trim()).toBe(""); // no more literal "—"
+      const img = mark?.querySelector<HTMLImageElement>("img.slot-silhouette");
+      expect(img?.getAttribute("src")).toBe(slotSilhouette(slot));
+      expect(mark?.getAttribute("aria-label")).toBe(`${slot} (empty)`);
+
+      const addBtn = tile?.querySelector<HTMLButtonElement>(`[data-gear-add="${slot}"]`);
+      expect(addBtn?.getAttribute("aria-label")).toBe(`Equip ${slot}`);
     }
   });
 
@@ -3406,6 +3444,26 @@ describe("Smithing (#28)", () => {
 
     expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
     expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("renders an .action-progress bar in the active recipe row, filling toward the next craft (#284)", () => {
+    const { engine, root, app } = mountWithBars(5);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.click();
+    app.render();
+
+    const swordRow = root.querySelector('[data-recipe-row="test-sword"]');
+    const bar = swordRow?.querySelector<HTMLElement>(".action-progress .fill");
+    expect(bar?.style.width).toBe("0%"); // fresh start
+
+    // A non-active recipe row (test-charm, under-leveled) never gets a bar.
+    expect(root.querySelector('[data-recipe-row="test-charm"] .action-progress')).toBeNull();
+
+    engine.tick(); // 1 of test-sword.craftTicks (3) elapsed
+    app.render();
+    const barAfterOneTick = root
+      .querySelector('[data-recipe-row="test-sword"]')
+      ?.querySelector<HTMLElement>(".action-progress .fill");
+    expect(barAfterOneTick?.style.width).toBe(`${(1 / 3) * 100}%`);
   });
 
   it("logs a feed line and grants Smithing XP when a craft completes (item-crafted)", () => {
@@ -4108,6 +4166,102 @@ describe("Vendor tab panel (#119)", () => {
   });
 });
 
+describe("Vendor bulk buy (#283)", () => {
+  /** Reads a vendor row's editable quantity field. */
+  function qtyInput(root: HTMLElement, itemId: string): HTMLInputElement {
+    const input = root.querySelector<HTMLInputElement>(`[data-vendor-qty="${itemId}"]`);
+    if (!input) throw new Error(`no qty input for ${itemId}`);
+    return input;
+  }
+
+  /** Sets a qty field's value and fires the `input` event the way a user typing would, so the
+   * live-label / disabled / clamp handler runs. */
+  function typeQty(root: HTMLElement, itemId: string, value: string): void {
+    const input = qtyInput(root, itemId);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function buyBtn(root: HTMLElement, itemId: string): HTMLButtonElement {
+    const btn = root.querySelector<HTMLButtonElement>(`[data-vendor-buy="${itemId}"]`);
+    if (!btn) throw new Error(`no buy button for ${itemId}`);
+    return btn;
+  }
+
+  it("gives each vendor row an integer qty field with min=1 defaulting to 1", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    const input = qtyInput(root, "arrow");
+    expect(input.type).toBe("number");
+    expect(input.min).toBe("1");
+    expect(input.step).toBe("1");
+    expect(input.value).toBe("1");
+  });
+
+  it("labels the Buy button with the live total cost = price × qty", () => {
+    const { root } = ammoMount({ player: { gold: 100 } });
+    // fixture arrow price is 2; default qty 1 -> total 2
+    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(2g\)/);
+
+    typeQty(root, "arrow", "5");
+    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(10g\)/); // 2 × 5
+  });
+
+  it("buys exactly qty via engine.buy(itemId, qty): qty 5 of a 3g item costs 15g, adds 5, one item-bought event", () => {
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
+    const events: { itemId: string; qty: number; gold: number }[] = [];
+    engine.on("item-bought", (e) => events.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
+
+    typeQty(root, "air-rune", "5"); // fixture air-rune price 3
+    buyBtn(root, "air-rune").click();
+
+    expect(engine.snapshot().player.gold).toBe(85); // 100 − 3×5
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 5 }]);
+    expect(events).toEqual([{ itemId: "air-rune", qty: 5, gold: 15 }]);
+  });
+
+  it("disables Buy when the total cost would exceed gold", () => {
+    const { root } = ammoMount({ player: { gold: 2 } }); // air-rune price 3 — cannot afford one
+    expect(buyBtn(root, "air-rune").disabled).toBe(true);
+  });
+
+  it("clamps an over-affordable qty down to floor(gold/price) instead of overspending", () => {
+    const { engine, root } = ammoMount({ player: { gold: 10 } }); // air-rune 3 -> max affordable 3
+    typeQty(root, "air-rune", "5");
+
+    expect(qtyInput(root, "air-rune").value).toBe("3"); // clamped
+    expect(buyBtn(root, "air-rune").textContent).toMatch(/Buy \(9g\)/);
+    expect(buyBtn(root, "air-rune").disabled).toBe(false);
+
+    buyBtn(root, "air-rune").click();
+    expect(engine.snapshot().player.gold).toBe(1); // 10 − 9, never overspent
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 3 }]);
+  });
+
+  it("disables Buy when the Bank has no room for the resulting new stack", () => {
+    // capacity 1, already holding one non-vendor stack -> a brand-new arrow stack has no room
+    const { root } = ammoMount({
+      player: { gold: 100 },
+      bank: { items: [{ itemId: "meat", qty: 1 }], capacity: 1 },
+    });
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+  });
+
+  it("treats a non-integer or < 1 qty as invalid: Buy is disabled and a click cannot purchase", () => {
+    const { engine, root } = ammoMount({ player: { gold: 100 } });
+
+    typeQty(root, "arrow", "0");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+
+    typeQty(root, "arrow", "");
+    expect(buyBtn(root, "arrow").disabled).toBe(true);
+
+    // Even if a click reaches the handler, an invalid qty must not purchase.
+    buyBtn(root, "arrow").click();
+    expect(engine.snapshot().player.gold).toBe(100);
+    expect(engine.snapshot().bank.items).toEqual([]);
+  });
+});
+
 describe("Combat feedback (#4)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -4288,6 +4442,37 @@ describe("Combat feedback (#4)", () => {
 
     vi.advanceTimersByTime(1000); // > the flash duration
     expect(root.querySelector("#flash-overlay")?.classList.contains("flash-rare")).toBe(false);
+  });
+
+  it("floats a +N XP number over the player on a combat-style xp-gained event, but not for hitpoints (#285)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 40, false);
+
+    const xpSplats = [...root.querySelectorAll("#player-splats .splat-xp")];
+    expect(xpSplats.length).toBeGreaterThan(0);
+    expect(xpSplats.every((el) => /^\+\d+$/.test(el.textContent ?? ""))).toBe(true);
+
+    // Exactly one floated XP number per landed hit (the style skill's grant), never two: the same
+    // hit's Hitpoints trickle (awardCombatXp's second grantXp call) must not also float. A landed
+    // player hit is a non-"0" hit splat over the Monster; damage-0 hits/misses grant no XP at all
+    // (awardCombatXp returns early), so the counts must match exactly.
+    const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
+      (el) => el.textContent !== "0",
+    );
+    expect(xpSplats.length).toBe(landedHits.length);
+  });
+
+  it("does not float an XP number for fishing xp-gained events", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    engine.selectFishingSpot("pond"); // pond: catchChance 1, xp 10 per Catch (fixtureContent)
+
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    expect(root.querySelectorAll("#player-splats .splat-xp").length).toBe(0);
   });
 });
 

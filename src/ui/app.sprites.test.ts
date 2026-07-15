@@ -123,7 +123,6 @@ describe("combat scene sprites", () => {
     }
     expect(seen.size).toBe(3);
   });
-
   it("hides the Monster sprite before a Monster is selected", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");

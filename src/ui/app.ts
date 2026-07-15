@@ -33,7 +33,7 @@ import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { resolveActiveAreaId } from "./area-context";
-import { itemIcon, skillIcon, tabIcon } from "./icons";
+import { itemIcon, skillIcon, slotSilhouette, tabIcon } from "./icons";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -71,6 +71,17 @@ const SPLAT_FADE_MS = 700;
 const TOAST_DISMISS_MS = 2500;
 /** Rare-Drop screen-flash duration (#4); mirrors styles.css's `rare-flash` keyframes. */
 const FLASH_DURATION_MS = 400;
+/** Combat-style Skills (#285) — the only Skills a floating xp-gained number renders for. Excludes
+ * Hitpoints (pinned decision: exactly one floated number per hit, the style skill's 4*damage
+ * grant; the ~1.33x damage Hitpoints trickle never floats) and non-combat Skills (fishing,
+ * production, …). */
+const COMBAT_STYLE_SKILLS: ReadonlySet<SkillName> = new Set([
+  "attack",
+  "strength",
+  "defence",
+  "ranged",
+  "magic",
+]);
 
 /** Abbreviated Attack Type labels for the compact defence-vector readout (#99) — terse to fit the
  * 320px Character panel budget. Rendered inside the shared hover panel/Bank detail strip since
@@ -658,6 +669,21 @@ export function mountApp(
     setTimeout(() => splat.remove(), SPLAT_FADE_MS);
   }
 
+  /** Appends a floating `+N` XP number to `layer` (#285), mirroring `showSplat`'s jitter/fade/
+   * auto-removal shape but visually distinct (`.splat-xp`, styled green/rising in styles.css) so
+   * it reads as XP rather than a hit/miss splat. Caller decides which Skills qualify. */
+  function showXpSplat(layer: HTMLElement, amount: number): void {
+    const splat = document.createElement("span");
+    splat.className = "splat splat-xp";
+    splat.textContent = `+${Math.round(amount)}`;
+    const jitterX = Math.random() * 24 - 12; // ±12px
+    const jitterY = Math.random() * 14 - 7; // ±7px, still biased upper-half by the 38% base
+    splat.style.left = `calc(50% + ${jitterX.toFixed(1)}px)`;
+    splat.style.top = `calc(38% + ${jitterY.toFixed(1)}px)`;
+    layer.appendChild(splat);
+    setTimeout(() => splat.remove(), SPLAT_FADE_MS);
+  }
+
   /** Appends a toast to #toast-container, auto-dismissing after TOAST_DISMISS_MS; each toast owns
    * its own timer so multiple same-Tick toasts (e.g. a kill's damage XP and its trickle of
    * Hitpoints XP both crossing a level boundary, or a level-up landing the same Tick an out-of-
@@ -755,16 +781,62 @@ export function mountApp(
    * command. */
   function renderVendor(bank: Snapshot["bank"], gold: number): void {
     const owned = (itemId: string) => bank.items.find((s) => s.itemId === itemId)?.qty ?? 0;
-    el("#vendor-list").innerHTML = content.vendor
+    const listEl = el("#vendor-list");
+    // Preserve any qty a player has already typed across this re-render (#283): toggling the tab
+    // re-renders the whole workspace, so snapshot the current field values first and reuse them as
+    // each row's default, falling back to "1" for rows not yet on the page.
+    const prevQty = new Map<string, string>();
+    listEl.querySelectorAll<HTMLInputElement>("[data-vendor-qty]").forEach((input) => {
+      const id = input.dataset["vendorQty"];
+      if (id) prevQty.set(id, input.value);
+    });
+    listEl.innerHTML = content.vendor
       .map((entry) => {
-        const disabled = gold < entry.price;
+        const rawQty = prevQty.get(entry.itemId) ?? "1";
+        const state = vendorBuyState(entry.price, rawQty, gold, bankHasRoom(bank, entry.itemId));
+        // `rawQty` is always a number input's own `.value` (a numeric string or ""), never
+        // attribute-unsafe; the clamp result replaces it when the entry overshot affordability.
+        const inputVal = state.clampedQty !== null ? String(state.clampedQty) : rawQty;
         return `<li data-vendor-row="${entry.itemId}">
                   <p class="recipe-name">${itemName(entry.itemId)} <span class="recipe-level">${entry.price}g</span></p>
                   <p class="recipe-inputs">Owned: ${owned(entry.itemId)}</p>
-                  <button class="craft-btn" data-vendor-buy="${entry.itemId}" ${disabled ? "disabled" : ""}>Buy</button>
+                  <input class="vendor-qty" type="number" min="1" step="1" value="${inputVal}" data-vendor-qty="${entry.itemId}">
+                  <button class="craft-btn" data-vendor-buy="${entry.itemId}" ${state.disabled ? "disabled" : ""}>${state.label}</button>
                 </li>`;
       })
       .join("");
+  }
+
+  /** Whether the Bank can hold the vendor Item's resulting stack (#283): an existing stack always
+   * has room; a brand-new stack needs a free Bank Slot. Mirrors the Engine's private
+   * `hasRoomForNewStack` against the public Snapshot's `bank` view — no Engine internals imported,
+   * so this stays a pure UI guard keeping the Engine throw a never-hit backstop. */
+  function bankHasRoom(bank: Snapshot["bank"], itemId: string): boolean {
+    if (bank.items.some((s) => s.itemId === itemId)) return true;
+    return bank.items.length < bank.capacity;
+  }
+
+  /** Resolves a vendor row's Buy button state (#283) from the entered quantity string. Clamps an
+   * over-affordable qty down to `floor(gold / price)` (tuning: clamp, don't merely disable) so a
+   * click never asks the Engine to overspend; treats empty / non-integer / `< 1` as invalid and
+   * disables Buy, and also disables when the Bank has no room. `clampedQty` is non-null only when
+   * the entered value was pulled down, signalling the caller to rewrite the field. */
+  function vendorBuyState(
+    price: number,
+    rawQty: string,
+    gold: number,
+    hasRoom: boolean,
+  ): { label: string; disabled: boolean; qty: number | null; clampedQty: number | null } {
+    const parsed = Number.parseInt(rawQty, 10);
+    const validInt = Number.isInteger(parsed) && parsed >= 1;
+    if (!validInt) return { label: "Buy", disabled: true, qty: null, clampedQty: null };
+
+    const maxAffordable = Math.floor(gold / price);
+    const clampedQty = parsed > maxAffordable && maxAffordable >= 1 ? maxAffordable : null;
+    const qty = clampedQty ?? parsed;
+    const total = price * qty;
+    const disabled = !hasRoom || total > gold;
+    return { label: `Buy (${total}g)`, disabled, qty, clampedQty };
   }
 
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
@@ -932,7 +1004,9 @@ export function mountApp(
           : "";
       return `<div class="tile tile-empty" data-slot="${slot}">
                 <button class="gear-slot-add" data-gear-add="${slot}" aria-label="Equip ${slot}">
-                  <span class="tile-empty-mark" aria-label="${slot} (empty)">—</span>
+                  <span class="tile-empty-mark" aria-label="${slot} (empty)">
+                    <img class="icon pixel slot-silhouette" src="${slotSilhouette(slot)}" alt="" aria-hidden="true" />
+                  </span>
                 </button>
                 ${chooser}
               </div>`;
@@ -1013,6 +1087,7 @@ export function mountApp(
       content,
       snap.bank.items,
       level,
+      snap.production,
     );
   }
 
@@ -1191,7 +1266,13 @@ export function mountApp(
       .map(({ id, unlocked }) => {
         const def = content.fishingSpotsById.get(id);
         const active = snap.fishing?.spotId === id;
-        return `<button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>`;
+        // #284: the active spot's own progress bar fills toward the next catch attempt, resetting
+        // every cycle whether or not the roll succeeds — sits right under its button.
+        const bar =
+          active && snap.fishing
+            ? `<div class="action-progress" aria-label="Catch progress"><div class="fill" style="width:${snap.fishing.progress * 100}%"></div></div>`
+            : "";
+        return `<span class="fishing-spot-item"><button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>${bar}</span>`;
       })
       .join("");
     const dungeonButtons = content.dungeons
@@ -1490,6 +1571,16 @@ export function mountApp(
   // often render() happens to run.
   engine.on("attack", (e) => {
     showSplat(el(e.actor === "player" ? "#monster-splats" : "#player-splats"), e.damage);
+  });
+  // Floating combat-style XP number above the player (#285) — only for attack/strength/defence/
+  // ranged/magic; never Hitpoints (one number per hit, the style skill's grant) and never
+  // fishing/production XP. #player-splats only exists while the combat card is mounted, so guard
+  // rather than assume (mirrors why `el` isn't used here — it casts instead of returning null).
+  engine.on("xp-gained", (e) => {
+    if (!COMBAT_STYLE_SKILLS.has(e.skill)) return;
+    const layer = root.querySelector<HTMLElement>("#player-splats");
+    if (!layer) return;
+    showXpSplat(layer, e.amount);
   });
   engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
   engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));
@@ -1865,11 +1956,48 @@ export function mountApp(
   // stable roots. See loadout-slot.ts's own doc comment for the shared dispatch order and state.
 
   // Vendor tab panel (#119): a fixed-price Buy control per row, mirroring the Smithing/Cooking/
-  // Crafting/Herblore recipe lists' single Craft-button dispatch shape.
-  el("#vendor-list").addEventListener("click", (event) => {
+  // Crafting/Herblore recipe lists' single Craft-button dispatch shape. Bulk buy (#283) adds a
+  // per-row qty field the click reads.
+  const vendorListEl = el("#vendor-list");
+
+  // Live label / disabled / clamp as the player edits a row's qty (#283): recompute just that
+  // row's Buy button (a full re-render would reset every field), and clamp an over-affordable
+  // entry down so the button's total never exceeds gold.
+  vendorListEl.addEventListener("input", (event) => {
+    const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-vendor-qty]");
+    if (!input) return;
+    const itemId = input.dataset["vendorQty"];
+    if (!itemId) return;
+    const entry = content.vendor.find((v) => v.itemId === itemId);
+    if (!entry) return;
+    const snap = engine.snapshot();
+    const state = vendorBuyState(
+      entry.price,
+      input.value,
+      snap.player.gold,
+      bankHasRoom(snap.bank, itemId),
+    );
+    if (state.clampedQty !== null) input.value = String(state.clampedQty);
+    const button = input
+      .closest("[data-vendor-row]")
+      ?.querySelector<HTMLButtonElement>("[data-vendor-buy]");
+    if (button) {
+      button.textContent = state.label;
+      button.disabled = state.disabled;
+    }
+  });
+
+  vendorListEl.addEventListener("click", (event) => {
     const itemId = (event.target as HTMLElement).dataset["vendorBuy"];
     if (!itemId) return;
-    engine.buy(itemId, 1); // logs its own feed line via the item-bought subscription below
+    const input = (event.target as HTMLElement)
+      .closest("[data-vendor-row]")
+      ?.querySelector<HTMLInputElement>("[data-vendor-qty]");
+    const qty = Number.parseInt(input?.value ?? "", 10);
+    // UI guard: the button is disabled for invalid qtys, but never let a stray click reach the
+    // Engine with a bad quantity — keep the Engine throw a backstop, not a normal path (#283).
+    if (!Number.isInteger(qty) || qty < 1) return;
+    engine.buy(itemId, qty); // logs its own feed line via the item-bought subscription below
     render();
   });
 

@@ -414,7 +414,11 @@ export type EngineEvent =
   /** A never-before-owned Pet (#120) just rolled on a qualifying action (a kill, a Catch, or a
    * craft completion) — see `PetDef.source`. Fires once per NEW pet only; an already-owned pet
    * never re-rolls, so this never fires twice for the same `petId`. */
-  | { type: "pet-dropped"; petId: string };
+  | { type: "pet-dropped"; petId: string }
+  /** Every XP grant (#285), general-purpose — fired for all Skills regardless of whether the same
+   * grant also crosses a level boundary (`levelup` still fires independently, unchanged). The UI
+   * decides what to render from it (e.g. floating combat-style XP above the player). */
+  | { type: "xp-gained"; skill: SkillName; amount: number };
 
 export interface SkillSnapshot {
   level: number;
@@ -513,7 +517,12 @@ export interface Snapshot {
      * while still rendering identical text. */
     weakElement?: Element;
   } | null;
-  fishing: { spotId: string; name: string } | null;
+  /** `progress` (#284) is the elapsed fraction, 0..1, of the current catch-attempt cycle —
+   * `(cooldownTotal - catchCooldown) / cooldownTotal` in engine.ts, derived fresh every
+   * snapshot() from internal-only Engine state (not persisted; a reload always restarts at a
+   * fresh cooldown, so `progress` never resumes mid-cycle). Resets every attempt regardless of
+   * catch-roll success — a full bar does not guarantee a catch. */
+  fishing: { spotId: string; name: string; progress: number } | null;
   /** Sibling to monster/fishing; monster stays populated with the current wave Monster so the
    * existing HP-bar rendering works untouched. 1-based wave, mid-run only — never persisted
    * across a reload (a reload is an abandon, see engine.ts's loadState). */
@@ -524,7 +533,9 @@ export interface Snapshot {
    * the UI can label any Skill's Recipe generically, not just Smithing's. Tolerant load reads
    * `production ?? smithing` (engine.ts's loadState) so a pre-#113 save (which stored `smithing`,
    * `{ recipeId, name }` with no skill) still resumes — skill is resolved from the recipe. */
-  production: { recipeId: string; name: string; skill: SkillName } | null;
+  /** `progress` (#284) mirrors `fishing.progress`'s own doc: elapsed fraction 0..1 of the current
+   * craft cycle, not persisted, restarts cleanly on reload. */
+  production: { recipeId: string; name: string; skill: SkillName; progress: number } | null;
   bank: {
     items: { itemId: string; qty: number }[];
     capacity: number;

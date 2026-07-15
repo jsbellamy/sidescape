@@ -200,6 +200,7 @@ describe("Crafting content (#116): hides and ranged/light armour", () => {
       recipeId: "craft-leather-body",
       name: "Leather Body",
       skill: "crafting",
+      progress: 0,
     });
   });
 

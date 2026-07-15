@@ -11,6 +11,7 @@ import { makeSnapshot } from "../core/make-snapshot";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";
+import { slotSilhouette } from "./icons";
 import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 
@@ -60,6 +61,62 @@ describe("createLoadoutSlotUi — mounting all six tiles", () => {
     expect(root.querySelector('#potion-slot .tile[data-item="strength-potion"]')).not.toBeNull();
     expect(root.querySelector('#quiver-slot .tile[data-item="arrow"]')).not.toBeNull();
     expect(root.querySelector('#rune-slot .tile[data-item="air-rune"]')).not.toBeNull();
+  });
+});
+
+// #286: every empty Loadout Slot (3 Food + Potion + Quiver + Rune) shows the matching greyed
+// silhouette in its [+] add button — the 3 Food Slots all share the "food" silhouette (one asset,
+// not three) — while the [+] add action itself keeps working (asserted by the existing chooser
+// open/close and assign suites elsewhere in this file, which click the very same button).
+describe("createLoadoutSlotUi — empty-slot silhouettes (#286)", () => {
+  it("renders the food silhouette for every empty Food Slot", () => {
+    const { root } = mountLoadoutUi({ player: { foodSlots: [null, null, null] } });
+    for (let i = 0; i < 3; i++) {
+      const addBtn = root.querySelector<HTMLElement>(`[data-add="${i}"]`);
+      const img = addBtn?.querySelector<HTMLImageElement>("img.slot-silhouette");
+      expect(img?.getAttribute("src")).toBe(slotSilhouette("food"));
+    }
+  });
+
+  it("renders the potion silhouette for the empty Potion Slot", () => {
+    const { root } = mountLoadoutUi({ player: { potionSlot: null } });
+    const img = root
+      .querySelector<HTMLElement>("[data-potion-add]")
+      ?.querySelector<HTMLImageElement>("img.slot-silhouette");
+    expect(img?.getAttribute("src")).toBe(slotSilhouette("potion"));
+  });
+
+  it("renders the quiver silhouette for the empty Quiver", () => {
+    const { root } = mountLoadoutUi({ player: { quiver: null } });
+    const img = root
+      .querySelector<HTMLElement>("[data-quiver-add]")
+      ?.querySelector<HTMLImageElement>("img.slot-silhouette");
+    expect(img?.getAttribute("src")).toBe(slotSilhouette("quiver"));
+  });
+
+  it("renders the rune silhouette for the empty Rune Slot", () => {
+    const { root } = mountLoadoutUi({ player: { runeSlot: null } });
+    const img = root
+      .querySelector<HTMLElement>("[data-rune-add]")
+      ?.querySelector<HTMLImageElement>("img.slot-silhouette");
+    expect(img?.getAttribute("src")).toBe(slotSilhouette("rune"));
+  });
+
+  it("a filled slot renders no silhouette — only the real item icon, unchanged from before #286", () => {
+    const { root } = mountLoadoutUi({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+        potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 },
+      },
+    });
+    expect(root.querySelector('[data-slot="0"] img.slot-silhouette')).toBeNull();
+    expect(root.querySelector("#potion-slot img.slot-silhouette")).toBeNull();
+  });
+
+  it("clicking the [+] add button (which now contains a silhouette image) still opens its chooser", () => {
+    const { root } = mountLoadoutUi({ bank: { items: [{ itemId: "meat", qty: 5 }] } });
+    root.querySelector<HTMLButtonElement>('[data-add="0"]')?.click();
+    expect(root.querySelector(".food-slot-chooser")).not.toBeNull();
   });
 });
 

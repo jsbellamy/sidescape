@@ -863,6 +863,15 @@ body {
   border: 1.5px solid #1e4f7a;
 }
 
+/* Floating combat-style XP number (#285): a distinct green pill so it reads as XP rather than a
+ * hit/miss splat, using the same rise/fade shape via splat-xp-fade (bigger vertical rise so it
+ * doesn't visually collide with the hit/miss splat firing on the same swing). */
+.splat-xp {
+  background: #3fae4a;
+  border: 1.5px solid #1c5f22;
+  animation: splat-xp-fade 700ms ease-out forwards;
+}
+
 @keyframes splat-fade {
   0% {
     opacity: 1;
@@ -871,6 +880,17 @@ body {
   100% {
     opacity: 0;
     transform: translate(-50%, -85%) scale(1.2);
+  }
+}
+
+@keyframes splat-xp-fade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -140%) scale(1.1);
   }
 }
 
@@ -1039,15 +1059,19 @@ body {
    item to show an icon for until one's assigned). */
 
 .food-slot-add {
+  position: relative;
   width: 100%;
+  aspect-ratio: 1;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-dim);
   font-size: 11px;
-  padding: 3px 4px;
+  padding: 2px;
   cursor: pointer;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .food-slot-eat:hover,
@@ -1145,15 +1169,19 @@ body {
 }
 
 .potion-slot-add {
+  position: relative;
   width: 100%;
+  aspect-ratio: 1;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-dim);
   font-size: 11px;
-  padding: 3px 4px;
+  padding: 2px;
   cursor: pointer;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .potion-slot-add:hover {
@@ -1409,6 +1437,32 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 700;
+}
+
+/* Wraps one Fishing Spot button + its own action-progress bar (#284) so the bar sits directly
+   under that spot's button inside the flex-wrapping `.fishing-buttons` row, instead of spanning
+   the whole row. */
+.fishing-spot-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Action progress bar (#284): fills as the active Fishing Spot's catch attempt or the active
+   Recipe's craft advances toward completion — reuses the `.sprite-hp`/`.fill` bar family's shape
+   (bordered track + colored fill) rather than introducing a new visual language. Used in the
+   World page's fishing-buttons row (`#area-detail`) and the Workshop's active recipe row
+   (`#workshop-recipes`). */
+.action-progress {
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #241b18;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+.action-progress .fill {
+  height: 100%;
+  background: #9fbc62;
 }
 
 /* The World page's own fixed shell (#208): mirrors `.bank-page-body` (#207) — the progression
@@ -1878,6 +1932,38 @@ button.tile:hover {
 .tile-empty-mark {
   color: var(--text-dim);
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* Slot silhouettes (#286): the greyed, type-hinting placeholder painted in an empty Gear/Loadout
+   Slot (`slotSilhouette` in icons.ts) — dimmed a step further than the art's own muted grey so a
+   filled slot's real icon still reads as visually "louder" at a glance. Explicit 34px sizing
+   because a Loadout Slot's `.food-slot-add`/`.potion-slot-add` button (unlike a Gear Slot's
+   `.tile`) has no `.tile .icon` ancestor rule to inherit it from. */
+.slot-silhouette {
+  width: 34px;
+  height: 34px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* The literal "+" affordance overlaid on a Loadout Slot's silhouette (#286) — same corner-badge
+   look as `.tile-qty`, so the add action stays visible without competing with the silhouette. */
+.slot-add-mark {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-size: 9px;
+  line-height: 1.4;
+  padding: 0 3px;
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 /* Pets grid (#120): an unobtained pet's tile stays in the grid (the roster previews what's
@@ -2078,6 +2164,18 @@ button.tile:hover {
   color: var(--text-dim);
   font-size: 11px;
   margin: 2px 0 4px;
+}
+
+/* Bulk-buy qty field (#283): a compact per-vendor-row integer input sitting beside its Buy button. */
+.vendor-qty {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 4px;
+  width: 48px;
+  margin-right: 6px;
 }
 
 .craft-btn {
