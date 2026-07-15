@@ -2866,6 +2866,25 @@ describe("Fishing", () => {
     expect(engine.snapshot().bank.items.find((s) => s.itemId === "raw-fish")?.qty).toBe(1);
   });
 
+  it("renders an .action-progress bar under the active Fishing Spot's button, filling toward the next catch (#284)", () => {
+    const { engine, root, app } = mount(1);
+    root.querySelector<HTMLButtonElement>('[data-spot="pond"]')?.click();
+    app.render();
+
+    // Fresh start: fill width 0%.
+    const bar = root.querySelector<HTMLElement>('[data-spot="pond"] + .action-progress');
+    expect(bar).not.toBeNull();
+    const fill = bar?.querySelector<HTMLElement>(".fill");
+    expect(fill?.style.width).toBe("0%");
+
+    engine.tick(); // 1 of pond.catchTicks (3) elapsed
+    app.render();
+    const fillAfterOneTick = root
+      .querySelector('[data-spot="pond"] + .action-progress')
+      ?.querySelector<HTMLElement>(".fill");
+    expect(fillAfterOneTick?.style.width).toBe(`${(1 / 3) * 100}%`);
+  });
+
   it("World page still rebuilds on levelup: Fishing-Spot levelReq gates are level-driven, independent of dungeon-completed", () => {
     const engine = createEngine(
       fixtureContent,
@@ -3406,6 +3425,26 @@ describe("Smithing (#28)", () => {
 
     expect(root.querySelector("#monster-name")?.textContent).toBe("Training Dummy");
     expect((root.querySelector("#monster-bar") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("renders an .action-progress bar in the active recipe row, filling toward the next craft (#284)", () => {
+    const { engine, root, app } = mountWithBars(5);
+    root.querySelector<HTMLButtonElement>('[data-recipe="test-sword"]')?.click();
+    app.render();
+
+    const swordRow = root.querySelector('[data-recipe-row="test-sword"]');
+    const bar = swordRow?.querySelector<HTMLElement>(".action-progress .fill");
+    expect(bar?.style.width).toBe("0%"); // fresh start
+
+    // A non-active recipe row (test-charm, under-leveled) never gets a bar.
+    expect(root.querySelector('[data-recipe-row="test-charm"] .action-progress')).toBeNull();
+
+    engine.tick(); // 1 of test-sword.craftTicks (3) elapsed
+    app.render();
+    const barAfterOneTick = root
+      .querySelector('[data-recipe-row="test-sword"]')
+      ?.querySelector<HTMLElement>(".action-progress .fill");
+    expect(barAfterOneTick?.style.width).toBe(`${(1 / 3) * 100}%`);
   });
 
   it("logs a feed line and grants Smithing XP when a craft completes (item-crafted)", () => {
