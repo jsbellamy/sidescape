@@ -19,7 +19,7 @@ parchment `#f5ebcf`, cream `#e6d4aa`, sand `#c6ad79`, and glint `#fff8df`.
 | sewer   | `#3a4136 #59624b #7d8857 #a5c64c #263027 #c4d46b` | moss grey-green, sickly glow |
 | crypt   | `#241a33 #3a2f4a #5c4c74 #806b9c #d9d3bc #150f1c` | purple, bone white           |
 | town    | `#4a2e1a #70421f #9c6331 #c5823b #e2ad57 #2b1b12` | timber brown, forge orange   |
-| glacier | `#041437 #0ea0ae #0d9fce #0e8ae9 #2372f3 #85aaf9` | deep glacial blue, icy cyan  |
+| glacier | `#10263d #244763 #4c718d #7f9eb3 #b8cbd4 #e8f0ed` | muted polar blue, snow white |
 
 These drive backdrops, sprite accents, and scene props so each Theme is coherent.
 

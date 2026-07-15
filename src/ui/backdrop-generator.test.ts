@@ -13,9 +13,7 @@ import {
   writeBackdrops,
 } from "../../scripts/art/backdrops.mjs";
 
-/** A synthetic registry independent of the real (deliberately empty) production `backdrops`
- * registry (#263) — infra tests must never depend on a real theme so they can't accidentally
- * couple to Frostspire/#142's future registration. */
+/** Synthetic registry coverage keeps generator validation independent from scene-art tuning. */
 function makeSyntheticRegistry(): [
   {
     theme: string;
@@ -51,8 +49,10 @@ describe("backdrop generator infrastructure (#263)", () => {
     expect(REVIEW_PERIODS).toBe(3);
   });
 
-  it("the production registry is deliberately empty (Frostspire/#142 registers the first entry)", () => {
-    expect(backdrops).toEqual([]);
+  it("registers Glacier as the sole production backdrop with all three scene layers", () => {
+    expect(backdrops).toHaveLength(1);
+    expect(backdrops[0]?.theme).toBe("glacier");
+    expect(Object.keys(backdrops[0]?.layers ?? {}).sort()).toEqual(["mid", "near", "sky"]);
   });
 
   it("writes exact <theme>-<layer>.png filenames for sky/mid/near", async () => {
@@ -150,10 +150,23 @@ describe("backdrop generator infrastructure (#263)", () => {
     expect(await readFile(untouchedPath, "utf8")).toBe("keep-me");
   });
 
-  it("the empty production registry writes nothing, leaving an existing backdrop untouched", async () => {
+  it("production generation writes Glacier only and is byte-stable on a second run", async () => {
     const sentinelPath = join(destDir, "meadow-sky.png");
     await writeFile(sentinelPath, "sentinel-bytes");
-    await writeBackdrops(destDir); // default registry = production `backdrops`, which is []
+    await writeBackdrops(destDir);
     expect(await readFile(sentinelPath, "utf8")).toBe("sentinel-bytes");
+
+    const first = await Promise.all(
+      ["sky", "mid", "near"].map((layer) => readFile(join(destDir, `glacier-${layer}.png`))),
+    );
+    for (const bytes of first) {
+      const image = PNG.sync.read(bytes);
+      expect([image.width, image.height]).toEqual([BACKDROP_WIDTH, BACKDROP_HEIGHT]);
+    }
+    await writeBackdrops(destDir);
+    const second = await Promise.all(
+      ["sky", "mid", "near"].map((layer) => readFile(join(destDir, `glacier-${layer}.png`))),
+    );
+    expect(second.map((bytes, index) => bytes.equals(first[index]!))).toEqual([true, true, true]);
   });
 });

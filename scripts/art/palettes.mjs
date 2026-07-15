@@ -26,7 +26,7 @@ export const zonePalettes = {
   // Zone palettes are scoped per asset through buildNamedPalette's `zoneNames`, just as material
   // palettes are scoped by `materialRampNames`. New entries can only affect a source that declares
   // the zone, but declaration order remains load-bearing for equal-distance quantization ties.
-  glacier: ["#041437", "#0ea0ae", "#0d9fce", "#0e8ae9", "#2372f3", "#85aaf9"],
+  glacier: ["#10263d", "#244763", "#4c718d", "#7f9eb3", "#b8cbd4", "#e8f0ed"],
 };
 
 /** Material ramps used by close-up UI icons. Zone palettes establish atmosphere; these ramps

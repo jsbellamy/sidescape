@@ -49,8 +49,7 @@ await writeSpriteContactSheets(resolve("src/assets/sprites"), resolve("docs"), s
 // them in the diff. Must run after writeIcons above so the sheets reflect the current icon set.
 await writeContactSheets(resolve("src/assets/icons"), resolve("docs"));
 
-// Reusable deterministic backdrop generator infrastructure (#263), parallel to the icon/sprite
-// writers above. The production registry is deliberately empty until the Frostspire slice (#142)
-// registers its first definition, so this call writes nothing and leaves every hand-assembled
-// backdrop under src/assets/backdrops/ byte-identical.
+// Deterministic production backdrop registry (#293), parallel to the icon/sprite writers above.
+// Glacier is the first registered theme; hand-assembled backdrop themes absent from its registry
+// remain byte-identical.
 await writeBackdrops(resolve("src/assets/backdrops"));

@@ -1,4 +1,5 @@
-import { writePng } from "./write-png.mjs";
+import { hex, writePng } from "./write-png.mjs";
+import { P, zonePalettes } from "./palettes.mjs";
 
 /** Native pixel dimensions of one shipped backdrop layer (#263). */
 export const BACKDROP_WIDTH = 160;
@@ -11,11 +12,8 @@ export const REVIEW_PERIODS = 3;
 const LAYER_NAMES = ["sky", "mid", "near"];
 
 /**
- * Production backdrop registry. Deliberately EMPTY: this issue (#263) adds the reusable
- * generator infrastructure only, parallel to `icons.mjs`/`sprites.mjs`, without migrating any of
- * the five currently-shipped, hand-assembled themes (meadow/forest/sewer/crypt/town) or the
- * hand-assembled `glacier` set (#254). The Frostspire slice (#142) is the named follow-up that
- * registers the first real definition (`glacier`) here and retires its hand-assembled bytes.
+ * Production backdrop registry. Glacier is the first generated production scene (#293); the other
+ * five existing themes intentionally remain untouched hand-assembled files.
  *
  * Each entry has the shape:
  *   {
@@ -27,7 +25,68 @@ const LAYER_NAMES = ["sky", "mid", "near"];
  *     },
  *   }
  */
-export const backdrops = [];
+const [deep, shadow, base, light, snow, glint] = zonePalettes.glacier.map(hex);
+const ink = hex(P.ink);
+const outline = hex(P.outline);
+
+const between = (value, low, high) => value >= low && value <= high;
+const stripe = (localX, phase, width) => (localX - phase + BACKDROP_WIDTH) % BACKDROP_WIDTH < width;
+
+/** Flat, clustered polar atmosphere: thin high clouds and a low snow-haze band. */
+function paintGlacierSky({ localX, y }) {
+  if (stripe(localX, 16, 31) && between(y, 16, 18)) return snow;
+  if (stripe(localX, 75, 23) && between(y, 27, 29)) return light;
+  if (stripe(localX, 118, 27) && between(y, 39, 41)) return snow;
+  if (stripe(localX, 43, 16) && between(y, 63, 65)) return light;
+  if (between(y, 84, 87) && (localX + y * 3) % 11 < 3) return snow;
+  if (y < 24) return deep;
+  if (y < 48) return shadow;
+  if (y < 76) return base;
+  if (y < 96) return light;
+  if (y < 106) return snow;
+  return y < 116 ? snow : glint;
+}
+
+/** Distant glacier faces, including a broken central ice ridge. */
+function paintGlacierMid({ localX, y }) {
+  const far = 83 - Math.max(0, 48 - Math.abs(localX - 26)) / 3;
+  const east = 88 - Math.max(0, 43 - Math.abs(localX - 132)) / 4;
+  const brokenRidge = 58 + Math.abs(localX - 79) / 2.6 + ((localX * 7) % 19 < 5 ? 4 : 0);
+  const summit = Math.min(far, east, brokenRidge);
+  if (y < summit) return [0, 0, 0, 0];
+  if (y < summit + 5) return shadow;
+  if (between(localX, 66, 94) && y < brokenRidge + 16) {
+    if (between(localX, 77, 84) && y > brokenRidge + 8) return deep;
+    return (localX + y) % 7 < 3 ? snow : light;
+  }
+  if (y < far + 12 || y < east + 12) return base;
+  return shadow;
+}
+
+/** Dark shelves and ice teeth leave the combat centre open above the unchanged ground line. */
+function paintGlacierNear({ localX, y }) {
+  if (y < 94) return [0, 0, 0, 0];
+  const leftShelf = localX < 39 && y >= 101 - localX / 3;
+  const rightShelf = localX > 119 && y >= 101 - (159 - localX) / 3;
+  const tooth =
+    (localX % 40 < 7 && y >= 96 + (localX % 40)) ||
+    ((localX + 19) % 53 < 6 && y >= 102 + ((localX + 19) % 53));
+  if (leftShelf || rightShelf) {
+    if (y < 106 && (localX + y) % 6 < 3) return light;
+    return y < 112 ? outline : ink;
+  }
+  if (tooth && y < 112) return shadow;
+  if (y >= 112) return outline;
+  return [0, 0, 0, 0];
+}
+
+/** @type {{ theme: string; layers: Record<string, (px: { localX: number; y: number }) => number[]> }[]} */
+export const backdrops = [
+  {
+    theme: "glacier",
+    layers: { sky: paintGlacierSky, mid: paintGlacierMid, near: paintGlacierNear },
+  },
+];
 
 /**
  * Renders a `REVIEW_PERIODS`-wide-by-`BACKDROP_HEIGHT`-tall working canvas (480x120 at the pinned
@@ -113,8 +172,8 @@ export function assertHorizontalPeriod(image, period = BACKDROP_WIDTH) {
  * from `layers`, an extra/unknown layer name, a non-function painter, and malformed RGBA output
  * (surfaced by `renderPeriodicLayer` itself) all throw before any file is written for that
  * definition. A theme absent from `registry` is never read, written, or deleted — with the
- * default empty production `backdrops` registry this function writes nothing at all, so `npm run
- * art` cannot change a single existing backdrop byte.
+ * registry this function writes only its declared theme, so untouched themes retain their
+ * hand-assembled bytes.
  */
 export async function writeBackdrops(destDir, { registry = backdrops } = {}) {
   const seenThemes = new Set();
