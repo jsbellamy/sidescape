@@ -83,10 +83,12 @@ behaviour with DOM integration tests.
   output is a draft that still needs the native-grid cleanup and lints; see `docs/art-style.md`).
 - **New combat sprites.** Same source-driven shape, own prompt kit (`docs/sprite-gen.md`): generate
   the character at the canvas's logical grid, `npm run art:ingest-sprite -- --name <sprite>` to
-  reconstruct it into a committed compact source under `scripts/art/sprite-sources/`, and register it
-  in `scripts/art/sprites.mjs`. **Never hand-redraw a generation into the canvas by eye, and never
-  let a sprite be downsampled** — a 2:1 downsample deletes the 1px outline and the figure ships
-  unreadable. Pin the logical grid in the prompt instead.
+  recover it into a committed compact source under `scripts/art/sprite-sources/`, and register it
+  in `scripts/art/sprites.mjs`. Keep the raw, git-ignored inbox PNG untouched: do not resize,
+  re-export, downsample, or hand-edit it. Ingest recovers its logical cells and deterministically
+  normalizes their source-local palette; high raw RGB variety is expected, not a reason to reject
+  the raw. Stage 2 still projects to named ramps, and its 1x preview must approve the silhouette,
+  subject, defining features, and facing.
   Canonical examples: `skill-attack` and `skill-strength` (source-driven), `skill-fishing`
   (mask-first). Use `skill-fishing` and `tab-bank` for irregular contours, selective outline weight,
   clustered 8–12-color material ramps, and volume-defining highlights. Always judge
