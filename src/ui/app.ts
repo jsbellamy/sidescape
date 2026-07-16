@@ -1,8 +1,6 @@
 import type { Engine } from "../core/engine";
-import { SKILL_NAMES } from "../core/types";
-import type { SkillName, SkillSnapshot, Snapshot } from "../core/types";
+import type { SkillName, Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
-import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import {
   monsterSprite,
   monsterSpriteSize,
@@ -19,11 +17,13 @@ import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { createWorldPageUi } from "./world-page";
 import type { WorldPageUi } from "./world-page";
-import { itemIcon, skillIcon, tabIcon } from "./icons";
+import { skillIcon, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
 import type { WorkspaceChrome } from "./workspace-chrome";
 import { createCharacterHubUi } from "./character-hub";
 import type { CharacterHubUi } from "./character-hub";
+import { createSkillsPageUi } from "./skills-page";
+import type { SkillsPageUi } from "./skills-page";
 import type { UiScale } from "./window-geometry";
 
 /** Damage-splat fade duration (#4); mirrors styles.css's `splat-fade` keyframes so the DOM node is
@@ -60,15 +60,6 @@ const PRODUCTION_SKILL_LABELS: Record<ProductionSkill, string> = {
  * Zone's capacity never changes, so the Activity page's header can safely know this literal
  * without a new Snapshot field or Engine/data change (#209 is a UI-only issue). */
 const LOOT_ZONE_DISPLAY_CAPACITY = 10;
-
-/** Fraction (0..1) of the way a Skill's XP is from its current level's threshold to the next
- * level's threshold. Skills at MAX_LEVEL have no next threshold, so the bar reads full. */
-function skillProgress(skill: SkillSnapshot): number {
-  if (skill.level >= MAX_LEVEL) return 1;
-  const floor = xpForLevel(skill.level);
-  const ceil = xpForLevel(skill.level + 1);
-  return (skill.xp - floor) / (ceil - floor);
-}
 
 /** The two Management Row cards (#206: replaces the three-card World/Character/Resources
  * workspace) — a fixed Character hub plus one shared Management card whose body swaps between
@@ -113,8 +104,6 @@ export function mountApp(
   const workspace: WorkspaceState = { characterOpen: false, management: null };
   let selectedProductionSkill: ProductionSkill = "smithing";
   const items = createItemPresentation(content);
-  // Whether the Skills destination's Pets summary popover is open (#222).
-  let openPetsPopover = false;
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -128,7 +117,7 @@ export function mountApp(
   let lastAreaId: string | null = null;
 
   /** Shows/hides the two Management Row cards and the Management card's four destination page
-   * bodies, and mirrors the Bank|Vendor toggle and Settings/Pets popovers onto the DOM (#206). DOM
+   * bodies, and mirrors workspace visibility onto the DOM (#206). DOM
    * order is always Character -> Management, stable regardless of which is open — only `hidden`
    * changes. Does not itself notify WorkspaceChrome — callers that change `workspace` do that via
    * `syncWorkspace` below. */
@@ -148,11 +137,6 @@ export function mountApp(
       .forEach((btn) => {
         btn.classList.toggle("active", btn.dataset["destination"] === workspace.management);
       });
-
-    el<HTMLElement>("#pets-popover").hidden = !openPetsPopover;
-    root
-      .querySelector<HTMLButtonElement>('[data-nav="pets"]')
-      ?.setAttribute("aria-expanded", String(openPetsPopover));
 
     el<HTMLElement>("#menu-toggle").classList.toggle(
       "active",
@@ -428,28 +412,6 @@ export function mountApp(
       : "Casting: No rune loaded";
   }
 
-  /** Renders the Skills page's Pets summary (#206: "compact owned/total summary whose popover
-   * reveals the roster"; moved off the Character card onto the Skills destination by #222, same
-   * ids/`data-nav="pets"` hook) — a compact `<owned>/<total>` count always visible, plus the full
-   * collection grid inside `#pets-popover` (one tile per `content.pets` entry, in Content order —
-   * never filtered down, so the roster itself previews what's collectible). An owned pet's tile
-   * renders normally; an unobtained one is dimmed via `.tile-unowned` (CSS greyscale/opacity)
-   * rather than hidden — "owned lit, unobtained greyed" is the issue's own instruction (#120). No
-   * qty badge (`tileMarkup`'s corner badge) since pets aren't stackable Items, just
-   * `iconMarkup`'s bare `<img>`, mirroring a Character Gear Slot tile. */
-  function renderPets(ownedPets: string[]): void {
-    const owned = new Set(ownedPets);
-    el("#pets-summary-count").textContent = `${owned.size}/${content.pets.length}`;
-    el("#pets-grid").innerHTML = content.pets
-      .map((pet) => {
-        const isOwned = owned.has(pet.id);
-        return `<div class="tile${isOwned ? "" : " tile-unowned"}" data-pet="${pet.id}" title="${pet.name}">
-                  <img class="icon pixel" src="${itemIcon(pet.icon)}" alt="${pet.name}" />
-                </div>`;
-      })
-      .join("");
-  }
-
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
    * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
    * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
@@ -515,55 +477,6 @@ export function mountApp(
     }
   }
 
-  /** Tooltip text for one Skill cell in the icon grid (#135): capitalized name, level, floored xp,
-   * and percent-to-next-level — MAX once a Skill hits `MAX_LEVEL`, since there is no next
-   * threshold (mirrors `skillProgress`'s own MAX_LEVEL special case). */
-  function skillTooltip(skill: SkillName, s: SkillSnapshot): string {
-    const label = skill[0]?.toUpperCase() + skill.slice(1);
-    const xp = Math.floor(s.xp);
-    if (s.level >= MAX_LEVEL) return `${label}: level ${s.level} · ${xp} xp · MAX`;
-    const pct = Math.floor(skillProgress(s) * 100);
-    return `${label}: level ${s.level} · ${xp} xp · ${pct}% to ${s.level + 1}`;
-  }
-
-  /** XP-remaining-to-next-level label for one Skill row (#222) — floored to a whole number, "MAX"
-   * once a Skill hits `MAX_LEVEL` (mirrors `skillTooltip`'s own MAX_LEVEL special case, since
-   * there's no next threshold to count down to). */
-  function xpToNextLabel(s: SkillSnapshot): string {
-    if (s.level >= MAX_LEVEL) return "MAX";
-    const remaining = Math.max(0, Math.ceil(xpForLevel(s.level + 1) - s.xp));
-    return `${remaining} xp to next`;
-  }
-
-  /** Renders the Skills destination's own page (#222, replacing the Character card's cramped
-   * 12-tile `#xp-row` icon grid): one row per Skill, in `SKILL_NAMES` order (#36) — never an
-   * inline literal, so a future Skill addition needs no change here — each with its icon at the
-   * shared `.tile .icon` chassis's 34px (issue #168's invariant, adopted rather than re-derived),
-   * name, level, XP bar, and XP-to-next, plus a trailing Total footer row (sum of all Skill
-   * levels). Kept `.skill`/`.skill-total`/`.skill-level`/`.skill-icon` class names from the old
-   * `#xp-row` cells so the existing per-Skill styling/selectors carry over unchanged. */
-  function renderSkillsPage(skills: Snapshot["player"]["skills"]): void {
-    const rows = SKILL_NAMES.map((skill) => {
-      const s = skills[skill];
-      const pct = Math.floor(skillProgress(s) * 100);
-      const label = skill[0]?.toUpperCase() + skill.slice(1);
-      return `<li class="skill" data-skill="${skill}" title="${skillTooltip(skill, s)}">
-             <img class="skill-icon pixel" src="${skillIcon(skill)}" alt="" />
-             <div class="skill-info">
-               <p class="skill-name">${label} <span class="skill-level">${s.level}</span></p>
-               <div class="skill-bar"><div class="skill-bar-fill" style="width: ${pct}%"></div></div>
-               <p class="skill-xp-next">${xpToNextLabel(s)}</p>
-             </div>
-           </li>`;
-    });
-    const total = SKILL_NAMES.reduce((sum, skill) => sum + skills[skill].level, 0);
-    rows.push(`<li class="skill skill-total" title="Total level">
-             <span class="skill-total-label">Total</span>
-             <span class="skill-level">${total}</span>
-           </li>`);
-    el("#skills-list").innerHTML = rows.join("");
-  }
-
   /** Renders the compact widget's live Loot Zone strip (#220): one chip per `snap.lootZone` stack
    * below `#scene`, filling the height wave 1/6 (#219) reclaimed by deleting `#titlebar`. It is
    * the sole Loot Zone interface (#243) — the Activity destination carries no Loot Zone markup of
@@ -625,9 +538,8 @@ export function mountApp(
     worldPageUi.render(snap);
     loadoutSlotUi.render(player, bank.items);
     renderCastingReadout(player.spell);
-    renderSkillsPage(player.skills);
+    skillsPageUi.render(player);
     characterHubUi.render(player, bank.items);
-    renderPets(player.ownedPets);
     renderLootStrip(snap.lootZone);
     bankUi.render(snap);
     renderWorkshopPage();
@@ -680,25 +592,7 @@ export function mountApp(
       </div>
       <div id="world-page-host" data-management-page="world" class="world-page-body" hidden></div>
       <div id="bank-destination-host"></div>
-      <!-- The Skills destination (#222): decrowds the Character card by giving the 11
-           SKILL_NAMES their own roomy one-row-per-Skill list plus the pets collection strip,
-           both formerly crammed onto the Character card. Own fixed shell mirroring
-           World/Bank/Workshop/Activity above — only the Skill list scrolls, the pets strip stays
-           put. See styles.css's .skills-page-body. -->
-      <div data-management-page="skills" class="skills-page-body" hidden>
-        <ul id="skills-list" class="card-scroll"></ul>
-        <div class="card-fixed">
-          <div id="pets-summary" class="pets-summary">
-            <button data-nav="pets" title="Pets" aria-expanded="false">
-              <span aria-hidden="true">🐾</span>
-              <span id="pets-summary-count"></span>
-            </button>
-            <div id="pets-popover" class="pets-popover" hidden>
-              <div id="pets-grid" class="tile-grid"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div id="skills-page-host" data-management-page="skills" class="skills-page-body" hidden></div>
     </section>
     </div>
     <section id="compact-widget" data-tauri-drag-region="deep">
@@ -768,9 +662,6 @@ export function mountApp(
     }),
   });
 
-  // The deep, mounted Bank module (#327): owns the Character tray and Bank/Vendor destination —
-  // see bank-ui.ts's own doc comment. Constructed after the Character hub has painted
-  // `#character-bank-tray` / `#character-bank-detail` and after `#bank-destination-host` exists.
   const bankUi: BankUi = createBankUi({
     trayHost: el<HTMLElement>("#card-character"),
     destinationHost: el<HTMLElement>("#bank-destination-host"),
@@ -809,6 +700,13 @@ export function mountApp(
     content,
     commands: engine,
     onChanged: () => render(),
+  });
+
+  // The deep, mounted Skills Management destination (#328): owns skill rows, XP/progress, total
+  // level, and Pets summary/popover/roster inside `#skills-page-host` — see skills-page.ts.
+  const skillsPageUi: SkillsPageUi = createSkillsPageUi({
+    host: el<HTMLElement>("#skills-page-host"),
+    content,
   });
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
@@ -920,20 +818,11 @@ export function mountApp(
   // closing both cards — see `onMenuToggle`'s own doc comment above.
   el("#menu-toggle").addEventListener("click", onMenuToggle);
 
-  // Management card's Back control (#206) and Skills page's Pets popover toggle (#222: pets moved
-  // off the Character card onto the Skills destination, so its `data-nav="pets"` hook now lives
-  // inside `#card-management` — same toggle shape as the Character hub's own Settings popover
-  // below).
+  // Management card's Back control (#206).
   el("#card-management").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     if (target.closest("[data-management-back]")) {
       backToCharacter();
-      return;
-    }
-    const navBtn = target.closest<HTMLElement>("[data-nav]");
-    if (navBtn?.dataset["nav"] === "pets") {
-      openPetsPopover = !openPetsPopover;
-      renderWorkspace();
     }
   });
 
@@ -1029,6 +918,7 @@ export function mountApp(
       characterHubUi.dispose();
       worldPageUi.dispose();
       bankUi.dispose();
+      skillsPageUi.dispose();
     },
   };
 }

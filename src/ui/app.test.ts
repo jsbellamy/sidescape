@@ -185,7 +185,7 @@ describe("mountApp", () => {
     expect(pondBtn?.classList.contains("active")).toBe(true);
   });
 
-  it("dispose() is idempotent and prevents World, Character, and Bank host clicks from dispatching Engine commands", () => {
+  it("dispose() is idempotent and prevents World, Character, Bank, and Skills host clicks from dispatching Engine commands", () => {
     const { engine, root, app } = mount(1);
     const monsterBefore = engine.snapshot().monster?.id ?? null;
     const combatStyleBefore = engine.snapshot().player.combatStyle;
@@ -197,10 +197,12 @@ describe("mountApp", () => {
     root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
     root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
     selectBankTile(root, "bronze-sword");
+    root.querySelector<HTMLButtonElement>('#skills-page-host [data-nav="pets"]')?.click();
 
     expect(engine.snapshot().monster?.id ?? null).toBe(monsterBefore);
     expect(engine.snapshot().player.combatStyle).toBe(combatStyleBefore);
     expect(engine.snapshot().player.gold).toBe(goldBefore);
+    expect(root.querySelector<HTMLElement>("#pets-popover")?.hidden).toBe(true);
   });
 
   it("passes the latest Engine Snapshot to the mounted Bank UI on render (#327)", () => {
@@ -208,6 +210,21 @@ describe("mountApp", () => {
     engine.snapshot();
     app.render();
     expect(root.querySelector("#bank-header")?.textContent).toMatch(/^Bank /);
+  });
+
+  it("passes the latest Engine Snapshot player slice to the mounted Skills page on render (#328)", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { skills: { attack: { level: 5, xp: xpForLevel(5) } } },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    const level = root.querySelector('#skills-page-host [data-skill="attack"] .skill-level');
+    expect(level?.textContent).toBe("5");
   });
 
   it("selecting a Monster renders a non-numeric HP bar", () => {
@@ -436,155 +453,6 @@ describe("Combat Style selector — Engine XP routing", () => {
   });
 });
 
-describe("XP progress bars", () => {
-  it("shows a fill bar at 0% right at a level threshold", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
-    expect(fill?.style.width).toBe("0%");
-  });
-
-  it("shows a fill bar approaching 100% just below the next level threshold", () => {
-    const nextFloor = xpForLevel(11);
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          skills: { hitpoints: { level: 10, xp: nextFloor - 1 } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const fill = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill');
-    expect(fill?.style.width).toBe("99%");
-  });
-
-  it("bar fill changes after XP-granting Ticks", () => {
-    const { engine, root, app } = mount(7);
-    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
-
-    const before = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill')
-      ?.style.width;
-
-    for (let i = 0; i < 400; i++) engine.tick();
-    app.render();
-
-    const after = root.querySelector<HTMLElement>('[data-skill="hitpoints"] .skill-bar-fill')?.style
-      .width;
-    expect(after).not.toBe(before);
-  });
-
-  it("shows capitalized name, level, exact XP, and percent-to-next in a tooltip on the Skill cell (#135)", () => {
-    // Boundary xp (exactly at level 10's floor) is an independent worked example for 0% — same
-    // pattern the bar-fill tests above use — so the expected tooltip string needs no re-derivation
-    // of skillProgress's own math.
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          skills: { attack: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const attackSkill = root.querySelector<HTMLElement>('[data-skill="attack"]');
-    expect(attackSkill?.title).toBe(`Attack: level 10 · ${xpForLevel(10)} xp · 0% to 11`);
-  });
-});
-
-describe("Skills page (#222: replaces the Character card's abbreviation-chip xp-row)", () => {
-  it("renders 12 rows: all 11 SKILL_NAMES in order via data-skill, then the Total row last", () => {
-    const { root } = mount(1);
-    const rows = [...root.querySelectorAll<HTMLElement>("#skills-list .skill")];
-    expect(rows).toHaveLength(12);
-    expect(rows.map((c) => c.dataset["skill"])).toEqual([...SKILL_NAMES, undefined]);
-    expect(rows[11]?.classList.contains("skill-total")).toBe(true);
-  });
-
-  it("gives every Skill row's icon a non-empty src, sized by the shared 34px .skill-icon chassis (#168)", () => {
-    const { root } = mount(1);
-    const imgs = [
-      ...root.querySelectorAll<HTMLImageElement>("#skills-list .skill[data-skill] img"),
-    ];
-    expect(imgs).toHaveLength(11);
-    for (const img of imgs) {
-      expect(img.getAttribute("src")).toBeTruthy();
-      expect(img.classList.contains("skill-icon")).toBe(true); // styles.css fixes this class at 34px
-    }
-  });
-
-  it("shows each row's Skill name alongside its level and XP-to-next", () => {
-    const { root } = mount(1);
-    const attackRow = root.querySelector<HTMLElement>('#skills-list [data-skill="attack"]');
-    expect(attackRow?.querySelector(".skill-name")?.textContent).toMatch(/^Attack/);
-    expect(attackRow?.querySelector(".skill-level")?.textContent).toBe("1");
-    expect(attackRow?.querySelector(".skill-xp-next")?.textContent).toMatch(/to next/i);
-  });
-
-  it("shows the Total row as the sum of all 11 Skill levels, and updates it after a level-up Tick", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          skills: { attack: { level: 1, xp: xpForLevel(2) - 1 } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const before = engine.snapshot().player.skills;
-    const expectedBefore = SKILL_NAMES.reduce((sum, s) => sum + before[s].level, 0);
-    const totalCell = root.querySelector<HTMLElement>("#skills-list .skill-total .skill-level");
-    expect(totalCell?.textContent).toBe(String(expectedBefore));
-    // The same Total also drives the Character card's one-line summary (#222).
-    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedBefore));
-
-    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
-    for (let i = 0; i < 20; i++) engine.tick();
-    app.render();
-
-    const after = engine.snapshot().player.skills;
-    const expectedAfter = SKILL_NAMES.reduce((sum, s) => sum + after[s].level, 0);
-    expect(after.attack.level).toBeGreaterThan(before.attack.level); // sanity: a level-up did occur
-    expect(
-      root.querySelector<HTMLElement>("#skills-list .skill-total .skill-level")?.textContent,
-    ).toBe(String(expectedAfter));
-    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedAfter));
-    expect(expectedAfter).toBeGreaterThan(expectedBefore);
-  });
-
-  it("#xp-row no longer exists on the Character card", () => {
-    const { root } = mount(1);
-    expect(root.querySelector("#xp-row")).toBeNull();
-  });
-});
-
 describe("Character card levels summary (#222)", () => {
   it("is a button that shows the live Combat level and Total level, and dispatches the skills destination", async () => {
     const { root } = mount(1);
@@ -601,6 +469,41 @@ describe("Character card levels summary (#222)", () => {
       ),
     );
     expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false);
+  });
+
+  it("updates the Character summary Total level after a level-up Tick", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 10,
+          skills: { attack: { level: 1, xp: xpForLevel(2) - 1 } },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    const before = engine.snapshot().player.skills;
+    const expectedBefore = SKILL_NAMES.reduce((sum, s) => sum + before[s].level, 0);
+    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedBefore));
+
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    for (let i = 0; i < 20; i++) engine.tick();
+    app.render();
+
+    const after = engine.snapshot().player.skills;
+    const expectedAfter = SKILL_NAMES.reduce((sum, s) => sum + after[s].level, 0);
+    expect(after.attack.level).toBeGreaterThan(before.attack.level);
+    expect(root.querySelector("#summary-total-level")?.textContent).toBe(String(expectedAfter));
+    expect(expectedAfter).toBeGreaterThan(expectedBefore);
+  });
+
+  it("#xp-row no longer exists on the Character card", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#xp-row")).toBeNull();
   });
 });
 
@@ -1459,9 +1362,9 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
     // the always-visible card body into the Settings popover, not deleted.
     expect(root.querySelector(".card-fixed #autoeat-row")).toBeNull();
     expect(root.querySelector(".card-fixed #autosell-duplicates-row")).toBeNull();
-    // #222: Pets moved to the Skills page — still present in the DOM (see the Skills page describe
-    // block below), just no longer inside `#card-character`.
+    // #222: Pets live on the Skills page host, not inside `#card-character`.
     expect(root.querySelector("#card-character #pets-summary")).toBeNull();
+    expect(root.querySelector("#skills-page-host #pets-summary")).not.toBeNull();
     expect(root.querySelector("#character-bank-tray")).not.toBeNull();
     expect(root.querySelector("#expand-bank-btn")).not.toBeNull();
     expect(root.querySelector("img.player-portrait, .portrait, [data-portrait]")).toBeNull();
@@ -1574,18 +1477,7 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
   });
 });
 
-describe("Character hub layout (#206) — Pets summary, Settings popover, and Bank tray remainder", () => {
-  it("the Pets summary shows a compact owned/total count, with the full roster grid behind its own popover", () => {
-    const { root } = mount(1);
-    const count = root.querySelector<HTMLElement>("#pets-summary-count");
-    expect(count?.textContent).toMatch(/^\d+\/\d+$/);
-    expect(root.querySelector<HTMLElement>("#pets-popover")?.hidden).toBe(true);
-
-    root.querySelector<HTMLButtonElement>('[data-nav="pets"]')?.click();
-    expect(root.querySelector<HTMLElement>("#pets-popover")?.hidden).toBe(false);
-    expect(root.querySelector("#pets-grid [data-pet]")).not.toBeNull();
-  });
-
+describe("Character hub layout (#206) — Settings popover and Bank tray remainder", () => {
   it("the Settings popover is closed by default and toggles Mute/Export/Import visibility without changing card height markup", () => {
     const { root } = mount(1);
     expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
