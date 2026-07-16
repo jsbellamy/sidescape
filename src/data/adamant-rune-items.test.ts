@@ -24,6 +24,7 @@ describe("adamant/rune Bars and Arrows (#252)", () => {
       id: "adamant-arrow",
       ammoType: "arrow",
       rangedStr: 14,
+      levelReq: { ranged: 30 },
       value: 8,
     });
     expect(runeArrow).toMatchObject({
@@ -31,8 +32,23 @@ describe("adamant/rune Bars and Arrows (#252)", () => {
       id: "rune-arrow",
       ammoType: "arrow",
       rangedStr: 18,
+      levelReq: { ranged: 40 },
       value: 16,
     });
+  });
+
+  it("all five arrow tiers carry Ranged levelReq 1/10/20/30/40 (#363)", () => {
+    const expected: Record<string, number> = {
+      "bronze-arrow": 1,
+      "steel-arrow": 10,
+      "mithril-arrow": 20,
+      "adamant-arrow": 30,
+      "rune-arrow": 40,
+    };
+    for (const [id, need] of Object.entries(expected)) {
+      const arrow = content.items.find((i) => i.id === id);
+      expect(arrow).toMatchObject({ kind: "ammo", ammoType: "arrow", levelReq: { ranged: need } });
+    }
   });
 
   it("both new arrows are sold by the vendor, mirroring the existing arrow entries' pricing shape", () => {

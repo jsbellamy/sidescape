@@ -1219,6 +1219,167 @@ describe("Equipment and gates", () => {
     );
   });
 
+  describe("levelReq gating (#363)", () => {
+    function skillsAt(levels: Record<string, number>) {
+      const base = {
+        attack: { level: 1, xp: xpForLevel(1) },
+        strength: { level: 1, xp: xpForLevel(1) },
+        defence: { level: 1, xp: xpForLevel(1) },
+        hitpoints: { level: 1, xp: xpForLevel(1) },
+        fishing: { level: 1, xp: xpForLevel(1) },
+        smithing: { level: 1, xp: xpForLevel(1) },
+        ranged: { level: 1, xp: xpForLevel(1) },
+        magic: { level: 1, xp: xpForLevel(1) },
+        cooking: { level: 1, xp: xpForLevel(1) },
+        crafting: { level: 1, xp: xpForLevel(1) },
+        herblore: { level: 1, xp: xpForLevel(1) },
+      };
+      for (const [skill, lvl] of Object.entries(levels)) {
+        (base as Record<string, { level: number; xp: number }>)[skill] = {
+          level: lvl,
+          xp: xpForLevel(lvl),
+        };
+      }
+      return base;
+    }
+
+    it("equip throws when Attack is below levelReq", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "high-sword", qty: 1 }] } }),
+      );
+      expect(() => engine.equip("high-sword")).toThrow(/attack level too low: need 40/);
+    });
+
+    it("a rejected equip mutates nothing and emits no equipped event", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "high-sword", qty: 1 }] } }),
+      );
+      const before = engine.snapshot();
+      const equipped: string[] = [];
+      engine.on("equipped", (e) => equipped.push(e.itemId));
+      expect(() => engine.equip("high-sword")).toThrow();
+      expect(engine.snapshot()).toEqual(before);
+      expect(equipped).toEqual([]);
+    });
+
+    it("equip succeeds at exactly the required level (boundary)", () => {
+      const at39 = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "high-sword", qty: 1 }] },
+          player: { skills: skillsAt({ attack: 39 }) },
+        }),
+      );
+      expect(() => at39.equip("high-sword")).toThrow(/attack level too low: need 40/);
+
+      const at40 = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "high-sword", qty: 1 }] },
+          player: { skills: skillsAt({ attack: 40 }) },
+        }),
+      );
+      at40.equip("high-sword");
+      expect(at40.snapshot().player.equipment.weapon).toBe("high-sword");
+    });
+
+    it("multi-skill levelReq throws when either skill is unmet", () => {
+      const attackOnly = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "dual-req-ring", qty: 1 }] },
+          player: { skills: skillsAt({ attack: 10, defence: 9 }) },
+        }),
+      );
+      expect(() => attackOnly.equip("dual-req-ring")).toThrow(/defence level too low: need 10/);
+
+      const defenceOnly = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "dual-req-ring", qty: 1 }] },
+          player: { skills: skillsAt({ attack: 9, defence: 10 }) },
+        }),
+      );
+      expect(() => defenceOnly.equip("dual-req-ring")).toThrow(/attack level too low: need 10/);
+
+      const both = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "dual-req-ring", qty: 1 }] },
+          player: { skills: skillsAt({ attack: 10, defence: 10 }) },
+        }),
+      );
+      both.equip("dual-req-ring");
+      expect(both.snapshot().player.equipment.ring).toBe("dual-req-ring");
+    });
+
+    it("items with no levelReq equip exactly as today", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+      );
+      engine.equip("bronze-sword");
+      expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+    });
+
+    it("grandfathering: under-levelled equipped gear loads and stays worn", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            skills: skillsAt({ attack: 3 }),
+            equipment: {
+              weapon: "high-sword",
+              shield: null,
+              head: null,
+              body: null,
+              legs: null,
+              amulet: null,
+              ring: null,
+            },
+          },
+        }),
+      );
+      expect(engine.snapshot().player.equipment.weapon).toBe("high-sword");
+    });
+
+    it("one-way door: after swapping away grandfathered gear, re-equipping throws", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
+          player: {
+            skills: skillsAt({ attack: 3 }),
+            equipment: {
+              weapon: "high-sword",
+              shield: null,
+              head: null,
+              body: null,
+              legs: null,
+              amulet: null,
+              ring: null,
+            },
+          },
+        }),
+      );
+      engine.equip("bronze-sword");
+      expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+      expect(() => engine.equip("high-sword")).toThrow(/attack level too low: need 40/);
+    });
+  });
+
   it("combat leveling alone never unlocks a gated Area, even far past the old combat-level requirement", () => {
     const veteran = createEngine(
       fixtureContent,
@@ -6676,7 +6837,12 @@ describe("Ammo + Vendor (#119)", () => {
         seededRng(1),
         makeSnapshot({
           bank: { items: [{ itemId: "iron-arrow", qty: 10 }] },
-          player: { quiver: { itemId: "arrow", qty: 7 } },
+          player: {
+            quiver: { itemId: "arrow", qty: 7 },
+            skills: {
+              ranged: { level: 10, xp: xpForLevel(10) },
+            },
+          },
         }),
       );
       engine.assignLoadoutSlot("quiver", "iron-arrow");
@@ -6696,11 +6862,42 @@ describe("Ammo + Vendor (#119)", () => {
             ],
             capacity: 1,
           },
-          player: { quiver: { itemId: "arrow", qty: 7 } },
+          player: {
+            quiver: { itemId: "arrow", qty: 7 },
+            skills: {
+              ranged: { level: 10, xp: xpForLevel(10) },
+            },
+          },
         }),
       );
       expect(() => engine.assignLoadoutSlot("quiver", "iron-arrow")).toThrow(/bank is full/i);
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 7 });
+    });
+
+    it("throws when Ranged is below the arrow's levelReq and mutates nothing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "gated-arrow", qty: 5 }] } }),
+      );
+      const before = engine.snapshot();
+      expect(() => engine.assignLoadoutSlot("quiver", "gated-arrow")).toThrow(
+        /ranged level too low: need 10/,
+      );
+      expect(engine.snapshot()).toEqual(before);
+    });
+
+    it("assignLoadoutSlot quiver succeeds at exactly the required Ranged level", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "gated-arrow", qty: 5 }] },
+          player: { skills: { ranged: { level: 10, xp: xpForLevel(10) } } },
+        }),
+      );
+      engine.assignLoadoutSlot("quiver", "gated-arrow");
+      expect(engine.snapshot().player.quiver).toEqual({ itemId: "gated-arrow", qty: 5 });
     });
   });
 

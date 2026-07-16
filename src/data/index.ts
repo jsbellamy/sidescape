@@ -140,6 +140,7 @@ export const content: Content = composeContent(
         strBonus: 34,
         def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
         attackSpeed: 3,
+        levelReq: { attack: 40 },
         value: 1000,
       },
       // Ranged and Magic starter weapons (#7): the first two Equipment in Content whose attackType
@@ -415,6 +416,7 @@ export const content: Content = composeContent(
         icon: "bronze-arrow",
         ammoType: "arrow",
         rangedStr: 3,
+        levelReq: { ranged: 1 },
         value: 1,
       },
       {
@@ -424,6 +426,7 @@ export const content: Content = composeContent(
         icon: "steel-arrow",
         ammoType: "arrow",
         rangedStr: 6,
+        levelReq: { ranged: 10 },
         value: 2,
       },
       {
@@ -433,6 +436,7 @@ export const content: Content = composeContent(
         icon: "mithril-arrow",
         ammoType: "arrow",
         rangedStr: 10,
+        levelReq: { ranged: 20 },
         value: 4,
       },
       {
@@ -514,6 +518,7 @@ export const content: Content = composeContent(
         icon: "adamant-arrow",
         ammoType: "arrow",
         rangedStr: 14,
+        levelReq: { ranged: 30 },
         value: 8,
       },
       {
@@ -523,6 +528,7 @@ export const content: Content = composeContent(
         icon: "rune-arrow",
         ammoType: "arrow",
         rangedStr: 18,
+        levelReq: { ranged: 40 },
         value: 16,
       },
       // Gear Tier ladder (#342): platelegs appended after rune-arrow (append-only — existing item
