@@ -1,14 +1,6 @@
 import type { Engine } from "../core/engine";
-import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
-import type {
-  AttackType,
-  AutoEatThreshold,
-  CombatStyle,
-  GearSlot,
-  SkillName,
-  SkillSnapshot,
-  Snapshot,
-} from "../core/types";
+import { SKILL_NAMES } from "../core/types";
+import type { SkillName, SkillSnapshot, Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { MAX_LEVEL, xpForLevel } from "../core/xp";
 import {
@@ -29,16 +21,13 @@ import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { createWorldPageUi } from "./world-page";
 import type { WorldPageUi } from "./world-page";
-import { itemIcon, skillIcon, slotSilhouette, tabIcon } from "./icons";
+import { itemIcon, skillIcon, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
-
-/** Gear Slot render order for the Character panel; independent of `Snapshot.player.equipment`'s
- * key order (a plain object, not guaranteed stable across engines/serialization). `amulet`/`ring`
- * (#117, Crafting's jewelry line) are appended after `legs`, mirroring GearSlot's own append-only
- * order in core/types.ts. */
-const GEAR_SLOT_ORDER: GearSlot[] = ["weapon", "shield", "head", "body", "legs", "amulet", "ring"];
+import { createCharacterHubUi } from "./character-hub";
+import type { CharacterHubUi } from "./character-hub";
+import type { UiScale } from "./window-geometry";
 
 /** Bank filter button labels, in `BANK_FILTERS` order (#207) — "Gear"/"Materials" rather than
  * "Equipment"/"Material" keep every one of the six always-visible buttons short enough to fit a
@@ -79,43 +68,6 @@ const COMBAT_STYLE_SKILLS: ReadonlySet<SkillName> = new Set([
   "ranged",
   "magic",
 ]);
-
-/** Abbreviated Attack Type labels for the compact defence-vector readout (#99) — terse to fit the
- * 320px Character panel budget. Rendered inside the shared hover panel/Bank detail strip since
- * #78's icon pass (item tiles carry only icon + qty; per-piece stats moved off the always-visible
- * row). */
-const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
-  stab: "st",
-  slash: "sl",
-  crush: "cr",
-  ranged: "rn",
-  magic: "mg",
-};
-
-/** One compact line for a per-type defence vector, e.g. "st 8 · sl 10 · cr 6 · rn 4 · mg 2" (#99).
- * Shared by per-piece Gear Slot rows and the Character panel's totals row. */
-function defVectorLabel(def: Record<AttackType, number>): string {
-  return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
-}
-
-/** Combat Style segmented control labels — Object.entries drives the buttons, so a future
- * widening of `CombatStyle` is a compile error here, not a silent gap. Issue #7 (Ranged/Magic)
- * deliberately did NOT widen this union: a weapon's Combat Mode (melee/ranged/magic) is a
- * separate concept that decides XP routing, while Combat Style (Accurate/Aggressive/Defensive)
- * stays the player's melee-only training selector — see CombatMode in core/types.ts. */
-const STYLE_LABELS: Record<CombatStyle, string> = {
-  accurate: "Accurate",
-  aggressive: "Aggressive",
-  defensive: "Defensive",
-};
-
-/** Auto-eat threshold segmented control labels, keyed by the Engine's AutoEatThreshold union. */
-const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
-  0: "Off",
-  0.25: "25%",
-  0.5: "50%",
-  0.75: "75%",
-};
 
 /** Workshop's four always-visible Production Skill button labels (#209) — plain title-case,
  * distinct from `productionLabel`'s own scene-label form (e.g. "🔨 Smithing", used by
@@ -169,28 +121,6 @@ interface VendorBuyState {
  * Bank search text and selection (owned by `BankPresentation`, see bank-view.ts). */
 type BankMode = "bank" | "vendor";
 
-/** Display labels for the Management card's own title and for the Character hub's destination
- * nav buttons (a subset — see `CHARACTER_NAV_DESTINATIONS` below). */
-const MANAGEMENT_DESTINATION_LABELS: Record<ManagementDestination, string> = {
-  world: "World",
-  bank: "Bank",
-  workshop: "Workshop",
-  activity: "Activity",
-  skills: "Skills",
-};
-
-/** The Character hub's own destination nav buttons, in display order (#206 "header: Character |
- * World | Workshop | Activity | Settings", widened by #222 to add Skills last) — `bank` is
- * deliberately excluded from the nav strip; it's reached only via the embedded Equipment Bank
- * tray's own "Expand Bank" button, which dispatches the same destination-click path as these
- * buttons. */
-const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = [
-  "world",
-  "workshop",
-  "activity",
-  "skills",
-];
-
 /** Presentation-only, session-only workspace state (#206) — never persisted under any key (a
  * relaunch always starts with both cards closed) and never entering the Engine Snapshot/save.
  * `characterOpen` and `management` independently track the two Management Row cards; stale
@@ -199,32 +129,6 @@ const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = [
 interface WorkspaceState {
   characterOpen: boolean;
   management: ManagementDestination | null;
-}
-
-/** The Character hub's own header nav (#206: "header: Character | World | Workshop | Activity |
- * Settings") — a static "Character" title (the hub's own label; there is no click behavior for
- * it, unlike the other four) plus one `data-destination` button per
- * `CHARACTER_NAV_DESTINATIONS` and a trailing `data-nav="settings"` popover toggle. Delegated
- * click handling on `#card-character` resolves buttons via `closest`, so nested `<img>`/`<span>`
- * clicks work the same as a direct button click. */
-function characterNavMarkup(): string {
-  const destinationButtons = CHARACTER_NAV_DESTINATIONS.map(
-    (destination) =>
-      `<button data-destination="${destination}" title="${MANAGEMENT_DESTINATION_LABELS[destination]}">
-        <img class="tab-icon pixel" src="${tabIcon(destination)}" alt="" />
-        <span>${MANAGEMENT_DESTINATION_LABELS[destination]}</span>
-      </button>`,
-  ).join("");
-  // #223: the auto-eat threshold buttons moved into the Settings popover, but the threshold
-  // itself silently keeps the player alive — it must stay legible without opening that popover.
-  // This compact indicator's text is filled in by renderCharacter (mirrors #summary-combat-level).
-  return `<nav id="character-nav" class="card-nav">
-      ${destinationButtons}
-      <span id="autoeat-indicator" class="autoeat-indicator" title="Auto-eat threshold">🍖 …</span>
-      <button data-nav="settings" title="Settings" aria-expanded="false">
-        <span aria-hidden="true">⚙</span>
-      </button>
-    </nav>`;
 }
 
 /** Handle returned by `mountApp` for driving re-renders after each Tick. */
@@ -261,30 +165,9 @@ export function mountApp(
   // actively crafting, but otherwise leaves a prior manual pick alone (see `openDestination`'s own
   // doc comment).
   let selectedProductionSkill: ProductionSkill = "smithing";
-  // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
-  // presentational UI state, an anchored popover that never changes card height.
-  let openSettings = false;
   const items = createItemPresentation(content);
-  async function syncScaleSelector(): Promise<void> {
-    const selected = windowChrome.getScale?.() ?? 1;
-    const options = await windowChrome.getScaleOptions?.();
-    root.querySelectorAll<HTMLButtonElement>("[data-ui-scale]").forEach((button) => {
-      const value = Number(button.dataset["uiScale"]);
-      const supported = options?.find((option) => option.value === value)?.supported !== false;
-      button.disabled = !supported;
-      button.title = supported
-        ? `Set UI scale to ${value * 100}%`
-        : `${value * 100}% unavailable: monitor cannot fit the full workspace`;
-      button.setAttribute("aria-pressed", String(value === selected));
-    });
-  }
-  // Whether the Character hub's Pets summary popover (the full owned/total roster grid) is open
-  // (#206) — same presentational shape as `openSettings`.
+  // Whether the Skills destination's Pets summary popover is open (#222).
   let openPetsPopover = false;
-  // Which empty Gear Slot (if any) currently has its Bank-Equipment chooser open (#206: Gear Slots
-  // become clickable slot tiles, mirroring the Loadout Slot choosers below) — purely
-  // presentational, closes on a re-click of the same slot's `[+]` or on picking an Equipment item.
-  let openGearChooserSlot: GearSlot | null = null;
   // Owns the expanded Bank page's filter/sort/search and the shared-but-independently-resolved
   // selection between it and the Character hub's Equipment-only tray (#237) — one deep,
   // instance-local module (bank-view.ts) replacing the four separate variables this mount used to
@@ -334,10 +217,6 @@ export function mountApp(
         btn.classList.toggle("active", btn.dataset["bankpage"] === managementBankPage);
       });
 
-    el<HTMLElement>("#settings-popover").hidden = !openSettings;
-    root
-      .querySelector<HTMLButtonElement>('[data-nav="settings"]')
-      ?.setAttribute("aria-expanded", String(openSettings));
     el<HTMLElement>("#pets-popover").hidden = !openPetsPopover;
     root
       .querySelector<HTMLButtonElement>('[data-nav="pets"]')
@@ -443,14 +322,12 @@ export function mountApp(
     syncWorkspace();
   }
 
-  /** Closes the empty Gear Slot Equipment chooser (#235) — idempotent: a no-op, including no
-   * rerender, whenever no Gear Slot chooser is open. `.gear-slot-chooser` is not a Loadout Slot
-   * (see CONTEXT.md), so it stays owned here rather than folding into `loadoutSlotUi`. Wired below
-   * to an outside click anywhere in the document and to the window losing focus. */
-  function closeGearChooser(): void {
-    if (openGearChooserSlot === null) return;
-    openGearChooserSlot = null;
-    render();
+  /** "Back to Character / second-card close" (#206): always returns to Character alone, whether
+   * triggered from the Management card's own Back control or (indirectly) from Escape. */
+  function backToCharacter(): void {
+    workspace.management = null;
+    workspace.characterOpen = true;
+    syncWorkspace();
   }
 
   /** "destination click" (#206): opens `destination` in the Management card, alongside Character
@@ -491,14 +368,6 @@ export function mountApp(
       workspace.characterOpen = false;
       workspace.management = destination;
     }
-    syncWorkspace();
-  }
-
-  /** "Back to Character / second-card close" (#206): always returns to Character alone, whether
-   * triggered from the Management card's own Back control or (indirectly) from Escape. */
-  function backToCharacter(): void {
-    workspace.management = null;
-    workspace.characterOpen = true;
     syncWorkspace();
   }
 
@@ -894,77 +763,6 @@ export function mountApp(
     el("#skills-list").innerHTML = rows.join("");
   }
 
-  /** Renders the Character tab panel: worn Gear Slots as icon tiles, derived stat totals, the
-   * Combat Style and auto-eat threshold segmented controls' active states, and the
-   * auto-sell-duplicates checkbox. A filled slot's own stats (#99's defence-vector readout
-   * included) no longer sit on the always-visible row (#78) — they're one hover away on
-   * `#item-tooltip`, same as every other item tile; `#character-totals` (the aggregate) stays put
-   * since it's the one number that's always worth showing without a hover. */
-  function renderCharacter(player: Snapshot["player"], bankItems: Snapshot["bank"]["items"]): void {
-    root.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("#autoeat-row button").forEach((btn) => {
-      btn.classList.toggle("active", Number(btn.dataset["threshold"]) === player.autoEatThreshold);
-    });
-
-    // #223: `#autoeat-row` itself now lives inside the (usually closed) Settings popover — this
-    // compact header indicator is what stays legible on every render.
-    el("#autoeat-indicator").textContent = `🍖 ${AUTO_EAT_LABELS[player.autoEatThreshold]}`;
-
-    el<HTMLInputElement>("#autosell-duplicates-toggle").checked = player.autoSellDuplicates;
-
-    // Gear Slot tiles (#206): a filled slot stays a plain hover-only tile (its stats surface via
-    // the shared #item-tooltip hover panel, same as before); an empty slot becomes a clickable
-    // slot tile whose `[+]` opens an anchored chooser of the Bank's Equipment stacks for that slot
-    // — mirroring the Loadout Slot choosers below, filtered by `slot` instead of item kind alone.
-    el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
-      const itemId = player.equipment[slot];
-      if (itemId) {
-        return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${items.iconMarkup(itemId)}</div>`;
-      }
-      const stacks = bankItems.filter((s) => {
-        const def = content.itemsById.get(s.itemId);
-        return def?.kind === "equipment" && def.slot === slot;
-      });
-      const chooser =
-        openGearChooserSlot === slot
-          ? `<div class="food-slot-chooser gear-slot-chooser">
-              ${
-                stacks.length > 0
-                  ? stacks
-                      .map(
-                        (s) =>
-                          `<button data-gear-assign="${s.itemId}">${items.name(s.itemId)} ×${s.qty}</button>`,
-                      )
-                      .join("")
-                  : `<p class="hint">No ${slot} Equipment in Bank</p>`
-              }
-            </div>`
-          : "";
-      return `<div class="tile tile-empty" data-slot="${slot}">
-                <button class="gear-slot-add" data-gear-add="${slot}" aria-label="Equip ${slot}">
-                  <span class="tile-empty-mark" aria-label="${slot} (empty)">
-                    <img class="icon pixel slot-silhouette" src="${slotSilhouette(slot)}" alt="" aria-hidden="true" />
-                  </span>
-                </button>
-                ${chooser}
-              </div>`;
-    }).join("");
-
-    const b = player.bonuses;
-    el("#character-totals").textContent =
-      `+${b.atkBonus} atk +${b.strBonus} str ${defVectorLabel(b.def)} spd ${b.attackSpeed}t`;
-
-    // #222: the Character card's one-line Skills summary — Combat level plus Total level (the
-    // same sum `renderSkillsPage`'s own Total footer row computes), updated on every render so it
-    // stays in lockstep with the Skills page on the same Tick.
-    el("#summary-combat-level").textContent = String(player.combatLevel);
-    const totalLevel = SKILL_NAMES.reduce((sum, skill) => sum + player.skills[skill].level, 0);
-    el("#summary-total-level").textContent = String(totalLevel);
-  }
-
   /** One `.detail-strip` body — name/qty, `itemDetailLines` stats, Equip/Sell actions — shared by
    * the full Bank page (`renderBankDetail`) and the Character hub's embedded Equipment-only Bank
    * tray (`renderEquipmentTray`, #206) so the two detail strips can never drift apart. */
@@ -1132,7 +930,7 @@ export function mountApp(
     loadoutSlotUi.render(player, bank.items);
     renderCastingReadout(player.spell);
     renderSkillsPage(player.skills);
-    renderCharacter(player, bank.items);
+    characterHubUi.render(player, bank.items);
     renderPets(player.ownedPets);
     renderLootStrip(snap.lootZone);
     renderBank(bank, player.gold);
@@ -1145,82 +943,7 @@ export function mountApp(
     <div id="flash-overlay"></div>
     <div id="item-tooltip" class="item-tooltip" hidden></div>
     <div id="management-row" class="management-row">
-    <section id="card-character" class="management-card" hidden>
-      <header class="management-card-header">
-        ${characterNavMarkup()}
-      </header>
-      <div id="settings-popover" class="settings-popover" hidden>
-        <button id="mute-toggle" title="Mute sound" aria-pressed="false">🔊 Mute</button>
-        <button id="export-save" title="Export save to clipboard">📤 Export</button>
-        <button id="import-save" title="Import save from clipboard">📥 Import</button>
-        <fieldset id="ui-scale-selector">
-          <legend>UI scale</legend>
-          <button data-ui-scale="1" title="Set UI scale to 100%">100%</button>
-          <button data-ui-scale="1.5" title="Set UI scale to 150%">150%</button>
-          <button data-ui-scale="2" title="Set UI scale to 200%">200%</button>
-        </fieldset>
-        <!-- #223: relocated from the Character card body — set-once preferences, not per-fight
-             controls. Markup shape/ids/handlers unchanged; only the container moved. -->
-        <fieldset id="autoeat-selector">
-          <legend>Auto-eat at</legend>
-          <div id="autoeat-row" class="style-row">
-            ${Object.entries(AUTO_EAT_LABELS)
-              .map(
-                ([threshold, label]) => `<button data-threshold="${threshold}">${label}</button>`,
-              )
-              .join("")}
-          </div>
-        </fieldset>
-        <label id="autosell-duplicates-row" class="checkbox-row">
-          <input type="checkbox" id="autosell-duplicates-toggle" />
-          Auto-sell duplicate gear
-        </label>
-      </div>
-      <div id="import-panel" hidden>
-        <p>Paste a save below, then Apply. This overwrites your current save.</p>
-        <textarea id="import-textarea" rows="4"></textarea>
-        <p id="import-error" hidden></p>
-        <div id="import-actions">
-          <button id="import-apply">Apply</button>
-          <button id="import-cancel">Cancel</button>
-        </div>
-      </div>
-      <div class="card-fixed">
-        <div id="character-slots" class="tile-grid gear-grid"></div>
-        <p id="character-totals" class="totals-row"></p>
-        <!-- #224: one unified Loadout row — food x3, potion, quiver, rune all on the same 40px
-             tile chassis #168 established for the gear grid (.tile-grid's own 40px track),
-             replacing the pre-#224 four stacked rows (.food-slots flex:1-stretched food tiles
-             rendering ~94px, plus three separate 44px singular tiles). The four render functions
-             below still target their own id so each keeps painting only its own slice, but
-             .food-slots/.potion-slot are now display:contents pass-throughs (see styles.css) so
-             all six tiles sit on #loadout-row's single flex line, not four nested boxes. -->
-        <div id="loadout-row" class="loadout-row">
-          <div id="character-food-slots" class="food-slots"></div>
-          <div id="potion-slot" class="potion-slot"></div>
-          <div id="quiver-slot" class="potion-slot"></div>
-          <div id="rune-slot" class="potion-slot"></div>
-        </div>
-        <p id="casting-readout" class="totals-row"></p>
-        <!-- #222: the 12-tile Skills icon grid (formerly #xp-row) moved to its own Management
-             destination — this is now a one-line clickable summary reusing the existing
-             data-destination nav dispatch (#card-character's delegated handler above), so no
-             new routing code. -->
-        <button id="character-levels-summary" data-destination="skills">
-          Combat <span id="summary-combat-level"></span> · Total <span id="summary-total-level"></span> ›
-        </button>
-        <div id="style-row" class="style-row">
-          ${Object.entries(STYLE_LABELS)
-            .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
-            .join("")}
-        </div>
-      </div>
-      <div class="card-scroll">
-        <div id="character-bank-tray" class="tile-grid"></div>
-        <div id="character-bank-detail" class="detail-strip" hidden></div>
-      </div>
-      <button id="expand-bank-btn" class="expand-bank-btn" data-destination="bank">Expand Bank</button>
-    </section>
+    <section id="card-character" hidden></section>
     <section id="card-management" class="management-card" hidden>
       <header class="management-card-header">
         <button class="card-close" data-management-back title="Back to Character">←</button>
@@ -1374,6 +1097,33 @@ export function mountApp(
     </div>
     </section>`;
 
+  // The deep, mounted Character hub module (#326): owns the Character card shell, Gear Slot
+  // chooser state, player controls, Settings visibility, Character navigation dispatch, and
+  // listener lifecycle — see character-hub.ts's own doc comment. Constructed after the top-level
+  // Cards-on-Glass hosts above have painted `#card-character`, before Loadout and Bank tray wiring.
+  const characterHubUi: CharacterHubUi = createCharacterHubUi({
+    host: el<HTMLElement>("#card-character"),
+    content,
+    commands: engine,
+    onChanged: () => render(),
+    onDestinationRequested: (destination) => {
+      void openDestination(destination);
+    },
+    onScaleRequested: async (scale: UiScale) => {
+      await windowChrome.setScale?.(scale);
+    },
+    getScaleState: async () => ({
+      selected: windowChrome.getScale?.() ?? 1,
+      options:
+        (await windowChrome.getScaleOptions?.()) ??
+        ([
+          { value: 1, supported: true },
+          { value: 1.5, supported: true },
+          { value: 2, supported: true },
+        ] as const),
+    }),
+  });
+
   // The deep, mounted Loadout Slot UI module (#235): owns all four Loadout Slot kinds' chooser
   // state, Item eligibility, Rune-level gating, tile markup, DOM listeners, and Engine command
   // dispatch — see loadout-slot.ts's own doc comment. Constructed after `root.innerHTML` above has
@@ -1401,8 +1151,6 @@ export function mountApp(
   // The game renders every Tick, so Vendor rows must outlive individual renders to avoid
   // interrupting keyboard editing in a focused quantity input (#307).
   const vendorRows = new Map<string, VendorRowElements>();
-
-  void syncScaleSelector();
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
   // the Monster's land on the player's; fires during engine.tick() itself, not the following
@@ -1509,30 +1257,6 @@ export function mountApp(
     feedLine("📦 Chest opened!", "chest-header");
   });
 
-  // Character section headers (#134): one delegated listener on the whole tab-panel rather than one
-  // per header, mirroring #management-row's own closest()-based delegation below. A click anywhere
-  // that isn't a `button[data-section]` (e.g. inside a section body) is a no-op.
-  el("#style-row").addEventListener("click", (event) => {
-    const style = (event.target as HTMLElement).dataset["style"] as CombatStyle | undefined;
-    if (style) {
-      engine.setCombatStyle(style);
-      render();
-    }
-  });
-
-  el("#autoeat-row").addEventListener("click", (event) => {
-    const raw = (event.target as HTMLElement).dataset["threshold"];
-    if (raw !== undefined) {
-      engine.setAutoEatThreshold(Number(raw) as AutoEatThreshold);
-      render();
-    }
-  });
-
-  el<HTMLInputElement>("#autosell-duplicates-toggle").addEventListener("change", (event) => {
-    engine.setAutoSellDuplicates((event.target as HTMLInputElement).checked);
-    render();
-  });
-
   // Bank filter buttons (#207): six always-visible kind filters plus "all"; re-clicking the active
   // filter is a no-op (unlike Bank tile selection, there's no "unfiltered by re-click" gesture —
   // "all" is itself the reachable no-filter state).
@@ -1580,68 +1304,6 @@ export function mountApp(
       renderWorkspace();
     }
   });
-
-  // Character hub's own header nav / Expand Bank / Settings popover (#206), delegated on
-  // the whole card so nested `<img>`/`<span>` clicks resolve via `closest`. Checked in a stable
-  // order: a destination click (World/Workshop/Activity/Skills nav buttons, the Skills summary
-  // line, or the Bank tray's "Expand Bank" button — all carry `data-destination`) before the
-  // Settings popover toggle.
-  el("#card-character").addEventListener("click", async (event) => {
-    const target = event.target as HTMLElement;
-    const scaleValue = target.closest<HTMLButtonElement>("[data-ui-scale]")?.dataset["uiScale"];
-    if (scaleValue) {
-      await windowChrome.setScale?.(Number(scaleValue) as 1 | 1.5 | 2);
-      await syncScaleSelector();
-      return;
-    }
-    const destinationBtn = target.closest<HTMLElement>("[data-destination]");
-    if (destinationBtn) {
-      void openDestination(destinationBtn.dataset["destination"] as ManagementDestination);
-      return;
-    }
-    const navBtn = target.closest<HTMLElement>("[data-nav]");
-    if (!navBtn) return;
-    const nav = navBtn.dataset["nav"];
-    if (nav === "settings") {
-      openSettings = !openSettings;
-      renderWorkspace();
-    }
-  });
-
-  // Gear Slot tiles (#206): an empty slot's `[+]` opens/closes its Bank-Equipment chooser; picking
-  // a chooser entry equips it directly (mirrors the Loadout Slot dispatch order — assign check
-  // before the add/toggle check).
-  el("#character-slots").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const assignBtn = target.closest<HTMLElement>("[data-gear-assign]");
-    if (assignBtn) {
-      engine.equip(assignBtn.dataset["gearAssign"] as string); // logs its own feed line via "equipped"
-      openGearChooserSlot = null;
-      render();
-      return;
-    }
-    const addBtn = target.closest<HTMLElement>("[data-gear-add]");
-    if (addBtn) {
-      const slot = addBtn.dataset["gearAdd"] as GearSlot;
-      openGearChooserSlot = openGearChooserSlot === slot ? null : slot; // re-click dismisses
-      render();
-    }
-  });
-
-  // Gear Slot chooser dismissal (#235): closes on a click anywhere in the SideScape document
-  // outside the active `.gear-slot-chooser` and outside its matching `[data-gear-add]` toggle, or
-  // on the window losing focus (the user clicked another app or the desktop). Both a toggle click
-  // (open/re-click-close, handled above) and a chooser selection click (`[data-gear-assign]`,
-  // inside `.gear-slot-chooser`) bubble up to this same document listener on the SAME click that
-  // opened or resolved the chooser — the two `closest` checks below skip those so this handler
-  // never fights the #character-slots handler's own toggle/selection outcome for that click.
-  // `closeGearChooser`'s own `openGearChooserSlot === null` guard makes every other call a no-op.
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.closest(".gear-slot-chooser") || target.closest("[data-gear-add]")) return;
-    closeGearChooser();
-  });
-  window.addEventListener("blur", () => closeGearChooser());
 
   // Bank|Vendor compact toggle inside the Management card's "bank" destination (#206) — purely
   // presentational; doesn't change which destination is open, so a plain visibility sync is
@@ -1861,6 +1523,7 @@ export function mountApp(
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      characterHubUi.dispose();
       worldPageUi.dispose();
     },
   };
