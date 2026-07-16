@@ -200,7 +200,7 @@ export const sprites = [
     source: "sprite-frost-wolf.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["water"],
+    materialRampNames: ["water", "rune"],
     zoneNames: ["forest", "sewer", "crypt", "town", "glacier"],
   },
   {
@@ -225,7 +225,7 @@ export const sprites = [
     size: 64,
     alpha: "binary",
     materialRampNames: ["steel", "water"],
-    zoneNames: ["forest", "crypt", "glacier"],
+    zoneNames: ["meadow", "forest", "crypt", "glacier"],
   },
 ];
 
