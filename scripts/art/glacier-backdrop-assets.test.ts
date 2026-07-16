@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
-import { zonePalettes } from "../../scripts/art/palettes.mjs";
+import { zonePalettes } from "./palettes.mjs";
 import {
   assertHorizontalPeriod,
   backdrops,
   BACKDROP_WIDTH,
   REVIEW_PERIODS,
   writeBackdrops,
-} from "../../scripts/art/backdrops.mjs";
-import { isRgbWithinHslGamut } from "../../scripts/art/trace-core.mjs";
+} from "./backdrops.mjs";
+import { isRgbWithinHslGamut } from "./trace-core.mjs";
 
 const layers = ["sky", "mid", "near"] as const;
 const otherThemes = ["meadow", "forest", "sewer", "crypt", "town"] as const;

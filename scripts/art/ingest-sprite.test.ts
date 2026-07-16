@@ -3,13 +3,13 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
-import { main as ingestSprite } from "../../scripts/art/ingest-sprite.mjs";
+import { main as ingestSprite } from "./ingest-sprite.mjs";
 import {
   deriveInteriorAlpha,
   prepareSpriteIngest,
   validateSpriteEntry,
   writeSpriteIngestArtifacts,
-} from "../../scripts/art/ingest-sprite-core.mjs";
+} from "./ingest-sprite-core.mjs";
 
 type RGB = [number, number, number];
 

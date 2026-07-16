@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeIcons } from "../../scripts/art/icons.mjs";
-import { materialPalettes, zonePalettes } from "../../scripts/art/palettes.mjs";
-import { writeSprites } from "../../scripts/art/sprites.mjs";
+import { writeIcons } from "./icons.mjs";
+import { materialPalettes, zonePalettes } from "./palettes.mjs";
+import { writeSprites } from "./sprites.mjs";
 
 /**
  * Ramp isolation (#252). `quantizeGrid` snaps every cell to the nearest entry of the palette it is
@@ -29,8 +29,8 @@ import { writeSprites } from "../../scripts/art/sprites.mjs";
  * per-sprite `materialRampNames`) it passes because no asset declares the decoy.
  */
 
-const ICONS_DIR = fileURLToPath(new URL("../assets/icons", import.meta.url));
-const SPRITES_DIR = fileURLToPath(new URL("../assets/sprites", import.meta.url));
+const ICONS_DIR = fileURLToPath(new URL("../../src/assets/icons", import.meta.url));
+const SPRITES_DIR = fileURLToPath(new URL("../../src/assets/sprites", import.meta.url));
 
 /** A ramp sitting ~1-2 RGB units from `steel` — a global quantizer would snap steel cells to it. */
 const DECOY_RAMP = { shadow: "#5a646e", base: "#8e9aa4", light: "#c5cdd2", glint: "#eff3f3" };

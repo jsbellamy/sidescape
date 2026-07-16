@@ -15,7 +15,7 @@ import {
   sampleCells,
   scaleGrid,
   stripExteriorInk,
-} from "../../scripts/art/trace-core.mjs";
+} from "./trace-core.mjs";
 
 /** A tiny RGBA image ({width,height,data}) built from a rows-of-hex grid, each cell upscaled by
  * `pitch` px and embedded in a `border`-px background frame — a synthetic "reference sheet" whose

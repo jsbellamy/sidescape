@@ -4,13 +4,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
-import { buildSpriteContactSheets } from "../../scripts/art/sprite-contact-sheet.mjs";
-import { materialPalettes, zonePalettes } from "../../scripts/art/palettes.mjs";
-import { sprites, writeSprites } from "../../scripts/art/sprites.mjs";
-import { encodePng } from "../../scripts/art/write-png.mjs";
+import { buildSpriteContactSheets } from "./sprite-contact-sheet.mjs";
+import { materialPalettes, zonePalettes } from "./palettes.mjs";
+import { sprites, writeSprites } from "./sprites.mjs";
+import { encodePng } from "./write-png.mjs";
 
 /** These are synthetic writeSprites fixtures, not shipped art. Per-asset ramp/zone scoping
- * (#252, #261) is exercised against the real registry by src/ui/art-ramp-isolation.test.ts; here
+ * (#252, #261) is exercised against the real registry by scripts/art/art-ramp-isolation.test.ts; here
  * we hand the fixture every ramp and zone so each assertion below keeps testing exactly the color
  * it always did. */
 const ALL_RAMPS = Object.keys(materialPalettes);
@@ -40,8 +40,8 @@ const EXPECTED_SPRITES = [
   { name: "frost-warden", size: 64, alpha: "binary" },
 ] as const;
 
-const SPRITES_DIR = fileURLToPath(new URL("../assets/sprites", import.meta.url));
-const SOURCES_DIR = fileURLToPath(new URL("../../scripts/art/sprite-sources", import.meta.url));
+const SPRITES_DIR = fileURLToPath(new URL("../../src/assets/sprites", import.meta.url));
+const SOURCES_DIR = fileURLToPath(new URL("./sprite-sources", import.meta.url));
 const DOCS_DIR = fileURLToPath(new URL("../../docs", import.meta.url));
 
 describe("source-driven combat sprite registry", () => {

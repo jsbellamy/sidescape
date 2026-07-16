@@ -5,7 +5,7 @@ import {
   isRgbWithinHslGamut,
   rgbToHsl,
   validateHslGamut,
-} from "../../scripts/art/trace-core.mjs";
+} from "./trace-core.mjs";
 
 /** Glacier-shaped Theme gamut from #313 — cold chromatic band + neutral floor. */
 const GLACIER_GAMUT = {

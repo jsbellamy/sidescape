@@ -12,17 +12,14 @@ import {
   renderPeriodicLayer,
   validateBackdropDefinition,
   writeBackdrops,
-} from "../../scripts/art/backdrops.mjs";
-import {
-  prepareBackdropIngest,
-  writeBackdropIngestArtifacts,
-} from "../../scripts/art/ingest-backdrop.mjs";
+} from "./backdrops.mjs";
+import { prepareBackdropIngest, writeBackdropIngestArtifacts } from "./ingest-backdrop.mjs";
 import {
   conformCellPaletteToHslGamut,
   isRgbWithinHslGamut,
   normalizeCellPalette,
-} from "../../scripts/art/trace-core.mjs";
-import { encodePng } from "../../scripts/art/write-png.mjs";
+} from "./trace-core.mjs";
+import { encodePng } from "./write-png.mjs";
 
 /** Permissive Theme gamut so existing #305/#311 fixtures remain valid under #313. */
 const PERMISSIVE_GAMUT = {
