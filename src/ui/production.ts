@@ -66,6 +66,8 @@ export function productionPanelMarkup(
 
   return content.recipes
     .filter((recipe) => recipe.skill === descriptor.skill)
+    .slice()
+    .sort((a, b) => a.levelReq - b.levelReq || a.id.localeCompare(b.id))
     .map((recipe) => {
       const inputsLine = recipe.inputs
         .map((input) => `${input.qty}× ${itemName(input.itemId)} (have ${owned(input.itemId)})`)
