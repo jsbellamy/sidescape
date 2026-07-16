@@ -75,6 +75,8 @@ describe("createLoadoutSlotUi — empty-slot silhouettes (#286)", () => {
       const addBtn = root.querySelector<HTMLElement>(`[data-add="${i}"]`);
       const img = addBtn?.querySelector<HTMLImageElement>("img.slot-silhouette");
       expect(img?.getAttribute("src")).toBe(slotSilhouette("food"));
+      // #286/#306: the literal "+" badge stays on the empty Loadout add button.
+      expect(addBtn?.querySelector(".slot-add-mark")?.textContent).toBe("+");
     }
   });
 

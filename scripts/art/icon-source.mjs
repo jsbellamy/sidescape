@@ -29,6 +29,66 @@ const LEGEND_POOL = "abcdefghijklmnpqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ"; // "o"
 export const MAX_BODY_COLORS = 11;
 
 /**
+ * Neutral interior ramp for empty-slot reliefs (#306). Opaque body colors are remapped onto these
+ * five values by relative luminance (darkest → lightest); the exterior ring stays `P.ink`.
+ * Declaration order is the dark→light ranking used by the bucket map.
+ */
+export const RELIEF_RAMP_REFS = ["P.outline", "P.shadow", 'P["text-dim"]', "P.sand", "P.cream"];
+
+/** Relative luminance of an sRGB triple — used only to rank distinct source body colors for relief. */
+function relativeLuminance([r, g, b]) {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Remaps every opaque body cell onto `RELIEF_RAMP_REFS` by the cell's source luminance rank.
+ * Equal luminance values share a bucket; ties break by `buildNamedPalette` declaration order.
+ * Empty ramp buckets are allowed when the source has fewer distinct body colors than five.
+ *
+ * @param {(null | { ref: string, hex: string, rgb: [number, number, number] })[][]} cells
+ */
+function applyReliefRemap(cells) {
+  const fullPalette = buildNamedPalette();
+  const orderByRef = new Map(fullPalette.map((entry, i) => [entry.ref, i]));
+  const byRef = new Map(fullPalette.map((entry) => [entry.ref, entry]));
+  const ramp = RELIEF_RAMP_REFS.map((ref) => {
+    const entry = byRef.get(ref);
+    if (!entry) throw new Error(`paintSourceIcon: relief ramp missing ${JSON.stringify(ref)}`);
+    return entry;
+  });
+
+  /** @type {Map<string, { ref: string, rgb: [number, number, number], order: number }>} */
+  const used = new Map();
+  for (const row of cells) {
+    for (const cell of row) {
+      if (!cell || used.has(cell.ref)) continue;
+      used.set(cell.ref, {
+        ref: cell.ref,
+        rgb: cell.rgb,
+        order: orderByRef.get(cell.ref) ?? Number.MAX_SAFE_INTEGER,
+      });
+    }
+  }
+
+  const unique = [...used.values()].sort((a, b) => {
+    const d = relativeLuminance(a.rgb) - relativeLuminance(b.rgb);
+    return d !== 0 ? d : a.order - b.order;
+  });
+
+  const n = unique.length;
+  const last = ramp.length - 1;
+  /** @type {Map<string, { ref: string, hex: string, rgb: [number, number, number] }>} */
+  const remap = new Map();
+  for (let i = 0; i < n; i++) {
+    const idx = n === 1 ? 0 : Math.round((i * last) / (n - 1));
+    const target = ramp[idx];
+    remap.set(unique[i].ref, { ref: target.ref, hex: target.hex, rgb: target.rgb });
+  }
+
+  return cells.map((row) => row.map((cell) => (cell ? remap.get(cell.ref) : null)));
+}
+
+/**
  * Loads a compact source PNG into a 2-D grid of `null | [r, g, b]` (row-major, `null` where the
  * pixel is transparent). This is the same shape `sampleCells` produces, so it feeds straight into
  * `quantizeGrid`.
@@ -69,12 +129,17 @@ export function loadSourceGrid(pngPath) {
  * `rune.*`), and a recolor is an explicit, per-icon instruction rather than a global
  * nearest-color accident.
  *
- * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, scope?: { materialRampNames?: readonly string[], zoneNames?: readonly string[] }, recolor?: Record<string, string> }} [opts]
+ * `relief` (#306) remaps opaque interiors onto the pinned neutral ramp after the normal
+ * quantize/strip/reduce/despeckle/recolor path, preserving the connected subject mask and letting
+ * `paintGrid` still derive one `P.ink` exterior ring. Allowed only for source-backed registry
+ * entries (see `validateIconEntry` in `icons.mjs`).
+ *
+ * @param {{ x0?: number, y0?: number, outline?: string, named?: ReturnType<typeof buildNamedPalette>, scope?: { materialRampNames?: readonly string[], zoneNames?: readonly string[] }, recolor?: Record<string, string>, relief?: boolean }} [opts]
  */
 export function paintSourceIcon(
   canvas,
   grid,
-  { x0, y0, outline = P.ink, named, scope, recolor = {} } = {},
+  { x0, y0, outline = P.ink, named, scope, recolor = {}, relief = false } = {},
 ) {
   const quantizePalette = named ?? buildNamedPalette(scope);
   // Full vocabulary — recolor may name any ramp, including one this source never quantizes into.
@@ -104,9 +169,10 @@ export function paintSourceIcon(
       return targetRef ? paletteByRef.get(targetRef) : cell;
     }),
   );
+  const body = relief ? applyReliefRemap(recolored) : recolored;
 
-  const height = recolored.length;
-  const width = height > 0 ? recolored[0].length : 0;
+  const height = body.length;
+  const width = height > 0 ? body[0].length : 0;
   // The derived outline ring adds 1px on every side, so the body must leave room for it inside the
   // drawable 1..32 area (a 34-wide canvas with a 1px transparent margin each side).
   if (width + 2 > 32 || height + 2 > 32) {
@@ -119,7 +185,7 @@ export function paintSourceIcon(
   // expressions (e.g. `steel.base`), so assign each distinct ref its own legend char.
   const charOf = new Map();
   const legend = {};
-  const rows = recolored.map((row) =>
+  const rows = body.map((row) =>
     row
       .map((cell) => {
         if (!cell) return ".";

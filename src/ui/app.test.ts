@@ -2945,6 +2945,14 @@ describe("Character panel (#26)", () => {
     }
   });
 
+  // #306: pinned relief opacity — DOM tests cannot getComputedStyle CSS modules, so assert the
+  // stylesheet literal that empty-slot reliefs rely on.
+  it("pins .slot-silhouette opacity at 0.65 with pointer-events: none (#306)", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    expect(css).toMatch(/\.slot-silhouette\s*\{[^}]*opacity:\s*0\.65;/s);
+    expect(css).toMatch(/\.slot-silhouette\s*\{[^}]*pointer-events:\s*none;/s);
+  });
+
   // Compact defence-vector readout (#99): every Attack Type at bonus 0.
   const ZERO_DEF_VECTOR = "st 0 · sl 0 · cr 0 · rn 0 · mg 0";
 

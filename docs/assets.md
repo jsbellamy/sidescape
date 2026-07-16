@@ -511,3 +511,15 @@ previews retained their defining silhouettes.
 This subsection supersedes only the historical CC0 Giant Rat, Zombie, and Skeleton outputs
 recorded above. Their provenance remains preserved as historical context; Sewer King is new
 original art.
+
+## Empty-slot reliefs (#306)
+
+Empty Gear and Loadout Slot placeholders (`slot-weapon` … `slot-rune` under `src/assets/icons/`) are
+original SideScape art. PR #302 / #286 shipped eleven hand-authored flat two-tone silhouettes
+(`paintSilhouette` + per-slot geometry painters in `scripts/art/icons.mjs`). #306 supersedes those
+placeholders with deterministic **relief** derivatives of existing committed compact Item sources
+(`SLOT_RELIEF_SOURCES` in `scripts/art/icons.mjs`): each row loads its mapped source through the
+shared `paintSourceIcon` path with `opts.relief: true`, which preserves the source mask and remaps
+opaque interiors onto the pinned neutral ramp (`P.outline` → `P.cream`) plus one derived `P.ink`
+exterior ring. No new raw generation, tracing, compact source, or hand-drawn geometry was added;
+the earlier two-tone history remains the prior provenance for these stable asset keys.

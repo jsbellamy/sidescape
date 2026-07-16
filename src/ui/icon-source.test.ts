@@ -119,6 +119,70 @@ describe("paintSourceIcon", () => {
       render(block(4, 4, BLOOD_BASE), { recolor: { "blood.base": "water.neon" } }),
     ).toThrow(/unknown named palette ref/);
   });
+
+  // #306: relief remaps quantized interiors onto the pinned neutral ramp while keeping the
+  // same connected subject mask and one derived P.ink exterior ring.
+  describe("relief: true (#306)", () => {
+    const OUTLINE: RGB = [0x29, 0x20, 0x17]; // P.outline
+    const SHADOW: RGB = [0x4b, 0x38, 0x28]; // P.shadow
+    const TEXT_DIM: RGB = [0x9a, 0x8a, 0x72]; // P["text-dim"]
+    const SAND: RGB = [0xc6, 0xad, 0x79]; // P.sand
+    const CREAM: RGB = [0xe6, 0xd4, 0xaa]; // P.cream
+    const ALLOWED = new Set(
+      [INK, OUTLINE, SHADOW, TEXT_DIM, SAND, CREAM].map((c) => `${c[0]},${c[1]},${c[2]}`),
+    );
+
+    /** Three stacked luminance bands so relief has distinct ranks to map. */
+    function shadedBlock(): Grid {
+      const dark: RGB = [0x59, 0x63, 0x6d]; // steel.shadow
+      const mid: RGB = [0x8d, 0x99, 0xa3]; // steel.base
+      const light: RGB = [0xc4, 0xcc, 0xd1]; // steel.light
+      return [
+        ...Array.from({ length: 3 }, () => Array.from({ length: 6 }, () => dark)),
+        ...Array.from({ length: 3 }, () => Array.from({ length: 6 }, () => mid)),
+        ...Array.from({ length: 3 }, () => Array.from({ length: 6 }, () => light)),
+      ];
+    }
+
+    it("preserves the subject alpha mask of the non-relief render", () => {
+      const grid = shadedBlock();
+      const plain = render(grid);
+      const relief = render(grid, { relief: true });
+      for (let y = 0; y < 34; y++)
+        for (let x = 0; x < 34; x++) expect(relief.fn(x, y)[3]).toBe(plain.fn(x, y)[3]);
+    });
+
+    it("emits only P.ink plus the five neutral relief values", () => {
+      const { colors } = render(shadedBlock(), { relief: true });
+      for (const c of colors) expect(ALLOWED.has(c)).toBe(true);
+      expect(colors.has(`${INK[0]},${INK[1]},${INK[2]}`)).toBe(true);
+    });
+
+    it("uses at least three interior relief values plus the exterior ink ring", () => {
+      const { colors } = render(shadedBlock(), { relief: true });
+      const interior = [...colors].filter((c) => c !== `${INK[0]},${INK[1]},${INK[2]}`);
+      expect(interior.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("maps darker source planes to darker relief values", () => {
+      const { fn } = render(shadedBlock(), { relief: true });
+      // Grid 6×9 → ox=14, oy=12. Sample each of the three stacked bands.
+      const top = fn(16, 13).slice(0, 3) as RGB;
+      const mid = fn(16, 16).slice(0, 3) as RGB;
+      const bot = fn(16, 19).slice(0, 3) as RGB;
+      const lum = (c: RGB) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      expect(lum(top)).toBeLessThan(lum(mid));
+      expect(lum(mid)).toBeLessThan(lum(bot));
+    });
+
+    it("is byte-identical across repeated renders", () => {
+      const grid = shadedBlock();
+      const a = render(grid, { relief: true });
+      const b = render(grid, { relief: true });
+      for (let y = 0; y < 34; y++)
+        for (let x = 0; x < 34; x++) expect(a.fn(x, y)).toEqual(b.fn(x, y));
+    });
+  });
 });
 
 describe("loadSourceGrid", () => {
