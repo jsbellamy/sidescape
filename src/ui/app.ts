@@ -24,6 +24,7 @@ import { createCharacterHubUi } from "./character-hub";
 import type { CharacterHubUi } from "./character-hub";
 import { createSkillsPageUi } from "./skills-page";
 import type { SkillsPageUi } from "./skills-page";
+import { createLootFeed } from "./loot-feed";
 import type { UiScale } from "./window-geometry";
 
 /** Damage-splat fade duration (#4); mirrors styles.css's `splat-fade` keyframes so the DOM node is
@@ -284,18 +285,6 @@ export function mountApp(
 
   function el<T extends HTMLElement>(selector: string): T {
     return root.querySelector(selector) as T;
-  }
-
-  /** Appends a line to the Activity card's Loot Feed.
-   * amendment's "heartbeat" — one line, same band/class styling, never a replacement for the
-   * full feed panel). Both are driven from this single call site so they can never drift apart. */
-  function feedLine(text: string, cls = ""): void {
-    const li = document.createElement("li");
-    li.textContent = text;
-    if (cls) li.className = cls;
-    const feed = el<HTMLUListElement>("#feed");
-    feed.prepend(li);
-    while (feed.children.length > 40) feed.lastChild?.remove();
   }
 
   /** Appends a damage splat (a red hit for `amount > 0`, a blue "0" miss otherwise) to `layer`,
@@ -575,7 +564,7 @@ export function mountApp(
       <!-- The Activity destination (#243) is now a single full-height Recent Activity feed
            scrollport — the Loot Zone strip in the Compact Widget (#loot-strip) is the sole Loot
            Zone interface, so Activity no longer owns any Loot Zone markup of its own. #feed is
-           still the one target every Engine event feeds via feedLine(), so one Engine event still
+           still the one target the Loot Feed module writes to, so one Engine event still
            yields exactly one feed entry, even while Activity is hidden. See styles.css's
            .activity-page-body. -->
       <div data-management-page="activity" class="activity-page-body" hidden>
@@ -656,6 +645,8 @@ export function mountApp(
     }),
   });
 
+  const lootFeed = createLootFeed({ engine, content, items, root });
+
   const bankUi: BankUi = createBankUi({
     trayHost: el<HTMLElement>("#card-character"),
     destinationHost: el<HTMLElement>("#bank-destination-host"),
@@ -666,7 +657,7 @@ export function mountApp(
       buy: engine.buy.bind(engine),
       buyBankSlots: () => {
         engine.buyBankSlots();
-        feedLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
+        lootFeed.logLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
       },
     },
     onChanged: () => render(),
@@ -720,61 +711,11 @@ export function mountApp(
     if (!lane) return;
     showXpGain(lane, e.skill, e.amount);
   });
-  engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
-  engine.on("drop", (e) => feedLine(`+${e.qty} ${items.name(e.itemId)}`, `drop-${e.band}`));
   engine.on("drop", (e) => {
     if (e.band === "rare") triggerRareFlash();
   });
-  engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
   engine.on("levelup", (e) => showToast(`⭐ ${e.skill} level ${e.level}!`));
-  engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
-  engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${items.name(e.itemId)} (+${e.healed})`, "eat"));
-  engine.on("item-sold", (e) => feedLine(`Sold ${items.name(e.itemId)} (+${e.gold}g)`, "sell"));
-  engine.on("overflow-sold", (e) =>
-    feedLine(`⚠ Bank full — sold ${items.name(e.itemId)} (+${e.gold}g)`, "overflow"),
-  );
-  engine.on("overflow-lost", (e) =>
-    feedLine(`⚠ Bank full — ${items.name(e.itemId)} lost!`, "overflow"),
-  );
-  engine.on("duplicate-sold", (e) =>
-    feedLine(`⚠ Auto-sold duplicate ${items.name(e.itemId)} (+${e.gold}g)`, "overflow"),
-  );
-  // Loot Zone (#60): a sweep (auto-loot on leaving combat, or the Loot all button) banks whatever
-  // fits and leaves the rest in the zone — check the post-sweep Snapshot for leftovers right here,
-  // rather than a per-render check, so the warning fires once per sweep instead of spamming every
-  // Tick while the zone sits non-empty.
-  engine.on("looted", (e) => {
-    if (e.items.length <= 3) {
-      for (const item of [...e.items].reverse()) {
-        feedLine(`Banked ${item.qty} ${items.name(item.itemId)}`, "loot");
-      }
-    } else {
-      feedLine(`Banked ${e.items.length} stacks of loot`, "loot");
-    }
-    if (engine.snapshot().lootZone.length > 0) {
-      feedLine("⚠ Bank full — loot left behind", "overflow");
-    }
-  });
-  engine.on("dungeon-failed", (e) => {
-    for (const item of [...e.lostItems].reverse()) {
-      feedLine(`-${item.qty} ${items.name(item.itemId)}`, "dungeon-failed");
-    }
-    feedLine("💀 Run failed — loot lost!", "dungeon-failed");
-  });
-  engine.on("fish-caught", (e) =>
-    feedLine(`🎣 Caught ${items.name(e.itemId)} (+${e.qty})`, "catch"),
-  );
-  engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${items.name(e.itemId)}`, "craft"));
-  engine.on("equipped", (e) => feedLine(`Equipped ${items.name(e.itemId)}`));
-  engine.on("item-bought", (e) =>
-    feedLine(`Bought ${e.qty} ${items.name(e.itemId)} (-${e.gold}g)`, "buy"),
-  );
-  // Out-of-ammo (#119): a toast (the acceptance criterion's own required surface) plus a feed
-  // line, mirroring the overflow-sold/overflow-lost/duplicate-sold warnings' "⚠" + "overflow"
-  // class treatment — this is the same "player needs to notice" severity.
   engine.on("out-of-ammo", (e) => {
-    // #221: `element` is only set for a DEPLETED (but still loaded) Rune Slot; a truly empty slot
-    // has no Spell at all, so it falls back to a Spell-agnostic message rather than "undefined".
     const text =
       e.need === "arrow"
         ? "🏹 Out of arrows!"
@@ -782,30 +723,12 @@ export function mountApp(
           ? `🔮 Out of ${e.element} runes!`
           : "🔮 No rune loaded!";
     showToast(text);
-    feedLine(`⚠ ${text}`, "overflow");
   });
-  // Pet drop (#120): a never-before-owned pet — celebratory, reusing the rare-Drop band's own
-  // screen-flash + toast + feed-line treatment (the issue's own "reuse the rare-drop band/flash
-  // presentation" instruction), rather than inventing a parallel severity.
   engine.on("pet-dropped", (e) => {
     const name = content.petsById.get(e.petId)?.name ?? e.petId;
     const text = `🐾 New pet: ${name}!`;
-    feedLine(text, "pet-dropped");
     showToast(text);
     triggerRareFlash();
-  });
-  engine.on("wave-cleared", (e) => feedLine(`Wave ${e.wave}/${e.totalWaves} cleared`));
-  engine.on("dungeon-completed", (e) => {
-    const def = content.dungeonsById.get(e.dungeonId);
-    feedLine(`🏰 ${def?.name ?? e.dungeonId} cleared!`, "dungeon-completed");
-  });
-  engine.on("chest-opened", (e) => {
-    // feedLine prepends, so the newest call ends up on top: insert items in reverse, then the
-    // header last, so the visual (top-to-bottom) order reads header followed by items in order.
-    for (const item of [...e.items].reverse()) {
-      feedLine(`+${item.qty} ${items.name(item.itemId)}`, `drop-${item.band}`);
-    }
-    feedLine("📦 Chest opened!", "chest-header");
   });
 
   // Menu button (#206): always-visible in the compact widget, toggling Character alone open or
@@ -870,7 +793,7 @@ export function mountApp(
     // If something moved, the looted listener above already logged the leftover check itself; this
     // covers the otherwise-silent case where the sweep moved nothing at all (no looted event fires).
     if (after > 0 && after === before) {
-      feedLine("⚠ Bank full — loot left behind", "overflow");
+      lootFeed.logLine("⚠ Bank full — loot left behind", "overflow");
     }
   }
   el("#loot-strip-all-btn").addEventListener("click", handleLootAll);
