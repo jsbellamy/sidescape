@@ -129,7 +129,7 @@ describe("createCharacterHubUi — Combat Style", () => {
     return [...host.querySelectorAll<HTMLButtonElement>("#style-row button")];
   }
 
-  it("renders one button per Combat Style from the label map", () => {
+  it("renders melee styles (Accurate/Aggressive/Defensive) when unarmed", () => {
     const { host } = mountCharacterHub();
     const buttons = styleButtons(host);
     expect(buttons).toHaveLength(3);
@@ -138,9 +138,49 @@ describe("createCharacterHubUi — Combat Style", () => {
       "aggressive",
       "defensive",
     ]);
+    expect(buttons.some((b) => b.dataset["style"] === "rapid")).toBe(false);
   });
 
-  it("clicking a style dispatches setCombatStyle and calls onChanged", () => {
+  it("renders ranged/magic styles (Accurate/Rapid/Defensive) when a bow is equipped", () => {
+    const { host } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bow" } },
+    });
+    const buttons = styleButtons(host);
+    expect(buttons).toHaveLength(3);
+    expect(buttons.map((b) => b.dataset["style"]).sort()).toEqual([
+      "accurate",
+      "defensive",
+      "rapid",
+    ]);
+    expect(buttons.some((b) => b.dataset["style"] === "aggressive")).toBe(false);
+  });
+
+  it("renders ranged/magic styles (Accurate/Rapid/Defensive) when a staff is equipped", () => {
+    const { host } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "staff" } },
+    });
+    const buttons = styleButtons(host);
+    expect(buttons).toHaveLength(3);
+    expect(buttons.map((b) => b.dataset["style"]).sort()).toEqual([
+      "accurate",
+      "defensive",
+      "rapid",
+    ]);
+    expect(buttons.some((b) => b.dataset["style"] === "aggressive")).toBe(false);
+  });
+
+  it("clicking Rapid dispatches setCombatStyle when a bow is equipped", () => {
+    const { engine, host, commands, onChanged } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bow" } },
+      bank: { items: [{ itemId: "arrow", qty: 1 }] },
+    });
+    host.querySelector<HTMLButtonElement>('[data-style="rapid"]')?.click();
+    expect(commands.setCombatStyle).toHaveBeenCalledWith("rapid");
+    expect(engine.snapshot().player.combatStyle).toBe("rapid");
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("clicking a melee style dispatches setCombatStyle and calls onChanged", () => {
     const { engine, host, commands, onChanged } = mountCharacterHub();
     host.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
     expect(commands.setCombatStyle).toHaveBeenCalledWith("accurate");

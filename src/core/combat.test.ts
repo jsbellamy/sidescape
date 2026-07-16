@@ -1,12 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { attackRoll, effectiveLevel, hitChance, maxHit, weakSpot } from "./combat";
+import { attackRoll, effectiveLevel, hitChance, maxHit, styleBoostSkill, weakSpot } from "./combat";
 
 // Expected values hand-computed from the OSRS formulas (docs/design.md).
 describe("effectiveLevel", () => {
-  it("adds 8, plus 3 when the Combat Style boosts the skill", () => {
-    expect(effectiveLevel(1, "strength", "aggressive")).toBe(12);
-    expect(effectiveLevel(1, "strength", "accurate")).toBe(9);
-    expect(effectiveLevel(40, "defence", "defensive")).toBe(51);
+  it("adds 8, plus 3 when the Combat Style boosts the skill for melee", () => {
+    expect(effectiveLevel(1, "strength", "aggressive", "melee")).toBe(12);
+    expect(effectiveLevel(1, "strength", "accurate", "melee")).toBe(9);
+    expect(effectiveLevel(40, "defence", "defensive", "melee")).toBe(51);
+  });
+
+  it("mode-aware ranged boosts: Accurate boosts Ranged, Rapid does not, Defensive boosts Defence", () => {
+    expect(effectiveLevel(10, "ranged", "accurate", "ranged")).toBe(21);
+    expect(effectiveLevel(10, "ranged", "rapid", "ranged")).toBe(18);
+    expect(effectiveLevel(10, "defence", "defensive", "ranged")).toBe(21);
+    expect(effectiveLevel(10, "ranged", "defensive", "ranged")).toBe(18);
+  });
+
+  it("mode-aware magic boosts: Accurate boosts Magic, Rapid does not, Defensive boosts Defence", () => {
+    expect(effectiveLevel(10, "magic", "accurate", "magic")).toBe(21);
+    expect(effectiveLevel(10, "magic", "rapid", "magic")).toBe(18);
+    expect(effectiveLevel(10, "defence", "defensive", "magic")).toBe(21);
+    expect(effectiveLevel(10, "magic", "defensive", "magic")).toBe(18);
+  });
+});
+
+describe("styleBoostSkill", () => {
+  it("keeps melee mappings unchanged", () => {
+    expect(styleBoostSkill("melee", "accurate")).toBe("attack");
+    expect(styleBoostSkill("melee", "aggressive")).toBe("strength");
+    expect(styleBoostSkill("melee", "defensive")).toBe("defence");
+    expect(styleBoostSkill("melee", "rapid")).toBeNull();
   });
 });
 

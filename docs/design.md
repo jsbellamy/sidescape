@@ -39,7 +39,7 @@ Character Settings owns Mute, Import/Export, and the scale selector.
 
 - **Attack** (hit chance), **Strength** (max hit), **Defence** (damage avoidance), **Hitpoints** (HP pool; gains XP from all combat).
 - RuneScape-style exponential XP table, levels 1–99. XP per kill scales with Monster HP.
-- **Combat Style** selector: Accurate (Attack XP) / Aggressive (Strength XP) / Defensive (Defence XP); Hitpoints XP always trickles.
+- **Combat Style** selector: mode-aware — melee Accurate (Attack XP) / Aggressive (Strength XP) / Defensive (Defence XP); ranged and magic Accurate (mode Skill XP + boost) / Rapid (mode Skill XP, faster attacks) / Defensive (50/50 mode Skill + Defence XP, Defence boost). Hitpoints XP always trickles.
 
 ## Combat model
 

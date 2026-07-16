@@ -1386,7 +1386,7 @@ describe("Jewelry Gear Slots (#117): amulet/ring are an offence slot, unlike arm
     // change was needed for jewelry to reach the damage roll (#117): gearBonus() already summed
     // across every equipped slot before this issue; only validateContent was gating it out.
     // (level 99 so the formula's floor() can't mask the difference the way it would at level 1.)
-    const eff = effectiveLevel(99, "strength", "aggressive");
+    const eff = effectiveLevel(99, "strength", "aggressive", "melee");
     expect(maxHit(eff, bonuses.strBonus)).toBeGreaterThan(maxHit(eff, 0));
   });
 
@@ -4205,7 +4205,7 @@ describe("Production skill chassis (#113)", () => {
   });
 });
 
-describe("Ranged and Magic Skills (#7)", () => {
+describe("Ranged and Magic Skills (#7, #339 mode-aware Combat Style)", () => {
   describe("weapon-driven XP routing", () => {
     it("melee combat (no weapon, or a melee weapon) never touches Ranged or Magic XP", () => {
       const engine = freshEngine();
@@ -4217,14 +4217,13 @@ describe("Ranged and Magic Skills (#7)", () => {
       expect(skills.magic.xp).toBe(0);
     });
 
-    it("equipping the ranged Test Bow routes attack XP to Ranged instead of Attack/Strength/Defence, bypassing Combat Style; Hitpoints still trickles", () => {
+    it("equipping the ranged Test Bow with Accurate routes attack XP to Ranged; Hitpoints still trickles", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(42),
-        // Ranged now requires a loaded Quiver (#119) — a deep stack outlasts this test's Ticks.
         makeSnapshot({
           player: {
-            combatStyle: "aggressive",
+            combatStyle: "accurate",
             equipment: { weapon: "bow" },
             quiver: { itemId: "arrow", qty: 100_000 },
           },
@@ -4238,12 +4237,51 @@ describe("Ranged and Magic Skills (#7)", () => {
       expect(skills.strength.xp).toBe(0);
       expect(skills.defence.xp).toBe(0);
       expect(skills.magic.xp).toBe(0);
-      // makeSnapshot's fixture default starts Hitpoints at level 1 / 0 xp (unlike freshState's
-      // level-10 default), so no baseline subtraction is needed here.
       expect(skills.hitpoints.xp).toBeCloseTo(skills.ranged.xp / 3, 6);
     });
 
-    it("equipping the magic Test Staff routes attack XP to Magic instead of Attack/Strength/Defence, bypassing Combat Style; Hitpoints still trickles", () => {
+    it("equipping the ranged Test Bow with Rapid routes attack XP to Ranged (same rate as Accurate)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "rapid",
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.ranged.xp).toBeGreaterThan(0);
+      expect(skills.defence.xp).toBe(0);
+    });
+
+    it("Defensive ranged splits XP 50/50 between Ranged and Defence", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "defensive",
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.ranged.xp).toBeGreaterThan(0);
+      expect(skills.defence.xp).toBeGreaterThan(0);
+      expect(skills.ranged.xp).toBeCloseTo(skills.defence.xp, 6);
+      expect(skills.attack.xp).toBe(0);
+      expect(skills.strength.xp).toBe(0);
+    });
+
+    it("equipping the magic Test Staff with Accurate routes attack XP to Magic; Hitpoints still trickles", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(42),
@@ -4264,9 +4302,27 @@ describe("Ranged and Magic Skills (#7)", () => {
       expect(skills.strength.xp).toBe(0);
       expect(skills.defence.xp).toBe(0);
       expect(skills.ranged.xp).toBe(0);
-      // makeSnapshot's fixture default starts Hitpoints at level 1 / 0 xp (unlike freshState's
-      // level-10 default), so no baseline subtraction is needed here.
       expect(skills.hitpoints.xp).toBeCloseTo(skills.magic.xp / 3, 6);
+    });
+
+    it("Defensive magic splits XP 50/50 between Magic and Defence", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "defensive",
+            equipment: { weapon: "staff" },
+            runeSlot: { itemId: "air-rune", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 400; i++) engine.tick();
+      const { skills } = engine.snapshot().player;
+      expect(skills.magic.xp).toBeGreaterThan(0);
+      expect(skills.defence.xp).toBeGreaterThan(0);
+      expect(skills.magic.xp).toBeCloseTo(skills.defence.xp, 6);
     });
 
     it("switching from a ranged weapon back to unarmed resumes ordinary Combat Style routing", () => {
@@ -4295,6 +4351,212 @@ describe("Ranged and Magic Skills (#7)", () => {
       const after = engine.snapshot().player.skills;
       expect(after.defence.xp).toBeGreaterThan(before.defence.xp); // defensive style, now melee
       expect(after.ranged.xp).toBe(before.ranged.xp); // no further Ranged XP once swapped off
+    });
+  });
+
+  describe("mode-aware Combat Style (#339)", () => {
+    function bowEngine(style: CombatStyle, seed = 42) {
+      return createEngine(
+        fixtureContent,
+        seededRng(seed),
+        makeSnapshot({
+          player: {
+            combatStyle: style,
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+    }
+
+    it("Rapid yields more player attacks than Accurate over the same Tick window", () => {
+      function playerAttacks(style: CombatStyle, ticks: number): number {
+        const engine = bowEngine(style, 7);
+        engine.selectMonster("dummy");
+        let count = 0;
+        engine.on("attack", (e) => {
+          if (e.actor === "player") count++;
+        });
+        for (let i = 0; i < ticks; i++) engine.tick();
+        return count;
+      }
+
+      expect(bowEngine("accurate", 7).snapshot().player.bonuses.attackSpeed).toBe(4);
+      expect(bowEngine("rapid", 7).snapshot().player.bonuses.attackSpeed).toBe(3);
+      expect(playerAttacks("rapid", 60)).toBeGreaterThan(playerAttacks("accurate", 60));
+    });
+
+    it("Rapid speed floor: max(1, speed - 1) for a 1-Tick ranged weapon", () => {
+      const fastBowContent = {
+        ...fixtureContent,
+        items: [
+          ...fixtureContent.items,
+          {
+            kind: "equipment" as const,
+            id: "fast-bow",
+            name: "Fast Bow",
+            icon: "shortbow",
+            slot: "weapon" as const,
+            attackType: "ranged" as const,
+            atkBonus: 10,
+            strBonus: 30,
+            def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+            attackSpeed: 1,
+            value: 20,
+          },
+        ],
+      };
+      const engine = createEngine(
+        fastBowContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "rapid",
+            equipment: { weapon: "fast-bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("dummy");
+      expect(engine.snapshot().player.bonuses.attackSpeed).toBe(1);
+    });
+
+    it("equip sword (aggressive) → bow remaps to rapid; bow (rapid) → sword remaps to aggressive", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "aggressive",
+            equipment: { weapon: "bronze-sword" },
+          },
+          bank: { items: [{ itemId: "bow", qty: 1 }] },
+        }),
+      );
+      engine.equip("bow");
+      expect(engine.snapshot().player.combatStyle).toBe("rapid");
+
+      engine.equip("bronze-sword");
+      expect(engine.snapshot().player.combatStyle).toBe("aggressive");
+    });
+
+    it("Defensive is preserved across melee ↔ ranged weapon swaps", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "defensive",
+            equipment: { weapon: "bronze-sword" },
+          },
+          bank: { items: [{ itemId: "bow", qty: 1 }] },
+        }),
+      );
+      engine.equip("bow");
+      expect(engine.snapshot().player.combatStyle).toBe("defensive");
+      engine.equip("bronze-sword");
+      expect(engine.snapshot().player.combatStyle).toBe("defensive");
+    });
+
+    it('setCombatStyle("rapid") throws while a melee weapon is equipped', () => {
+      const engine = freshEngine();
+      expect(() => engine.setCombatStyle("rapid")).toThrow(/illegal for melee/i);
+    });
+
+    it('setCombatStyle("aggressive") throws while a bow is equipped', () => {
+      const engine = bowEngine("accurate");
+      expect(() => engine.setCombatStyle("aggressive")).toThrow(/illegal for ranged/i);
+    });
+
+    it("Defensive ranged raises the player's incoming-hit Defence roll through the Engine interface", () => {
+      function monsterHitRate(style: CombatStyle): number {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(11),
+          makeSnapshot({
+            player: {
+              combatStyle: style,
+              skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+              equipment: { weapon: "bow", head: "lucky-charm" },
+              quiver: { itemId: "arrow", qty: 100_000 },
+            },
+          }),
+        );
+        engine.selectMonster("dummy");
+        let hits = 0;
+        let total = 0;
+        engine.on("attack", (e) => {
+          if (e.actor !== "monster") return;
+          total++;
+          if (e.hit) hits++;
+        });
+        for (let i = 0; i < 8000; i++) engine.tick();
+        expect(total).toBeGreaterThan(200);
+        return hits / total;
+      }
+      const rapidRate = monsterHitRate("rapid");
+      const defensiveRate = monsterHitRate("defensive");
+      expect(defensiveRate).toBeLessThan(rapidRate);
+    });
+
+    it("Defensive magic raises the player's incoming-hit Defence roll through the Engine interface", () => {
+      function monsterHitRate(style: CombatStyle): number {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(11),
+          makeSnapshot({
+            player: {
+              combatStyle: style,
+              skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+              equipment: { weapon: "staff", head: "lucky-charm" },
+              runeSlot: { itemId: "air-rune", qty: 100_000 },
+            },
+          }),
+        );
+        engine.selectMonster("dummy");
+        let hits = 0;
+        let total = 0;
+        engine.on("attack", (e) => {
+          if (e.actor !== "monster") return;
+          total++;
+          if (e.hit) hits++;
+        });
+        for (let i = 0; i < 8000; i++) engine.tick();
+        expect(total).toBeGreaterThan(200);
+        return hits / total;
+      }
+      const rapidRate = monsterHitRate("rapid");
+      const defensiveRate = monsterHitRate("defensive");
+      expect(defensiveRate).toBeLessThan(rapidRate);
+    });
+
+    it('loads combatStyle "rapid" when legal and remaps rapid+mace to aggressive on resume', () => {
+      const rapidBow = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "rapid",
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+          monster: { id: "dummy", hp: 10 },
+        }),
+      );
+      expect(rapidBow.snapshot().player.combatStyle).toBe("rapid");
+      expect(rapidBow.snapshot().player.bonuses.attackSpeed).toBe(3);
+
+      const remapped = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "rapid",
+            equipment: { weapon: "bronze-sword" },
+          },
+        }),
+      );
+      expect(remapped.snapshot().player.combatStyle).toBe("aggressive");
     });
   });
 
@@ -4463,7 +4725,12 @@ describe("Ranged and Magic Skills (#7)", () => {
         seededRng(1),
         // Ranged now requires a loaded Quiver (#119).
         makeSnapshot({
-          player: { equipment: { weapon: "bow" }, quiver: { itemId: "arrow", qty: 100_000 } },
+          player: {
+            combatStyle: "accurate",
+            skills: { hitpoints: { level: 99, xp: xpForLevel(99) } },
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
         }),
         () => 0,
       );
@@ -4545,6 +4812,7 @@ describe("Attack Type axis (#99)", () => {
         seededRng(99),
         makeSnapshot({
           player: {
+            combatStyle: "accurate",
             skills: {
               attack: { level: attackLevel, xp: xpForLevel(attackLevel) },
               strength: { level: strengthLevel, xp: xpForLevel(strengthLevel) },
@@ -4557,7 +4825,7 @@ describe("Attack Type axis (#99)", () => {
           },
         }),
       );
-      engine.selectMonster("dummy");
+      engine.selectMonster("weak-dummy");
       const damages: number[] = [];
       engine.on("attack", (e) => {
         if (e.actor === "player") damages.push(e.damage);
@@ -4610,7 +4878,7 @@ describe("Attack Type axis (#99)", () => {
       const dummy = fixtureContent.monsters.find((m) => m.id === "dummy")!;
       const expectedAtkRoll = attackRoll(dummy.attackLevel + 8, 0);
       // Player: level-1 Defence, default combatStyle "aggressive" (no Defence style boost).
-      const expectedDefRoll = defenceRoll(effectiveLevel(1, "defence", "aggressive"), 1);
+      const expectedDefRoll = defenceRoll(effectiveLevel(1, "defence", "aggressive", "melee"), 1);
       const expectedHitChance = hitChance(expectedAtkRoll, expectedDefRoll);
 
       expect(hits / total).toBeCloseTo(expectedHitChance, 1);
