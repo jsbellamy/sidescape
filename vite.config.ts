@@ -32,6 +32,6 @@ export default defineConfig(async () => ({
     environment: "node",
     // Playwright owns the browser-degraded smoke specs in e2e/; keep Vitest's
     // existing colocated suites from ever collecting that directory.
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/art/**/*.test.ts"],
   },
 }));

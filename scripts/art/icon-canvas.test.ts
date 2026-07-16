@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 // icon-canvas.mjs is the plain-JS module `npm run art` actually renders icons with — imported
 // directly (tsconfig's `allowJs`) so this test exercises the exact `thickLine` shipped, not a
 // parallel TS reimplementation that could drift.
-import { createCanvas, createMask, paintGrid } from "../../scripts/art/icon-canvas.mjs";
+import { createCanvas, createMask, paintGrid } from "./icon-canvas.mjs";
 
 describe("thickLine", () => {
   it("stamps a width-2 diagonal with no single-pixel steps: every occupied row has >=2 opaque columns and vice versa", () => {

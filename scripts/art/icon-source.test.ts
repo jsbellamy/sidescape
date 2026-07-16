@@ -4,13 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 // icon-source.mjs is the plain-JS Stage-2 build converter `scripts/art/icons.mjs` runs for
 // source-driven icons; imported directly (tsconfig allowJs) so this exercises the shipped code.
-import { createCanvas } from "../../scripts/art/icon-canvas.mjs";
-import {
-  loadSourceGrid,
-  MAX_BODY_COLORS,
-  paintSourceIcon,
-} from "../../scripts/art/icon-source.mjs";
-import { encodePng } from "../../scripts/art/write-png.mjs";
+import { createCanvas } from "./icon-canvas.mjs";
+import { loadSourceGrid, MAX_BODY_COLORS, paintSourceIcon } from "./icon-source.mjs";
+import { encodePng } from "./write-png.mjs";
 
 type RGB = [number, number, number];
 type Grid = (RGB | null)[][];
