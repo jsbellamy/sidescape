@@ -36,6 +36,14 @@ const SOURCE_PALETTES = {
     zoneNames: ["town", "sewer", "meadow"],
   },
   "golden-base-air-rune.png": { materialRampNames: ["water"], zoneNames: ["meadow", "forest"] },
+  "golden-base-air-bolt-rune.png": {
+    materialRampNames: ["water"],
+    zoneNames: ["meadow", "forest"],
+  },
+  "golden-base-air-blast-rune.png": {
+    materialRampNames: ["water"],
+    zoneNames: ["meadow", "forest"],
+  },
   "golden-base-apprentice-staff.png": {
     materialRampNames: ["ember", "gold", "steel"],
     zoneNames: ["town", "crypt", "sewer"],
@@ -1309,6 +1317,20 @@ export const icons = [
     },
   },
   {
+    // Between bronze (orange/tan head) and steel (mid-grey): same `steel` ramp as steel-arrow,
+    // one stop lighter (#360). Iron and steel share the ramp; value placement separates them.
+    name: "iron-arrow",
+    source: "golden-base-bronze-arrow.png",
+    opts: {
+      recolor: {
+        "town[2]": "steel.base",
+        "town[3]": "steel.light",
+        "town[4]": "steel.glint",
+        "ember.base": "P.cream",
+      },
+    },
+  },
+  {
     name: "mithril-arrow",
     source: "golden-base-bronze-arrow.png",
     opts: {
@@ -1380,6 +1402,91 @@ export const icons = [
   {
     name: "fire-rune",
     source: "golden-base-air-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "ember.shadow",
+        "water.base": "ember.base",
+        "meadow[0]": "ember.base",
+        "water.light": "ember.light",
+        "water.glint": "ember.glint",
+      },
+    },
+  },
+  // --- Bolt rune family ---
+  // Same stone as Strike (`golden-base-air-rune`); zigzag lightning sigil carries tier. Element
+  // recolors lift the Strike maps verbatim (#360).
+  { name: "water-bolt-rune", source: "golden-base-air-bolt-rune.png" },
+  {
+    name: "air-bolt-rune",
+    source: "golden-base-air-bolt-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "steel.shadow",
+        "water.base": "steel.base",
+        "meadow[0]": "steel.base",
+        "water.light": "steel.light",
+        "water.glint": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "earth-bolt-rune",
+    source: "golden-base-air-bolt-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "meadow[4]",
+        "water.base": "meadow[3]",
+        "meadow[0]": "meadow[2]",
+        "water.light": "forest[3]",
+        "water.glint": "forest[5]",
+      },
+    },
+  },
+  {
+    name: "fire-bolt-rune",
+    source: "golden-base-air-bolt-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "ember.shadow",
+        "water.base": "ember.base",
+        "meadow[0]": "ember.base",
+        "water.light": "ember.light",
+        "water.glint": "ember.glint",
+      },
+    },
+  },
+  // --- Blast rune family ---
+  // Same stone; four-pointed star-burst sigil carries tier. Element maps identical to Strike/Bolt.
+  { name: "water-blast-rune", source: "golden-base-air-blast-rune.png" },
+  {
+    name: "air-blast-rune",
+    source: "golden-base-air-blast-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "steel.shadow",
+        "water.base": "steel.base",
+        "meadow[0]": "steel.base",
+        "water.light": "steel.light",
+        "water.glint": "steel.glint",
+      },
+    },
+  },
+  {
+    name: "earth-blast-rune",
+    source: "golden-base-air-blast-rune.png",
+    opts: {
+      recolor: {
+        "forest[1]": "meadow[4]",
+        "water.base": "meadow[3]",
+        "meadow[0]": "meadow[2]",
+        "water.light": "forest[3]",
+        "water.glint": "forest[5]",
+      },
+    },
+  },
+  {
+    name: "fire-blast-rune",
+    source: "golden-base-air-blast-rune.png",
     opts: {
       recolor: {
         "forest[1]": "ember.shadow",

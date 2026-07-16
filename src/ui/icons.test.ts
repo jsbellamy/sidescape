@@ -48,6 +48,29 @@ describe("icons registry (#78)", () => {
     const keys = content.pets.map((p) => p.icon);
     expect(new Set(keys).size).toBe(keys.length);
   });
+
+  // #360: Bolt/Blast rune icons + iron-arrow registered ahead of their Items (#364/#365).
+  it("resolves Wave A (#360) icon keys to distinct non-empty URLs", () => {
+    const keys = [
+      "air-bolt-rune",
+      "water-bolt-rune",
+      "earth-bolt-rune",
+      "fire-bolt-rune",
+      "air-blast-rune",
+      "water-blast-rune",
+      "earth-blast-rune",
+      "fire-blast-rune",
+      "iron-arrow",
+    ] as const;
+    const urls = keys.map((key) => itemIcon(key));
+    for (const url of urls) {
+      expect(url).toEqual(expect.any(String));
+      expect(url.length).toBeGreaterThan(0);
+    }
+    expect(new Set(urls).size).toBe(urls.length);
+    const allUrls = registeredIconKeys().map((key) => itemIcon(key));
+    expect(new Set(allUrls).size).toBe(allUrls.length);
+  });
 });
 
 // UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons, resolved
