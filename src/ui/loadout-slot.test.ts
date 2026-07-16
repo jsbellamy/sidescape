@@ -276,14 +276,14 @@ describe("createLoadoutSlotUi — Food click-to-eat vs unassign", () => {
 });
 
 describe("createLoadoutSlotUi — exact command arguments", () => {
-  it("assignFoodSlot receives the exact slot index and itemId", () => {
+  it("assignLoadoutSlot receives the exact slot index and itemId for food", () => {
     const { engine, root } = mountLoadoutUi({ bank: { items: [{ itemId: "meat", qty: 5 }] } });
     root.querySelector<HTMLButtonElement>('[data-add="1"]')?.click();
     root.querySelector<HTMLButtonElement>('[data-assign="1"][data-item="meat"]')?.click();
     expect(engine.snapshot().player.foodSlots[1]).toEqual({ itemId: "meat", qty: 5 });
   });
 
-  it("unassignFoodSlot receives the exact slot index", () => {
+  it("clearLoadoutSlot receives the exact food slot index", () => {
     const { engine, root } = mountLoadoutUi({
       player: { foodSlots: [null, { itemId: "meat", qty: 3 }, null] },
     });
@@ -304,7 +304,7 @@ describe("createLoadoutSlotUi — exact command arguments", () => {
     expect(engine.snapshot().player.foodSlots[1]).toEqual({ itemId: "meat", qty: 2 });
   });
 
-  it("assignPotionSlot/unassignPotionSlot receive the exact itemId and no args", () => {
+  it("assignLoadoutSlot/clearLoadoutSlot receive the exact potion itemId and no index", () => {
     const { engine, root } = mountLoadoutUi({
       bank: { items: [{ itemId: "strength-potion", qty: 5 }] },
     });
@@ -320,7 +320,7 @@ describe("createLoadoutSlotUi — exact command arguments", () => {
     expect(engine.snapshot().player.potionSlot).toBeNull();
   });
 
-  it("loadQuiver/unloadQuiver receive the exact itemId and no args", () => {
+  it("assignLoadoutSlot/clearLoadoutSlot receive the exact quiver itemId and no index", () => {
     const { engine, root } = mountLoadoutUi({ bank: { items: [{ itemId: "arrow", qty: 30 }] } });
     root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
     root.querySelector<HTMLButtonElement>('[data-quiver-assign="arrow"]')?.click();
@@ -330,7 +330,7 @@ describe("createLoadoutSlotUi — exact command arguments", () => {
     expect(engine.snapshot().player.quiver).toBeNull();
   });
 
-  it("loadRuneSlot/unloadRuneSlot receive the exact itemId and no args", () => {
+  it("assignLoadoutSlot/clearLoadoutSlot receive the exact rune itemId and no index", () => {
     const { engine, root } = mountLoadoutUi({ bank: { items: [{ itemId: "air-rune", qty: 10 }] } });
     root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
     root.querySelector<HTMLButtonElement>('[data-rune-assign="air-rune"]')?.click();

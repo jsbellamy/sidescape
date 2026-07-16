@@ -766,7 +766,7 @@ export const content: Content = composeContent(
       // Herblore wave (#118): the #113 chassis's fourth non-Smithing content — brews herbs (see the
       // "#118: herb drop" comments on the tiered Areas' Monsters' dropTables above) straight into
       // charge potions (#118's PotionDef, consumed via the Potion Slot — see engine.ts's
-      // assignPotionSlot/decrementPotionCharge). levelReqs climb with the herb tier, mirroring the
+      // assignLoadoutSlot/decrementPotionCharge). levelReqs climb with the herb tier, mirroring the
       // Cooking/Crafting ladders' own tier-interleaving shape.
       //
       // Economy check (owner-mandated arithmetic, verbatim from the issue's own worked example):

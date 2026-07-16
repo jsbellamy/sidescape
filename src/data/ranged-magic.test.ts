@@ -107,7 +107,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       }),
     );
     engine.equip("shortbow");
-    engine.loadQuiver("bronze-arrow");
+    engine.assignLoadoutSlot("quiver", "bronze-arrow");
     expect(engine.snapshot().player.equipment.weapon).toBe("shortbow");
 
     engine.selectMonster("chicken");
@@ -134,7 +134,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       }),
     );
     engine.equip("apprentice-staff");
-    engine.loadRuneSlot("air-rune");
+    engine.assignLoadoutSlot("rune", "air-rune");
     expect(engine.snapshot().player.equipment.weapon).toBe("apprentice-staff");
 
     engine.selectMonster("chicken");

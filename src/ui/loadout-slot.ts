@@ -25,15 +25,7 @@ export type LoadoutSlotPlayer = Pick<
  * real Engine (a superset) without this module gaining access to unrelated commands. */
 export type LoadoutSlotCommands = Pick<
   Engine,
-  | "assignFoodSlot"
-  | "unassignFoodSlot"
-  | "eatFromSlot"
-  | "assignPotionSlot"
-  | "unassignPotionSlot"
-  | "loadQuiver"
-  | "unloadQuiver"
-  | "loadRuneSlot"
-  | "unloadRuneSlot"
+  "assignLoadoutSlot" | "clearLoadoutSlot" | "eatFromSlot"
 >;
 
 export interface LoadoutSlotUi {
@@ -331,7 +323,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
 
     const unassignValue = target.dataset["unassign"];
     if (unassignValue !== undefined) {
-      commands.unassignFoodSlot(Number(unassignValue));
+      commands.clearLoadoutSlot("food", Number(unassignValue));
       openChooser = null;
       onChanged();
       return;
@@ -348,7 +340,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     if (assignValue !== undefined) {
       const itemId = target.dataset["item"];
       if (itemId !== undefined) {
-        commands.assignFoodSlot(Number(assignValue), itemId);
+        commands.assignLoadoutSlot("food", itemId, Number(assignValue));
         openChooser = null;
         onChanged();
         return;
@@ -370,7 +362,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     const target = event.target as HTMLElement;
 
     if (target.dataset["potionUnassign"] !== undefined) {
-      commands.unassignPotionSlot(); // logs nothing; no feed line for unassign (mirrors Food Slot)
+      commands.clearLoadoutSlot("potion"); // logs nothing; no feed line for unassign (mirrors Food Slot)
       openChooser = null;
       onChanged();
       return;
@@ -378,7 +370,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
 
     const itemId = target.dataset["potionAssign"];
     if (itemId !== undefined) {
-      commands.assignPotionSlot(itemId);
+      commands.assignLoadoutSlot("potion", itemId);
       openChooser = null;
       onChanged();
       return;
@@ -397,7 +389,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     const target = event.target as HTMLElement;
 
     if (target.dataset["quiverUnassign"] !== undefined) {
-      commands.unloadQuiver(); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
+      commands.clearLoadoutSlot("quiver"); // logs nothing; no feed line for unload (mirrors Food/Potion Slot)
       openChooser = null;
       onChanged();
       return;
@@ -405,7 +397,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
 
     const itemId = target.dataset["quiverAssign"];
     if (itemId !== undefined) {
-      commands.loadQuiver(itemId);
+      commands.assignLoadoutSlot("quiver", itemId);
       openChooser = null;
       onChanged();
       return;
@@ -420,12 +412,12 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
 
   // Rune Slot tile: dispatch order mirrors the Quiver above — unassign (✕) before a chooser pick,
   // before the [+] toggle. A gated (disabled) chooser row never fires click at all, so
-  // `loadRuneSlot`'s own "magic level too low" throw is a backstop, never the primary gate.
+  // `assignLoadoutSlot`'s own "magic level too low" throw is a backstop, never the primary gate.
   el("#rune-slot").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
 
     if (target.dataset["runeUnassign"] !== undefined) {
-      commands.unloadRuneSlot(); // logs nothing; no feed line for unload (mirrors Quiver)
+      commands.clearLoadoutSlot("rune"); // logs nothing; no feed line for unload (mirrors Quiver)
       openChooser = null;
       onChanged();
       return;
@@ -433,7 +425,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
 
     const itemId = target.dataset["runeAssign"];
     if (itemId !== undefined) {
-      commands.loadRuneSlot(itemId);
+      commands.assignLoadoutSlot("rune", itemId);
       openChooser = null;
       onChanged();
       return;

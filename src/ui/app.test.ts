@@ -2036,7 +2036,7 @@ describe("Casting readout (#221)", () => {
     );
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    engine.loadRuneSlot("air-rune");
+    engine.assignLoadoutSlot("rune", "air-rune");
     app.render();
     expect(root.querySelector("#casting-readout")?.textContent).toBe("Casting: Test Spark");
   });
@@ -2050,7 +2050,7 @@ describe("Casting readout (#221)", () => {
     const root = document.createElement("main");
     const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
     expect(root.querySelector("#casting-readout")?.textContent).toBe("Casting: Test Spark");
-    engine.unloadRuneSlot();
+    engine.clearLoadoutSlot("rune");
     app.render();
     expect(root.querySelector("#casting-readout")?.textContent).toMatch(/no rune loaded/i);
   });

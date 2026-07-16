@@ -628,14 +628,14 @@ describe("Passive HP regen", () => {
 });
 
 describe("Active Food Slots (#61)", () => {
-  describe("assignFoodSlot", () => {
+  describe("assignLoadoutSlot food", () => {
     it("moves the entire Bank stock into the slot, clearing the Bank stack", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
       );
-      engine.assignFoodSlot(0, "meat");
+      engine.assignLoadoutSlot("food", "meat", 0);
       expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
       expect(engine.snapshot().bank.items).toEqual([]);
     });
@@ -646,8 +646,8 @@ describe("Active Food Slots (#61)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
       );
-      expect(() => engine.assignFoodSlot(-1, "meat")).toThrow();
-      expect(() => engine.assignFoodSlot(3, "meat")).toThrow();
+      expect(() => engine.assignLoadoutSlot("food", "meat", -1)).toThrow();
+      expect(() => engine.assignLoadoutSlot("food", "meat", 3)).toThrow();
     });
 
     it("throws for an unknown itemId or a non-Food item", () => {
@@ -656,13 +656,13 @@ describe("Active Food Slots (#61)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
       );
-      expect(() => engine.assignFoodSlot(0, "unobtainium")).toThrow(/food/i);
-      expect(() => engine.assignFoodSlot(0, "bronze-sword")).toThrow(/food/i);
+      expect(() => engine.assignLoadoutSlot("food", "unobtainium", 0)).toThrow(/food/i);
+      expect(() => engine.assignLoadoutSlot("food", "bronze-sword", 0)).toThrow(/food/i);
     });
 
     it("throws when the Bank holds zero of the Food", () => {
       const engine = freshEngine();
-      expect(() => engine.assignFoodSlot(0, "meat")).toThrow(/own/i);
+      expect(() => engine.assignLoadoutSlot("food", "meat", 0)).toThrow(/own/i);
     });
 
     it("throws when the same Food is already assigned to a DIFFERENT slot", () => {
@@ -671,8 +671,8 @@ describe("Active Food Slots (#61)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
       );
-      engine.assignFoodSlot(0, "meat");
-      expect(() => engine.assignFoodSlot(1, "meat")).toThrow(/assigned/i);
+      engine.assignLoadoutSlot("food", "meat", 0);
+      expect(() => engine.assignLoadoutSlot("food", "meat", 1)).toThrow(/assigned/i);
       expect(engine.snapshot().player.foodSlots[1]).toBeNull(); // untouched
     });
 
@@ -685,7 +685,7 @@ describe("Active Food Slots (#61)", () => {
           player: { foodSlots: [{ itemId: "meat", qty: 7 }, null, null] },
         }),
       );
-      engine.assignFoodSlot(0, "bread");
+      engine.assignLoadoutSlot("food", "bread", 0);
       expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "bread", qty: 4 });
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 7 }]);
     });
@@ -707,7 +707,7 @@ describe("Active Food Slots (#61)", () => {
           player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
         }),
       );
-      expect(() => engine.assignFoodSlot(0, "bread")).not.toThrow();
+      expect(() => engine.assignLoadoutSlot("food", "bread", 0)).not.toThrow();
       expect(engine.snapshot().player.foodSlots[0]?.itemId).toBe("bread");
     });
 
@@ -730,7 +730,7 @@ describe("Active Food Slots (#61)", () => {
           player: { foodSlots: [{ itemId: "meat", qty: 7 }, null, null] },
         }),
       );
-      expect(() => engine.assignFoodSlot(0, "bread")).toThrow(/bank is full/i);
+      expect(() => engine.assignLoadoutSlot("food", "bread", 0)).toThrow(/bank is full/i);
       expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 7 });
       expect(engine.snapshot().bank.items).toEqual(
         expect.arrayContaining([
@@ -741,14 +741,14 @@ describe("Active Food Slots (#61)", () => {
     });
   });
 
-  describe("unassignFoodSlot", () => {
+  describe("clearLoadoutSlot food", () => {
     it("returns the slot's stock to the Bank and clears the slot to null", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ player: { foodSlots: [{ itemId: "meat", qty: 5 }, null, null] } }),
       );
-      engine.unassignFoodSlot(0);
+      engine.clearLoadoutSlot("food", 0);
       expect(engine.snapshot().player.foodSlots[0]).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 5 }]);
     });
@@ -762,7 +762,7 @@ describe("Active Food Slots (#61)", () => {
           player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
         }),
       );
-      expect(() => engine.unassignFoodSlot(0)).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("food", 0)).not.toThrow();
       expect(engine.snapshot().player.foodSlots[0]).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
     });
@@ -776,15 +776,64 @@ describe("Active Food Slots (#61)", () => {
           player: { foodSlots: [{ itemId: "meat", qty: 5 }, null, null] },
         }),
       );
-      expect(() => engine.unassignFoodSlot(0)).toThrow(/bank is full/i);
+      expect(() => engine.clearLoadoutSlot("food", 0)).toThrow(/bank is full/i);
       expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
     });
 
     it("throws on an out-of-range index; unassigning an already-null slot is a harmless no-op", () => {
       const engine = freshEngine();
-      expect(() => engine.unassignFoodSlot(-1)).toThrow();
-      expect(() => engine.unassignFoodSlot(3)).toThrow();
-      expect(() => engine.unassignFoodSlot(0)).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("food", -1)).toThrow();
+      expect(() => engine.clearLoadoutSlot("food", 3)).toThrow();
+      expect(() => engine.clearLoadoutSlot("food", 0)).not.toThrow();
+    });
+  });
+
+  describe("assignLoadoutSlot/clearLoadoutSlot slotIndex rules (#354)", () => {
+    it("food without slotIndex throws on assign and clear", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "meat", qty: 5 }] },
+          player: { foodSlots: [{ itemId: "meat", qty: 3 }, null, null] },
+        }),
+      );
+      expect(() => engine.assignLoadoutSlot("food", "meat")).toThrow(/requires slotIndex/i);
+      expect(() => engine.clearLoadoutSlot("food")).toThrow(/requires slotIndex/i);
+    });
+
+    it("singular kinds with slotIndex throw on assign and clear", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: {
+            items: [
+              { itemId: "strength-potion", qty: 1 },
+              { itemId: "arrow", qty: 1 },
+              { itemId: "air-rune", qty: 1 },
+            ],
+          },
+        }),
+      );
+      expect(() => engine.assignLoadoutSlot("potion", "strength-potion", 0)).toThrow(
+        /potion loadout slot does not take slotIndex/i,
+      );
+      expect(() => engine.clearLoadoutSlot("potion", 0)).toThrow(
+        /potion loadout slot does not take slotIndex/i,
+      );
+      expect(() => engine.assignLoadoutSlot("quiver", "arrow", 0)).toThrow(
+        /quiver loadout slot does not take slotIndex/i,
+      );
+      expect(() => engine.clearLoadoutSlot("quiver", 0)).toThrow(
+        /quiver loadout slot does not take slotIndex/i,
+      );
+      expect(() => engine.assignLoadoutSlot("rune", "air-rune", 0)).toThrow(
+        /rune loadout slot does not take slotIndex/i,
+      );
+      expect(() => engine.clearLoadoutSlot("rune", 0)).toThrow(
+        /rune loadout slot does not take slotIndex/i,
+      );
     });
   });
 
@@ -994,8 +1043,8 @@ describe("Active Food Slots (#61)", () => {
           },
         }),
       );
-      engine.assignFoodSlot(0, "meat");
-      engine.assignFoodSlot(2, "bread");
+      engine.assignLoadoutSlot("food", "meat", 0);
+      engine.assignLoadoutSlot("food", "bread", 2);
       const saved = engine.snapshot();
 
       const restored = createEngine(
@@ -5208,10 +5257,10 @@ describe("Attack Type axis (#99)", () => {
 });
 
 describe("Spells / Rune Slot (#101, #221)", () => {
-  describe("loadRuneSlot selects the Spell", () => {
+  describe("assignLoadoutSlot rune selects the Spell", () => {
     it("throws on an unknown item id", () => {
       const engine = freshEngine();
-      expect(() => engine.loadRuneSlot("no-such-item")).toThrow(/not a Rune/);
+      expect(() => engine.assignLoadoutSlot("rune", "no-such-item")).toThrow(/not a Rune/);
     });
 
     it("throws on a non-rune item (e.g. an arrow)", () => {
@@ -5220,12 +5269,12 @@ describe("Spells / Rune Slot (#101, #221)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "arrow", qty: 5 }] } }),
       );
-      expect(() => engine.loadRuneSlot("arrow")).toThrow(/not a Rune/);
+      expect(() => engine.assignLoadoutSlot("rune", "arrow")).toThrow(/not a Rune/);
     });
 
     it("throws when the player owns zero of the rune", () => {
       const engine = freshEngine();
-      expect(() => engine.loadRuneSlot("air-rune")).toThrow(/do not own/);
+      expect(() => engine.assignLoadoutSlot("rune", "air-rune")).toThrow(/do not own/);
     });
 
     it("throws when the player's Magic level is below the Spell's levelReq", () => {
@@ -5235,7 +5284,9 @@ describe("Spells / Rune Slot (#101, #221)", () => {
         makeSnapshot({ bank: { items: [{ itemId: "fire-rune", qty: 5 }] } }),
       );
       // test-inferno (fire-rune's Spell) has levelReq 13; a fresh player is Magic level 1.
-      expect(() => engine.loadRuneSlot("fire-rune")).toThrow(/magic level too low: need 13/);
+      expect(() => engine.assignLoadoutSlot("rune", "fire-rune")).toThrow(
+        /magic level too low: need 13/,
+      );
     });
 
     it("a rejected load (magic level too low) leaves the Rune Slot and Bank untouched", () => {
@@ -5244,7 +5295,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "fire-rune", qty: 5 }] } }),
       );
-      expect(() => engine.loadRuneSlot("fire-rune")).toThrow();
+      expect(() => engine.assignLoadoutSlot("rune", "fire-rune")).toThrow();
       expect(engine.snapshot().player.runeSlot).toBeNull();
       expect(engine.snapshot().player.spell).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "fire-rune", qty: 5 }]);
@@ -5259,7 +5310,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
           bank: { items: [{ itemId: "water-rune", qty: 12 }] },
         }),
       );
-      engine.loadRuneSlot("water-rune");
+      engine.assignLoadoutSlot("rune", "water-rune");
       expect(engine.snapshot().player.spell).toEqual({
         id: "test-blast",
         name: "Test Blast",
@@ -5283,7 +5334,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
         makeSnapshot({ bank: { items: [{ itemId: "air-rune", qty: 5 }] } }),
       );
       engine.selectMonster("dummy");
-      engine.loadRuneSlot("air-rune");
+      engine.assignLoadoutSlot("rune", "air-rune");
       expect(engine.snapshot().monster?.id).toBe("dummy");
     });
 
@@ -5299,7 +5350,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
           bank: { items: [{ itemId: "air-rune", qty: 4 }] },
         }),
       );
-      engine.loadRuneSlot("air-rune");
+      engine.assignLoadoutSlot("rune", "air-rune");
       expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 4 });
       expect(engine.snapshot().bank.items).toEqual(
         expect.arrayContaining([{ itemId: "water-rune", qty: 10 }]),
@@ -5315,7 +5366,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
           bank: { items: [{ itemId: "air-rune", qty: 3 }] },
         }),
       );
-      engine.loadRuneSlot("air-rune");
+      engine.assignLoadoutSlot("rune", "air-rune");
       expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 8 });
       expect(engine.snapshot().bank.items.find((s) => s.itemId === "air-rune")).toBeUndefined();
     });
@@ -5335,19 +5386,19 @@ describe("Spells / Rune Slot (#101, #221)", () => {
           },
         }),
       );
-      expect(() => engine.loadRuneSlot("air-rune")).toThrow(/bank is full/);
+      expect(() => engine.assignLoadoutSlot("rune", "air-rune")).toThrow(/bank is full/);
       expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "water-rune", qty: 10 });
     });
   });
 
-  describe("unloadRuneSlot", () => {
+  describe("clearLoadoutSlot rune", () => {
     it("returns the stack to the Bank and empties the slot", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ player: { runeSlot: { itemId: "air-rune", qty: 7 } } }),
       );
-      engine.unloadRuneSlot();
+      engine.clearLoadoutSlot("rune");
       expect(engine.snapshot().player.runeSlot).toBeNull();
       expect(engine.snapshot().bank.items).toEqual(
         expect.arrayContaining([{ itemId: "air-rune", qty: 7 }]),
@@ -5356,7 +5407,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
 
     it("is a no-op on an already-empty slot", () => {
       const engine = freshEngine();
-      expect(() => engine.unloadRuneSlot()).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("rune")).not.toThrow();
       expect(engine.snapshot().player.runeSlot).toBeNull();
     });
 
@@ -5369,7 +5420,7 @@ describe("Spells / Rune Slot (#101, #221)", () => {
           bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
         }),
       );
-      expect(() => engine.unloadRuneSlot()).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("rune")).not.toThrow();
       expect(engine.snapshot().player.runeSlot).toBeNull();
     });
   });
@@ -5908,14 +5959,14 @@ describe("Pets (#120)", () => {
  * "herblore") exercise the Herblore Recipe chassis itself.
  */
 describe("Herblore and Potion Slot (#118)", () => {
-  describe("assignPotionSlot", () => {
+  describe("assignLoadoutSlot potion", () => {
     it("moves the entire Bank stock into the slot, opening it with the PotionDef's charges", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 5 }] } }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       expect(engine.snapshot().player.potionSlot).toEqual({
         itemId: "strength-potion",
         qty: 5,
@@ -5930,13 +5981,13 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
       );
-      expect(() => engine.assignPotionSlot("unobtainium")).toThrow(/potion/i);
-      expect(() => engine.assignPotionSlot("meat")).toThrow(/potion/i);
+      expect(() => engine.assignLoadoutSlot("potion", "unobtainium")).toThrow(/potion/i);
+      expect(() => engine.assignLoadoutSlot("potion", "meat")).toThrow(/potion/i);
     });
 
     it("throws when the Bank holds zero of the Potion", () => {
       const engine = freshEngine();
-      expect(() => engine.assignPotionSlot("strength-potion")).toThrow(/own/i);
+      expect(() => engine.assignLoadoutSlot("potion", "strength-potion")).toThrow(/own/i);
     });
 
     it("re-assigning the same potion type tops up qty, keeping the open one's remaining charges", () => {
@@ -5948,7 +5999,7 @@ describe("Herblore and Potion Slot (#118)", () => {
           player: { potionSlot: { itemId: "strength-potion", qty: 2, charges: 1 } },
         }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       // qty adds (2 + 4 = 6); charges stays at the already-open potion's remaining 1 — no reset,
       // the buff (and its drain progress) carries through unbroken.
       expect(engine.snapshot().player.potionSlot).toEqual({
@@ -5968,7 +6019,7 @@ describe("Herblore and Potion Slot (#118)", () => {
           player: { potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 } },
         }),
       );
-      engine.assignPotionSlot("fishing-potion");
+      engine.assignLoadoutSlot("potion", "fishing-potion");
       expect(engine.snapshot().player.potionSlot).toEqual({
         itemId: "fishing-potion",
         qty: 2,
@@ -5993,7 +6044,7 @@ describe("Herblore and Potion Slot (#118)", () => {
           player: { potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 } },
         }),
       );
-      expect(() => engine.assignPotionSlot("fishing-potion")).toThrow(/bank is full/i);
+      expect(() => engine.assignLoadoutSlot("potion", "fishing-potion")).toThrow(/bank is full/i);
       expect(engine.snapshot().player.potionSlot).toEqual({
         itemId: "strength-potion",
         qty: 3,
@@ -6008,14 +6059,14 @@ describe("Herblore and Potion Slot (#118)", () => {
     });
   });
 
-  describe("unassignPotionSlot", () => {
+  describe("clearLoadoutSlot potion", () => {
     it("consumes the open potion, returning qty-1 to the Bank, and clears the slot to null", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ player: { potionSlot: { itemId: "strength-potion", qty: 5, charges: 2 } } }),
       );
-      engine.unassignPotionSlot();
+      engine.clearLoadoutSlot("potion");
       expect(engine.snapshot().player.potionSlot).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "strength-potion", qty: 4 }]);
     });
@@ -6026,14 +6077,14 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ player: { potionSlot: { itemId: "strength-potion", qty: 1, charges: 2 } } }),
       );
-      engine.unassignPotionSlot();
+      engine.clearLoadoutSlot("potion");
       expect(engine.snapshot().player.potionSlot).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([]);
     });
 
     it("is a harmless no-op when already null", () => {
       const engine = freshEngine();
-      expect(() => engine.unassignPotionSlot()).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("potion")).not.toThrow();
       expect(engine.snapshot().player.potionSlot).toBeNull();
     });
 
@@ -6046,7 +6097,7 @@ describe("Herblore and Potion Slot (#118)", () => {
           player: { potionSlot: { itemId: "strength-potion", qty: 5, charges: 2 } },
         }),
       );
-      expect(() => engine.unassignPotionSlot()).toThrow(/bank is full/i);
+      expect(() => engine.clearLoadoutSlot("potion")).toThrow(/bank is full/i);
       expect(engine.snapshot().player.potionSlot).toEqual({
         itemId: "strength-potion",
         qty: 5,
@@ -6062,7 +6113,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       // "control-dummy": never dies, never attacks back — isolates the player's own attack cadence.
       engine.selectMonster("control-dummy");
       for (let i = 0; i < UNARMED_SPEED; i++) engine.tick(); // one resolved player attack
@@ -6075,7 +6126,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 2 }] } }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       engine.selectMonster("control-dummy");
       for (let i = 0; i < UNARMED_SPEED * 3; i++) engine.tick(); // 3 resolved player attacks
       // charges: 3 -> 2 -> 1 -> 0 on the 3rd attack; qty 2 > 1, so it auto-continues: qty 1,
@@ -6093,7 +6144,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       engine.selectMonster("control-dummy");
       for (let i = 0; i < UNARMED_SPEED * 3; i++) engine.tick(); // 3 resolved player attacks
       expect(engine.snapshot().player.potionSlot).toBeNull();
@@ -6105,7 +6156,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "fishing-potion", qty: 1 }] } }),
       );
-      engine.assignPotionSlot("fishing-potion");
+      engine.assignLoadoutSlot("potion", "fishing-potion");
       engine.selectFishingSpot("pond"); // catchTicks 3, catchChance 1 — always succeeds
       for (let i = 0; i < 3; i++) engine.tick(); // one catch attempt
       expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
@@ -6124,7 +6175,7 @@ describe("Herblore and Potion Slot (#118)", () => {
           },
         }),
       );
-      engine.assignPotionSlot("production-potion");
+      engine.assignLoadoutSlot("potion", "production-potion");
       engine.selectRecipe("test-sword"); // skill "smithing" — the wiring is skill-agnostic
       for (let i = 0; i < 3; i++) engine.tick(); // one craft completion (craftTicks 3)
       expect(engine.snapshot().player.potionSlot?.charges).toBe(2);
@@ -6136,7 +6187,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "fishing-potion", qty: 1 }] } }),
       );
-      engine.assignPotionSlot("fishing-potion"); // boostPct 0.5 -> multiplier 1.5
+      engine.assignLoadoutSlot("potion", "fishing-potion"); // boostPct 0.5 -> multiplier 1.5
       engine.selectFishingSpot("pond"); // catchTicks 3, first cycle arms to the raw 3
       for (let i = 0; i < 3; i++) engine.tick(); // completes the un-boosted first cycle, re-arms
       // Math.round(3 / 1.5) = 2: the re-armed cooldownTotal shrinks to 2, and progress derives
@@ -6160,7 +6211,7 @@ describe("Herblore and Potion Slot (#118)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "strength-potion", qty: 1 }] } }),
       );
-      engine.assignPotionSlot("strength-potion");
+      engine.assignLoadoutSlot("potion", "strength-potion");
       engine.selectFishingSpot("pond");
       for (let i = 0; i < 30; i++) engine.tick(); // several catch attempts
       expect(engine.snapshot().player.potionSlot?.charges).toBe(3); // never ticked down
@@ -6186,7 +6237,7 @@ describe("Herblore and Potion Slot (#118)", () => {
             bank: { items: withPotion ? [{ itemId: "strength-potion", qty: 1000 }] : [] },
           }),
         );
-        if (withPotion) engine.assignPotionSlot("strength-potion");
+        if (withPotion) engine.assignLoadoutSlot("potion", "strength-potion");
         // "control-dummy": never dies (so damage never clamps to remaining Monster HP) and never
         // attacks back, isolating the player's own max-hit ceiling.
         engine.selectMonster("control-dummy");
@@ -6218,7 +6269,7 @@ describe("Herblore and Potion Slot (#118)", () => {
             bank: { items: withPotion ? [{ itemId: "fishing-potion", qty: 1000 }] : [] },
           }),
         );
-        if (withPotion) engine.assignPotionSlot("fishing-potion");
+        if (withPotion) engine.assignLoadoutSlot("potion", "fishing-potion");
         let caught = 0;
         engine.on("fish-caught", () => caught++);
         engine.selectFishingSpot("pond");
@@ -6252,14 +6303,14 @@ describe("Herblore and Potion Slot (#118)", () => {
 });
 
 describe("Ammo + Vendor (#119)", () => {
-  describe("loadQuiver", () => {
+  describe("assignLoadoutSlot quiver", () => {
     it("moves the whole Bank stack into the Quiver", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "arrow", qty: 30 }] } }),
       );
-      engine.loadQuiver("arrow");
+      engine.assignLoadoutSlot("quiver", "arrow");
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 30 });
       expect(engine.snapshot().bank.items).toEqual([]);
     });
@@ -6270,12 +6321,12 @@ describe("Ammo + Vendor (#119)", () => {
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "air-rune", qty: 5 }] } }),
       );
-      expect(() => engine.loadQuiver("air-rune")).toThrow(/arrow/i);
+      expect(() => engine.assignLoadoutSlot("quiver", "air-rune")).toThrow(/arrow/i);
     });
 
     it("throws when the player owns none", () => {
       const engine = freshEngine();
-      expect(() => engine.loadQuiver("arrow")).toThrow(/own/i);
+      expect(() => engine.assignLoadoutSlot("quiver", "arrow")).toThrow(/own/i);
     });
 
     it("topping up: loading the same arrow tier again adds to the already-loaded stack", () => {
@@ -6287,7 +6338,7 @@ describe("Ammo + Vendor (#119)", () => {
           player: { quiver: { itemId: "arrow", qty: 5 } },
         }),
       );
-      engine.loadQuiver("arrow");
+      engine.assignLoadoutSlot("quiver", "arrow");
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 15 });
     });
 
@@ -6300,7 +6351,7 @@ describe("Ammo + Vendor (#119)", () => {
           player: { quiver: { itemId: "arrow", qty: 7 } },
         }),
       );
-      engine.loadQuiver("iron-arrow");
+      engine.assignLoadoutSlot("quiver", "iron-arrow");
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "iron-arrow", qty: 10 });
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 7 }]);
     });
@@ -6320,26 +6371,26 @@ describe("Ammo + Vendor (#119)", () => {
           player: { quiver: { itemId: "arrow", qty: 7 } },
         }),
       );
-      expect(() => engine.loadQuiver("iron-arrow")).toThrow(/bank is full/i);
+      expect(() => engine.assignLoadoutSlot("quiver", "iron-arrow")).toThrow(/bank is full/i);
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 7 });
     });
   });
 
-  describe("unloadQuiver", () => {
+  describe("clearLoadoutSlot quiver", () => {
     it("returns the stack to the Bank and clears the Quiver to null", () => {
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ player: { quiver: { itemId: "arrow", qty: 12 } } }),
       );
-      engine.unloadQuiver();
+      engine.clearLoadoutSlot("quiver");
       expect(engine.snapshot().player.quiver).toBeNull();
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 12 }]);
     });
 
     it("is a harmless no-op when already empty", () => {
       const engine = freshEngine();
-      expect(() => engine.unloadQuiver()).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("quiver")).not.toThrow();
       expect(engine.snapshot().player.quiver).toBeNull();
     });
 
@@ -6352,7 +6403,7 @@ describe("Ammo + Vendor (#119)", () => {
           player: { quiver: { itemId: "arrow", qty: 12 } },
         }),
       );
-      expect(() => engine.unloadQuiver()).toThrow(/bank is full/i);
+      expect(() => engine.clearLoadoutSlot("quiver")).toThrow(/bank is full/i);
       expect(engine.snapshot().player.quiver).toEqual({ itemId: "arrow", qty: 12 });
     });
 
@@ -6365,12 +6416,12 @@ describe("Ammo + Vendor (#119)", () => {
           player: { quiver: { itemId: "arrow", qty: 0 } },
         }),
       );
-      expect(() => engine.unloadQuiver()).not.toThrow();
+      expect(() => engine.clearLoadoutSlot("quiver")).not.toThrow();
       expect(engine.snapshot().player.quiver).toBeNull();
     });
   });
 
-  // loadRuneSlot/unloadRuneSlot (#221, replacing loadRunePouch/unloadRunePouch) are covered by the
+  // assignLoadoutSlot/clearLoadoutSlot rune (#221, replacing loadRunePouch/unloadRunePouch) are covered by the
   // "Spells / Rune Slot (#221)" describe block above, not duplicated here.
 
   describe("Ranged consumption: the Quiver's own arrow feeds both accuracy-independent decrement and max hit", () => {
@@ -6627,7 +6678,7 @@ describe("Ammo + Vendor (#119)", () => {
       expect(engine.snapshot().player.quiver?.qty).toBe(0);
 
       // Reload — no special "clear the warning" step needed, it resets the moment ammo is present.
-      engine.loadQuiver("arrow");
+      engine.assignLoadoutSlot("quiver", "arrow");
       for (let i = 0; i < 100; i++) engine.tick();
       expect(warnings).toBe(2); // the SECOND depletion gets its own event
       expect(engine.snapshot().player.quiver?.qty).toBe(0);
@@ -6680,7 +6731,7 @@ describe("Ammo + Vendor (#119)", () => {
       expect(afterRanged.quiver?.qty).toBeLessThan(50); // Quiver depleted while wielding the bow
       expect(afterRanged.runeSlot?.qty).toBe(50); // untouched
 
-      // Swap weapons only — NO loadQuiver/loadRuneSlot call, which is the entire point being
+      // Swap weapons only — NO assignLoadoutSlot quiver/rune call, which is the entire point being
       // tested: both stores are already live, so switching needs no reload step.
       engine.equip("staff");
       for (let i = 0; i < 120; i++) engine.tick();
