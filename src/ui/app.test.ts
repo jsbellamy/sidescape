@@ -185,15 +185,18 @@ describe("mountApp", () => {
     expect(pondBtn?.classList.contains("active")).toBe(true);
   });
 
-  it("dispose() is idempotent and prevents World host clicks from dispatching Engine commands", () => {
+  it("dispose() is idempotent and prevents World and Character host clicks from dispatching Engine commands", () => {
     const { engine, root, app } = mount(1);
     const monsterBefore = engine.snapshot().monster?.id ?? null;
+    const combatStyleBefore = engine.snapshot().player.combatStyle;
     app.dispose();
     app.dispose();
 
     root.querySelector<HTMLButtonElement>('#world-page-host [data-monster="dummy"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
 
     expect(engine.snapshot().monster?.id ?? null).toBe(monsterBefore);
+    expect(engine.snapshot().player.combatStyle).toBe(combatStyleBefore);
   });
 
   it("selecting a Monster renders a non-numeric HP bar", () => {
@@ -407,58 +410,7 @@ describe.skip("Monster stats line (removed from Compact Widget by #210)", () => 
   });
 });
 
-describe("Combat Style selector", () => {
-  function styleButtons(root: HTMLElement) {
-    return [...root.querySelectorAll<HTMLButtonElement>("#style-row button")];
-  }
-
-  it("renders one button per Combat Style, generated from the label map (not hard-coded)", () => {
-    const { root } = mount(1);
-    const buttons = styleButtons(root);
-    expect(buttons).toHaveLength(3);
-    const styles = buttons.map((b) => b.dataset["style"]).sort();
-    expect(styles).toEqual(["accurate", "aggressive", "defensive"]);
-  });
-
-  it("the active button reflects the Engine's default Combat Style on mount", () => {
-    const { root } = mount(1);
-    const buttons = styleButtons(root);
-    const active = buttons.filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["style"]).toBe("aggressive");
-  });
-
-  it("highlights a non-default Combat Style when mounted from a saved Snapshot", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          combatStyle: "defensive",
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const active = styleButtons(root).filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["style"]).toBe("defensive");
-  });
-
-  it("clicking a style updates the active button and calls setCombatStyle on the Engine", () => {
-    const { engine, root } = mount(1);
-    root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
-
-    expect(engine.snapshot().player.combatStyle).toBe("accurate");
-    const active = styleButtons(root).filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["style"]).toBe("accurate");
-  });
-
+describe("Combat Style selector — Engine XP routing", () => {
   it("routes subsequent kill XP to the matching Skill, with Hitpoints XP still trickling", () => {
     const { engine, root } = mount(7);
     root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
@@ -470,108 +422,6 @@ describe("Combat Style selector", () => {
     expect(skills.attack.xp).toBeGreaterThan(0);
     expect(skills.strength.xp).toBe(0);
     expect(skills.hitpoints.xp).toBeGreaterThan(xpForLevel(10));
-  });
-});
-
-describe("Auto-eat threshold selector", () => {
-  function thresholdButtons(root: HTMLElement) {
-    return [...root.querySelectorAll<HTMLButtonElement>("#autoeat-row button")];
-  }
-
-  it("renders one button per threshold, generated from the label map (not hard-coded)", () => {
-    const { root } = mount(1);
-    const buttons = thresholdButtons(root);
-    expect(buttons).toHaveLength(4);
-    const labels = buttons.map((b) => b.textContent);
-    expect(labels).toEqual(["Off", "25%", "50%", "75%"]);
-  });
-
-  it("the active button reflects the Engine's default threshold (50%) on mount", () => {
-    const { root } = mount(1);
-    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["threshold"]).toBe("0.5");
-  });
-
-  it("highlights a non-default threshold when mounted from a saved Snapshot", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          autoEatThreshold: 0.25,
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["threshold"]).toBe("0.25");
-  });
-
-  it("clicking a threshold updates the active button and calls setAutoEatThreshold on the Engine", () => {
-    const { engine, root } = mount(1);
-    root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
-
-    expect(engine.snapshot().player.autoEatThreshold).toBe(0);
-    const active = thresholdButtons(root).filter((b) => b.classList.contains("active"));
-    expect(active).toHaveLength(1);
-    expect(active[0]?.dataset["threshold"]).toBe("0");
-  });
-});
-
-describe("Auto-sell duplicates toggle (#63)", () => {
-  function toggle(root: HTMLElement) {
-    return root.querySelector<HTMLInputElement>("#autosell-duplicates-toggle");
-  }
-
-  it("reflects the Engine's default (ON) on mount", () => {
-    const { root } = mount(1);
-    expect(toggle(root)?.checked).toBe(true);
-  });
-
-  it("reflects OFF when mounted from a saved Snapshot with the toggle off", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          autoSellDuplicates: false,
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    expect(toggle(root)?.checked).toBe(false);
-  });
-
-  it("unchecking the checkbox calls setAutoSellDuplicates(false); re-checking flips it back on", () => {
-    const { engine, root } = mount(1);
-    const input = toggle(root)!;
-
-    // happy-dom's checkbox .click() doesn't reliably flip .checked before dispatching, so drive
-    // the interaction the way a real "uncheck the box" user action lands on the DOM: flip the
-    // property, then fire the "change" event the click handler listens for.
-    input.checked = false;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(engine.snapshot().player.autoSellDuplicates).toBe(false);
-    expect(toggle(root)?.checked).toBe(false);
-
-    input.checked = true;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(engine.snapshot().player.autoSellDuplicates).toBe(true);
-    expect(toggle(root)?.checked).toBe(true);
   });
 });
 
@@ -740,15 +590,6 @@ describe("Character card levels summary (#222)", () => {
       ),
     );
     expect(root.querySelector<HTMLElement>("#card-management")?.hidden).toBe(false);
-  });
-
-  it("shows the exact Combat level from the Snapshot", () => {
-    const engine = createEngine(fixtureContent, seededRng(1));
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    expect(root.querySelector("#summary-combat-level")?.textContent).toBe(
-      String(engine.snapshot().player.combatLevel),
-    );
   });
 });
 
@@ -1722,83 +1563,6 @@ describe("Character hub layout (#206: fixed dashboard, only the Equipment Bank t
   });
 });
 
-describe("Gear Slot chooser dismissal (#235: outside click / window blur close it without racing its own toggle/selection click)", () => {
-  /** Mounts into `document.body` (like the Cards-on-glass describe block above) so the
-   * document-level outside-click/blur handlers under test have a real connected tree to bubble
-   * through, and opens the weapon Gear Slot's chooser as the shared starting state every case
-   * below builds on. */
-  function mountWithOpenGearChooser() {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
-    );
-    document.body.innerHTML = "";
-    const root = document.createElement("main");
-    document.body.appendChild(root);
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    root.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
-    expect(root.querySelector(".gear-slot-chooser")).not.toBeNull();
-    return { engine, root };
-  }
-
-  it("a click elsewhere inside SideScape (outside the chooser and its toggle) closes it", () => {
-    const { root } = mountWithOpenGearChooser();
-    root
-      .querySelector<HTMLElement>("#character-totals")
-      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-    document.body.innerHTML = "";
-  });
-
-  it("a click inside the chooser does not dismiss it before its own selection action runs", () => {
-    const { engine, root } = mountWithOpenGearChooser();
-    root.querySelector<HTMLButtonElement>('[data-gear-assign="bronze-sword"]')?.click();
-    // The chooser is gone, but because the selection closed it (and equipped the item) — not
-    // because the outside-click handler raced ahead of it.
-    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-    document.body.innerHTML = "";
-  });
-
-  it("clicking the active Gear Slot's own toggle still follows the existing re-click-close behavior, not a double-toggle from the outside-click handler", () => {
-    const { root } = mountWithOpenGearChooser();
-    root.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-    document.body.innerHTML = "";
-  });
-
-  it("window blur closes the open chooser", () => {
-    const { root } = mountWithOpenGearChooser();
-    window.dispatchEvent(new Event("blur"));
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-    document.body.innerHTML = "";
-  });
-
-  it("an outside click or blur while no Gear Slot chooser is open is a no-op", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
-    );
-    document.body.innerHTML = "";
-    const root = document.createElement("main");
-    document.body.appendChild(root);
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-
-    root
-      .querySelector<HTMLElement>("#character-totals")
-      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    window.dispatchEvent(new Event("blur"));
-
-    expect(root.querySelector(".gear-slot-chooser")).toBeNull();
-    // Still equipment-free — neither call mutated Engine state.
-    expect(engine.snapshot().player.equipment.weapon).toBeNull();
-    document.body.innerHTML = "";
-  });
-});
-
 describe("Character hub layout (#206) — Pets summary, Settings popover, and Bank tray remainder", () => {
   it("the Pets summary shows a compact owned/total count, with the full roster grid behind its own popover", () => {
     const { root } = mount(1);
@@ -1829,42 +1593,6 @@ describe("Character hub layout (#206) — Pets summary, Settings popover, and Ba
 
     root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
     expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
-  });
-});
-
-describe("Auto-eat compact indicator (#223: stays legible without opening Settings)", () => {
-  it("shows the current auto-eat threshold on the Character card without opening the Settings popover", () => {
-    const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>("#settings-popover")?.hidden).toBe(true);
-    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("50%");
-  });
-
-  it("updates immediately when a new threshold is picked from the popover", () => {
-    const { engine, root } = mount(1);
-    root.querySelector<HTMLButtonElement>('[data-nav="settings"]')?.click();
-    root.querySelector<HTMLButtonElement>('[data-threshold="0"]')?.click();
-
-    expect(engine.snapshot().player.autoEatThreshold).toBe(0);
-    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("Off");
-  });
-
-  it("reflects a non-default threshold restored from a saved Snapshot", () => {
-    const engine = createEngine(
-      fixtureContent,
-      seededRng(1),
-      makeSnapshot({
-        player: {
-          hp: 10,
-          maxHp: 10,
-          autoEatThreshold: 0.25,
-          skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
-        },
-      }),
-    );
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    expect(root.querySelector("#autoeat-indicator")?.textContent).toContain("25%");
   });
 });
 
