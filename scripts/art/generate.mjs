@@ -50,7 +50,6 @@ await writeSpriteContactSheets(resolve("src/assets/sprites"), resolve("docs"), s
 await writeContactSheets(resolve("src/assets/icons"), resolve("docs"));
 
 // Reusable deterministic backdrop generator infrastructure (#263), parallel to the icon/sprite
-// writers above. The production registry is deliberately empty until the Frostspire slice (#142)
-// registers its first definition, so this call writes nothing and leaves every hand-assembled
-// backdrop under src/assets/backdrops/ byte-identical.
+// writers above. Glacier (#293) is the first production kind: source Theme; other biomes remain
+// hand-assembled under src/assets/backdrops/ and are never rewritten here.
 await writeBackdrops(resolve("src/assets/backdrops"));

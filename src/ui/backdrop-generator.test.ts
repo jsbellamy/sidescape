@@ -38,9 +38,8 @@ const GLACIER_GAMUT = {
   chromaticMaxSaturation: 65,
 };
 
-/** A synthetic registry independent of the real (deliberately empty) production `backdrops`
- * registry (#263) — infra tests must never depend on a real theme so they can't accidentally
- * couple to Frostspire/#142's future registration. */
+/** A synthetic registry independent of the production `backdrops` registry (#263/#293) — infra
+ * tests inject this so they never depend on Glacier's real compact sources for mechanical checks. */
 function makeSyntheticRegistry(): [
   {
     theme: string;
@@ -78,8 +77,23 @@ describe("backdrop generator infrastructure (#263)", () => {
     expect(REVIEW_PERIODS).toBe(3);
   });
 
-  it("the production registry is deliberately empty (Frostspire/#142 registers the first entry)", () => {
-    expect(backdrops).toEqual([]);
+  it("registers Glacier as the first production source backdrop with its pinned compact caps", () => {
+    expect(backdrops).toEqual([
+      {
+        theme: "glacier",
+        kind: "source",
+        gamut: {
+          neutralMaxSaturation: 20,
+          chromaticHueRange: [175, 240],
+          chromaticMaxSaturation: 65,
+        },
+        layers: {
+          sky: { source: "glacier-sky.png", alpha: "opaque", maxColors: 48 },
+          mid: { source: "glacier-mid.png", alpha: "binary", maxColors: 64 },
+          near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
+        },
+      },
+    ]);
   });
 
   it("writes exact <theme>-<layer>.png filenames for sky/mid/near", async () => {
@@ -177,11 +191,14 @@ describe("backdrop generator infrastructure (#263)", () => {
     expect(await readFile(untouchedPath, "utf8")).toBe("keep-me");
   });
 
-  it("the empty production registry writes nothing, leaving an existing backdrop untouched", async () => {
+  it("the production Glacier registry writes only glacier layers and leaves other themes untouched", async () => {
     const sentinelPath = join(destDir, "meadow-sky.png");
     await writeFile(sentinelPath, "sentinel-bytes");
-    await writeBackdrops(destDir); // default registry = production `backdrops`, which is []
+    await writeBackdrops(destDir);
     expect(await readFile(sentinelPath, "utf8")).toBe("sentinel-bytes");
+    const glacierSky = await readFile(join(destDir, "glacier-sky.png"));
+    const sourceSky = await readFile(join("scripts/art/backdrop-sources", "glacier-sky.png"));
+    expect(glacierSky.equals(sourceSky)).toBe(true);
   });
 });
 

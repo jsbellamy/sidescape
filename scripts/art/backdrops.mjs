@@ -16,8 +16,23 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const defaultSourceDir = resolve(moduleDir, "backdrop-sources");
 const layerAlpha = { sky: "opaque", mid: "binary", near: "binary" };
 
-/** Production entries are deliberately empty until #293 supplies approved compact sources. */
-export const backdrops = [];
+/** Approved compact sources; source layers are validated before every deterministic build. */
+export const backdrops = [
+  {
+    theme: "glacier",
+    kind: "source",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [175, 240],
+      chromaticMaxSaturation: 65,
+    },
+    layers: {
+      sky: { source: "glacier-sky.png", alpha: "opaque", maxColors: 48 },
+      mid: { source: "glacier-mid.png", alpha: "binary", maxColors: 64 },
+      near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
+    },
+  },
+];
 
 export function renderPeriodicLayer(paint) {
   const width = BACKDROP_WIDTH * REVIEW_PERIODS;
@@ -217,7 +232,11 @@ function preparePaintDefinition(def) {
   });
 }
 
-/** Writes validated source or painter definitions through the same deterministic PNG writer. */
+/**
+ * Writes validated source or painter definitions through the same deterministic PNG writer.
+ * @param {string} destDir
+ * @param {{registry?: any[], sourceDir?: string}} [options]
+ */
 export async function writeBackdrops(
   destDir,
   { registry = backdrops, sourceDir = defaultSourceDir } = {},

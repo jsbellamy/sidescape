@@ -122,3 +122,53 @@ test("activity overlay composition remains player-plane pixel art at every UiSca
     });
   }
 });
+
+test("Frostspire Glacier backdrop evidence at native compact scale (#293)", async ({ page }) => {
+  // Shade Crypt clear unlocks Frostspire so the real World rail can select glacier Theme combat.
+  await page.addInitScript(
+    ({ key }) => {
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          player: {
+            completedDungeonIds: ["darkroot-hollow", "sewer-king", "shade-crypt"],
+            skills: {
+              attack: { level: 70, xp: 737627 },
+              strength: { level: 70, xp: 737627 },
+              defence: { level: 70, xp: 737627 },
+              hitpoints: { level: 70, xp: 737627 },
+            },
+            equipment: {
+              weapon: "adamant-dagger",
+              shield: "adamant-kiteshield",
+              body: "adamant-chainbody",
+              head: "adamant-full-helm",
+            },
+            foodSlots: [{ itemId: "cooked-pike", qty: 100 }, null, null],
+          },
+        }),
+      );
+    },
+    { key: "sidescape-save-v1" },
+  );
+
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="world"]').click();
+  await page.locator('[data-area-select="frostspire"]').click();
+  await page.locator('[data-monster="frost-wolf"]').click();
+  await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "glacier");
+  await page.locator("#menu-toggle").click();
+  await expect(page.locator("#management-row")).toBeHidden();
+  await page.screenshot({ path: `${screenshots}/glacier-combat.png`, fullPage: true });
+
+  // Non-combat Glacier evidence: Frostspire has no Fishing spot, and Production forces town Theme.
+  // After real Frostspire combat, lastAreaId keeps glacier; compose the Fishing prop for the
+  // native-scale activity screenshot without leaving the retained Theme.
+  await page.locator("#activity-prop").evaluate((element) => {
+    element.removeAttribute("hidden");
+    element.className = "prop-fishing";
+  });
+  await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "glacier");
+  await page.screenshot({ path: `${screenshots}/glacier-activity.png`, fullPage: true });
+});
