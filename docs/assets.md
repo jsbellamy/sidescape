@@ -580,37 +580,46 @@ opaque interiors onto the pinned neutral ramp (`P.outline` → `P.cream`) plus o
 exterior ring. No new raw generation, tracing, compact source, or hand-drawn geometry was added;
 the earlier two-tone history remains the prior provenance for these stable asset keys.
 
-## Platelegs icon family (#341)
+## Platelegs icon family (#341; silhouette remake)
 
 `bronze-platelegs`, `iron-platelegs`, `steel-platelegs`, `mithril-platelegs`, `adamant-platelegs`,
-and `rune-platelegs` are a source-driven metal armour family. One iron platelegs silhouette was
-generated with the built-in image generator (Cursor `GenerateImage`, style reference
-`docs/icon-style-golden-master.png` plus the iron-chainbody and leather-chaps compact sources as
-negative/peer framing). Final prompt (verbatim grid/key language from `docs/icon-gen.md`):
+and `rune-platelegs` are a source-driven metal armour family. The original #341 iron platelegs
+silhouette (compact grid 23×30, wide `forest/sewer/crypt/town/glacier` scope) shipped but read too
+busy and skinny beside iron chainbody / full helm — noisy segmented shading and off-peer visual
+weight. That generation is superseded by the remake below; gameplay ids and `icons.ts` registration
+are unchanged.
 
-> A single video-game inventory icon of iron platelegs (metal armored greaves / plated leg armour),
-> chunky pixel art matching the attached style sample. One dominant object, centered, filling most
-> of the frame. Drawn on a 32×32 logical pixel grid rendered large (each logical pixel is a clean
-> flat block — no smooth gradients, no anti-aliasing, no blur). The subject's long side spans about
-> 26–30 logical pixels. Flat magenta `#ff00ff` background, nothing else in frame. Selective 1px dark
-> warm outline, light from the upper-left, 8–12 muted earthy colors, clustered shading (no
-> dithering, no drop shadow). Subject details: a pair of rigid metal platelegs — two separate
-> armored legs with a clear transparent gap between them, waist belt/hip plate, thick knee cups,
-> shin greaves; hard metal plates (not leather chaps).
+One iron platelegs silhouette was regenerated with Cursor `GenerateImage`, style references
+`docs/icon-sheet-1x.png`, `src/assets/icons/iron-chainbody.png`, and
+`src/assets/icons/iron-full-helm.png`. Final prompt:
 
-- **Raw (uncommitted):** `scripts/art/icon-gen-inbox/golden-base-iron-platelegs.png` (1024×1024,
+> A single video-game inventory icon of iron platelegs, matching the attached iron Chainbody and
+> Full Helm in silhouette weight, pixel density, metal shading, outline treatment, and visual scale.
+> Depict the platelegs as one connected, chunky armor garment: a broad armored waist and hip
+> assembly flowing into two heavy plated legs. Use an exaggerated wide silhouette, large knee
+> plates, thick flared shin guards, and a small readable gap between the lower legs. Front-facing
+> with slight three-quarter depth. Simplify the armor into four or five broad value-separated metal
+> planes rather than many small anatomical details. Strong dark interior separations, restrained
+> pale highlights, and a muted blue-gray iron palette. The result should feel squat, weighty, and
+> forged—not tall, skinny, skeletal, or like two disconnected greaves. Chunky pixel art on a 32×32
+> logical pixel grid rendered large. Subject approximately 24–27 pixels wide and 26–28 pixels tall.
+> Every logical pixel is a clean flat block; no smooth gradients, anti-aliasing, blur, or dithering.
+> Flat magenta `#ff00ff` background, nothing else. Selective 1px dark warm outline, upper-left
+> lighting, clustered shading, no drop shadow.
+
+- **Raw (uncommitted):** `scripts/art/icon-gen-inbox/golden-base-iron-platelegs.png` (1536×1024,
   git-ignored; never re-exported).
 - **Committed compact source:** `scripts/art/icon-sources/golden-base-iron-platelegs.png` via
   `npm run art:ingest -- --name golden-base-iron-platelegs` with default crop/tolerance/pitch (no
-  overrides). Detected pitch ≈30.16×30.11 → compact grid 23×30; rendered long axis 32px.
-- **`SOURCE_PALETTES` scope:** `materialRampNames: ["steel"]`,
-  `zoneNames: ["forest", "sewer", "crypt", "town", "glacier"]` (ingest winners; `steel.glint`
-  reduced into `glacier[5]` on the compact pass).
+  overrides). Detected pitch ≈29.36×32.56 → compact grid **26×27**; rendered long axis 29px.
+- **`SOURCE_PALETTES` scope:** `materialRampNames: ["steel"]`, `zoneNames: ["sewer"]` — matched to
+  full-helm so Stage-2 stays on the same cool-grey iron planes as chainbody/helm (wider zone scopes
+  tinted earlier remake attempts).
 - **Six deterministic outputs** share that source with chainbody-shaped `opts.recolor` maps
-  (bronze → town[]; iron near-identity with stray zone cleanup; steel/mithril/adamant/rune retarget
-  metal ramps). Shipped under `src/assets/icons/*-platelegs.png` and registered in
-  `src/ui/icons.ts`.
+  (bronze → town[]; iron near-identity with sewer cleanup; steel/mithril/adamant/rune retarget
+  metal ramps). Shipped under `src/assets/icons/*-platelegs.png` (already registered in
+  `src/ui/icons.ts`).
 - **1× approval:** Stage-2 preview and `docs/icon-silhouette-sheet-1x.png` /
-  `docs/icon-sheet-1x.png` read as metal platelegs at native scale — distinct from leather chaps,
-  readable leg gap, peer-consistent with full-helm/chainbody armour scale. No gameplay or
-  `tier-ladder` changes in this issue.
+  `docs/icon-sheet-1x.png` read as squat, connected metal platelegs at native scale — peer weight
+  with full-helm/chainbody, distinct from leather chaps, readable lower-leg gap. No gameplay or
+  `tier-ladder` changes in this remake.
