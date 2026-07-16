@@ -190,6 +190,7 @@ export function boot(
     dispose(): void {
       clearInterval(tickInterval);
       clearInterval(autosaveInterval);
+      app.dispose();
     },
   };
 }

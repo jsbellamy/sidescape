@@ -4,7 +4,6 @@ import type {
   AttackType,
   AutoEatThreshold,
   CombatStyle,
-  DropTableEntry,
   GearSlot,
   SkillName,
   SkillSnapshot,
@@ -28,7 +27,8 @@ import type { ProductionSkill } from "./production";
 import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
-import { resolveActiveAreaId } from "./area-context";
+import { createWorldPageUi } from "./world-page";
+import type { WorldPageUi } from "./world-page";
 import { itemIcon, skillIcon, slotSilhouette, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
 import { formatQty } from "./format";
@@ -96,14 +96,6 @@ const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
  * Shared by per-piece Gear Slot rows and the Character panel's totals row. */
 function defVectorLabel(def: Record<AttackType, number>): string {
   return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
-}
-
-/** Renders a per-kill chance as a short human-readable fraction (e.g. "1/24") when the chance
- * is (near enough) an exact reciprocal, falling back to a percentage otherwise (e.g. "30%"). */
-function formatChance(chance: number): string {
-  const inverse = 1 / chance;
-  const rounded = Math.round(inverse);
-  return Math.abs(inverse - rounded) < 0.01 ? `1/${rounded}` : `${Math.round(chance * 100)}%`;
 }
 
 /** Combat Style segmented control labels — Object.entries drives the buttons, so a future
@@ -239,6 +231,8 @@ function characterNavMarkup(): string {
 export interface MountedApp {
   /** Re-renders the scene from the Engine's current Snapshot. Call after every `engine.tick()`. */
   render(): void;
+  /** Tears down every mounted deep module's DOM listeners. Idempotent. */
+  dispose(): void;
 }
 
 /**
@@ -308,12 +302,6 @@ export function mountApp(
   // Presentation-only, in-memory (never the Snapshot/save), same boundary as bankPresentation's
   // own sort/filter state.
   let lastAreaId: string | null = null;
-
-  // World page's own selected-Area progression rail (#208): which Area's Monsters/Fishing
-  // Spots/Dungeon show in the selected-detail section. Session-only presentation state, like
-  // `lastAreaId` above — selecting a rail row never starts/cancels an activity and never touches
-  // the Snapshot/save. See `resolveSelectedArea`'s own doc for the priority order.
-  let selectedAreaId: string | null = null;
 
   /** Shows/hides the two Management Row cards and the Management card's four destination page
    * bodies, and mirrors the Bank|Vendor toggle and Settings/Pets popovers onto the DOM (#206). DOM
@@ -523,19 +511,6 @@ export function mountApp(
       workspace.characterOpen = false;
       syncWorkspace();
     }
-  }
-
-  /** One tooltip line per Drop Table entry: item name, quantity, band, and human-readable chance. */
-  function dropEntryLine(entry: DropTableEntry): string {
-    const chanceLabel =
-      entry.band === "guaranteed" ? "always" : `${entry.band} ${formatChance(entry.chance)}`;
-    return `${items.name(entry.itemId)} ×${entry.qty} — ${chanceLabel}`;
-  }
-
-  /** `title` tooltip text previewing a Monster's full Drop Table. */
-  function dropTableTooltip(monsterId: string): string {
-    const def = content.monstersById.get(monsterId);
-    return def ? def.dropTable.map(dropEntryLine).join("\n") : "";
   }
 
   function el<T extends HTMLElement>(selector: string): T {
@@ -1153,7 +1128,7 @@ export function mountApp(
 
     renderBackdrop(snap);
     renderScene(dungeon, player, monster, fishing, production);
-    renderWorldPage();
+    worldPageUi.render(snap);
     loadoutSlotUi.render(player, bank.items);
     renderCastingReadout(player.spell);
     renderSkillsPage(player.skills);
@@ -1164,117 +1139,6 @@ export function mountApp(
     renderEquipmentTray(bank, player.gold);
     renderVendor(bank, player.gold);
     renderWorkshopPage();
-  }
-
-  /**
-   * Resolves which Snapshot Area's detail the World page's progression rail shows selected right
-   * now (#208) — a pure function over the Snapshot (plus the session-only `selectedAreaId`
-   * closed-over state), mirroring `resolveTheme`'s own shape and rationale. Priority, matching the
-   * issue's owner-decided rules:
-   * 1. `selectedAreaId`, if it still names a Snapshot Area (stale/never-set falls through);
-   * 2. the shared `resolveActiveAreaId` (#236) resolver's host Area id, if it names a Snapshot
-   *    Area — see that module's doc for its own Dungeon → Monster → Fishing Spot order and why
-   *    Dungeon must be checked first;
-   * 3. the first Snapshot Area reporting `unlocked`;
-   * 4. the first Snapshot Area outright (undefined only if `snap.areas` is itself empty).
-   */
-  function resolveSelectedArea(snap: Snapshot): Snapshot["areas"][number] | undefined {
-    const selected = snap.areas.find((a) => a.id === selectedAreaId);
-    if (selected) return selected;
-
-    const activeAreaId = resolveActiveAreaId(snap, content);
-    const activeArea = activeAreaId ? snap.areas.find((a) => a.id === activeAreaId) : undefined;
-    if (activeArea) return activeArea;
-
-    return snap.areas.find((a) => a.unlocked) ?? snap.areas[0];
-  }
-
-  /** Renders the World page's progression rail (#208): one row per Snapshot Area, in Snapshot
-   * order — all Areas stay visible and selectable (including locked ones, for inspection),
-   * regardless of which one is currently selected. */
-  function renderAreaRail(
-    snap: Snapshot,
-    selectedId: string | undefined,
-    activeId: string | null,
-  ): void {
-    el("#area-rail").innerHTML = snap.areas
-      .map((area) => {
-        const classes = ["area-rail-item"];
-        if (!area.unlocked) classes.push("locked");
-        if (area.id === selectedId) classes.push("selected");
-        if (area.id === activeId) classes.push("current");
-        return `<button type="button" class="${classes.join(" ")}" data-area-select="${area.id}" aria-pressed="${area.id === selectedId}">
-          <span class="area-rail-name">${area.name}</span>
-          ${area.unlocked ? "" : `<span class="area-rail-lock" aria-hidden="true">🔒</span>`}
-        </button>`;
-      })
-      .join("");
-  }
-
-  /** Renders the selected Area's own detail section (#208: name/gate state, Monsters, Fishing
-   * Spots, Dungeon) — the Monster/Fishing Spot/Dungeon markup and its `disabled`/tooltip rules are
-   * unchanged from the pre-#208 flat picker, just scoped to one Area instead of every Area at
-   * once. The currently active Monster/Fishing Spot/Dungeon (Snapshot-driven, independent of which
-   * Area is selected) gets the `active` accent class. */
-  function renderAreaDetail(snap: Snapshot, area: Snapshot["areas"][number] | undefined): void {
-    if (!area) {
-      el("#area-detail").innerHTML = "";
-      return;
-    }
-    const inDungeon = snap.dungeon !== null;
-    const monsterButtons = area.monsterIds
-      .map((id) => {
-        const def = content.monstersById.get(id);
-        const active = !inDungeon && snap.monster?.id === id;
-        return `<button data-monster="${id}" class="${active ? "active" : ""}" ${area.unlocked ? "" : "disabled"} title="${dropTableTooltip(id)}">${def?.name ?? id}</button>`;
-      })
-      .join("");
-    const spotButtons = area.fishingSpots
-      .map(({ id, unlocked }) => {
-        const def = content.fishingSpotsById.get(id);
-        const active = snap.fishing?.spotId === id;
-        // #284: the active spot's own progress bar fills toward the next catch attempt, resetting
-        // every cycle whether or not the roll succeeds — sits right under its button.
-        const bar =
-          active && snap.fishing
-            ? `<div class="action-progress" aria-label="Catch progress"><div class="fill" style="width:${snap.fishing.progress * 100}%"></div></div>`
-            : "";
-        return `<span class="fishing-spot-item"><button data-spot="${id}" class="${active ? "active" : ""}" ${unlocked ? "" : "disabled"}>🎣 ${def?.name ?? id}</button>${bar}</span>`;
-      })
-      .join("");
-    const dungeonButtons = content.dungeons
-      .filter((d) => d.areaId === area.id)
-      .map((d) => {
-        const active = snap.dungeon?.id === d.id;
-        return `<button data-dungeon="${d.id}" class="${active ? "active" : ""}" ${area.unlocked ? "" : "disabled"}>⚔ ${d.name}</button>`;
-      })
-      .join("");
-    el("#area-detail").innerHTML = `
-      <p class="area-name">${area.name}${area.unlocked ? "" : ` ${lockClearLabel(area)}`}</p>
-      <div class="monster-buttons">${monsterButtons}</div>
-      ${spotButtons ? `<div class="monster-buttons fishing-buttons">${spotButtons}</div>` : ""}
-      ${dungeonButtons ? `<div class="monster-buttons dungeon-buttons">${dungeonButtons}</div>` : ""}`;
-  }
-
-  /** Rebuilds the World page (#208's progression rail + selected-Area detail) from the current
-   * Snapshot — replaces the old flat `buildPicker`. Called from `render()` every tick (so live
-   * Snapshot changes like Dungeon Wave advances keep the active highlight in sync) and eagerly
-   * from the levelup/dungeon-completed listeners below (mirroring `buildPicker`'s own two trigger
-   * sites), so a gate flip is reflected even when no other render() call follows in the same
-   * frame. */
-  function renderWorldPage(): void {
-    const snap = engine.snapshot();
-    const selectedArea = resolveSelectedArea(snap);
-    const activeAreaId = resolveActiveAreaId(snap, content);
-    renderAreaRail(snap, selectedArea?.id, activeAreaId);
-    renderAreaDetail(snap, selectedArea);
-  }
-
-  /** "🔒 Clear <dungeon name>" for a locked Area's picker label, read straight from the
-   * Snapshot's derived `gatedBy` (#24/#87: Engine keeps gate rules internal, UI never walks
-   * raw Content for them). */
-  function lockClearLabel(area: Snapshot["areas"][number]): string {
-    return `🔒 Clear ${area.gatedBy?.name ?? "?"}`;
   }
 
   root.innerHTML = `
@@ -1397,13 +1261,7 @@ export function mountApp(
         </div>
         <ul id="feed" class="card-scroll"></ul>
       </div>
-      <!-- The World destination (#208) owns its own fixed shell — the progression rail never
-           scrolls, only the selected-Area detail does, so the rail stays put while a long detail
-           (e.g. many Monsters) scrolls under it. See styles.css's .world-page-body. -->
-      <div data-management-page="world" class="world-page-body" hidden>
-        <div id="area-rail" class="area-rail" role="tablist"></div>
-        <div id="area-detail" class="area-detail card-scroll"></div>
-      </div>
+      <div id="world-page-host" data-management-page="world" class="world-page-body" hidden></div>
       <!-- The expanded Bank/Vendor destination (#207) owns its own fixed shell too
            (search/filters/sort/detail/buy-slots never scroll, only the tile grid and the Vendor
            list do) — see styles.css's .bank-page-body. -->
@@ -1530,6 +1388,16 @@ export function mountApp(
     onChanged: () => render(),
   });
 
+  // The deep, mounted World Management destination (#325): owns session Area selection, World
+  // rendering, and Monster/Fishing Spot/Dungeon dispatch inside `#world-page-host` — see
+  // world-page.ts's own doc comment.
+  const worldPageUi: WorldPageUi = createWorldPageUi({
+    host: el<HTMLElement>("#world-page-host"),
+    content,
+    commands: engine,
+    onChanged: () => render(),
+  });
+
   // The game renders every Tick, so Vendor rows must outlive individual renders to avoid
   // interrupting keyboard editing in a focused quantity input (#307).
   const vendorRows = new Map<string, VendorRowElements>();
@@ -1640,8 +1508,6 @@ export function mountApp(
     }
     feedLine("📦 Chest opened!", "chest-header");
   });
-  engine.on("levelup", () => renderWorldPage()); // Fishing-Spot levelReq gates are level-driven
-  engine.on("dungeon-completed", () => renderWorldPage()); // Area gates flip on Dungeon completion
 
   // Character section headers (#134): one delegated listener on the whole tab-panel rather than one
   // per header, mirroring #management-row's own closest()-based delegation below. A click anywhere
@@ -1799,42 +1665,6 @@ export function mountApp(
   // see `onEscape`'s own doc comment above.
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") onEscape();
-  });
-
-  // World page's selected-Area detail (#208, formerly #picker): dispatches the existing
-  // Monster/Fishing Spot/Dungeon commands, unchanged from the pre-#208 flat picker. A locked
-  // Area's buttons carry `disabled`, so they never fire a click here — no extra guard needed
-  // (mirrors the Spell picker's own disabled-button reasoning above).
-  el("#area-detail").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const monsterId = target.dataset["monster"];
-    if (monsterId) {
-      engine.selectMonster(monsterId);
-      render();
-      return;
-    }
-    const spotId = target.dataset["spot"];
-    if (spotId) {
-      engine.selectFishingSpot(spotId);
-      render();
-      return;
-    }
-    const dungeonId = target.dataset["dungeon"];
-    if (dungeonId) {
-      engine.enterDungeon(dungeonId);
-      render();
-    }
-  });
-
-  // World page's progression rail (#208): selecting a row is session-only presentation state
-  // (`selectedAreaId`) — it never calls the Engine, unlike the detail buttons above. A locked
-  // Area's row stays selectable (inspection is allowed; only its activity controls are
-  // `disabled`), so there's no locked-guard here either.
-  el("#area-rail").addEventListener("click", (event) => {
-    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-area-select]");
-    if (!row) return;
-    selectedAreaId = row.dataset["areaSelect"] ?? null;
-    render();
   });
 
   // Bank grid (#78): clicking a tile selects it (re-clicking the already-selected tile
@@ -2017,12 +1847,21 @@ export function mountApp(
     render();
   });
 
-  render(); // includes renderWorldPage() (#208)
+  render(); // includes worldPageUi.render(snap) (#325)
   // Both cards start closed (#206: workspace state is session-only, never restored across a
   // relaunch) and notifies WorkspaceChrome of zero open cards once up front, so the real Tauri
   // adapter (main.ts) sizes/positions the OS window to match on every mount, not just on the next
   // toggle.
   syncWorkspace();
 
-  return { render };
+  let disposed = false;
+
+  return {
+    render,
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      worldPageUi.dispose();
+    },
+  };
 }
