@@ -1,4 +1,5 @@
 import { SKILL_NAMES } from "./types";
+import { MAX_LEVEL } from "./xp";
 import type {
   AmmoDef,
   AreaDef,
@@ -238,6 +239,15 @@ export function validateContent(content: Content): string[] {
         violations.push(`arrow "${item.id}" declares element`);
       }
     }
+    if (item.levelReq) {
+      violations.push(...levelReqViolations(item.id, item.levelReq));
+    }
+  }
+
+  for (const item of content.items) {
+    if (item.kind === "equipment" && item.levelReq) {
+      violations.push(...levelReqViolations(item.id, item.levelReq));
+    }
   }
 
   // Vendor (#119): every entry's itemId must resolve to a real Item, mirroring the dropTable
@@ -286,6 +296,24 @@ export function validateContent(content: Content): string[] {
   }
 
   return violations;
+}
+
+function levelReqViolations(
+  itemId: string,
+  levelReq: Partial<Record<(typeof SKILL_NAMES)[number], number>>,
+): string[] {
+  const messages: string[] = [];
+  for (const [skill, need] of Object.entries(levelReq)) {
+    if (!(SKILL_NAMES as readonly string[]).includes(skill)) {
+      messages.push(`item "${itemId}" levelReq names unknown skill "${skill}"`);
+    }
+    if (!Number.isInteger(need) || need < 1 || need > MAX_LEVEL) {
+      messages.push(
+        `item "${itemId}" levelReq.${skill} must be an integer 1..${MAX_LEVEL}, got ${need}`,
+      );
+    }
+  }
+  return messages;
 }
 
 function duplicateIds(entries: { id: string }[], collectionName: string): string[] {

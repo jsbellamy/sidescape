@@ -136,6 +136,11 @@ describe("Bone Crypt content", () => {
     expect(shadeBlade?.kind === "equipment" && shadeBlade.magicDamage).toBeUndefined();
   });
 
+  it("shade-blade carries levelReq: { attack: 40 }, matching rune tier (#363)", () => {
+    const shadeBlade = content.items.find((i) => i.id === "shade-blade");
+    expect(shadeBlade).toMatchObject({ levelReq: { attack: 40 } });
+  });
+
   it("the Shade Blade out-bonuses every mithril weapon and every earlier weapon in the game", () => {
     const shadeBlade = content.items.find((i) => i.id === "shade-blade");
     const mithrilDagger = content.items.find((i) => i.id === "mithril-dagger");

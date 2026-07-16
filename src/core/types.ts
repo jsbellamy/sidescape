@@ -128,6 +128,10 @@ export interface EquipmentDef {
    * clears `equipment.shield` to bank; equipping a shield while this is worn clears the weapon to
    * bank. Omit/false = one-handed. Shortbows are two-handed; staves are not. */
   twoHanded?: boolean;
+  /** Skill levels required to equip this item. Multi-skill by design — every entry must be met.
+   * Absent means no requirement. Gates the ACTION only: gear already worn in a save is never
+   * retroactively stripped (grandfathering on load). */
+  levelReq?: Partial<Record<SkillName, number>>;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }
@@ -234,6 +238,10 @@ export interface AmmoDef {
    * decides power. Required for arrows, forbidden on runes (magic max hit is spell-driven, not
    * strength-shaped — runes add no strength). */
   rangedStr?: number;
+  /** Skill levels required to load this ammo. Multi-skill by design — every entry must be met.
+   * Absent means no requirement. Runes gate on their Spell's levelReq instead — do not duplicate
+   * that here. Gates the ACTION only; ammo already in the Quiver on load is never stripped. */
+  levelReq?: Partial<Record<SkillName, number>>;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }

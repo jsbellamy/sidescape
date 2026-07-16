@@ -1,4 +1,4 @@
-import type { AttackType, EquipmentDef, GearSlot, RecipeDef } from "../core/types";
+import type { AttackType, EquipmentDef, GearSlot, RecipeDef, SkillName } from "../core/types";
 
 /**
  * Issue #251: the Gear Tier ladder (bronze -> iron -> steel -> mithril) expressed BY
@@ -216,6 +216,26 @@ function resolveIdName(tier: GearTier, family: WeaponFamily | ArmourFamily) {
   return { id: `${tier}-${family}`, name: `${titleTier(tier)} ${titleCase(family)}` };
 }
 
+/** Wear/wield requirement per Gear Tier — the level in the item's governing Skill needed to
+ * equip it. Distinct from TIER_BASE_LEVEL (Smithing: what you can MAKE). Owner-decided
+ * 2026-07-16: a spread ladder, not OSRS's literal 1/1/5/20/30/40 — OSRS puts iron at 1, which
+ * would make a whole tier of this ladder a non-event. */
+export const TIER_REQ_LEVEL: Record<GearTier, number> = {
+  bronze: 1,
+  iron: 5,
+  steel: 10,
+  mithril: 20,
+  adamant: 30,
+  rune: 40,
+};
+
+function weaponWearSkill(family: WeaponFamily): SkillName {
+  const attackType = WEAPON_TABLE[family].attackType;
+  if (attackType === "ranged") return "ranged";
+  if (attackType === "magic") return "magic";
+  return "attack";
+}
+
 /** Generates one weapon Equipment entry for `tier`/`family`. `icon` always equals the item's
  * final id (the issue's own rule). */
 export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef {
@@ -243,6 +263,7 @@ export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef
     def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
     attackSpeed: row.attackSpeed,
     ...(family === "shortbow" ? { twoHanded: true as const } : {}),
+    levelReq: { [weaponWearSkill(family)]: TIER_REQ_LEVEL[tier] },
     value: row.baseValue * 2 ** tierIndex,
   };
 }
@@ -292,6 +313,7 @@ export function ladderArmour(tier: GearTier, family: ArmourFamily): EquipmentDef
     icon: id,
     slot: row.slot,
     def,
+    levelReq: { defence: TIER_REQ_LEVEL[tier] },
     value: row.baseValue * 2 ** tierIndex,
   };
 }

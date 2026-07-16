@@ -848,6 +848,14 @@ export function createEngine(
     return levelForXp(state.xp[skill]);
   }
 
+  function checkLevelReq(def: { levelReq?: Partial<Record<SkillName, number>> }): void {
+    for (const [skill, need] of Object.entries(def.levelReq ?? {})) {
+      if (level(skill as SkillName) < need) {
+        throw new Error(`${skill} level too low: need ${need}`);
+      }
+    }
+  }
+
   function monsterDef(id: string): MonsterDef {
     const def = resolved.monstersById.get(id);
     if (!def) throw new Error(`unknown monster: ${id}`);
@@ -1955,11 +1963,12 @@ export function createEngine(
   }
 
   function quiverAssignAt(arrowItemId: string): void {
-    const { owned } = takeOwned(
+    const { def, owned } = takeOwned(
       arrowItemId,
       (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "arrow",
       `${arrowItemId} is not an Arrow`,
     );
+    checkLevelReq(def);
 
     const current = state.quiver;
     let homeQty = owned;
@@ -1987,6 +1996,7 @@ export function createEngine(
       `${runeItemId} is not a Rune`,
     );
     const spell = resolved.spellsByRuneId.get(def.id);
+    // Rune level gates live on the Spell, not AmmoDef.levelReq — do not add a second gate here.
     if (spell && level("magic") < spell.levelReq) {
       throw new Error(`magic level too low: need ${spell.levelReq}`);
     }
@@ -2104,6 +2114,7 @@ export function createEngine(
       if (def.kind !== "equipment") throw new Error(`${def.name} cannot be equipped`);
       const owned = state.bank.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
+      checkLevelReq(def);
 
       const oldMode = weaponCombatModeFor(state.equipment.weapon, resolved);
 

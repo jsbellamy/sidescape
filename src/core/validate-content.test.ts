@@ -13,6 +13,50 @@ describe("validateContent", () => {
     expect(validateContent(realContent)).toEqual([]);
   });
 
+  describe("levelReq (#363)", () => {
+    it("rejects an out-of-range level", () => {
+      const content = {
+        ...fixtureContent,
+        items: [
+          ...fixtureContent.items,
+          {
+            kind: "equipment" as const,
+            id: "bad-level-item",
+            name: "Bad Level Item",
+            icon: "bronze-sword",
+            slot: "head" as const,
+            def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+            levelReq: { attack: 100 },
+          },
+        ],
+      };
+      expect(validateContent(content)).toContain(
+        'item "bad-level-item" levelReq.attack must be an integer 1..99, got 100',
+      );
+    });
+
+    it("rejects an unknown skill in levelReq", () => {
+      const content = {
+        ...fixtureContent,
+        items: [
+          ...fixtureContent.items,
+          {
+            kind: "equipment" as const,
+            id: "bad-skill-item",
+            name: "Bad Skill Item",
+            icon: "bronze-sword",
+            slot: "head" as const,
+            def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+            levelReq: { notaskill: 5 },
+          } as (typeof fixtureContent.items)[number],
+        ],
+      };
+      expect(validateContent(content)).toContain(
+        'item "bad-skill-item" levelReq names unknown skill "notaskill"',
+      );
+    });
+  });
+
   it("reports zero currency items", () => {
     const content: Content = {
       ...fixtureContent,

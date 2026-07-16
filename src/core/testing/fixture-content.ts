@@ -136,6 +136,35 @@ export const fixtureContent: Content = {
       attackSpeed: 4,
       value: 20,
     },
+    // Level-gating fixtures (#363): high-sword gates on Attack 40; dual-req-ring needs Attack 10
+    // AND Defence 10; gated-arrow gates Quiver load on Ranged 10. bronze-sword deliberately has
+    // no levelReq so "items without requirements equip as today" stays testable.
+    {
+      kind: "equipment",
+      id: "high-sword",
+      name: "High Sword",
+      icon: "bronze-sword",
+      slot: "weapon",
+      attackType: "slash",
+      atkBonus: 50,
+      strBonus: 40,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      attackSpeed: 4,
+      levelReq: { attack: 40 },
+      value: 500,
+    },
+    {
+      kind: "equipment",
+      id: "dual-req-ring",
+      name: "Dual Req Ring",
+      icon: "goblin-charm",
+      slot: "ring",
+      atkBonus: 1,
+      strBonus: 1,
+      def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+      levelReq: { attack: 10, defence: 10 },
+      value: 50,
+    },
     {
       kind: "equipment",
       id: "lucky-charm",
@@ -274,11 +303,22 @@ export const fixtureContent: Content = {
     },
     {
       kind: "ammo",
+      id: "gated-arrow",
+      name: "Gated Arrow",
+      icon: "iron-bar",
+      ammoType: "arrow",
+      rangedStr: 8,
+      levelReq: { ranged: 10 },
+      value: 2,
+    },
+    {
+      kind: "ammo",
       id: "iron-arrow",
       name: "Test Iron Arrow",
       icon: "bronze-bar",
       ammoType: "arrow",
       rangedStr: 10,
+      levelReq: { ranged: 10 },
       value: 2,
     },
     {

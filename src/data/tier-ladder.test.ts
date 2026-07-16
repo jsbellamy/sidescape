@@ -8,6 +8,7 @@ import {
   ladderRecipe,
   ladderWeapon,
   METAL_FAMILIES,
+  TIER_REQ_LEVEL,
   WEAPON_FAMILIES,
 } from "./tier-ladder";
 
@@ -306,6 +307,51 @@ describe("ladderArmour", () => {
         expect(item.attackSpeed).toBeUndefined();
       }
     }
+  });
+});
+
+/** Wear requirements (#363): TIER_REQ_LEVEL per tier, governing skill by family. */
+const WEAR_REQ_SKILL: Record<string, string> = {
+  dagger: "attack",
+  mace: "attack",
+  sword: "attack",
+  shortbow: "ranged",
+  staff: "magic",
+  chainbody: "defence",
+  kiteshield: "defence",
+  "full-helm": "defence",
+  platelegs: "defence",
+};
+
+describe("wear levelReq (#363)", () => {
+  it("every ladder weapon carries levelReq in its governing Skill at TIER_REQ_LEVEL", () => {
+    for (const family of WEAPON_FAMILIES) {
+      const skill = WEAR_REQ_SKILL[family]!;
+      for (const tier of GEAR_TIERS) {
+        const item = ladderWeapon(tier, family);
+        expect(item.levelReq).toEqual({ [skill]: TIER_REQ_LEVEL[tier] });
+      }
+    }
+  });
+
+  it("every ladder armour piece carries levelReq: { defence: TIER_REQ_LEVEL[tier] }", () => {
+    for (const family of ARMOUR_FAMILIES) {
+      for (const tier of GEAR_TIERS) {
+        const item = ladderArmour(tier, family);
+        expect(item.levelReq).toEqual({ defence: TIER_REQ_LEVEL[tier] });
+      }
+    }
+  });
+
+  it("TIER_REQ_LEVEL is 1/5/10/20/30/40 across bronze→rune", () => {
+    expect(TIER_REQ_LEVEL).toEqual({
+      bronze: 1,
+      iron: 5,
+      steel: 10,
+      mithril: 20,
+      adamant: 30,
+      rune: 40,
+    });
   });
 });
 

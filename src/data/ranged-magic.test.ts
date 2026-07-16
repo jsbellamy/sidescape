@@ -19,6 +19,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 5,
       twoHanded: true,
+      levelReq: { ranged: 1 },
       value: 25,
     });
 
@@ -34,6 +35,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       magicDamage: 0,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 6,
+      levelReq: { magic: 1 },
       value: 25,
     });
   });
