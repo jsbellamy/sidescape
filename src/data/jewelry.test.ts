@@ -112,13 +112,29 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
       atkBonus: 4,
       strBonus: 2,
       rangedStr: 2,
+      magicDamage: 2,
     });
     expect(content.items.find((i) => i.id === "ruby-ring")).toMatchObject({
       slot: "ring",
       atkBonus: 6,
       strBonus: 4,
       rangedStr: 4,
+      magicDamage: 3,
     });
+  });
+
+  it("higher-tier jewelry carries magicDamage in the 2–5% band; sapphire tier has none (#362)", () => {
+    const sapphireAmulet = content.items.find((i) => i.id === "sapphire-amulet");
+    const emeraldAmulet = content.items.find((i) => i.id === "emerald-amulet");
+    const rubyAmulet = content.items.find((i) => i.id === "ruby-amulet");
+    if (sapphireAmulet?.kind !== "equipment") throw new Error("sapphire-amulet must be equipment");
+    if (emeraldAmulet?.kind !== "equipment") throw new Error("emerald-amulet must be equipment");
+    if (rubyAmulet?.kind !== "equipment") throw new Error("ruby-amulet must be equipment");
+    expect(sapphireAmulet.magicDamage).toBeUndefined();
+    expect(emeraldAmulet.magicDamage).toBeGreaterThanOrEqual(2);
+    expect(emeraldAmulet.magicDamage).toBeLessThanOrEqual(5);
+    expect(rubyAmulet.magicDamage).toBeGreaterThanOrEqual(2);
+    expect(rubyAmulet.magicDamage).toBeLessThanOrEqual(5);
   });
 
   it("defines the jewelry Crafting Recipes, interleaved with the leather ladder's levelReqs", () => {

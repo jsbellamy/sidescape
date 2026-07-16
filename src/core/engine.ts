@@ -914,11 +914,11 @@ export function createEngine(
     return defs;
   }
 
-  /** atkBonus/strBonus/rangedStr, summed across equipped Gear Slots (#99: only the weapon carries
-   * atk/str/ranged fields now — armour dropped them — so in practice this reads the equipped weapon
-   * alone; kept as a sum over `equippedDefs()` rather than a direct weapon lookup so it stays
-   * correct if that ever changes). */
-  function gearBonus(kind: "atkBonus" | "strBonus" | "rangedStr"): number {
+  /** atkBonus/strBonus/rangedStr/magicDamage, summed across equipped Gear Slots (#99: only the
+   * weapon carries atk/str/ranged/magic fields now — armour dropped them — so in practice this
+   * reads the equipped weapon alone; kept as a sum over `equippedDefs()` rather than a direct
+   * weapon lookup so it stays correct if that ever changes). */
+  function gearBonus(kind: "atkBonus" | "strBonus" | "rangedStr" | "magicDamage"): number {
     return equippedDefs().reduce((sum, def) => sum + (def[kind] ?? 0), 0);
   }
 
@@ -1364,9 +1364,10 @@ export function createEngine(
    * (OSRS-style) rather than Attack/Strength — effectiveLevel already yields +8 with no Combat
    * Style boost for a non-melee skill, so no change needed there. Magic's accuracy mirrors
    * Ranged's shape (keyed off the Magic skill + weapon atkBonus), but max hit comes from the
-   * resolved spell's `baseMaxHit` instead of a Strength-shaped formula (#101, replacing wave 1/4's
-   * interim level-driven magic max hit) — Magic level gates WHICH spell, the spell decides the
-   * damage; magic weapons ignore strBonus entirely. */
+   * resolved spell's `baseMaxHit` scaled by gear `magicDamage` (#362) instead of a
+   * Strength-shaped formula (#101, replacing wave 1/4's interim level-driven magic max hit) —
+   * Magic level gates WHICH spell and drives accuracy only; the spell's `baseMaxHit` and gear
+   * `magicDamage` % decide max hit. */
   function playerAccuracyAndMaxHit(): { atkRoll: number; max: number } {
     const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     if (mode === "ranged") {
@@ -1392,14 +1393,14 @@ export function createEngine(
         effectiveLevel(level("magic"), "magic", state.combatStyle, mode) *
           skillLevelMultiplier("magic"),
       );
+      const baseMaxHit = currentSpell()?.baseMaxHit ?? 0;
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
-        // Magic max hit is the currently cast Spell's own baseMaxHit (#101, #221), not
-        // Strength-derived — left unmultiplied here on purpose (#114): a magic-damage source is
-        // out of scope this wave. Caller (playerAttack) has already gated on checkAmmo confirming
-        // a loaded Rune Slot, so this only ever runs with a real Spell; the `?? 0` guards
-        // defensively, mirroring arrowDef's own guard above.
-        max: currentSpell()?.baseMaxHit ?? 0,
+        // Magic max hit: spell baseMaxHit × (1 + summed gear magicDamage % / 100), floored (#362).
+        // Caller (playerAttack) has already gated on checkAmmo confirming a loaded Rune Slot, so
+        // this only ever runs with a real Spell; the `?? 0` guards defensively, mirroring
+        // arrowDef's own guard above.
+        max: Math.floor(baseMaxHit * (1 + gearBonus("magicDamage") / 100)),
       };
     }
     return {

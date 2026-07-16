@@ -114,6 +114,11 @@ export interface EquipmentDef {
    * `AmmoDef.rangedStr`. Bows + jewelry. Mirrors OSRS, where Ranged Strength is a stat distinct
    * from melee Strength bonus and appears on gear as well as ammunition. */
   rangedStr?: number;
+  /** Magic damage bonus, as a PERCENT (5 means +5%) — not a flat addend, unlike `strBonus` and
+   * `rangedStr`. Summed additively across equipped gear, then applied as one multiplier to the
+   * cast Spell's `baseMaxHit`. Mirrors OSRS, where Magic level drives accuracy only and gear's
+   * magic damage % is the sole gear-side damage lever. Staves + jewelry. */
+  magicDamage?: number;
   /** Every piece's defence, per Attack Type (#99) — replaces the old scalar defBonus. All five
    * keys are required (a compile error forces every content site to update). */
   def: Record<AttackType, number>;

@@ -56,12 +56,12 @@ const WEAPON_ATK_STR: Record<string, [number, number][]> = {
     [41, 35],
   ],
   staff: [
-    [4, 5],
-    [9, 11],
-    [14, 17],
-    [19, 23],
-    [27, 32],
-    [35, 41],
+    [4, 0],
+    [9, 3],
+    [14, 5],
+    [19, 8],
+    [27, 12],
+    [35, 15],
   ],
 };
 
@@ -123,9 +123,15 @@ describe("ladderWeapon", () => {
         if (family === "shortbow") {
           expect(item.rangedStr, `${tier}-${family} rangedStr`).toBe(str);
           expect(item.strBonus).toBeUndefined();
+          expect(item.magicDamage).toBeUndefined();
+        } else if (family === "staff") {
+          expect(item.magicDamage, `${tier}-${family} magicDamage`).toBe(str);
+          expect(item.strBonus).toBeUndefined();
+          expect(item.rangedStr).toBeUndefined();
         } else {
           expect(item.strBonus, `${tier}-${family} strBonus`).toBe(str);
           expect(item.rangedStr).toBeUndefined();
+          expect(item.magicDamage).toBeUndefined();
         }
         expect(item.value, `${tier}-${family} value`).toBe(VALUES[family]![tierIndex]);
       });
@@ -209,7 +215,7 @@ describe("ladderWeapon", () => {
       const items = GEAR_TIERS.map((tier) => ladderWeapon(tier, family));
       for (let i = 1; i < items.length; i++) {
         expect(items[i]!.atkBonus).toBeGreaterThan(items[i - 1]!.atkBonus!);
-        const strStat = family === "shortbow" ? "rangedStr" : "strBonus";
+        const strStat = family === "shortbow" ? "rangedStr" : "magicDamage";
         expect(items[i]![strStat]).toBeGreaterThan(items[i - 1]![strStat]!);
       }
     }
@@ -235,7 +241,7 @@ describe("ladderWeapon", () => {
     expect(ladderWeapon("mithril", "dagger").atkBonus).toBe(19);
     expect(ladderWeapon("mithril", "shortbow").atkBonus).toBe(23);
     expect(ladderWeapon("mithril", "shortbow").rangedStr).toBe(19);
-    expect(ladderWeapon("mithril", "staff").strBonus).toBe(23);
+    expect(ladderWeapon("mithril", "staff").magicDamage).toBe(8);
   });
 
   it("every shortbow is two-handed; staves and melee weapons are one-handed (#340)", () => {

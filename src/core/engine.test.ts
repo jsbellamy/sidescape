@@ -5284,6 +5284,194 @@ describe("Attack Type axis (#99)", () => {
     });
   });
 
+  describe("#362: magicDamage (%) is magic-only — strBonus and rangedStr do not bleed in", () => {
+    function observedMagicMaxDamage(
+      content = fixtureContent,
+      equipment: Record<string, string> = {},
+      runeItemId = "earth-rune",
+      magicLevel = 99,
+    ): number {
+      const engine = createEngine(
+        content,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "accurate",
+            skills: {
+              magic: { level: magicLevel, xp: xpForLevel(magicLevel) },
+              hitpoints: { level: 40, xp: xpForLevel(40) },
+            },
+            equipment: { weapon: "staff", ...equipment },
+            runeSlot: { itemId: runeItemId, qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy");
+      let max = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") max = Math.max(max, e.damage);
+      });
+      for (let i = 0; i < 2000; i++) engine.tick();
+      expect(max).toBeGreaterThan(0);
+      return max;
+    }
+
+    it("baseMaxHit 16 with +15% gear magicDamage → max hit 18 (floor, not rounded)", () => {
+      const content = {
+        ...fixtureContent,
+        items: fixtureContent.items.map((i) => {
+          if (i.id === "staff" && i.kind === "equipment") {
+            const { strBonus: _strBonus, ...staff } = i;
+            return { ...staff, magicDamage: 15 };
+          }
+          return i;
+        }),
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-quake" ? { ...s, baseMaxHit: 16 } : s,
+        ),
+      };
+      const observed = observedMagicMaxDamage(content, {}, "earth-rune");
+      expect(observed).toBe(18);
+    });
+
+    it("magicDamage sums additively across slots, then multiplies once (+10% +10% → ×1.20)", () => {
+      const magicAmulet = {
+        kind: "equipment" as const,
+        id: "magic-amulet",
+        name: "Magic Amulet",
+        icon: "goblin-charm",
+        slot: "amulet" as const,
+        magicDamage: 10,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const magicRing = {
+        kind: "equipment" as const,
+        id: "magic-ring",
+        name: "Magic Ring",
+        icon: "goblin-charm",
+        slot: "ring" as const,
+        magicDamage: 10,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const content = {
+        ...fixtureContent,
+        items: [...fixtureContent.items, magicAmulet, magicRing],
+        spells: fixtureContent.spells.map((s) =>
+          s.id === "test-quake" ? { ...s, baseMaxHit: 10 } : s,
+        ),
+      };
+      const observed = observedMagicMaxDamage(content, {
+        amulet: "magic-amulet",
+        ring: "magic-ring",
+      });
+      expect(observed).toBe(12); // floor(10 * 1.20)
+    });
+
+    it("zero equipped magicDamage leaves magic max hit exactly at baseMaxHit", () => {
+      const observed = observedMagicMaxDamage(fixtureContent, {}, "air-rune");
+      expect(observed).toBe(5); // test-spark baseMaxHit; fixture staff magicDamage is 0
+    });
+
+    it("Magic level does not affect max hit — identical ceiling at Magic 13 and Magic 99", () => {
+      const low = observedMagicMaxDamage(fixtureContent, {}, "air-rune", 13);
+      const high = observedMagicMaxDamage(fixtureContent, {}, "air-rune", 99);
+      expect(high).toBe(low);
+    });
+
+    it("an item with only strBonus contributes zero to magic max hit", () => {
+      const strOnlyAmulet = {
+        kind: "equipment" as const,
+        id: "str-only-amulet",
+        name: "Str Only Amulet",
+        icon: "goblin-charm",
+        slot: "amulet" as const,
+        strBonus: 50,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const content = { ...fixtureContent, items: [...fixtureContent.items, strOnlyAmulet] };
+      const without = observedMagicMaxDamage(content);
+      const withAmulet = observedMagicMaxDamage(content, { amulet: "str-only-amulet" });
+      expect(withAmulet).toBe(without);
+    });
+
+    it("an item with only rangedStr contributes zero to magic max hit", () => {
+      const rangedOnlyAmulet = {
+        kind: "equipment" as const,
+        id: "ranged-only-amulet",
+        name: "Ranged Only Amulet",
+        icon: "goblin-charm",
+        slot: "amulet" as const,
+        rangedStr: 50,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const content = { ...fixtureContent, items: [...fixtureContent.items, rangedOnlyAmulet] };
+      const without = observedMagicMaxDamage(content);
+      const withAmulet = observedMagicMaxDamage(content, { amulet: "ranged-only-amulet" });
+      expect(withAmulet).toBe(without);
+    });
+
+    it("melee max hit is byte-for-byte unchanged for a pinned bronze-sword loadout", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "aggressive",
+            skills: {
+              attack: { level: 90, xp: xpForLevel(90) },
+              strength: { level: 90, xp: xpForLevel(90) },
+              hitpoints: { level: 40, xp: xpForLevel(40) },
+            },
+            equipment: { weapon: "bronze-sword" },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy");
+      let max = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") max = Math.max(max, e.damage);
+      });
+      for (let i = 0; i < 2000; i++) engine.tick();
+      const eff = Math.floor(effectiveLevel(90, "strength", "aggressive", "melee") * 1);
+      expect(max).toBe(maxHit(eff, 30));
+    });
+
+    it("ranged max hit is byte-for-byte unchanged for a pinned bow+arrow loadout", () => {
+      const rangedLevel = 50;
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "accurate",
+            skills: {
+              ranged: { level: rangedLevel, xp: xpForLevel(rangedLevel) },
+              hitpoints: { level: 40, xp: xpForLevel(40) },
+            },
+            equipment: { weapon: "bow" },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy");
+      let max = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") max = Math.max(max, e.damage);
+      });
+      for (let i = 0; i < 2000; i++) engine.tick();
+      const bow = fixtureContent.items.find((i) => i.id === "bow" && i.kind === "equipment")!;
+      const arrow = fixtureContent.items.find((i) => i.id === "arrow" && i.kind === "ammo")!;
+      const bowRangedStr = bow.kind === "equipment" ? (bow.rangedStr ?? 0) : 0;
+      const arrowRangedStr = arrow.kind === "ammo" ? (arrow.rangedStr ?? 0) : 0;
+      const eff = Math.floor(effectiveLevel(rangedLevel, "ranged", "accurate", "ranged") * 1);
+      expect(max).toBe(maxHit(eff, bowRangedStr + arrowRangedStr));
+    });
+  });
+
   describe("Monster-vs-player accuracy is unchanged at uniform defence vectors (regression pin, #100)", () => {
     it("matches the theoretical hitChance for the scalar a uniform vector averages to", () => {
       const engine = createEngine(
