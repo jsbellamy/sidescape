@@ -1,5 +1,7 @@
 # SideScape — v1 Design
 
+> **Historical v1 design.** Superseded where it conflicts with `CONTEXT.md` and `docs/adr/` (inventory → Bank, gold sinks, offline progress, 11 Skills, 7 Gear Slots, 6 Gear Tiers, 5 Areas with Dungeon gating, Respawn resumes combat). Kept as a record; the window and persistence sections remain broadly accurate.
+
 A taskbar-sized RuneScape-like idle grinder. The window is the game: park it at the screen edge and it grinds while open (no offline gains in v1).
 
 ## Window
