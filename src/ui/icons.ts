@@ -5,6 +5,7 @@ import adamantDaggerUrl from "../assets/icons/adamant-dagger.png";
 import adamantFullHelmUrl from "../assets/icons/adamant-full-helm.png";
 import adamantKiteshieldUrl from "../assets/icons/adamant-kiteshield.png";
 import adamantMaceUrl from "../assets/icons/adamant-mace.png";
+import adamantPlatelegsUrl from "../assets/icons/adamant-platelegs.png";
 import adamantShortbowUrl from "../assets/icons/adamant-shortbow.png";
 import adamantStaffUrl from "../assets/icons/adamant-staff.png";
 import adamantSwordUrl from "../assets/icons/adamant-sword.png";
@@ -17,6 +18,7 @@ import bronzeChainbodyUrl from "../assets/icons/bronze-chainbody.png";
 import bronzeDaggerUrl from "../assets/icons/bronze-dagger.png";
 import bronzeFullHelmUrl from "../assets/icons/bronze-full-helm.png";
 import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
+import bronzePlatelegsUrl from "../assets/icons/bronze-platelegs.png";
 import bronzeShieldUrl from "../assets/icons/bronze-shield.png";
 import bronzeSwordUrl from "../assets/icons/bronze-sword.png";
 import cookedMeatUrl from "../assets/icons/cooked-meat.png";
@@ -44,6 +46,7 @@ import ironDaggerUrl from "../assets/icons/iron-dagger.png";
 import ironFullHelmUrl from "../assets/icons/iron-full-helm.png";
 import ironKiteshieldUrl from "../assets/icons/iron-kiteshield.png";
 import ironMaceUrl from "../assets/icons/iron-mace.png";
+import ironPlatelegsUrl from "../assets/icons/iron-platelegs.png";
 import ironShortbowUrl from "../assets/icons/iron-shortbow.png";
 import ironStaffUrl from "../assets/icons/iron-staff.png";
 import ironSwordUrl from "../assets/icons/iron-sword.png";
@@ -59,6 +62,7 @@ import mithrilDaggerUrl from "../assets/icons/mithril-dagger.png";
 import mithrilFullHelmUrl from "../assets/icons/mithril-full-helm.png";
 import mithrilKiteshieldUrl from "../assets/icons/mithril-kiteshield.png";
 import mithrilMaceUrl from "../assets/icons/mithril-mace.png";
+import mithrilPlatelegsUrl from "../assets/icons/mithril-platelegs.png";
 import mithrilShortbowUrl from "../assets/icons/mithril-shortbow.png";
 import mithrilStaffUrl from "../assets/icons/mithril-staff.png";
 import mithrilSwordUrl from "../assets/icons/mithril-sword.png";
@@ -78,6 +82,7 @@ import runeDaggerUrl from "../assets/icons/rune-dagger.png";
 import runeFullHelmUrl from "../assets/icons/rune-full-helm.png";
 import runeKiteshieldUrl from "../assets/icons/rune-kiteshield.png";
 import runeMaceUrl from "../assets/icons/rune-mace.png";
+import runePlatelegsUrl from "../assets/icons/rune-platelegs.png";
 import runeShortbowUrl from "../assets/icons/rune-shortbow.png";
 import runeStaffUrl from "../assets/icons/rune-staff.png";
 import runeSwordUrl from "../assets/icons/rune-sword.png";
@@ -94,6 +99,7 @@ import steelDaggerUrl from "../assets/icons/steel-dagger.png";
 import steelFullHelmUrl from "../assets/icons/steel-full-helm.png";
 import steelKiteshieldUrl from "../assets/icons/steel-kiteshield.png";
 import steelMaceUrl from "../assets/icons/steel-mace.png";
+import steelPlatelegsUrl from "../assets/icons/steel-platelegs.png";
 import steelShortbowUrl from "../assets/icons/steel-shortbow.png";
 import steelStaffUrl from "../assets/icons/steel-staff.png";
 import steelSwordUrl from "../assets/icons/steel-sword.png";
@@ -160,6 +166,7 @@ const icons: Record<string, string> = {
   "iron-chainbody": ironChainbodyUrl,
   "iron-dagger": ironDaggerUrl,
   "iron-full-helm": ironFullHelmUrl,
+  "iron-platelegs": ironPlatelegsUrl,
   "iron-kiteshield": ironKiteshieldUrl,
   "iron-shortbow": ironShortbowUrl,
   "iron-staff": ironStaffUrl,
@@ -167,6 +174,7 @@ const icons: Record<string, string> = {
   "mithril-chainbody": mithrilChainbodyUrl,
   "mithril-dagger": mithrilDaggerUrl,
   "mithril-full-helm": mithrilFullHelmUrl,
+  "mithril-platelegs": mithrilPlatelegsUrl,
   "mithril-kiteshield": mithrilKiteshieldUrl,
   "mithril-shortbow": mithrilShortbowUrl,
   "mithril-staff": mithrilStaffUrl,
@@ -175,6 +183,7 @@ const icons: Record<string, string> = {
   "steel-chainbody": steelChainbodyUrl,
   "steel-dagger": steelDaggerUrl,
   "steel-full-helm": steelFullHelmUrl,
+  "steel-platelegs": steelPlatelegsUrl,
   "steel-kiteshield": steelKiteshieldUrl,
   "steel-shortbow": steelShortbowUrl,
   "steel-staff": steelStaffUrl,
@@ -191,6 +200,7 @@ const icons: Record<string, string> = {
   // committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   "bronze-chainbody": bronzeChainbodyUrl,
   "bronze-full-helm": bronzeFullHelmUrl,
+  "bronze-platelegs": bronzePlatelegsUrl,
   "steel-bar": steelBarUrl,
   "mithril-bar": mithrilBarUrl,
   // Gear Tier ladder, tiers 5/6 (#252): the 16 adamant/rune Equipment items + adamant-bar/
@@ -204,6 +214,7 @@ const icons: Record<string, string> = {
   "adamant-chainbody": adamantChainbodyUrl,
   "adamant-kiteshield": adamantKiteshieldUrl,
   "adamant-full-helm": adamantFullHelmUrl,
+  "adamant-platelegs": adamantPlatelegsUrl,
   "rune-dagger": runeDaggerUrl,
   "rune-mace": runeMaceUrl,
   "rune-sword": runeSwordUrl,
@@ -212,6 +223,7 @@ const icons: Record<string, string> = {
   "rune-chainbody": runeChainbodyUrl,
   "rune-kiteshield": runeKiteshieldUrl,
   "rune-full-helm": runeFullHelmUrl,
+  "rune-platelegs": runePlatelegsUrl,
   "adamant-bar": adamantBarUrl,
   "rune-bar": runeBarUrl,
   "adamant-arrow": adamantArrowUrl,
