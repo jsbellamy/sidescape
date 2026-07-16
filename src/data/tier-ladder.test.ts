@@ -120,7 +120,13 @@ describe("ladderWeapon", () => {
         const item = ladderWeapon(tier, family);
         const [atk, str] = WEAPON_ATK_STR[family]![tierIndex]!;
         expect(item.atkBonus, `${tier}-${family} atkBonus`).toBe(atk);
-        expect(item.strBonus, `${tier}-${family} strBonus`).toBe(str);
+        if (family === "shortbow") {
+          expect(item.rangedStr, `${tier}-${family} rangedStr`).toBe(str);
+          expect(item.strBonus).toBeUndefined();
+        } else {
+          expect(item.strBonus, `${tier}-${family} strBonus`).toBe(str);
+          expect(item.rangedStr).toBeUndefined();
+        }
         expect(item.value, `${tier}-${family} value`).toBe(VALUES[family]![tierIndex]);
       });
     }
@@ -203,7 +209,8 @@ describe("ladderWeapon", () => {
       const items = GEAR_TIERS.map((tier) => ladderWeapon(tier, family));
       for (let i = 1; i < items.length; i++) {
         expect(items[i]!.atkBonus).toBeGreaterThan(items[i - 1]!.atkBonus!);
-        expect(items[i]!.strBonus).toBeGreaterThan(items[i - 1]!.strBonus!);
+        const strStat = family === "shortbow" ? "rangedStr" : "strBonus";
+        expect(items[i]![strStat]).toBeGreaterThan(items[i - 1]![strStat]!);
       }
     }
   });
@@ -227,6 +234,7 @@ describe("ladderWeapon", () => {
     expect(ladderWeapon("mithril", "sword").strBonus).toBe(18);
     expect(ladderWeapon("mithril", "dagger").atkBonus).toBe(19);
     expect(ladderWeapon("mithril", "shortbow").atkBonus).toBe(23);
+    expect(ladderWeapon("mithril", "shortbow").rangedStr).toBe(19);
     expect(ladderWeapon("mithril", "staff").strBonus).toBe(23);
   });
 

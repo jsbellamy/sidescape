@@ -75,7 +75,11 @@ export function validateContent(content: Content): string[] {
       if (item.atkBonus === undefined) {
         violations.push(`weapon "${item.id}" declares no atkBonus`);
       }
-      if (item.strBonus === undefined) {
+      if (item.attackType === "ranged") {
+        if (item.rangedStr === undefined) {
+          violations.push(`weapon "${item.id}" declares no rangedStr`);
+        }
+      } else if (item.strBonus === undefined) {
         violations.push(`weapon "${item.id}" declares no strBonus`);
       }
       if (isJewelry) {

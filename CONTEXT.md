@@ -72,7 +72,7 @@ _Avoid_: loot (as a noun for a single item)
 Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
-An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus, for weapons only, attack/strength bonuses and an **Attack Type** of its own.
+An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus combat-mode offence bonuses — melee Strength (`strBonus`), Ranged Strength (`rangedStr`), and (on weapons) an **Attack Type** and attack bonus. Jewelry (amulet/ring) may carry melee and Ranged Strength bonuses; weapons carry the stat matching their combat mode.
 _Avoid_: gear (alone), armor (as the general term)
 
 **Gear Slot**:

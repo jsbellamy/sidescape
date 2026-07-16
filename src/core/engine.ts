@@ -914,11 +914,11 @@ export function createEngine(
     return defs;
   }
 
-  /** atkBonus/strBonus, summed across equipped Gear Slots (#99: only the weapon carries these
-   * fields now — armour dropped them — so in practice this reads the equipped weapon alone; kept
-   * as a sum over `equippedDefs()` rather than a direct weapon lookup so it stays correct if that
-   * ever changes). */
-  function gearBonus(kind: "atkBonus" | "strBonus"): number {
+  /** atkBonus/strBonus/rangedStr, summed across equipped Gear Slots (#99: only the weapon carries
+   * atk/str/ranged fields now — armour dropped them — so in practice this reads the equipped weapon
+   * alone; kept as a sum over `equippedDefs()` rather than a direct weapon lookup so it stays
+   * correct if that ever changes). */
+  function gearBonus(kind: "atkBonus" | "strBonus" | "rangedStr"): number {
     return equippedDefs().reduce((sum, def) => sum + (def[kind] ?? 0), 0);
   }
 
@@ -1375,7 +1375,7 @@ export function createEngine(
           skillLevelMultiplier("ranged"),
       );
       // Arrow strength (#119): the loaded Quiver arrow's rangedStr folds into max hit alongside
-      // gear's strBonus — the bow decides accuracy, the arrow decides power (owner decision).
+      // gear's rangedStr — the bow decides accuracy, the arrow decides power (owner decision).
       // Caller (playerAttack) has already gated on quiver.qty > 0, so this only ever runs with a
       // real loaded arrow; the `?? 0` guards a corrupted/missing content lookup defensively.
       const arrowDef = state.quiver
@@ -1384,7 +1384,7 @@ export function createEngine(
       const rangedStr = arrowDef?.kind === "ammo" ? (arrowDef.rangedStr ?? 0) : 0;
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
-        max: maxHit(eff, gearBonus("strBonus") + rangedStr),
+        max: maxHit(eff, gearBonus("rangedStr") + rangedStr),
       };
     }
     if (mode === "magic") {

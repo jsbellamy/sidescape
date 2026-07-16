@@ -60,6 +60,7 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
       slot: "amulet",
       atkBonus: 3,
       strBonus: 2,
+      rangedStr: 2,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 1 },
       value: 60,
     });
@@ -71,9 +72,26 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
       slot: "ring",
       atkBonus: 2,
       strBonus: 1,
+      rangedStr: 1,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       value: 50,
     });
+  });
+
+  it("every jewelry item mirrors strBonus into rangedStr (#361)", () => {
+    const jewelryIds = [
+      "sapphire-amulet",
+      "sapphire-ring",
+      "emerald-amulet",
+      "emerald-ring",
+      "ruby-amulet",
+      "ruby-ring",
+    ];
+    for (const id of jewelryIds) {
+      const item = content.items.find((i) => i.id === id);
+      if (item?.kind !== "equipment") throw new Error(`${id} must be equipment`);
+      expect(item.rangedStr, `${id} rangedStr`).toBe(item.strBonus);
+    }
   });
 
   it("emerald and ruby jewelry tiers scale atk/str upward, still modest against the matching-tier weapon", () => {
@@ -93,11 +111,13 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
       slot: "ring",
       atkBonus: 4,
       strBonus: 2,
+      rangedStr: 2,
     });
     expect(content.items.find((i) => i.id === "ruby-ring")).toMatchObject({
       slot: "ring",
       atkBonus: 6,
       strBonus: 4,
+      rangedStr: 4,
     });
   });
 

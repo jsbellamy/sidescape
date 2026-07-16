@@ -156,7 +156,8 @@ export const fixtureContent: Content = {
     // src/ui/icons.ts, same discipline as every other fixture item above).
     { kind: "material", id: "hide", name: "Test Hide", icon: "cowhide", value: 2 },
     // Ranged/Magic fixtures (#7): same atk/str/speed as bronze-sword above, so XP-routing tests
-    // can swap weapons without also changing the damage math being exercised.
+    // can swap weapons without also changing the damage math being exercised. Bow carries rangedStr
+    // (not strBonus) since #361 split the stats.
     {
       kind: "equipment",
       id: "bow",
@@ -165,7 +166,7 @@ export const fixtureContent: Content = {
       slot: "weapon",
       attackType: "ranged",
       atkBonus: 10,
-      strBonus: 30,
+      rangedStr: 30,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 4,
       twoHanded: true,
