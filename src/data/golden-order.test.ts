@@ -93,8 +93,8 @@ const PRE_251_ITEM_IDS = [
 
 /** The four new items #251 added, followed by #252's 20 new items (16 adamant/rune Equipment +
  * adamant-bar/rune-bar + adamant-arrow/rune-arrow, issue's "Full generated Equipment" family
- * order per tier, then the bars, then the arrows) — must appear only after every PRE_251_ITEM_IDS
- * entry, in this exact order (append-only). */
+ * order per tier, then the bars, then the arrows), then #342's six platelegs — must appear only
+ * after every PRE_251_ITEM_IDS entry, in this exact order (append-only). */
 const NEW_ITEM_IDS = [
   "bronze-chainbody",
   "bronze-full-helm",
@@ -120,6 +120,12 @@ const NEW_ITEM_IDS = [
   "rune-bar",
   "adamant-arrow",
   "rune-arrow",
+  "bronze-platelegs",
+  "iron-platelegs",
+  "steel-platelegs",
+  "mithril-platelegs",
+  "adamant-platelegs",
+  "rune-platelegs",
 ] as const;
 
 const PRE_251_RECIPE_IDS = [
@@ -154,8 +160,8 @@ const PRE_251_RECIPE_IDS = [
 ] as const;
 
 /** The 16 new Smithing recipes #251 added (24 total - the 8 pre-existing above), followed by
- * #252's 12 new recipes (6 METAL_FAMILIES-order families x adamant, then x rune) — appended after
- * every PRE_251_RECIPE_IDS entry. */
+ * #252's 12 new recipes (6 METAL_FAMILIES-order families x adamant, then x rune), then #342's
+ * six platelegs — appended after every PRE_251_RECIPE_IDS entry. */
 const NEW_RECIPE_IDS = [
   "bronze-chainbody",
   "bronze-full-helm",
@@ -185,10 +191,16 @@ const NEW_RECIPE_IDS = [
   "rune-chainbody",
   "rune-kiteshield",
   "rune-full-helm",
+  "bronze-platelegs",
+  "iron-platelegs",
+  "steel-platelegs",
+  "mithril-platelegs",
+  "adamant-platelegs",
+  "rune-platelegs",
 ] as const;
 
 describe("Golden order (#251): every pre-existing id keeps its exact array index", () => {
-  it("content.items: the pre-#251 ids occupy indices 0..75 unchanged, the four new ids follow at the end", () => {
+  it("content.items: the pre-#251 ids occupy indices 0..75 unchanged, appended new ids follow at the end", () => {
     const currentIds = content.items.map((i) => i.id);
     expect(currentIds).toEqual([...PRE_251_ITEM_IDS, ...NEW_ITEM_IDS]);
     // Explicit per-id index check — fails loudly on any single id's exact position, not just the
@@ -198,7 +210,7 @@ describe("Golden order (#251): every pre-existing id keeps its exact array index
     });
   });
 
-  it("content.recipes: the pre-#251 ids occupy indices 0..27 unchanged, the sixteen new ids follow at the end", () => {
+  it("content.recipes: the pre-#251 ids occupy indices 0..27 unchanged, appended new ids follow at the end", () => {
     const currentIds = content.recipes.map((r) => r.id);
     expect(currentIds).toEqual([...PRE_251_RECIPE_IDS, ...NEW_RECIPE_IDS]);
     PRE_251_RECIPE_IDS.forEach((id, index) => {

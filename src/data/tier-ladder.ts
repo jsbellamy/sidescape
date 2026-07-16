@@ -33,12 +33,12 @@ function sumSteps(steps: readonly number[], tierIndex: number): number {
 export const WEAPON_FAMILIES = ["dagger", "mace", "sword", "shortbow", "staff"] as const;
 export type WeaponFamily = (typeof WEAPON_FAMILIES)[number];
 
-export const ARMOUR_FAMILIES = ["chainbody", "kiteshield", "full-helm"] as const;
+export const ARMOUR_FAMILIES = ["chainbody", "kiteshield", "full-helm", "platelegs"] as const;
 export type ArmourFamily = (typeof ARMOUR_FAMILIES)[number];
 
 /** The families Smithing covers: every weapon family except the two non-metal ones (shortbow has
  * no fletching Skill, staff has no runecrafting Skill — both stay drop-only, unchanged from
- * today), plus every armour family. 6 families x 4 tiers = 24 Recipes. */
+ * today), plus every armour family. 7 families x 6 tiers = 42 Recipes. */
 export const METAL_FAMILIES = [
   "dagger",
   "mace",
@@ -46,6 +46,7 @@ export const METAL_FAMILIES = [
   "chainbody",
   "kiteshield",
   "full-helm",
+  "platelegs",
 ] as const;
 export type MetalFamily = (typeof METAL_FAMILIES)[number];
 
@@ -169,6 +170,18 @@ export const ARMOUR_TABLE: Record<ArmourFamily, ArmourFamilyRow> = {
     ],
     baseValue: 25,
   },
+  platelegs: {
+    slot: "legs",
+    baseDef: { stab: 3, slash: 3, crush: 2, ranged: 2, magic: 0 },
+    stepDef: [
+      { stab: 4, slash: 4, crush: 2, ranged: 3, magic: -1 },
+      { stab: 4, slash: 4, crush: 2, ranged: 3, magic: -1 },
+      { stab: 4, slash: 4, crush: 2, ranged: 3, magic: -1 },
+      { stab: 7, slash: 7, crush: 3, ranged: 5, magic: -1 },
+      { stab: 7, slash: 7, crush: 3, ranged: 5, magic: -1 },
+    ],
+    baseValue: 28,
+  },
 };
 
 interface LegacyOverride {
@@ -287,6 +300,7 @@ const FAMILY_LEVEL_OFFSET: Record<MetalFamily, number> = {
   "full-helm": 2,
   kiteshield: 4,
   mace: 5,
+  platelegs: 6,
   sword: 7,
   chainbody: 9,
 };
@@ -297,6 +311,7 @@ const FAMILY_BAR_COST: Record<MetalFamily, number> = {
   mace: 2,
   sword: 2,
   chainbody: 3,
+  platelegs: 3,
 };
 const TIER_XP_PER_BAR: Record<GearTier, number> = {
   bronze: 12,
@@ -312,6 +327,7 @@ const FAMILY_CRAFT_TICKS: Record<MetalFamily, number> = {
   kiteshield: 10,
   sword: 10,
   "full-helm": 10,
+  platelegs: 11,
   chainbody: 12,
 };
 

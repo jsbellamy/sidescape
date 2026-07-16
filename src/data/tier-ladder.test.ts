@@ -91,6 +91,14 @@ const ARMOUR_DEF: Record<string, [number, number, number, number, number][]> = {
     [16, 16, 6, 11, -4],
     [21, 21, 8, 14, -5],
   ],
+  platelegs: [
+    [3, 3, 2, 2, 0],
+    [7, 7, 4, 5, -1],
+    [11, 11, 6, 8, -2],
+    [15, 15, 8, 11, -3],
+    [22, 22, 11, 16, -4],
+    [29, 29, 14, 21, -5],
+  ],
 };
 
 const VALUES: Record<string, number[]> = {
@@ -102,6 +110,7 @@ const VALUES: Record<string, number[]> = {
   chainbody: [30, 60, 120, 240, 480, 960],
   kiteshield: [12, 24, 48, 96, 192, 384],
   "full-helm": [25, 50, 100, 200, 400, 800],
+  platelegs: [28, 56, 112, 224, 448, 896],
 };
 
 describe("ladderWeapon", () => {
@@ -287,7 +296,7 @@ describe("ladderArmour", () => {
 });
 
 describe("ladderRecipe", () => {
-  it("generates 36 Smithing recipes: 6 metal families x 6 tiers, id equals outputItemId, skill smithing", () => {
+  it("generates 42 Smithing recipes: 7 metal families x 6 tiers, id equals outputItemId, skill smithing", () => {
     let count = 0;
     for (const family of METAL_FAMILIES) {
       for (const tier of GEAR_TIERS) {
@@ -297,7 +306,7 @@ describe("ladderRecipe", () => {
         count++;
       }
     }
-    expect(count).toBe(36);
+    expect(count).toBe(42);
   });
 
   it("shortbow and staff are not MetalFamily members — no recipe accessor exists for them", () => {
@@ -351,6 +360,23 @@ describe("ladderRecipe", () => {
   // #252: extending TIER_BASE_LEVEL to [1,15,30,45,60,75] puts the highest recipe (rune
   // chainbody: 75 + chainbody's own +9 family offset) at level 84, comfortably under MAX_LEVEL 99
   // — the issue's own worked example, copied verbatim.
+  it("platelegs: bronze levelReq 7 / 3 bars / 36 xp / 11 craftTicks, slot legs; rune level 81 / 510 xp / 16 craftTicks", () => {
+    const bronze = ladderRecipe("bronze", "platelegs");
+    expect(bronze.levelReq).toBe(7);
+    expect(bronze.inputs).toEqual([{ itemId: "bronze-bar", qty: 3 }]);
+    expect(bronze.xp).toBe(36);
+    expect(bronze.craftTicks).toBe(11);
+    expect(bronze.id).toBe("bronze-platelegs");
+    expect(ladderArmour("bronze", "platelegs").slot).toBe("legs");
+
+    const rune = ladderRecipe("rune", "platelegs");
+    expect(rune.levelReq).toBe(81);
+    expect(rune.inputs).toEqual([{ itemId: "rune-bar", qty: 3 }]);
+    expect(rune.xp).toBe(510);
+    expect(rune.craftTicks).toBe(16);
+    expect(rune.id).toBe("rune-platelegs");
+  });
+
   it("rune-chainbody is the highest-level recipe at 84, under MAX_LEVEL", () => {
     const runeChainbody = ladderRecipe("rune", "chainbody");
     expect(runeChainbody.levelReq).toBe(84);
