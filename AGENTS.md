@@ -100,11 +100,13 @@ behaviour with DOM integration tests.
   `docs/icon-style-golden-master.png`, before treating an icon as complete. Shipped icons remain
   deterministic `npm run art` output.
 - **New backdrops.** Follow `docs/backdrop-gen.md`: preserve the untouched raw PNG, recover its
-  logical grid by majority vote, then deterministically normalize source-local RGB variation to
-  the layer's single `maxColors` ceiling. High sampled RGB variety is expected and is not itself a
-  rejection reason. Approve the normalized native 1× and unscaled three-period previews; never
-  resize, downsample, or hand-edit the raw or compact source. Stage 2 copies the compact source
-  exactly and rejects an over-cap committed source.
+  logical grid by majority vote, conform recovered cells to the Theme's declared HSL gamut, then
+  deterministically normalize source-local RGB variation to the layer's single `maxColors` ceiling.
+  Prompts guide palette intent but do not enforce decoded-RGB bounds. High sampled RGB variety is
+  expected and is not itself a rejection reason. Approve the native 1× and unscaled three-period
+  previews; never resize, downsample, or hand-edit the raw or compact source. Stage 2 copies the
+  compact source exactly, validates gamut without repairing it, and rejects an over-cap or
+  out-of-gamut committed source.
 
 ## Commands
 

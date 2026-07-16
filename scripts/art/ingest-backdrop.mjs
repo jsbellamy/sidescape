@@ -13,6 +13,7 @@ import {
   validateBackdropImage,
 } from "./backdrops.mjs";
 import {
+  conformCellPaletteToHslGamut,
   cropImage,
   detectPitch,
   keyBackground,
@@ -159,13 +160,33 @@ export function prepareBackdropIngest(input) {
       `${error.message} (detected pitch ${px.pitch.toFixed(2)}×${py.pitch.toFixed(2)}). Adjust --crop, --pitch, or --pitch-y; do not resize or downsample the raw raster.`,
     );
   }
-  const normalized = normalizeCellPalette(sampledCells, { maxColors: target.maxColors });
+  const conformed = conformCellPaletteToHslGamut(sampledCells, def.gamut);
+  const normalized = normalizeCellPalette(conformed.cells, {
+    maxColors: target.maxColors,
+  });
   const compact = gridToImage(normalized.cells);
   const { colorCount } = validateBackdropImage(compact, {
     layerName: layer,
     maxColors: target.maxColors,
+    gamut: def.gamut,
     label: `ingest-backdrop: ${theme}-${layer}`,
   });
+  let originalToFinalChanged = 0;
+  for (let y = 0; y < sampledCells.length; y++)
+    for (let x = 0; x < sampledCells[y].length; x++) {
+      const original = sampledCells[y][x];
+      const final = normalized.cells[y][x];
+      if (original === null && final === null) continue;
+      if (
+        original === null ||
+        final === null ||
+        original[0] !== final[0] ||
+        original[1] !== final[1] ||
+        original[2] !== final[2]
+      ) {
+        originalToFinalChanged++;
+      }
+    }
   return {
     compact,
     colorCount,
@@ -174,10 +195,13 @@ export function prepareBackdropIngest(input) {
       pitchX: px,
       pitchY: py,
       enclosedBgCount: keyed.enclosedBgCount,
-      sampledColors: normalized.inputColorCount,
+      sampledColors: conformed.inputColorCount,
+      gamutConformedColors: conformed.outputColorCount,
       normalizedColors: normalized.outputColorCount,
       maxColors: target.maxColors,
-      changedCellCount: normalized.changedCellCount,
+      gamutChangedCellCount: conformed.changedCellCount,
+      normalizationChangedCellCount: normalized.changedCellCount,
+      changedCellCount: originalToFinalChanged,
     },
   };
 }
@@ -249,7 +273,7 @@ export async function main(values = options(), { registry = backdrops } = {}) {
     compact: result.compact,
   });
   console.log(
-    `ingest-backdrop: ${values.theme}-${values.layer}\n  input: ${rawPath}\n  grid: ${result.compact.width}x${result.compact.height}\n  cells: ${result.report.sampledColors} sampled -> ${result.report.normalizedColors} normalized (ceiling ${result.report.maxColors}, ${result.report.changedCellCount} changed)\n  pitch: ${result.report.pitchX.pitch.toFixed(2)} × ${result.report.pitchY.pitch.toFixed(2)}\n  wrote compact source: ${sourcePath}\n  previews (ignored): ${resolve(previewDir, `${values.theme}-${values.layer}@1x.png`)} and @3x-strip`,
+    `ingest-backdrop: ${values.theme}-${values.layer}\n  input: ${rawPath}\n  grid: ${result.compact.width}x${result.compact.height}\n  cells: ${result.report.sampledColors} sampled -> ${result.report.gamutConformedColors} gamut-conformed (${result.report.gamutChangedCellCount} cells changed) -> ${result.report.normalizedColors} normalized (ceiling ${result.report.maxColors}, ${result.report.normalizationChangedCellCount} normalization changes, ${result.report.changedCellCount} original-to-final changes)\n  pitch: ${result.report.pitchX.pitch.toFixed(2)} × ${result.report.pitchY.pitch.toFixed(2)}\n  wrote compact source: ${sourcePath}\n  previews (ignored): ${resolve(previewDir, `${values.theme}-${values.layer}@1x.png`)} and @3x-strip`,
   );
 }
 

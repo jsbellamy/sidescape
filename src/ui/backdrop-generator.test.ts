@@ -10,13 +10,33 @@ import {
   BACKDROP_WIDTH,
   REVIEW_PERIODS,
   renderPeriodicLayer,
+  validateBackdropDefinition,
   writeBackdrops,
 } from "../../scripts/art/backdrops.mjs";
 import {
   prepareBackdropIngest,
   writeBackdropIngestArtifacts,
 } from "../../scripts/art/ingest-backdrop.mjs";
+import {
+  conformCellPaletteToHslGamut,
+  isRgbWithinHslGamut,
+  normalizeCellPalette,
+} from "../../scripts/art/trace-core.mjs";
 import { encodePng } from "../../scripts/art/write-png.mjs";
+
+/** Permissive Theme gamut so existing #305/#311 fixtures remain valid under #313. */
+const PERMISSIVE_GAMUT = {
+  neutralMaxSaturation: 100,
+  chromaticHueRange: [0, 359],
+  chromaticMaxSaturation: 100,
+};
+
+/** Glacier-shaped Theme gamut used by focused #313 pipeline fixtures. */
+const GLACIER_GAMUT = {
+  neutralMaxSaturation: 20,
+  chromaticHueRange: [175, 240],
+  chromaticMaxSaturation: 65,
+};
 
 /** A synthetic registry independent of the real (deliberately empty) production `backdrops`
  * registry (#263) — infra tests must never depend on a real theme so they can't accidentally
@@ -165,15 +185,16 @@ describe("backdrop generator infrastructure (#263)", () => {
   });
 });
 
-function sourceRegistry() {
+function sourceRegistry(gamut = PERMISSIVE_GAMUT) {
   return [
     {
       theme: "source-theme",
-      kind: "source",
+      kind: "source" as const,
+      gamut,
       layers: {
-        sky: { source: "source-theme-sky.png", alpha: "opaque", maxColors: 4 },
-        mid: { source: "source-theme-mid.png", alpha: "binary", maxColors: 4 },
-        near: { source: "source-theme-near.png", alpha: "binary", maxColors: 4 },
+        sky: { source: "source-theme-sky.png", alpha: "opaque" as const, maxColors: 4 },
+        mid: { source: "source-theme-mid.png", alpha: "binary" as const, maxColors: 4 },
+        near: { source: "source-theme-near.png", alpha: "binary" as const, maxColors: 4 },
       },
     },
   ];
@@ -280,17 +301,19 @@ function recoveredRaw(
 function ingestFixture({
   layer = "sky",
   maxColors = 4,
+  gamut = PERMISSIVE_GAMUT,
   cell,
 }: {
   layer?: "sky" | "mid" | "near";
   maxColors?: number;
+  gamut?: typeof PERMISSIVE_GAMUT;
   cell: (x: number, y: number) => [number, number, number] | null;
 }) {
   return prepareBackdropIngest({
     image: recoveredRaw(layer, cell),
     theme: "source-theme",
     layer,
-    registry: sourceRegistry().map((definition) => ({
+    registry: sourceRegistry(gamut).map((definition) => ({
       ...definition,
       layers: Object.fromEntries(
         Object.entries(definition.layers).map(([name, target]) => [name, { ...target, maxColors }]),
@@ -417,5 +440,253 @@ describe("backdrop ingest palette normalization (#311)", () => {
     await expect(
       Promise.all([sourcePath, oneXPath, stripPath].map((path) => readFile(path, "utf8"))),
     ).resolves.toEqual(["unchanged", "unchanged", "unchanged"]);
+  });
+});
+
+describe("source-driven backdrop Theme gamut (#313)", () => {
+  it("requires Theme-level gamut on source definitions and rejects it on painters", () => {
+    expect(() => validateBackdropDefinition(sourceRegistry()[0]!)).not.toThrow();
+    const missing = { ...sourceRegistry()[0]! };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (missing as any).gamut;
+    expect(() => validateBackdropDefinition(missing)).toThrow(/requires gamut/i);
+
+    const painter = makeSyntheticRegistry()[0]!;
+    expect(() => validateBackdropDefinition(painter)).not.toThrow();
+    expect(() => validateBackdropDefinition({ ...painter, gamut: PERMISSIVE_GAMUT })).toThrow(
+      /must not declare gamut/i,
+    );
+  });
+
+  it("conforms recovered cells after exact grid validation and before Oklab medoids", () => {
+    // Warm out-of-gamut variants plus a large cold-legal plane. Normalize-first keeps an
+    // illegal warm medoid; conform-first projects warms into gamut and retains the cold plane.
+    const result = ingestFixture({
+      maxColors: 2,
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => {
+        if (x < 80) return [40, 70, 90];
+        const hueShift = (x + y) % 5;
+        return [200 - hueShift * 10, 80 + hueShift * 5, 30] as [number, number, number];
+      },
+    });
+    expect(result.report.gamutChangedCellCount).toBeGreaterThan(0);
+    expect(result.report.normalizedColors).toBeLessThanOrEqual(2);
+
+    const sampled = Array.from({ length: BACKDROP_HEIGHT }, (_, y) =>
+      Array.from({ length: BACKDROP_WIDTH }, (_, x) => {
+        if (x < 80) return [40, 70, 90] as [number, number, number];
+        const hueShift = (x + y) % 5;
+        return [200 - hueShift * 10, 80 + hueShift * 5, 30] as [number, number, number];
+      }),
+    );
+    const conformed = conformCellPaletteToHslGamut(sampled, GLACIER_GAMUT);
+    const normalizeFirst = normalizeCellPalette(sampled, { maxColors: 2 });
+    const conformThenNormalize = normalizeCellPalette(conformed.cells, { maxColors: 2 });
+    expect(
+      normalizeFirst.medoids.some((rgb: number[]) => !isRgbWithinHslGamut(rgb, GLACIER_GAMUT)),
+    ).toBe(true);
+    expect(
+      conformThenNormalize.medoids.every((rgb: number[]) =>
+        isRgbWithinHslGamut(rgb, GLACIER_GAMUT),
+      ),
+    ).toBe(true);
+    expect(conformThenNormalize.medoids.some((rgb: number[]) => rgb.join(",") === "40,70,90")).toBe(
+      true,
+    );
+  });
+
+  it("reports all seven color/change fields with non-additive original-to-final semantics", () => {
+    const result = ingestFixture({
+      maxColors: 2,
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => {
+        if ((x + y) % 3 === 0) return [0, 24, 50]; // over-sat cold → gamut change
+        if ((x + y) % 3 === 1) return [40, 70, 90];
+        return [50, 80, 100];
+      },
+    });
+    expect(result.report).toMatchObject({
+      sampledColors: expect.any(Number),
+      gamutConformedColors: expect.any(Number),
+      normalizedColors: expect.any(Number),
+      maxColors: 2,
+      gamutChangedCellCount: expect.any(Number),
+      normalizationChangedCellCount: expect.any(Number),
+      changedCellCount: expect.any(Number),
+    });
+    expect(result.report.gamutChangedCellCount).toBeGreaterThan(0);
+    // A cell can change in both stages; original-to-final is not the sum.
+    expect(result.report.changedCellCount).toBeLessThanOrEqual(
+      result.report.gamutChangedCellCount + result.report.normalizationChangedCellCount,
+    );
+    expect(result.report.changedCellCount).toBeGreaterThan(0);
+  });
+
+  it("still normalizes over-cap input after gamut conformance", () => {
+    const result = ingestFixture({
+      maxColors: 3,
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => {
+        const t = (x + y) % 6;
+        return [30 + t * 5, 50 + t * 8, 80 + t * 10];
+      },
+    });
+    expect(result.report.sampledColors).toBeGreaterThan(result.report.maxColors);
+    expect(result.report.normalizedColors).toBeLessThanOrEqual(result.report.maxColors);
+    expect(result.colorCount).toBeLessThanOrEqual(result.report.maxColors);
+  });
+
+  it("preserves sky opacity and mid/near binary alpha through gamut conformance", () => {
+    const sky = ingestFixture({
+      layer: "sky",
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => ((x + y) % 2 ? [0, 24, 50] : [40, 70, 90]),
+    });
+    expect(sky.compact.data.every((_, i) => i % 4 !== 3 || sky.compact.data[i] === 255)).toBe(true);
+
+    const mid = ingestFixture({
+      layer: "mid",
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => (x < 20 || x >= 139 || y < 20 || y >= 99 ? null : [0, 24, 50]),
+    });
+    expect(mid.compact.data[3]).toBe(0);
+    expect(mid.compact.data[(50 * BACKDROP_WIDTH + 50) * 4 + 3]).toBe(255);
+  });
+
+  it("keeps compact, 1x, every 3x period, and Stage 2 decoded-RGBA identical", async () => {
+    const result = ingestFixture({
+      maxColors: 3,
+      gamut: GLACIER_GAMUT,
+      cell: (x, y) => ((x + y) % 2 ? [0, 100, 200] : [40, 70, 90]),
+    });
+    const sourcePath = join(destDir, "source-theme-sky.png");
+    const oneXPath = join(destDir, "preview.png");
+    const stripPath = join(destDir, "strip.png");
+    await writeBackdropIngestArtifacts({
+      sourcePath,
+      oneXPath,
+      stripPath,
+      compact: result.compact,
+    });
+    const oneX = PNG.sync.read(await readFile(oneXPath));
+    const strip = PNG.sync.read(await readFile(stripPath));
+    expect(Array.from(oneX.data)).toEqual(Array.from(result.compact.data));
+    for (let period = 0; period < REVIEW_PERIODS; period++)
+      for (let y = 0; y < BACKDROP_HEIGHT; y++)
+        for (let x = 0; x < BACKDROP_WIDTH; x++) {
+          const compactAt = (y * BACKDROP_WIDTH + x) * 4;
+          const stripAt = (y * strip.width + period * BACKDROP_WIDTH + x) * 4;
+          expect(Array.from(strip.data.slice(stripAt, stripAt + 4))).toEqual(
+            Array.from(result.compact.data.slice(compactAt, compactAt + 4)),
+          );
+        }
+
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-gamut-stage2-"));
+    try {
+      for (const layer of ["sky", "mid", "near"] as const) {
+        await writeFile(
+          join(sourceDir, `source-theme-${layer}.png`),
+          encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, (x: number, y: number) => {
+            const at = (y * BACKDROP_WIDTH + x) * 4;
+            if (layer === "mid" && x < 2) return [0, 0, 0, 0];
+            return [
+              result.compact.data[at]!,
+              result.compact.data[at + 1]!,
+              result.compact.data[at + 2]!,
+              255,
+            ];
+          }),
+        );
+      }
+      const shipDir = await mkdtemp(join(tmpdir(), "backdrop-gamut-ship-"));
+      try {
+        await writeBackdrops(shipDir, {
+          registry: sourceRegistry(GLACIER_GAMUT).map((definition) => ({
+            ...definition,
+            layers: {
+              sky: { ...definition.layers.sky, maxColors: 3 },
+              mid: { ...definition.layers.mid, maxColors: 3 },
+              near: { ...definition.layers.near, maxColors: 3 },
+            },
+          })),
+          sourceDir,
+        });
+        const shipped = PNG.sync.read(await readFile(join(shipDir, "source-theme-sky.png")));
+        expect(Array.from(shipped.data)).toEqual(Array.from(result.compact.data));
+      } finally {
+        await rm(shipDir, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("Stage 2 rejects a manually altered out-of-gamut source with full diagnostics before writing", async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-oog-"));
+    try {
+      await writeFile(
+        join(sourceDir, "source-theme-sky.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, (x: number, y: number) =>
+          x === 0 && y === 0 ? [0, 24, 50, 255] : [40, 70, 90, 255],
+        ),
+      );
+      await writeFile(
+        join(sourceDir, "source-theme-mid.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, () => [40, 70, 90, 255]),
+      );
+      await writeFile(
+        join(sourceDir, "source-theme-near.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, () => [40, 70, 90, 255]),
+      );
+      await expect(
+        writeBackdrops(destDir, { registry: sourceRegistry(GLACIER_GAMUT), sourceDir }),
+      ).rejects.toThrow(
+        /writeBackdrops: source-theme\.sky: out-of-gamut pixel at \(0, 0\): RGB \[0, 24, 50\], HSL \[211\.2, 100%, 9\.804%\]; allowed saturation <= 20% OR hue 175\.\.240 and saturation <= 65%/,
+      );
+      expect(await readdir(destDir)).toEqual([]);
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves an existing compact source and both previews untouched on pre-write gamut failure", async () => {
+    const sourcePath = join(destDir, "compact-source.png");
+    const oneXPath = join(destDir, "preview@1x.png");
+    const stripPath = join(destDir, "preview@3x-strip.png");
+    const sentinel = "unchanged-ingest-artifacts";
+    await Promise.all([sourcePath, oneXPath, stripPath].map((path) => writeFile(path, sentinel)));
+
+    // Stage-2 / compact validation rejects out-of-gamut pixels before any theme outputs
+    // are written. Ingest mirrors that: prepareBackdropIngest validates before
+    // writeBackdropIngestArtifacts, so seeded compact+preview paths stay untouched.
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-prewrite-gamut-"));
+    try {
+      await writeFile(
+        join(sourceDir, "source-theme-sky.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, () => [0, 24, 50, 255]),
+      );
+      await writeFile(
+        join(sourceDir, "source-theme-mid.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, () => [40, 70, 90, 255]),
+      );
+      await writeFile(
+        join(sourceDir, "source-theme-near.png"),
+        encodePng(BACKDROP_WIDTH, BACKDROP_HEIGHT, () => [40, 70, 90, 255]),
+      );
+      await expect(
+        writeBackdrops(join(destDir, "out"), {
+          registry: sourceRegistry(GLACIER_GAMUT),
+          sourceDir,
+        }),
+      ).rejects.toThrow(/out-of-gamut/);
+      expect(await readdir(join(destDir, "out")).catch(() => [])).toEqual([]);
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+
+    await expect(
+      Promise.all([sourcePath, oneXPath, stripPath].map((path) => readFile(path, "utf8"))),
+    ).resolves.toEqual([sentinel, sentinel, sentinel]);
   });
 });
