@@ -14,12 +14,13 @@ import { xpForLevel } from "../core/xp";
 import { slotSilhouette } from "./icons";
 import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
+import { createItemPresentation } from "./item-presentation";
 
 const content = resolveContent(fixtureContent);
+const items = createItemPresentation(content);
 
-function tileMarkup(itemId: string, qty: number): string {
-  const def = content.itemsById.get(itemId);
-  return `<img class="icon pixel" alt="${def?.name ?? itemId}" /><span class="tile-qty">×${qty}</span>`;
+function normalizeMarkup(html: string): string {
+  return html.replace(/\s\/>/g, ">");
 }
 
 /** Mounts a real Engine + a real `createLoadoutSlotUi` instance into a bare root carrying only the
@@ -40,7 +41,7 @@ function mountLoadoutUi(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const snap = engine.snapshot();
     ui.render(snap.player, snap.bank.items);
   });
-  ui = createLoadoutSlotUi({ root, content, commands: engine, tileMarkup, onChanged });
+  ui = createLoadoutSlotUi({ root, content, commands: engine, onChanged });
   const snap = engine.snapshot();
   ui.render(snap.player, snap.bank.items);
   return { engine, root, ui, onChanged };
@@ -61,6 +62,25 @@ describe("createLoadoutSlotUi — mounting all six tiles", () => {
     expect(root.querySelector('#potion-slot .tile[data-item="strength-potion"]')).not.toBeNull();
     expect(root.querySelector('#quiver-slot .tile[data-item="arrow"]')).not.toBeNull();
     expect(root.querySelector('#rune-slot .tile[data-item="air-rune"]')).not.toBeNull();
+  });
+
+  it("renders real item-presentation tile markup on filled Loadout tiles", () => {
+    const { root } = mountLoadoutUi({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+        potionSlot: { itemId: "strength-potion", qty: 3, charges: 2 },
+      },
+    });
+
+    expect(normalizeMarkup(root.querySelector('[data-eat="0"]')?.innerHTML.trim() ?? "")).toBe(
+      normalizeMarkup(items.tileMarkup("meat", 3)),
+    );
+    expect(
+      normalizeMarkup(
+        root.querySelector('#potion-slot .tile[data-item="strength-potion"]')?.innerHTML.trim() ??
+          "",
+      ),
+    ).toBe(normalizeMarkup(items.tileMarkup("strength-potion", 3)));
   });
 });
 
