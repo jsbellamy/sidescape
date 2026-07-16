@@ -10,12 +10,10 @@ import {
   playerSpriteSize,
   spriteEdgePx,
 } from "./sprites";
-import { SORT_KEYS } from "./sort";
-import type { SortKey } from "./sort";
-import { BANK_FILTERS, createBankPresentation } from "./bank-view";
-import type { BankFilter } from "./bank-view";
-import { PRODUCTION_SKILLS, productionPanelMarkup, resolveProp } from "./production";
 import type { ProductionSkill } from "./production";
+import { createBankUi } from "./bank-ui";
+import type { BankUi } from "./bank-ui";
+import { PRODUCTION_SKILLS, productionPanelMarkup, resolveProp } from "./production";
 import { createLoadoutSlotUi } from "./loadout-slot";
 import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
@@ -23,32 +21,10 @@ import { createWorldPageUi } from "./world-page";
 import type { WorldPageUi } from "./world-page";
 import { itemIcon, skillIcon, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
-import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 import { createCharacterHubUi } from "./character-hub";
 import type { CharacterHubUi } from "./character-hub";
 import type { UiScale } from "./window-geometry";
-
-/** Bank filter button labels, in `BANK_FILTERS` order (#207) — "Gear"/"Materials" rather than
- * "Equipment"/"Material" keep every one of the six always-visible buttons short enough to fit a
- * 300px card three-per-row with no horizontal scrolling (see styles.css's `.bank-filter-row`). */
-const BANK_FILTER_LABELS: Record<BankFilter, string> = {
-  all: "All",
-  equipment: "Gear",
-  food: "Food",
-  material: "Materials",
-  potion: "Potions",
-  ammo: "Ammo",
-};
-
-/** The expanded Bank's sort `<select>` options, in the issue's own Name/Kind/Value order (#207) —
- * deliberately not `SORT_KEYS`' own kind/value/name order, which drove the old three-button
- * `#sort-row` this replaces. */
-const BANK_SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
-  { key: "name", label: "Name" },
-  { key: "kind", label: "Kind" },
-  { key: "value", label: "Value" },
-];
 
 /** Damage-splat fade duration (#4); mirrors styles.css's `splat-fade` keyframes so the DOM node is
  * removed right as the CSS animation finishes. */
@@ -102,25 +78,6 @@ function skillProgress(skill: SkillSnapshot): number {
 export const MANAGEMENT_DESTINATIONS = ["world", "bank", "workshop", "activity", "skills"] as const;
 export type ManagementDestination = (typeof MANAGEMENT_DESTINATIONS)[number];
 
-interface VendorRowElements {
-  row: HTMLLIElement;
-  owned: HTMLElement;
-  quantity: HTMLInputElement;
-  buy: HTMLButtonElement;
-}
-
-interface VendorBuyState {
-  quantity: number | null;
-  clampedQuantity: number | null;
-  label: string;
-  disabled: boolean;
-}
-
-/** Which of the Management card's "bank" destination sub-pages is showing — purely
- * presentational and session-only (never persisted, never the Snapshot/save), same boundary as
- * Bank search text and selection (owned by `BankPresentation`, see bank-view.ts). */
-type BankMode = "bank" | "vendor";
-
 /** Presentation-only, session-only workspace state (#206) — never persisted under any key (a
  * relaunch always starts with both cards closed) and never entering the Engine Snapshot/save.
  * `characterOpen` and `management` independently track the two Management Row cards; stale
@@ -154,26 +111,10 @@ export function mountApp(
   // never persisted, never restored across a relaunch, never part of the Snapshot/save (see
   // WorkspaceState's own doc comment above).
   const workspace: WorkspaceState = { characterOpen: false, management: null };
-  // Which Bank|Vendor page is showing inside the Management card's "bank" destination (#206) —
-  // purely presentational, session-only, independent of `workspace.management` itself so the
-  // choice survives switching away to another destination and back.
-  let managementBankPage: BankMode = "bank";
-  // Which Production Skill the Workshop destination's four-button selector shows (#209) — purely
-  // presentational, session-only, independent of `workspace.management`, mirroring
-  // `managementBankPage`'s own shape. Defaults to Smithing; `openDestination` resyncs it to
-  // `snapshot.production.skill` whenever Workshop opens while one of the four Production Skills is
-  // actively crafting, but otherwise leaves a prior manual pick alone (see `openDestination`'s own
-  // doc comment).
   let selectedProductionSkill: ProductionSkill = "smithing";
   const items = createItemPresentation(content);
   // Whether the Skills destination's Pets summary popover is open (#222).
   let openPetsPopover = false;
-  // Owns the expanded Bank page's filter/sort/search and the shared-but-independently-resolved
-  // selection between it and the Character hub's Equipment-only tray (#237) — one deep,
-  // instance-local module (bank-view.ts) replacing the four separate variables this mount used to
-  // hold directly, plus the tolerant load and immediate-persist timing of
-  // `sidescape-ui-bank-view-v1`. Both render paths below are DOM adapters over this one instance.
-  const bankPresentation = createBankPresentation(content);
 
   // Combat feedback (#4) — damage splats, level-up toast, rare-Drop flash. Purely presentational:
   // reacts to the Engine's own events, adding no new Engine state.
@@ -208,15 +149,6 @@ export function mountApp(
         btn.classList.toggle("active", btn.dataset["destination"] === workspace.management);
       });
 
-    root.querySelectorAll<HTMLElement>("[data-bank-page]").forEach((page) => {
-      page.hidden = page.dataset["bankPage"] !== managementBankPage;
-    });
-    root
-      .querySelectorAll<HTMLButtonElement>("#bank-vendor-toggle button[data-bankpage]")
-      .forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset["bankpage"] === managementBankPage);
-      });
-
     el<HTMLElement>("#pets-popover").hidden = !openPetsPopover;
     root
       .querySelector<HTMLButtonElement>('[data-nav="pets"]')
@@ -232,11 +164,6 @@ export function mountApp(
       !workspace.characterOpen && workspace.management === null;
   }
 
-  // Tracks `workspace.management`'s previous value across `syncWorkspace` calls, purely to detect
-  // the "bank" destination closing (#207: "search clears whenever the Bank Management destination
-  // closes") — covers every path away from Bank (Back, Escape, the transparent-glass close, and
-  // switching straight to another destination), since all of them funnel through this one function.
-  let previousManagement: ManagementDestination | null = null;
   // Invalidates an older geometry-transition completion when a newer workspace action wins the race. This
   // complements the desired-state comparison below: two transitions can target the same state at
   // different moments, but only the newest one may reveal the staged Management Row.
@@ -259,12 +186,7 @@ export function mountApp(
    * after a rapid re-entrant click has already moved on. */
   function syncWorkspace(): void {
     const revision = ++workspaceSyncRevision;
-    if (previousManagement === "bank" && workspace.management !== "bank") {
-      bankPresentation.clearSearch(); // #207: search is session-only and resets whenever Bank's page closes
-      const searchInput = root.querySelector<HTMLInputElement>("#bank-search");
-      if (searchInput) searchInput.value = ""; // the DOM value isn't otherwise re-synced per-render
-    }
-    previousManagement = workspace.management;
+    bankUi.setDestinationOpen(workspace.management === "bank");
 
     const desired: WorkspaceState = { ...workspace };
     const desiredCount = (desired.characterOpen ? 1 : 0) + (desired.management ? 1 : 0);
@@ -528,127 +450,6 @@ export function mountApp(
       .join("");
   }
 
-  /** Renders the Vendor tab panel's fixed-price buy list (#119): mirrors a Production Skill panel's
-   * (production.ts) own name/level-row/action-button shape (reusing its `.recipe-name`/`.craft-btn`
-   * CSS classes rather than inventing a parallel set), substituting the gold price for a level requirement and a
-   * "Buy" command for "Craft". Each row also shows how many the player already owns in the Bank.
-   * The Buy button disables while short on gold; `buy` itself still throws on a full Bank (#119's
-   * "player commands throw" rule), surfaced via the item-bought/error path same as any other
-   * command. */
-  function renderVendor(bank: Snapshot["bank"], gold: number): void {
-    const listEl = el("#vendor-list");
-    const vendorIds = new Set(content.vendor.map((entry) => entry.itemId));
-    for (const [itemId, elements] of vendorRows) {
-      if (!vendorIds.has(itemId)) {
-        elements.row.remove();
-        vendorRows.delete(itemId);
-      }
-    }
-
-    for (const [index, entry] of content.vendor.entries()) {
-      let elements = vendorRows.get(entry.itemId);
-      if (!elements) {
-        const row = document.createElement("li");
-        row.dataset["vendorRow"] = entry.itemId;
-        const name = document.createElement("p");
-        name.className = "recipe-name";
-        name.append(items.name(entry.itemId), " ");
-        const price = document.createElement("span");
-        price.className = "recipe-level";
-        price.textContent = `${entry.price}g`;
-        name.append(price);
-        const owned = document.createElement("p");
-        owned.className = "recipe-inputs";
-        const quantity = document.createElement("input");
-        quantity.className = "vendor-qty";
-        quantity.type = "number";
-        quantity.min = "1";
-        quantity.step = "1";
-        quantity.value = "1";
-        quantity.dataset["vendorQty"] = entry.itemId;
-        const buy = document.createElement("button");
-        buy.className = "craft-btn";
-        buy.dataset["vendorBuy"] = entry.itemId;
-        row.append(name, owned, quantity, buy);
-        elements = { row, owned, quantity, buy };
-        vendorRows.set(entry.itemId, elements);
-      }
-
-      // Moving an already-last focused node can blur it in DOM implementations, so only move when
-      // its position is actually stale. This still restores Content order without cloning nodes.
-      if (listEl.children[index] !== elements.row) listEl.append(elements.row);
-      updateVendorRow(elements, entry.price, bank, gold, entry.itemId);
-    }
-  }
-
-  /** Whether the Bank can hold the vendor Item's resulting stack (#283): an existing stack always
-   * has room; a brand-new stack needs a free Bank Slot. Mirrors the Engine's private
-   * `hasRoomForNewStack` against the public Snapshot's `bank` view — no Engine internals imported,
-   * so this stays a pure UI guard keeping the Engine throw a never-hit backstop. */
-  function bankHasRoom(bank: Snapshot["bank"], itemId: string): boolean {
-    if (bank.items.some((s) => s.itemId === itemId)) return true;
-    return bank.items.length < bank.capacity;
-  }
-
-  /** Resolves a vendor row's Buy button state (#283) from the entered quantity string. Clamps an
-   * over-affordable qty down to `floor(gold / price)` (tuning: clamp, don't merely disable) so a
-   * click never asks the Engine to overspend; treats empty / non-integer / `< 1` as invalid and
-   * disables Buy, and also disables when the Bank has no room. `clampedQty` is non-null only when
-   * the entered value was pulled down, signalling the caller to rewrite the field. */
-  function parseVendorQuantity(raw: string): number | null {
-    if (!/^[1-9]\d*$/.test(raw)) return null;
-    const quantity = Number(raw);
-    return Number.isSafeInteger(quantity) ? quantity : null;
-  }
-
-  function vendorBuyState(
-    price: number,
-    rawQty: string,
-    gold: number,
-    hasRoom: boolean,
-  ): VendorBuyState {
-    const quantity = parseVendorQuantity(rawQty);
-    if (quantity === null)
-      return { label: "Buy", disabled: true, quantity: null, clampedQuantity: null };
-
-    const maxAffordable = Math.floor(gold / price);
-    const clampedQuantity = quantity > maxAffordable && maxAffordable >= 1 ? maxAffordable : null;
-    const effectiveQuantity = clampedQuantity ?? quantity;
-    const total = price * effectiveQuantity;
-    if (!Number.isSafeInteger(total)) {
-      return { label: "Buy", disabled: true, quantity, clampedQuantity: null };
-    }
-    return {
-      label: `Buy (${total}g)`,
-      disabled: !hasRoom || total > gold,
-      quantity,
-      clampedQuantity,
-    };
-  }
-
-  function updateVendorRow(
-    elements: VendorRowElements,
-    price: number,
-    bank: Snapshot["bank"],
-    gold: number,
-    itemId: string,
-  ): VendorBuyState {
-    // An empty field is allowed while replacing the default value, but a quantity itself may only
-    // contain positive decimal digits. This also sanitizes pasted values that bypass key handling.
-    if (!/^\d*$/.test(elements.quantity.value) || elements.quantity.value === "0") {
-      elements.quantity.value = "";
-    }
-    elements.owned.textContent = `Owned: ${bank.items.find((s) => s.itemId === itemId)?.qty ?? 0}`;
-    let state = vendorBuyState(price, elements.quantity.value, gold, bankHasRoom(bank, itemId));
-    if (state.clampedQuantity !== null) {
-      elements.quantity.value = String(state.clampedQuantity);
-      state = vendorBuyState(price, elements.quantity.value, gold, bankHasRoom(bank, itemId));
-    }
-    elements.buy.textContent = state.label;
-    elements.buy.disabled = state.disabled;
-    return state;
-  }
-
   /** Renders the scene's parallax backdrop (#80): resolves the current Theme via `resolveTheme`
    * (UI-only, ADR-0001 — the Engine has no notion of "theme") and stamps it onto `#backdrop`'s
    * `data-theme` attribute, which styles.css keys each layer's background off of; also resolves
@@ -763,28 +564,6 @@ export function mountApp(
     el("#skills-list").innerHTML = rows.join("");
   }
 
-  /** One `.detail-strip` body — name/qty, `itemDetailLines` stats, Equip/Sell actions — shared by
-   * the full Bank page (`renderBankDetail`) and the Character hub's embedded Equipment-only Bank
-   * tray (`renderEquipmentTray`, #206) so the two detail strips can never drift apart. */
-  function bankDetailMarkup(stack: { itemId: string; qty: number }): string {
-    const def = content.itemsById.get(stack.itemId);
-    const price = items.sellPrice(stack.itemId);
-    const sellBtn =
-      price !== undefined
-        ? `<button class="sell-btn" data-sell="${stack.itemId}">Sell ${price}g</button>`
-        : "";
-    const equipBtn =
-      def?.kind === "equipment"
-        ? `<button class="equip-btn" data-equip="${stack.itemId}">Equip</button>`
-        : "";
-    return `<p class="detail-name">${items.name(stack.itemId)} ×${formatQty(stack.qty)}</p>
-      ${items
-        .detailLines(stack.itemId)
-        .map((line) => `<p class="detail-stat">${line}</p>`)
-        .join("")}
-      <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
-  }
-
   /** Renders the compact widget's live Loot Zone strip (#220): one chip per `snap.lootZone` stack
    * below `#scene`, filling the height wave 1/6 (#219) reclaimed by deleting `#titlebar`. It is
    * the sole Loot Zone interface (#243) — the Activity destination carries no Loot Zone markup of
@@ -831,89 +610,6 @@ export function mountApp(
     );
   }
 
-  /** Renders the expanded Bank destination page (#207, deepened #237): the six filter buttons' +
-   * sort select's active state, the capacity/Gold header, the buy-slots button, and the
-   * filtered/searched/sorted stack grid (#78: `<button class="tile">`s carrying only icon + qty
-   * badge — the click-to-select detail strip below shows the name/stats/Equip/Sell buttons that
-   * used to sit inline on each row). The filter -> search -> sort pipeline and selection
-   * visibility are entirely owned by `bankPresentation.full` (bank-view.ts); this is just the DOM
-   * adapter. `gold` (rather than the whole player) is all the Gold readout and buy-slots button's
-   * disabled check need. */
-  function renderBank(bank: Snapshot["bank"], gold: number): void {
-    const state = bankPresentation.state();
-    root.querySelectorAll<HTMLButtonElement>("#bank-filter-row button").forEach((btn) => {
-      const active = btn.dataset["bankFilter"] === state.filter;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-pressed", String(active));
-    });
-    el<HTMLSelectElement>("#bank-sort-select").value = state.sort;
-
-    const used = bank.items.length;
-    el("#bank-header").textContent = `Bank ${used}/${bank.capacity}`;
-    el("#bank-gold").textContent = `🪙 ${gold}`;
-    const buySlotsBtn = el<HTMLButtonElement>("#buy-slots-btn");
-    buySlotsBtn.textContent = `Buy +10 slots (${bank.nextSlotsPrice}g)`;
-    buySlotsBtn.disabled = gold < bank.nextSlotsPrice;
-
-    const presented = bankPresentation.full(bank.items);
-
-    el("#bank").innerHTML = presented.stacks
-      .map(
-        (s) =>
-          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === presented.selected?.itemId}">
-             ${items.tileMarkup(s.itemId, s.qty)}
-           </button>`,
-      )
-      .join("");
-
-    renderBankDetail(presented.selected);
-  }
-
-  /** Renders the Bank page's detail strip (#78): hidden while nothing is selected, otherwise
-   * `bankDetailMarkup`'s shared name/stats/Equip/Sell body. `selected` is `renderBank`'s own
-   * `PresentedBank.selected` (#237), not necessarily identical to `renderEquipmentTray`'s. */
-  function renderBankDetail(selected: { itemId: string; qty: number } | null): void {
-    const detail = el<HTMLElement>("#bank-detail");
-    if (!selected) {
-      detail.hidden = true;
-      detail.innerHTML = "";
-      return;
-    }
-    detail.hidden = false;
-    detail.innerHTML = bankDetailMarkup(selected);
-  }
-
-  /** Renders the Character hub's embedded Equipment-only Bank tray (#206, filter behavior updated
-   * #207, deepened #237) — `snapshot.bank.items` always filtered to `kind === "equipment"`
-   * regardless of the full Bank page's own active filter, with no search of its own, sorted by the
-   * same `SortKey` choice the full Bank page uses. It is the same Bank, never an Inventory or a
-   * second store: this is a filtered view over the identical `bank.items`, and it shares selection
-   * with the full Bank page via `bankPresentation` (#207) — selecting a tile in either view drives
-   * both views' detail strips via `bankDetailMarkup`. This tray is the Character hub's only
-   * scrollport. */
-  function renderEquipmentTray(bank: Snapshot["bank"], gold: number): void {
-    void gold; // kept for symmetry with renderBank; the tray has no buy-slots control of its own
-    const presented = bankPresentation.equipment(bank.items);
-
-    el("#character-bank-tray").innerHTML = presented.stacks
-      .map(
-        (s) =>
-          `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === presented.selected?.itemId}">
-             ${items.tileMarkup(s.itemId, s.qty)}
-           </button>`,
-      )
-      .join("");
-
-    const detail = el<HTMLElement>("#character-bank-detail");
-    if (!presented.selected) {
-      detail.hidden = true;
-      detail.innerHTML = "";
-      return;
-    }
-    detail.hidden = false;
-    detail.innerHTML = bankDetailMarkup(presented.selected);
-  }
-
   /** Dispatcher (#39): reads the latest Snapshot, then renders each Production Skill's panel in
    * turn (#181: descriptor-driven, see production.ts — one loop replaces the four former
    * per-skill panel-rendering functions this module used to define). Hidden Management-card
@@ -933,9 +629,7 @@ export function mountApp(
     characterHubUi.render(player, bank.items);
     renderPets(player.ownedPets);
     renderLootStrip(snap.lootZone);
-    renderBank(bank, player.gold);
-    renderEquipmentTray(bank, player.gold);
-    renderVendor(bank, player.gold);
+    bankUi.render(snap);
     renderWorkshopPage();
   }
 
@@ -985,57 +679,7 @@ export function mountApp(
         <ul id="feed" class="card-scroll"></ul>
       </div>
       <div id="world-page-host" data-management-page="world" class="world-page-body" hidden></div>
-      <!-- The expanded Bank/Vendor destination (#207) owns its own fixed shell too
-           (search/filters/sort/detail/buy-slots never scroll, only the tile grid and the Vendor
-           list do) — see styles.css's .bank-page-body. -->
-      <div data-management-page="bank" class="bank-page-body" hidden>
-        <div class="card-fixed">
-          <div id="bank-vendor-toggle" class="style-row">
-            <button data-bankpage="bank">Bank</button>
-            <button data-bankpage="vendor">Vendor</button>
-          </div>
-          <div data-bank-page="bank">
-            <p class="panel-title">
-              <span id="bank-header"></span>
-              <span id="bank-gold"></span>
-            </p>
-            <div class="bank-search-row">
-              <input
-                id="bank-search"
-                type="search"
-                placeholder="Search"
-                aria-label="Search Bank"
-                title="Search Bank"
-              />
-            </div>
-            <div id="bank-filter-row" class="bank-filter-row">
-              ${BANK_FILTERS.map(
-                (filter) =>
-                  `<button data-bank-filter="${filter}" aria-pressed="false">${BANK_FILTER_LABELS[filter]}</button>`,
-              ).join("")}
-            </div>
-            <label class="bank-sort-row">
-              Sort
-              <select id="bank-sort-select" aria-label="Sort Bank" title="Sort Bank">
-                ${BANK_SORT_OPTIONS.map(
-                  (opt) => `<option value="${opt.key}">${opt.label}</option>`,
-                ).join("")}
-              </select>
-            </label>
-          </div>
-        </div>
-        <div data-bank-page="bank" class="card-scroll">
-          <div id="bank" class="tile-grid"></div>
-        </div>
-        <div data-bank-page="bank" class="card-fixed">
-          <div id="bank-detail" class="detail-strip" hidden></div>
-          <button id="buy-slots-btn" data-buy-slots class="buy-slots-btn"></button>
-        </div>
-        <div data-bank-page="vendor" class="card-scroll" hidden>
-          <p class="panel-title">Vendor</p>
-          <ul id="vendor-list"></ul>
-        </div>
-      </div>
+      <div id="bank-destination-host"></div>
       <!-- The Skills destination (#222): decrowds the Character card by giving the 11
            SKILL_NAMES their own roomy one-row-per-Skill list plus the pets collection strip,
            both formerly crammed onto the Character card. Own fixed shell mirroring
@@ -1124,6 +768,25 @@ export function mountApp(
     }),
   });
 
+  // The deep, mounted Bank module (#327): owns the Character tray and Bank/Vendor destination —
+  // see bank-ui.ts's own doc comment. Constructed after the Character hub has painted
+  // `#character-bank-tray` / `#character-bank-detail` and after `#bank-destination-host` exists.
+  const bankUi: BankUi = createBankUi({
+    trayHost: el<HTMLElement>("#card-character"),
+    destinationHost: el<HTMLElement>("#bank-destination-host"),
+    content,
+    commands: {
+      sell: engine.sell.bind(engine),
+      equip: engine.equip.bind(engine),
+      buy: engine.buy.bind(engine),
+      buyBankSlots: () => {
+        engine.buyBankSlots();
+        feedLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
+      },
+    },
+    onChanged: () => render(),
+  });
+
   // The deep, mounted Loadout Slot UI module (#235): owns all four Loadout Slot kinds' chooser
   // state, Item eligibility, Rune-level gating, tile markup, DOM listeners, and Engine command
   // dispatch — see loadout-slot.ts's own doc comment. Constructed after `root.innerHTML` above has
@@ -1147,10 +810,6 @@ export function mountApp(
     commands: engine,
     onChanged: () => render(),
   });
-
-  // The game renders every Tick, so Vendor rows must outlive individual renders to avoid
-  // interrupting keyboard editing in a focused quantity input (#307).
-  const vendorRows = new Map<string, VendorRowElements>();
 
   // One splat per resolved swing (#86) — the player's own attacks land on the Monster's side,
   // the Monster's land on the player's; fires during engine.tick() itself, not the following
@@ -1257,33 +916,6 @@ export function mountApp(
     feedLine("📦 Chest opened!", "chest-header");
   });
 
-  // Bank filter buttons (#207): six always-visible kind filters plus "all"; re-clicking the active
-  // filter is a no-op (unlike Bank tile selection, there's no "unfiltered by re-click" gesture —
-  // "all" is itself the reachable no-filter state).
-  el("#bank-filter-row").addEventListener("click", (event) => {
-    const filter = (event.target as HTMLElement).closest<HTMLElement>("[data-bank-filter]")
-      ?.dataset["bankFilter"];
-    if (!filter || !(BANK_FILTERS as readonly string[]).includes(filter)) return;
-    bankPresentation.setFilter(filter as BankFilter);
-    render();
-  });
-
-  // Bank search (#207): session-only, filters as you type; cleared on its own whenever the Bank
-  // Management destination closes (see `syncWorkspace`'s `previousManagement` tracking).
-  el<HTMLInputElement>("#bank-search").addEventListener("input", (event) => {
-    bankPresentation.setSearch((event.target as HTMLInputElement).value);
-    render();
-  });
-
-  // Bank sort select (#207): replaces the old Kind|Value|Name button row (`#sort-row`) with a
-  // single `<select>`, per the issue's own "sort select: Name, Kind, Value" shell description.
-  el<HTMLSelectElement>("#bank-sort-select").addEventListener("change", (event) => {
-    const value = (event.target as HTMLSelectElement).value;
-    if (!(SORT_KEYS as readonly string[]).includes(value)) return;
-    bankPresentation.setSort(value as SortKey);
-    render();
-  });
-
   // Menu button (#206): always-visible in the compact widget, toggling Character alone open or
   // closing both cards — see `onMenuToggle`'s own doc comment above.
   el("#menu-toggle").addEventListener("click", onMenuToggle);
@@ -1305,18 +937,6 @@ export function mountApp(
     }
   });
 
-  // Bank|Vendor compact toggle inside the Management card's "bank" destination (#206) — purely
-  // presentational; doesn't change which destination is open, so a plain visibility sync is
-  // enough (no full render() needed).
-  el("#bank-vendor-toggle").addEventListener("click", (event) => {
-    const page = (event.target as HTMLElement).closest<HTMLElement>("[data-bankpage]")?.dataset[
-      "bankpage"
-    ];
-    if (page !== "bank" && page !== "vendor") return;
-    managementBankPage = page;
-    renderWorkspace();
-  });
-
   // Transparent-glass click (#206): clicking the bare union background (document.body itself, not
   // any card inside it) always closes both cards.
   document.body.addEventListener("click", (event) => {
@@ -1327,69 +947,6 @@ export function mountApp(
   // see `onEscape`'s own doc comment above.
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") onEscape();
-  });
-
-  // Bank grid (#78): clicking a tile selects it (re-clicking the already-selected tile
-  // deselects), driving the detail strip below — the grid itself never calls the Engine.
-  el("#bank").addEventListener("click", (event) => {
-    const tile = (event.target as HTMLElement).closest<HTMLElement>(".tile[data-item]");
-    if (!tile) return;
-    const itemId = tile.dataset["item"];
-    if (!itemId) return;
-    bankPresentation.toggleSelection(itemId);
-    render();
-  });
-
-  // Bank detail strip (#78): the Equip/Sell buttons that used to sit inline on each Bank row now
-  // live here instead, carrying the same data-equip/data-sell attributes.
-  // Click-handler order is load-bearing (#59, mirrors #25's deposit-before-sell-before-equip
-  // rule): the Sell button fires before Equip. Bank rows no longer eat (#61 moved eating to the
-  // Food Slot bar) — a Food row's only actions left are Equip (never applicable) and Sell.
-  el("#bank-detail").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const sellId = target.dataset["sell"];
-    if (sellId) {
-      engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
-      render();
-      return;
-    }
-
-    const equipId = target.dataset["equip"];
-    if (equipId) {
-      engine.equip(equipId); // logs its own feed line via the equipped listener above
-      render();
-    }
-  });
-
-  // Character hub's embedded Equipment-only Bank tray (#206): mirrors the full Bank grid's own
-  // select/deselect-tile behavior above, over the same shared `bankPresentation` selection (#207,
-  // #237) — selecting an Equipment tile here also drives the full Bank page's own detail strip,
-  // and vice versa.
-  el("#character-bank-tray").addEventListener("click", (event) => {
-    const tile = (event.target as HTMLElement).closest<HTMLElement>(".tile[data-item]");
-    if (!tile) return;
-    const itemId = tile.dataset["item"];
-    if (!itemId) return;
-    bankPresentation.toggleSelection(itemId);
-    render();
-  });
-
-  // Character hub's embedded tray detail strip (#206): mirrors the full Bank detail strip's own
-  // sell-before-equip dispatch order above.
-  el("#character-bank-detail").addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const sellId = target.dataset["sell"];
-    if (sellId) {
-      engine.sell(sellId, 1); // logs its own feed line via the item-sold listener above
-      render();
-      return;
-    }
-
-    const equipId = target.dataset["equip"];
-    if (equipId) {
-      engine.equip(equipId); // logs its own feed line via the equipped listener above
-      render();
-    }
   });
 
   // Shared item-tooltip hover panel (#78): delegated on `root` itself so it covers every
@@ -1417,55 +974,7 @@ export function mountApp(
   });
 
   // The four Loadout Slot listeners (Food bar, Potion, Quiver, Rune Slot) are now owned entirely
-  // by `loadoutSlotUi` (#235) — constructed above, right after `root.innerHTML` painted its four
-  // stable roots. See loadout-slot.ts's own doc comment for the shared dispatch order and state.
-
-  // Vendor tab panel (#119): a fixed-price Buy control per row, mirroring the Smithing/Cooking/
-  // Crafting/Herblore recipe lists' single Craft-button dispatch shape. Bulk buy (#283) adds a
-  // per-row qty field the click reads.
-  const vendorListEl = el("#vendor-list");
-
-  // `type=number` still accepts exponent/sign/decimal editing keys in browsers. Vendor quantities
-  // are whole positive numbers, so keep those characters out before they reach the input.
-  vendorListEl.addEventListener("keydown", (event) => {
-    const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-vendor-qty]");
-    if (!input) return;
-    if (["-", "+", "e", "E", "."].includes(event.key)) event.preventDefault();
-  });
-
-  // Live label / disabled / clamp as the player edits a row's qty (#283): recompute just that
-  // row's Buy button (a full re-render would reset every field), and clamp an over-affordable
-  // entry down so the button's total never exceeds gold.
-  vendorListEl.addEventListener("input", (event) => {
-    const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-vendor-qty]");
-    if (!input) return;
-    const itemId = input.dataset["vendorQty"];
-    if (!itemId) return;
-    const entry = content.vendor.find((v) => v.itemId === itemId);
-    if (!entry) return;
-    const snap = engine.snapshot();
-    const elements = vendorRows.get(itemId);
-    if (!elements || elements.quantity !== input) return;
-    updateVendorRow(elements, entry.price, snap.bank, snap.player.gold, itemId);
-  });
-
-  vendorListEl.addEventListener("click", (event) => {
-    const buy = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-vendor-buy]");
-    const itemId = buy?.dataset["vendorBuy"];
-    if (!itemId) return;
-    const entry = content.vendor.find((vendor) => vendor.itemId === itemId);
-    const elements = vendorRows.get(itemId);
-    if (!entry || !elements || elements.buy !== buy) return;
-    const snap = engine.snapshot();
-    const state = updateVendorRow(elements, entry.price, snap.bank, snap.player.gold, itemId);
-    const quantity = state.clampedQuantity ?? state.quantity;
-    // The disabled check keeps invalid/illegal states out of Engine.buy; Engine errors remain a
-    // loud backstop rather than normal UI flow.
-    if (state.disabled || quantity === null) return;
-    engine.buy(itemId, quantity); // logs its own feed line via the item-bought subscription above
-    render();
-    elements.quantity.focus({ preventScroll: true });
-  });
+  // by `loadoutSlotUi` (#235) — see loadout-slot.ts's own doc comment.
 
   // Loot All (#206, wired into the compact widget's own Loot Strip by #220): the compact widget's
   // Loot Strip button is the sole Loot Zone UI (#243), so this is the only handler and the only
@@ -1482,12 +991,6 @@ export function mountApp(
     }
   }
   el("#loot-strip-all-btn").addEventListener("click", handleLootAll);
-
-  el("#buy-slots-btn").addEventListener("click", () => {
-    engine.buyBankSlots();
-    feedLine(`Bank expanded to ${engine.snapshot().bank.capacity} slots`);
-    render();
-  });
 
   // Workshop's four-button Production Skill selector (#209): clicking a button is session-only
   // presentation state (mirrors the World rail's `selectedAreaId` and the Bank/Vendor toggle's
@@ -1525,6 +1028,7 @@ export function mountApp(
       disposed = true;
       characterHubUi.dispose();
       worldPageUi.dispose();
+      bankUi.dispose();
     },
   };
 }

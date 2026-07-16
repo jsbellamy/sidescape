@@ -185,18 +185,29 @@ describe("mountApp", () => {
     expect(pondBtn?.classList.contains("active")).toBe(true);
   });
 
-  it("dispose() is idempotent and prevents World and Character host clicks from dispatching Engine commands", () => {
+  it("dispose() is idempotent and prevents World, Character, and Bank host clicks from dispatching Engine commands", () => {
     const { engine, root, app } = mount(1);
     const monsterBefore = engine.snapshot().monster?.id ?? null;
     const combatStyleBefore = engine.snapshot().player.combatStyle;
+    const goldBefore = engine.snapshot().player.gold;
     app.dispose();
     app.dispose();
 
     root.querySelector<HTMLButtonElement>('#world-page-host [data-monster="dummy"]')?.click();
     root.querySelector<HTMLButtonElement>('[data-style="accurate"]')?.click();
+    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
+    selectBankTile(root, "bronze-sword");
 
     expect(engine.snapshot().monster?.id ?? null).toBe(monsterBefore);
     expect(engine.snapshot().player.combatStyle).toBe(combatStyleBefore);
+    expect(engine.snapshot().player.gold).toBe(goldBefore);
+  });
+
+  it("passes the latest Engine Snapshot to the mounted Bank UI on render (#327)", () => {
+    const { engine, root, app } = mount(1);
+    engine.snapshot();
+    app.render();
+    expect(root.querySelector("#bank-header")?.textContent).toMatch(/^Bank /);
   });
 
   it("selecting a Monster renders a non-numeric HP bar", () => {
@@ -1649,91 +1660,9 @@ describe.skip("Event ticker (moved to Activity by #210)", () => {
   });
 });
 
-describe("Bank", () => {
-  function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
-    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
-    const root = document.createElement("main");
-    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    return { engine, root, app };
-  }
-
-  it("shows the Bank header as used/capacity and the next slot price on the buy button", () => {
-    const { root } = bankMount({
-      bank: { items: [{ itemId: "meat", qty: 5 }], capacity: 100 },
-    });
-    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 1/100");
-    expect(root.querySelector("#buy-slots-btn")?.textContent).toBe("Buy +10 slots (1000g)");
-  });
-
-  it("disables the buy-slots button when gold is short of the price, enables it when affordable", () => {
-    const short = bankMount({ player: { gold: 500 } });
-    expect(short.root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.disabled).toBe(true);
-
-    const flush = bankMount({ player: { gold: 1000 } });
-    expect(flush.root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.disabled).toBe(false);
-  });
-
-  it("clicking Buy +10 slots grows capacity, debits gold, updates the header/price, and logs a feed line", () => {
-    const { engine, root } = bankMount({ player: { gold: 1000 } });
-    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
-
-    expect(engine.snapshot().bank.capacity).toBe(110);
-    expect(engine.snapshot().player.gold).toBe(0);
-    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/110");
-    expect(root.querySelector("#buy-slots-btn")?.textContent).toBe("Buy +10 slots (1500g)");
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank expanded to 110 slots/i);
-  });
-
-  it("clicking Equip on a Bank row moves the item into its Gear Slot and logs a feed line", () => {
-    const { engine, root } = bankMount({
-      bank: { items: [{ itemId: "bronze-sword", qty: 1 }] },
-    });
-
-    selectBankTile(root, "bronze-sword");
-    const equipBtn = root.querySelector<HTMLButtonElement>(
-      '#bank-detail [data-equip="bronze-sword"]',
-    );
-    expect(equipBtn).not.toBeNull();
-    equipBtn?.click();
-
-    expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
-    expect(engine.snapshot().bank.items).toEqual([]);
-    expect(root.querySelector("#feed li")?.textContent).toMatch(/equipped.*bronze sword/i);
-  });
-
-  it("an Equip button is only shown on equipment rows, not food or material rows", () => {
-    const { root } = bankMount({
-      bank: {
-        items: [
-          { itemId: "meat", qty: 1 },
-          { itemId: "bar", qty: 1 },
-        ],
-      },
-    });
-    selectBankTile(root, "meat");
-    expect(root.querySelector("#bank-detail [data-equip]")).toBeNull();
-    selectBankTile(root, "bar");
-    expect(root.querySelector("#bank-detail [data-equip]")).toBeNull();
-  });
-
-  it("clicking a Food tile in the Bank (not the Equip/Sell buttons) does nothing — Food is eaten from the Food Slot bar, not the Bank (#61)", () => {
-    const { engine, root } = bankMount({
-      player: { hp: 5, maxHp: 10, skills: { hitpoints: { level: 10, xp: xpForLevel(10) } } },
-      bank: { items: [{ itemId: "meat", qty: 3 }] },
-    });
-
-    selectBankTile(root, "meat"); // selecting a tile only opens the detail strip (#78)
-
-    expect(engine.snapshot().player.hp).toBe(5);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 3 }]);
-    expect(root.querySelector("#feed li")).toBeNull();
-  });
-
-  it("logs an overflow-sold feed line when a sellable combat Drop can't fit a full Loot Zone (#60 — kill Drops overflow the zone, not the Bank)", () => {
-    // Extend fixtureContent with junk Material items purely to pre-fill all 10 Loot Zone stacks
-    // with items that are NOT among dummy's own Drop Table entries (meat/bronze-sword/lucky-charm),
-    // so the next one of those to land is a genuine 11th stack.
-    const content = {
+describe("Bank overflow feed lines (composition, #60/#63)", () => {
+  it("logs an overflow-sold feed line when a sellable combat Drop can't fit a full Loot Zone (#60)", () => {
+    const contentExt = {
       ...fixtureContent,
       items: [
         ...fixtureContent.items,
@@ -1747,7 +1676,7 @@ describe("Bank", () => {
       ],
     };
     const engine = createEngine(
-      content,
+      contentExt,
       seededRng(1),
       makeSnapshot({
         lootZone: [
@@ -1765,8 +1694,8 @@ describe("Bank", () => {
       }),
     );
     const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(content), noopWindowChrome);
-    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    mountApp(engine, root, resolveContent(contentExt), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('#world-page-host [data-monster="dummy"]')?.click();
 
     let sold = false;
     engine.on("overflow-sold", () => {
@@ -1797,9 +1726,9 @@ describe("Bank", () => {
     );
     const root = document.createElement("main");
     mountApp(engine, root, resolveContent(noValueContent), noopWindowChrome);
-    engine.selectFishingSpot("pond"); // catchChance 1, always catches "raw-fish"
+    engine.selectFishingSpot("pond");
 
-    for (let i = 0; i < 3; i++) engine.tick(); // catchTicks === 3: exactly one Catch lands
+    for (let i = 0; i < 3; i++) engine.tick();
 
     expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*lost/i);
   });
@@ -1838,7 +1767,7 @@ describe("Bank", () => {
   });
 });
 
-describe("Expanded Bank filters, search, and Vendor mode (#207)", () => {
+describe("Bank destination lifecycle (composition, #327)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", stubLocalStorage());
   });
@@ -1852,203 +1781,15 @@ describe("Expanded Bank filters, search, and Vendor mode (#207)", () => {
       player: { gold: 500 },
       bank: {
         items: [
-          { itemId: "bronze-sword", qty: 1 }, // equipment
-          { itemId: "meat", qty: 3 }, // food
-          { itemId: "bar", qty: 2 }, // material
-          { itemId: "strength-potion", qty: 1 }, // potion
-          { itemId: "arrow", qty: 10 }, // ammo
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "meat", qty: 3 },
+          { itemId: "bar", qty: 2 },
+          { itemId: "strength-potion", qty: 1 },
+          { itemId: "arrow", qty: 10 },
         ],
       },
     });
   }
-
-  function bankMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
-    const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
-    const root = document.createElement("main");
-    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-    return { engine, root, app };
-  }
-
-  function bankIds(root: HTMLElement) {
-    return [...root.querySelectorAll<HTMLElement>("#bank .tile")].map(
-      (tile) => tile.dataset["item"],
-    );
-  }
-
-  function clickFilter(root: HTMLElement, filter: string) {
-    root.querySelector<HTMLButtonElement>(`[data-bank-filter="${filter}"]`)?.click();
-  }
-
-  function typeSearch(root: HTMLElement, text: string) {
-    const input = root.querySelector<HTMLInputElement>("#bank-search");
-    if (!input) throw new Error("#bank-search not found");
-    input.value = text;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-
-  function setSort(root: HTMLElement, key: "kind" | "value" | "name") {
-    const select = root.querySelector<HTMLSelectElement>("#bank-sort-select");
-    if (!select) throw new Error("#bank-sort-select not found");
-    select.value = key;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-
-  it("renders exactly the six always-visible filter buttons: All, Gear, Food, Materials, Potions, Ammo", () => {
-    const { root } = bankMount();
-    const buttons = [...root.querySelectorAll<HTMLButtonElement>("#bank-filter-row button")];
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      "All",
-      "Gear",
-      "Food",
-      "Materials",
-      "Potions",
-      "Ammo",
-    ]);
-  });
-
-  it("the six filter buttons, the search input, the sort select, and the sticky detail/buy-slots footer all sit outside the grid's own scrolling container", () => {
-    const { root } = bankMount(mixedBank());
-    const grid = root.querySelector("#bank");
-    const gridScroll = grid?.closest(".card-scroll");
-    expect(gridScroll).not.toBeNull();
-
-    for (const outside of [
-      root.querySelector("#bank-filter-row"),
-      root.querySelector("#bank-search"),
-      root.querySelector("#bank-sort-select"),
-      root.querySelector("#bank-detail"),
-      root.querySelector("#buy-slots-btn"),
-    ]) {
-      expect(outside).not.toBeNull();
-      // None of these fixed-shell controls sit inside the same scrolling grid container.
-      expect(outside?.closest(".card-scroll")).not.toBe(gridScroll);
-    }
-  });
-
-  it("filtering to Gear/Food/Materials/Potions/Ammo shows only that kind's stacks", () => {
-    const { root } = bankMount(mixedBank());
-
-    clickFilter(root, "equipment");
-    expect(bankIds(root)).toEqual(["bronze-sword"]);
-
-    clickFilter(root, "food");
-    expect(bankIds(root)).toEqual(["meat"]);
-
-    clickFilter(root, "material");
-    expect(bankIds(root)).toEqual(["bar"]);
-
-    clickFilter(root, "potion");
-    expect(bankIds(root)).toEqual(["strength-potion"]);
-
-    clickFilter(root, "ammo");
-    expect(bankIds(root)).toEqual(["arrow"]);
-
-    clickFilter(root, "all");
-    expect(bankIds(root)).toHaveLength(5);
-  });
-
-  it("marks the active filter button, moving `active`/aria-pressed as the filter changes", () => {
-    const { root } = bankMount(mixedBank());
-    clickFilter(root, "food");
-    const foodBtn = root.querySelector<HTMLButtonElement>('[data-bank-filter="food"]');
-    const allBtn = root.querySelector<HTMLButtonElement>('[data-bank-filter="all"]');
-    expect(foodBtn?.classList.contains("active")).toBe(true);
-    expect(foodBtn?.getAttribute("aria-pressed")).toBe("true");
-    expect(allBtn?.classList.contains("active")).toBe(false);
-    expect(allBtn?.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("search matches case-insensitively and trims surrounding whitespace", () => {
-    const { root } = bankMount(mixedBank());
-
-    typeSearch(root, "SWORD");
-    expect(bankIds(root)).toEqual(["bronze-sword"]);
-
-    typeSearch(root, "  meat  ");
-    expect(bankIds(root)).toEqual(["meat"]);
-
-    typeSearch(root, "");
-    expect(bankIds(root)).toHaveLength(5);
-  });
-
-  it("composes filter and search — search narrows within the active filter, kind first", () => {
-    const { root } = bankMount(mixedBank());
-    clickFilter(root, "food");
-    typeSearch(root, "sword"); // matches an Equipment item's name, but filter is Food
-
-    expect(bankIds(root)).toEqual([]);
-  });
-
-  it("selecting a tile then filtering it out of view hides the detail strip", () => {
-    const { root } = bankMount(mixedBank());
-    selectBankTile(root, "bronze-sword");
-    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(false);
-
-    clickFilter(root, "food"); // hides the Equipment tile currently selected
-    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
-  });
-
-  it("filtering the full Bank grid to hide an Equipment selection does not blank the Character tray's own detail for the same shared selection", () => {
-    const { root } = bankMount(mixedBank());
-    // Select via the full Bank grid, then filter the Bank page to Food only.
-    selectBankTile(root, "bronze-sword");
-    clickFilter(root, "food");
-    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
-
-    // The Character tray is always Equipment-only regardless of the Bank page's own filter, so its
-    // detail strip for the same shared selection must still show (#207).
-    const trayDetail = root.querySelector<HTMLElement>("#character-bank-detail");
-    expect(trayDetail?.hidden).toBe(false);
-    expect(trayDetail?.querySelector('[data-item], [data-equip="bronze-sword"]')).not.toBeNull();
-  });
-
-  it("selecting a tile in the full Bank grid also selects it in the Character tray (shared selection, #207)", () => {
-    const { root } = bankMount(mixedBank());
-    selectBankTile(root, "bronze-sword");
-
-    const trayTile = root.querySelector<HTMLButtonElement>(
-      '#character-bank-tray [data-item="bronze-sword"]',
-    );
-    expect(trayTile?.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("filter and sort persist across a remount; search and selection do not (#207)", () => {
-    const engine = createEngine(fixtureContent, seededRng(1), mixedBank());
-    const root = document.createElement("main");
-    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
-
-    clickFilter(root, "food");
-    typeSearch(root, "meat");
-    selectBankTile(root, "meat");
-
-    const stored = JSON.parse(localStorage.getItem("sidescape-ui-bank-view-v1") ?? "{}");
-    expect(stored).toEqual({ version: 1, filter: "food", sort: "name" });
-
-    const root2 = document.createElement("main");
-    mountApp(engine, root2, resolveContent(fixtureContent), noopWindowChrome);
-
-    // Filter persisted...
-    expect(
-      root2
-        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
-        ?.classList.contains("active"),
-    ).toBe(true);
-    // ...but search and selection are session-only, so a fresh mount starts blank/deselected.
-    expect(root2.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("");
-    expect(root2.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(true);
-  });
-
-  it("falls back to the default filter/sort when localStorage holds malformed bank-view JSON", () => {
-    localStorage.setItem("sidescape-ui-bank-view-v1", "{not json");
-    const { root } = bankMount(mixedBank());
-    expect(
-      root
-        .querySelector<HTMLButtonElement>('[data-bank-filter="all"]')
-        ?.classList.contains("active"),
-    ).toBe(true);
-    expect(root.querySelector<HTMLSelectElement>("#bank-sort-select")?.value).toBe("name");
-    expect(bankIds(root)).toHaveLength(5); // mounts cleanly rather than throwing
-  });
 
   it("search clears once the Bank Management destination closes, but the filter choice does not", async () => {
     const engine = createEngine(fixtureContent, seededRng(1), mixedBank());
@@ -2061,9 +1802,12 @@ describe("Expanded Bank filters, search, and Vendor mode (#207)", () => {
       expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
     );
 
-    clickFilter(root, "food");
-    typeSearch(root, "meat");
-    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("meat");
+    root.querySelector<HTMLButtonElement>('[data-bank-filter="food"]')?.click();
+    const searchInput = root.querySelector<HTMLInputElement>("#bank-search");
+    if (!searchInput) throw new Error("#bank-search not found");
+    searchInput.value = "meat";
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(searchInput.value).toBe("meat");
 
     root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
     expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("");
@@ -2072,63 +1816,27 @@ describe("Expanded Bank filters, search, and Vendor mode (#207)", () => {
     await vi.waitFor(() =>
       expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
     );
-    // The filter choice is locally persisted, not session-only, so it survives the round trip.
     expect(
       root
         .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
         ?.classList.contains("active"),
     ).toBe(true);
-    expect(bankIds(root)).toEqual(["meat"]);
+    const bankIds = [...root.querySelectorAll<HTMLElement>("#bank .tile")].map(
+      (tile) => tile.dataset["item"],
+    );
+    expect(bankIds).toEqual(["meat"]);
   });
 
-  it("shows Gold alongside the existing used/capacity header text, updating after a slot purchase", () => {
-    const { root, engine } = bankMount({
-      player: { gold: 1500 },
-      bank: { items: [], capacity: 100 },
-    });
-    expect(root.querySelector("#bank-gold")?.textContent).toBe("🪙 1500");
-    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/100");
-
-    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click(); // price 1000 at capacity 100
-    expect(engine.snapshot().bank.capacity).toBe(110);
-    expect(engine.snapshot().player.gold).toBe(500);
-    expect(root.querySelector("#bank-gold")?.textContent).toBe("🪙 500");
-    expect(root.querySelector("#bank-header")?.textContent).toBe("Bank 0/110");
-  });
-
-  it("the Bank/Vendor toggle leaves the active filter, search, selection, and game state untouched", () => {
-    const { root, engine } = bankMount(mixedBank());
-    clickFilter(root, "food");
-    typeSearch(root, "meat");
-    selectBankTile(root, "meat");
-    const goldBefore = engine.snapshot().player.gold;
-    const bankBefore = engine.snapshot().bank.items;
-
-    root.querySelector<HTMLButtonElement>('[data-bankpage="vendor"]')?.click();
-    expect(root.querySelector<HTMLElement>('[data-bank-page="vendor"]')?.hidden).toBe(false);
-    root.querySelector<HTMLButtonElement>('[data-bankpage="bank"]')?.click();
-
-    expect(
-      root
-        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
-        ?.classList.contains("active"),
-    ).toBe(true);
-    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("meat");
-    expect(root.querySelector<HTMLElement>("#bank-detail")?.hidden).toBe(false);
-    expect(engine.snapshot().player.gold).toBe(goldBefore);
-    expect(engine.snapshot().bank.items).toEqual(bankBefore);
-  });
-
-  it("never mutates the Engine Snapshot's own bank.items array while filtering/searching/sorting", () => {
-    const { root, engine } = bankMount(mixedBank());
-    const before = engine.snapshot().bank.items;
-    const beforeCopy = JSON.parse(JSON.stringify(before));
-
-    clickFilter(root, "equipment");
-    typeSearch(root, "sword");
-    setSort(root, "value");
-
-    expect(engine.snapshot().bank.items).toEqual(beforeCopy);
+  it("clicking Buy +10 slots logs a feed line via mountApp composition", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { gold: 1000 } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank expanded to 110 slots/i);
   });
 });
 
@@ -3567,234 +3275,6 @@ describe("unified Loadout row (#224) — food x3, potion, quiver, rune collapse 
     root.querySelector<HTMLButtonElement>("[data-quiver-unassign]")?.click();
     expect(engine.snapshot().player.quiver).toBeNull();
     expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "air-rune", qty: 5 }); // untouched
-  });
-});
-
-describe("Vendor tab panel (#119)", () => {
-  it("lists every vendor entry with its price and how many the player already owns", () => {
-    const { root } = ammoMount({ bank: { items: [{ itemId: "arrow", qty: 7 }] } });
-    const arrowRow = root.querySelector<HTMLElement>('[data-vendor-row="arrow"]');
-    expect(arrowRow?.textContent).toMatch(/Test Arrow/);
-    expect(arrowRow?.textContent).toMatch(/2g/); // fixture vendor price
-    expect(arrowRow?.textContent).toMatch(/Owned: 7/);
-  });
-
-  it("the Buy button is disabled while gold is short of the price", () => {
-    const { root } = ammoMount({ player: { gold: 1 } });
-    const buyBtn = root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]');
-    expect(buyBtn?.disabled).toBe(true);
-  });
-
-  it("clicking Buy purchases 1 unit, charging gold and adding it to the Bank, logging a feed line", () => {
-    const { engine, root } = ammoMount({ player: { gold: 100 } });
-    root.querySelector<HTMLButtonElement>('[data-vendor-buy="arrow"]')?.click();
-
-    expect(engine.snapshot().player.gold).toBe(98); // fixture vendor price 2
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 1 }]);
-    const feedLine = root.querySelector("#feed li");
-    expect(feedLine?.textContent).toMatch(/bought/i);
-  });
-});
-
-describe("Vendor bulk buy (#283)", () => {
-  /** Reads a vendor row's editable quantity field. */
-  function qtyInput(root: HTMLElement, itemId: string): HTMLInputElement {
-    const input = root.querySelector<HTMLInputElement>(`[data-vendor-qty="${itemId}"]`);
-    if (!input) throw new Error(`no qty input for ${itemId}`);
-    return input;
-  }
-
-  /** Sets a qty field's value and fires the `input` event the way a user typing would, so the
-   * live-label / disabled / clamp handler runs. */
-  function typeQty(root: HTMLElement, itemId: string, value: string): void {
-    const input = qtyInput(root, itemId);
-    input.value = value;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-
-  function buyBtn(root: HTMLElement, itemId: string): HTMLButtonElement {
-    const btn = root.querySelector<HTMLButtonElement>(`[data-vendor-buy="${itemId}"]`);
-    if (!btn) throw new Error(`no buy button for ${itemId}`);
-    return btn;
-  }
-
-  it("gives each vendor row an integer qty field with min=1 defaulting to 1", () => {
-    const { root } = ammoMount({ player: { gold: 100 } });
-    const input = qtyInput(root, "arrow");
-    expect(input.type).toBe("number");
-    expect(input.min).toBe("1");
-    expect(input.step).toBe("1");
-    expect(input.value).toBe("1");
-  });
-
-  it("labels the Buy button with the live total cost = price × qty", () => {
-    const { root } = ammoMount({ player: { gold: 100 } });
-    // fixture arrow price is 2; default qty 1 -> total 2
-    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(2g\)/);
-
-    typeQty(root, "arrow", "5");
-    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(10g\)/); // 2 × 5
-  });
-
-  it("buys exactly qty via engine.buy(itemId, qty): qty 5 of a 3g item costs 15g, adds 5, one item-bought event", () => {
-    const { engine, root } = ammoMount({ player: { gold: 100 } });
-    const events: { itemId: string; qty: number; gold: number }[] = [];
-    engine.on("item-bought", (e) => events.push({ itemId: e.itemId, qty: e.qty, gold: e.gold }));
-
-    typeQty(root, "air-rune", "5"); // fixture air-rune price 3
-    buyBtn(root, "air-rune").click();
-
-    expect(engine.snapshot().player.gold).toBe(85); // 100 − 3×5
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 5 }]);
-    expect(events).toEqual([{ itemId: "air-rune", qty: 5, gold: 15 }]);
-  });
-
-  it("disables Buy when the total cost would exceed gold", () => {
-    const { root } = ammoMount({ player: { gold: 2 } }); // air-rune price 3 — cannot afford one
-    expect(buyBtn(root, "air-rune").disabled).toBe(true);
-  });
-
-  it("clamps an over-affordable qty down to floor(gold/price) instead of overspending", () => {
-    const { engine, root } = ammoMount({ player: { gold: 10 } }); // air-rune 3 -> max affordable 3
-    typeQty(root, "air-rune", "5");
-
-    expect(qtyInput(root, "air-rune").value).toBe("3"); // clamped
-    expect(buyBtn(root, "air-rune").textContent).toMatch(/Buy \(9g\)/);
-    expect(buyBtn(root, "air-rune").disabled).toBe(false);
-
-    buyBtn(root, "air-rune").click();
-    expect(engine.snapshot().player.gold).toBe(1); // 10 − 9, never overspent
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "air-rune", qty: 3 }]);
-  });
-
-  it("disables Buy when the Bank has no room for the resulting new stack", () => {
-    // capacity 1, already holding one non-vendor stack -> a brand-new arrow stack has no room
-    const { root } = ammoMount({
-      player: { gold: 100 },
-      bank: { items: [{ itemId: "meat", qty: 1 }], capacity: 1 },
-    });
-    expect(buyBtn(root, "arrow").disabled).toBe(true);
-  });
-
-  it("treats a non-integer or < 1 qty as invalid: Buy is disabled and a click cannot purchase", () => {
-    const { engine, root } = ammoMount({ player: { gold: 100 } });
-
-    typeQty(root, "arrow", "0");
-    expect(buyBtn(root, "arrow").disabled).toBe(true);
-    expect(qtyInput(root, "arrow").value).toBe("");
-
-    typeQty(root, "arrow", "-1");
-    expect(buyBtn(root, "arrow").disabled).toBe(true);
-    expect(qtyInput(root, "arrow").value).toBe("");
-
-    typeQty(root, "arrow", "");
-    expect(buyBtn(root, "arrow").disabled).toBe(true);
-
-    // Even if a click reaches the handler, an invalid qty must not purchase.
-    buyBtn(root, "arrow").click();
-    expect(engine.snapshot().player.gold).toBe(100);
-    expect(engine.snapshot().bank.items).toEqual([]);
-  });
-
-  it("blocks non-numeric quantity keys and clears non-numeric pasted values", () => {
-    const { root } = ammoMount({ player: { gold: 100 } });
-    const input = qtyInput(root, "arrow");
-    const minus = new KeyboardEvent("keydown", { key: "-", bubbles: true, cancelable: true });
-    const decimal = new KeyboardEvent("keydown", { key: ".", bubbles: true, cancelable: true });
-
-    input.dispatchEvent(minus);
-    input.dispatchEvent(decimal);
-    expect(minus.defaultPrevented).toBe(true);
-    expect(decimal.defaultPrevented).toBe(true);
-
-    typeQty(root, "arrow", "1.5");
-    expect(input.value).toBe("");
-  });
-
-  it("keeps the exact focused input through repeated Tick renders while keyboard editing", () => {
-    const { engine, root, app } = ammoMount({ player: { gold: 100 } });
-    document.body.append(root); // happy-dom only tracks focus for connected controls
-    const input = qtyInput(root, "air-rune");
-    input.focus();
-    expect(document.activeElement).toBe(input);
-
-    typeQty(root, "air-rune", "");
-    app.render();
-    expect(qtyInput(root, "air-rune")).toBe(input);
-    expect(input.isConnected).toBe(true);
-    expect(document.activeElement).toBe(input);
-    expect(input.value).toBe("");
-
-    typeQty(root, "air-rune", "2");
-    engine.tick(); // closest app-test equivalent of boot's 600ms Tick/render cadence
-    app.render();
-    typeQty(root, "air-rune", "25");
-    app.render();
-
-    expect(qtyInput(root, "air-rune")).toBe(input);
-    expect(document.activeElement).toBe(input);
-    expect(input.value).toBe("25");
-    expect(buyBtn(root, "air-rune").textContent).toMatch(/Buy \(75g\)/);
-  });
-
-  it("updates live ownership and affordability on the same focused input", () => {
-    const { engine, root, app } = ammoMount({ player: { gold: 100 } });
-    document.body.append(root);
-    const input = qtyInput(root, "arrow"); // 2g each
-    typeQty(root, "arrow", "40");
-    input.focus();
-    engine.buy("air-rune", 30); // unrelated Vendor action leaves 10g
-    engine.tick(); // combat state can also change without rebuilding Vendor rows
-    app.render();
-
-    expect(qtyInput(root, "arrow")).toBe(input);
-    expect(document.activeElement).toBe(input);
-    expect(input.value).toBe("5"); // falling affordability clamps this same node
-    expect(buyBtn(root, "arrow").textContent).toMatch(/Buy \(10g\)/);
-    expect(root.querySelector('[data-vendor-row="air-rune"] .recipe-inputs')?.textContent).toBe(
-      "Owned: 30",
-    );
-  });
-
-  it("strictly rejects malformed quantities without purchasing", () => {
-    const { engine, root } = ammoMount({ player: { gold: 100 } });
-    for (const value of ["", "0", "-1", "1.5", "1e2", " 2", "2 ", "+2", "9007199254740992"]) {
-      typeQty(root, "arrow", value);
-      expect(buyBtn(root, "arrow").disabled, value).toBe(true);
-      buyBtn(root, "arrow").click();
-    }
-    expect(engine.snapshot().player.gold).toBe(100);
-    expect(engine.snapshot().bank.items).toEqual([]);
-  });
-
-  it("keeps valid existing stacks eligible in a full Bank and returns focus after Buy", () => {
-    const { engine, root } = ammoMount({
-      player: { gold: 100 },
-      bank: { items: [{ itemId: "arrow", qty: 1 }], capacity: 1 },
-    });
-    document.body.append(root);
-    const input = qtyInput(root, "arrow");
-    typeQty(root, "arrow", "5");
-    input.focus();
-    buyBtn(root, "arrow").click();
-
-    expect(engine.snapshot().player.gold).toBe(90);
-    expect(engine.snapshot().bank.items).toEqual([{ itemId: "arrow", qty: 6 }]);
-    expect(qtyInput(root, "arrow")).toBe(input);
-    expect(input.value).toBe("5");
-    expect(document.activeElement).toBe(input);
-  });
-
-  it("reconciles Vendor rows in Content order without duplicate rows after rerenders", () => {
-    const { root, app } = ammoMount({ player: { gold: 100 } });
-    const expected = fixtureContent.vendor.map((entry) => entry.itemId);
-    app.render();
-    app.render();
-    expect(
-      [...root.querySelectorAll<HTMLElement>("[data-vendor-row]")].map(
-        (row) => row.dataset["vendorRow"],
-      ),
-    ).toEqual(expected);
   });
 });
 

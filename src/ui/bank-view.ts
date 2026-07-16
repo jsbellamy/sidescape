@@ -74,7 +74,7 @@ export interface PresentedBank {
 /**
  * One deep, instance-local module owning the Bank's presentation state (#237): filter, sort,
  * search, and shared selection, plus the tolerant load / immediate-persist timing described on
- * `StoredBankViewV1`. Two DOM adapters in `app.ts` — the full Bank destination and the Character
+ * `StoredBankViewV1`. Two DOM adapters in `bank-ui.ts` — the full Bank destination and the Character
  * hub's Equipment-only tray — call `full`/`equipment` against one shared instance rather than each
  * owning filter/sort/search/selection variables of their own.
  */
@@ -117,7 +117,7 @@ export function createBankPresentation(content: ResolvedContent): BankPresentati
   let filter: BankFilter = initial.filter;
   let sort: SortKey = initial.sort;
   // Session-only: never persisted, never the Snapshot/save. Cleared by `clearSearch` whenever the
-  // Bank Management destination closes (see app.ts's `syncWorkspace`).
+  // Bank Management destination closes (see bank-ui.ts's `setDestinationOpen`).
   let search = "";
   // Shared internally by both projections, but each projection resolves *visibility* against its
   // own filtered/sorted list — one view's filter hiding the item must not blank the other view's
