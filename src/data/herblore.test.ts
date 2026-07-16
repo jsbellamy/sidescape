@@ -114,7 +114,7 @@ describe("Herblore content (#118): herbs and charge potions", () => {
     const byId = Object.fromEntries(content.recipes.map((r) => [r.id, r]));
     expect(byId["brew-strength-potion"]).toMatchObject({
       skill: "herblore",
-      levelReq: 3,
+      levelReq: 1,
       inputs: [{ itemId: "guam-herb", qty: 1 }],
       outputItemId: "strength-potion",
     });
@@ -138,13 +138,27 @@ describe("Herblore content (#118): herbs and charge potions", () => {
     });
   });
 
-  it("a fresh (level 1) player is gated out of the level-3 Strength Potion recipe, even owning the herb", () => {
+  it("a fresh (level 1) player with guam-herb can select the Strength Potion recipe", () => {
     const engine = createEngine(
       content,
       seededRng(1),
       makeSnapshot({ bank: { items: [{ itemId: "guam-herb", qty: 1 }] } }),
     );
-    expect(() => engine.selectRecipe("brew-strength-potion")).toThrow(/herblore level 3/i);
+    engine.selectRecipe("brew-strength-potion");
+    expect(engine.snapshot().production).toMatchObject({
+      recipeId: "brew-strength-potion",
+      name: "Strength Potion",
+      skill: "herblore",
+    });
+  });
+
+  it("a fresh (level 1) player is still gated out of the level-12 Attack Potion recipe", () => {
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "marrentill-herb", qty: 1 }] } }),
+    );
+    expect(() => engine.selectRecipe("brew-attack-potion")).toThrow(/herblore level 12/i);
   });
 
   it("a Herblore-3 player crafts a Strength Potion end-to-end: herb consumed, potion granted, HERBLORE xp granted (not Smithing)", () => {
