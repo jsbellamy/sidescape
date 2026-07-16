@@ -287,7 +287,7 @@ produce pale air, blue water, green earth, and orange fire variants.
 
 ## Bolt/Blast rune icons + iron-arrow (Wave A, #360)
 
-Wave A slice 1 of 6 — art only (no items/spells). Nine icons from **two** generated bases and
+Wave A slice 1 of 6 — art only (no items/spells). Nine icons from **two** compact bases and
 seven deterministic recolors. Contract for every future rune tier:
 
 | axis             | carried by           | values                                                  |
@@ -298,18 +298,17 @@ seven deterministic recolors. Contract for every future rune tier:
 
 **The stone never changes. The sigil carved into it does.** Colour alone never carries tier.
 
-### Generated bases (Cursor `GenerateImage`)
+### Compact bases (Strike stone + carved sigil)
 
-Style references: `docs/icon-style-golden-master.png` and `src/assets/icons/water-rune.png`
-(family anchor). Prompts verbatim from issue #360 (grid-size and magenta-background lines
-unchanged from `docs/icon-gen.md`).
+First-pass image-gen ingest for Bolt/Blast drifted the stone (rounded proportions, cooler palette
+not matching Strike). Rework copied `golden-base-air-rune.png` pixel-for-pixel and repainted only
+the carved `forest[1]` sigil on the native 22×28 grid — zigzag for Bolt, four-pointed star for
+Blast — so outline, shading, and the five-colour Strike vocabulary (`forest[1]`, `water.base`,
+`meadow[0]`, `water.light`, `water.glint`) transfer verbatim. Sigil shapes were kept from the
+approved first-pass carvings.
 
-1. **Bolt** → inbox `golden-base-air-bolt-rune.png` — diamond stone with one bold zigzag lightning
-   sigil. Compact source via `npm run art:ingest -- --name golden-base-air-bolt-rune` (default
-   pitch). Grid **22×28**.
-2. **Blast** → inbox `golden-base-air-blast-rune.png` — same stone with four thick wedge rays from a
-   solid centre. Ingest used `--pitch 26 --pitch-y 27` so the recovered grid stays **22×28** (auto
-   pitch was one cell too tall for the outline ring). Four thick rays only.
+1. **Bolt** → `golden-base-air-bolt-rune.png` — Strike stone + zigzag lightning sigil. Grid **22×28**.
+2. **Blast** → `golden-base-air-blast-rune.png` — Strike stone + four thick wedge rays. Grid **22×28**.
 
 Both scoped in `SOURCE_PALETTES` as `{ materialRampNames: ["water"], zoneNames: ["meadow", "forest"] }`,
 matching `golden-base-air-rune.png`.
