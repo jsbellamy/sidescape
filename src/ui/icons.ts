@@ -140,7 +140,8 @@ import slotRuneUrl from "../assets/icons/slot-rune.png";
  * Item-icon registry (#78), keyed by `ItemDef.icon` (a key, not a URL — Core never touches the
  * asset itself; see the doc on `EquipmentDef.icon`). Mirrors `sprites.ts`'s `monsterSprites`
  * shape/pattern. Every key that any `ItemDef` in `src/data/index.ts` declares must resolve here —
- * `icons.test.ts` in this directory asserts that completeness (Core's own `validateContent` only
+ * `assertRegisteredContentIcons` in `content-icons.ts` asserts that completeness (Core's own
+ * `validateContent` only
  * checks that an item declares a non-empty icon string, since Core can't see this UI registry).
  */
 const icons: Record<string, string> = {
@@ -274,7 +275,8 @@ const icons: Record<string, string> = {
 /** Resolves an `ItemDef.icon` key to its imported asset URL. Throws on an unknown key rather than
  * falling back to a placeholder (#78's explicit "no placeholder/fallback branch in the UI" —
  * same discipline as a weapon's required attackSpeed): every key content declares is covered by
- * `icons.test.ts`, so hitting this at runtime means the registry and Content have drifted, which
+ * `assertRegisteredContentIcons`, so hitting this at runtime means the registry and Content have
+ * drifted, which
  * should fail loud rather than silently render a broken image. */
 export function itemIcon(key: string): string {
   const url = icons[key];
