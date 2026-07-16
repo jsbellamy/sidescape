@@ -350,15 +350,15 @@ export function tabIcon(tabId: string): string {
  * Food Slots share one kind/silhouette, since they're the same slot TYPE repeated three times. */
 export type LoadoutSlotKind = "food" | "potion" | "quiver" | "rune";
 
-/** Slot-silhouette registry (#286), keyed by Gear/Loadout Slot TYPE — deliberately separate from
- * `icons` above and NEVER routed through `itemIcon`. `itemIcon` is keyed by `ItemDef.icon` and
- * exists to resolve a real Item's icon; it throws on an unknown key by design (#78's no-fallback
- * policy) precisely because every real Item must have a registered icon. A slot silhouette is not
- * an item icon at all — it's a placeholder painted for an EMPTY slot, keyed by the slot's own type
- * (`GearSlot` or a `LoadoutSlotKind`), so folding it into `icons`/`itemIcon` would either weaken
- * that throw into an implicit fallback branch or require inventing fake item keys. Assets are the
- * hand-authored `slot-*.png` icons in `scripts/art/icons.mjs` (native-grid masks, not the
- * source-driven pipeline — see that file's own doc for why). */
+/** Slot-silhouette registry (#286/#306), keyed by Gear/Loadout Slot TYPE — deliberately separate
+ * from `icons` above and NEVER routed through `itemIcon`. `itemIcon` is keyed by `ItemDef.icon`
+ * and exists to resolve a real Item's icon; it throws on an unknown key by design (#78's
+ * no-fallback policy) precisely because every real Item must have a registered icon. A slot
+ * silhouette is not an item icon at all — it's a placeholder painted for an EMPTY slot, keyed by
+ * the slot's own type (`GearSlot` or a `LoadoutSlotKind`), so folding it into `icons`/`itemIcon`
+ * would either weaken that throw into an implicit fallback branch or require inventing fake item
+ * keys. Assets are the `slot-*.png` reliefs in `scripts/art/icons.mjs` (source-derived via
+ * `opts.relief`, not routed through `itemIcon`). */
 const slotSilhouettes: Record<GearSlot | LoadoutSlotKind, string> = {
   weapon: slotWeaponUrl,
   shield: slotShieldUrl,

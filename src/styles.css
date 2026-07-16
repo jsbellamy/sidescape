@@ -1973,15 +1973,15 @@ button.tile:hover {
   height: 100%;
 }
 
-/* Slot silhouettes (#286): the greyed, type-hinting placeholder painted in an empty Gear/Loadout
-   Slot (`slotSilhouette` in icons.ts) — dimmed a step further than the art's own muted grey so a
-   filled slot's real icon still reads as visually "louder" at a glance. Explicit 34px sizing
-   because a Loadout Slot's `.food-slot-add`/`.potion-slot-add` button (unlike a Gear Slot's
-   `.tile`) has no `.tile .icon` ancestor rule to inherit it from. */
+/* Slot reliefs (#306): muted carved-glyph placeholders for empty Gear/Loadout Slots
+   (`slotSilhouette` in icons.ts). Opacity 0.65 is pinned so the relief stays visibly inactive while
+   its middle/high value clusters survive at native scale; filled slots' real Item icons remain
+   louder. Explicit 34px sizing because a Loadout Slot's `.food-slot-add`/`.potion-slot-add` button
+   (unlike a Gear Slot's `.tile`) has no `.tile .icon` ancestor rule to inherit it from. */
 .slot-silhouette {
   width: 34px;
   height: 34px;
-  opacity: 0.55;
+  opacity: 0.65;
   pointer-events: none;
 }
 
