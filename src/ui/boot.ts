@@ -87,8 +87,9 @@ export function boot(
   dispose(): void;
 } {
   const savedSnapshot = loadSave();
-  // Resolved exactly once (#185): the by-id maps feed both createEngine (fine — ResolvedContent
-  // extends Content) and mountApp, so neither re-validates or re-scans Content by id.
+  // Resolve once for UI by-id maps (#185). `createEngine` also calls the idempotent
+  // `resolveContent`, so passing this same object reuses it without re-validating or rebuilding
+  // maps — the private marker short-circuits the second pass.
   const resolved = resolveContent(deps.content);
   const engine = createEngine(resolved, deps.rng, savedSnapshot);
 

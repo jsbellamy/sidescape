@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { createEngine, UNARMED_SPEED } from "./engine";
 import { fixtureContent } from "./fixture-content";
+import { resolveContent } from "./validate-content";
 import { makeSnapshot } from "./make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
@@ -45,6 +46,22 @@ function grindFor(engine: ReturnType<typeof freshEngine>, itemId: string, maxTic
   }
   throw new Error(`${itemId} never dropped in ${maxTicks} ticks`);
 }
+
+describe("createEngine content resolution (#320)", () => {
+  it("constructs from raw fixtureContent", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    expect(engine.snapshot().player.skills.attack.level).toBe(1);
+  });
+
+  it("constructs from pre-resolved fixtureContent with an equivalent initial snapshot", () => {
+    // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+    // calls a millisecond apart would flake this equality — pin the clock instead.
+    const now = () => 1_000_000;
+    const fromRaw = createEngine(fixtureContent, seededRng(1), undefined, now);
+    const fromResolved = createEngine(resolveContent(fixtureContent), seededRng(1), undefined, now);
+    expect(fromResolved.snapshot()).toEqual(fromRaw.snapshot());
+  });
+});
 
 describe("Content validation at construction", () => {
   it("throws a single Error joining every violation when Content is malformed in several ways", () => {
