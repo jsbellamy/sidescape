@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveContent, validateContent } from "./validate-content";
-import { fixtureContent } from "./fixture-content";
+import { fixtureContent } from "./testing/fixture-content";
 import { content as realContent } from "../data";
 import type { Content } from "./types";
 

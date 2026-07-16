@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeSnapshot } from "../core/make-snapshot";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { decodeSave, encodeSave } from "./save-transfer";
 
 describe("encodeSave / decodeSave", () => {

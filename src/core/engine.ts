@@ -231,7 +231,7 @@ const FOOD_SLOT_COUNT = 3;
 
 /** Loot Zone capacity (#60): max STACKS the zone holds, mirroring a Bank Slot's "1 stack, any
  * qty" rule. Tuning, not spec. */
-const LOOT_ZONE_CAPACITY = 10;
+export const LOOT_ZONE_CAPACITY = 10;
 
 /** Element weakness damage multiplier (Combat Depth wave 3/4, #101) — the ONE damage-side
  * modifier in the otherwise accuracy-only Hybrid combat model: a spell whose element matches

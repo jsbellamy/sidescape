@@ -4,8 +4,8 @@
  * minimal dedicated host with explicit player Snapshots, mirroring world-page.test.ts. */
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
 import type { Rng } from "../core/types";
 import { SKILL_NAMES } from "../core/types";

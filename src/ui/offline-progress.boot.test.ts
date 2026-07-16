@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
 import type { WorkspaceChrome } from "./workspace-chrome";
 import { boot, SAVE_KEY, TICK_MS } from "./boot";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { content } from "../data";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { resolveContent } from "../core/validate-content";
 import { resolveActiveAreaId } from "./area-context";
 

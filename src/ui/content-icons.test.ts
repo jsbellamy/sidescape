@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Content } from "../core/types";
-import { fixtureContent } from "../core/fixture-content";
+import { fixtureContent } from "../core/testing/fixture-content";
 import { seededRng } from "../core/rng";
 import { content } from "../data";
 import type { WorkspaceChrome } from "./workspace-chrome";

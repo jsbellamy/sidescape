@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import type { RecipeDef } from "../core/types";
 import {
   PRODUCTION_SKILLS,

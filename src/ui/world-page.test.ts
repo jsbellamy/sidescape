@@ -4,8 +4,8 @@
  * explicit Snapshots or a fixture Engine behind command spies, mirroring loadout-slot.test.ts. */
 import { describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
 import { xpForLevel } from "../core/xp";
 import { resolveContent } from "../core/validate-content";

@@ -6,8 +6,8 @@
  * Rune suites use, so command-dispatch assertions read real Snapshot state rather than a mock. */
 import { describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "./engine";
-import { fixtureContent } from "./fixture-content";
-import { makeSnapshot } from "./make-snapshot";
+import { fixtureContent } from "./testing/fixture-content";
+import { makeSnapshot } from "./testing/make-snapshot";
 import { seededRng } from "./rng";
 
 describe("makeSnapshot", () => {

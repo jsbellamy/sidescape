@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { fixtureContent } from "../core/fixture-content";
+import { fixtureContent } from "../core/testing/fixture-content";
 import { resolveContent } from "../core/validate-content";
 import { itemIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { attackRoll, defenceRoll, effectiveLevel, hitChance, maxHit } from "./combat";
 import { createEngine, UNARMED_SPEED } from "./engine";
-import { fixtureContent } from "./fixture-content";
+import { fixtureContent } from "./testing/fixture-content";
 import { resolveContent } from "./validate-content";
-import { makeSnapshot } from "./make-snapshot";
+import { makeSnapshot } from "./testing/make-snapshot";
 import { seededRng } from "./rng";
 import { xpForLevel } from "./xp";
 import { AUTO_EAT_THRESHOLDS } from "./types";
