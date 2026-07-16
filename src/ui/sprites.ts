@@ -73,9 +73,9 @@ const monsterSprites: Record<string, SpriteAsset> = {
   "crypt-ghoul": { url: cryptGhoulUrl, size: 48 },
   "bone-knight": { url: boneKnightUrl, size: 48 },
   "frost-wolf": { url: frostWolfUrl, size: 32 },
-  "ice-wraith": { url: iceWraithUrl, size: 32 },
-  "frost-giant": { url: frostGiantUrl, size: 32 },
-  "frost-warden": { url: frostWardenUrl, size: 48 },
+  "ice-wraith": { url: iceWraithUrl, size: 48 },
+  "frost-giant": { url: frostGiantUrl, size: 64 },
+  "frost-warden": { url: frostWardenUrl, size: 64 },
 };
 
 /** Looks up a Monster's combat-scene sprite by id, or undefined if it has none. */

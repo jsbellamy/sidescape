@@ -123,6 +123,30 @@ describe("combat scene sprites", () => {
     }
     expect(seen.size).toBe(3);
   });
+
+  it("renders a distinct, pixelated sprite for every Frostspire Monster and its Dungeon Boss", () => {
+    const seen = new Set<string>();
+    for (const monsterId of ["frost-wolf", "ice-wraith", "frost-giant", "frost-warden"]) {
+      const engine = createEngine(
+        cryptContent,
+        seededRng(1),
+        makeSnapshot({ player: { completedDungeonIds: ["shade-crypt"] } }),
+      );
+      const root = document.createElement("main");
+      const app = mountApp(engine, root, resolvedCryptContent, noopWindowChrome);
+
+      engine.selectMonster(monsterId);
+      app.render();
+
+      const monsterImg = root.querySelector<HTMLImageElement>("#monster-sprite");
+      const src = monsterImg?.getAttribute("src");
+      expect(src, `${monsterId} should render a sprite`).toBeTruthy();
+      expect(monsterImg?.classList.contains("pixel")).toBe(true);
+      seen.add(src!);
+    }
+    expect(seen.size).toBe(4);
+  });
+
   it("hides the Monster sprite before a Monster is selected", () => {
     const engine = createEngine(meadowsContent, seededRng(1));
     const root = document.createElement("main");
