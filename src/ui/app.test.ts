@@ -3482,6 +3482,35 @@ describe("Combat feedback (#4)", () => {
     expect(skills.filter((s) => s === "hitpoints").length).toBe(0);
   });
 
+  it("Defensive magic shows two combat-skill XP rows (Magic + Defence) per landed hit", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(42),
+      makeSnapshot({
+        player: {
+          combatStyle: "defensive",
+          equipment: { weapon: "staff" },
+          runeSlot: { itemId: "air-rune", qty: 100_000 },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 40, false);
+
+    const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
+      (el) => el.textContent !== "0",
+    );
+    const xpGains = [...root.querySelectorAll<HTMLElement>("#player-xp-lane .xp-gain")];
+    expect(landedHits.length).toBeGreaterThan(0);
+    expect(xpGains.length).toBe(landedHits.length * 2);
+    const skills = xpGains.map((el) => el.dataset["xpSkill"]);
+    expect(skills.filter((s) => s === "magic").length).toBe(landedHits.length);
+    expect(skills.filter((s) => s === "defence").length).toBe(landedHits.length);
+    expect(skills.filter((s) => s === "hitpoints").length).toBe(0);
+  });
+
   it("keeps concurrent gains ordered with the newest nearest the bar and removes each independently (#308)", () => {
     const { root, emitXp } = mountWithXpEmitter(1);
     emitXp("attack", 10);

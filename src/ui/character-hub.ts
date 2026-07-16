@@ -3,7 +3,7 @@
  * dispatch, UiScale collaboration callbacks, and listener lifecycle. Does NOT own Pets, the
  * Equipment Bank tray's presentation (#327), or Loadout Slot rendering (`createLoadoutSlotUi`). */
 
-import type { Engine } from "../core/engine";
+import { weaponCombatModeFor, type Engine } from "../core/engine";
 import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
 import type {
   AttackType,
@@ -219,18 +219,8 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
     onChanged();
   }
 
-  function weaponCombatModeFor(weaponId: string | null): CombatMode {
-    if (weaponId === null) return "melee";
-    const def = content.itemsById.get(weaponId);
-    if (def?.kind !== "equipment") return "melee";
-    const type = def.attackType ?? "crush";
-    if (type === "ranged") return "ranged";
-    if (type === "magic") return "magic";
-    return "melee";
-  }
-
   function renderCharacter(player: Snapshot["player"], bankItems: Snapshot["bank"]["items"]): void {
-    const mode = weaponCombatModeFor(player.equipment.weapon);
+    const mode = weaponCombatModeFor(player.equipment.weapon, content);
     const styleRow = el("#style-row");
     const legalStyles = stylesForMode(mode);
     styleRow.innerHTML = legalStyles

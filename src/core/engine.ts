@@ -330,7 +330,7 @@ function weaponAttackTypeFor(weaponId: string | null, content: ResolvedContent):
  * a stored field: stab/slash/crush all train melee, ranged trains ranged, magic trains magic. One
  * source of truth (weaponAttackTypeFor above); this function only maps that type to its Combat
  * Mode family. */
-function weaponCombatModeFor(weaponId: string | null, content: ResolvedContent): CombatMode {
+export function weaponCombatModeFor(weaponId: string | null, content: ResolvedContent): CombatMode {
   const type = weaponAttackTypeFor(weaponId, content);
   if (type === "ranged") return "ranged";
   if (type === "magic") return "magic";

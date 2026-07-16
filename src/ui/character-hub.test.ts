@@ -155,6 +155,20 @@ describe("createCharacterHubUi — Combat Style", () => {
     expect(buttons.some((b) => b.dataset["style"] === "aggressive")).toBe(false);
   });
 
+  it("renders ranged/magic styles (Accurate/Rapid/Defensive) when a staff is equipped", () => {
+    const { host } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "staff" } },
+    });
+    const buttons = styleButtons(host);
+    expect(buttons).toHaveLength(3);
+    expect(buttons.map((b) => b.dataset["style"]).sort()).toEqual([
+      "accurate",
+      "defensive",
+      "rapid",
+    ]);
+    expect(buttons.some((b) => b.dataset["style"] === "aggressive")).toBe(false);
+  });
+
   it("clicking Rapid dispatches setCombatStyle when a bow is equipped", () => {
     const { engine, host, commands, onChanged } = mountCharacterHub(1, {
       player: { equipment: { weapon: "bow" } },

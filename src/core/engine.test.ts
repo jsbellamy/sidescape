@@ -4494,9 +4494,40 @@ describe("Ranged and Magic Skills (#7, #339 mode-aware Combat Style)", () => {
         expect(total).toBeGreaterThan(200);
         return hits / total;
       }
-      const aggressiveRate = monsterHitRate("rapid");
+      const rapidRate = monsterHitRate("rapid");
       const defensiveRate = monsterHitRate("defensive");
-      expect(defensiveRate).toBeLessThan(aggressiveRate);
+      expect(defensiveRate).toBeLessThan(rapidRate);
+    });
+
+    it("Defensive magic raises the player's incoming-hit Defence roll through the Engine interface", () => {
+      function monsterHitRate(style: CombatStyle): number {
+        const engine = createEngine(
+          fixtureContent,
+          seededRng(11),
+          makeSnapshot({
+            player: {
+              combatStyle: style,
+              skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+              equipment: { weapon: "staff", head: "lucky-charm" },
+              runeSlot: { itemId: "air-rune", qty: 100_000 },
+            },
+          }),
+        );
+        engine.selectMonster("dummy");
+        let hits = 0;
+        let total = 0;
+        engine.on("attack", (e) => {
+          if (e.actor !== "monster") return;
+          total++;
+          if (e.hit) hits++;
+        });
+        for (let i = 0; i < 8000; i++) engine.tick();
+        expect(total).toBeGreaterThan(200);
+        return hits / total;
+      }
+      const rapidRate = monsterHitRate("rapid");
+      const defensiveRate = monsterHitRate("defensive");
+      expect(defensiveRate).toBeLessThan(rapidRate);
     });
 
     it('loads combatStyle "rapid" when legal and remaps rapid+mace to aggressive on resume', () => {
