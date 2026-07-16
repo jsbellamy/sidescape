@@ -3438,7 +3438,7 @@ describe("Combat feedback (#4)", () => {
     expect(root.querySelectorAll("#player-xp-lane .xp-gain")).toHaveLength(0);
   });
 
-  it("shows exactly one XP row for each landed combat attack, excluding its Hitpoints grant (#308)", () => {
+  it("shows one combat-skill XP row per landed melee hit, excluding Hitpoints (#308)", () => {
     const { engine, root, app } = mount(1);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     pump(engine, app, 40, false);
@@ -3447,14 +3447,39 @@ describe("Combat feedback (#4)", () => {
     expect(xpGains.length).toBeGreaterThan(0);
     expect(xpGains.every((el) => /^\+\d+$/.test(el.textContent ?? ""))).toBe(true);
 
-    // Exactly one floated XP number per landed hit (the style skill's grant), never two: the same
-    // hit's Hitpoints trickle (awardCombatXp's second grantXp call) must not also float. A landed
-    // player hit is a non-"0" hit splat over the Monster; damage-0 hits/misses grant no XP at all
-    // (awardCombatXp returns early), so the counts must match exactly.
     const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
       (el) => el.textContent !== "0",
     );
     expect(xpGains.length).toBe(landedHits.length);
+  });
+
+  it("Defensive ranged shows two combat-skill XP rows (Ranged + Defence) per landed hit", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(42),
+      makeSnapshot({
+        player: {
+          combatStyle: "defensive",
+          equipment: { weapon: "bow" },
+          quiver: { itemId: "arrow", qty: 100_000 },
+        },
+      }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
+    pump(engine, app, 40, false);
+
+    const landedHits = [...root.querySelectorAll("#monster-splats .splat-hit")].filter(
+      (el) => el.textContent !== "0",
+    );
+    const xpGains = [...root.querySelectorAll<HTMLElement>("#player-xp-lane .xp-gain")];
+    expect(landedHits.length).toBeGreaterThan(0);
+    expect(xpGains.length).toBe(landedHits.length * 2);
+    const skills = xpGains.map((el) => el.dataset["xpSkill"]);
+    expect(skills.filter((s) => s === "ranged").length).toBe(landedHits.length);
+    expect(skills.filter((s) => s === "defence").length).toBe(landedHits.length);
+    expect(skills.filter((s) => s === "hitpoints").length).toBe(0);
   });
 
   it("keeps concurrent gains ordered with the newest nearest the bar and removes each independently (#308)", () => {

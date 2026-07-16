@@ -11,3 +11,7 @@
 
 - An architecture review will see two identical maps and may flag the duplication. This ADR is the answer: the duplication is intentional, so leave the maps separate.
 - **Lifecycle**: this ADR is not deleted once read — it is a standing record. If, after the combat system expands and the two maps still never diverge, a future review decides the coupling is safe, it should merge them under a **new** ADR that marks this one _superseded_, preserving the history of why they were split. Reversal is by supersession, never by removal.
+
+## Status (2026-07-16, issue #339)
+
+The two maps remain separate and independently owned, but they are **no longer byte-identical**: XP routing in `engine.ts` (`STYLE_SKILL` / `awardCombatXp`) and boost resolution in `combat.ts` (`styleBoostSkill`) are both intentionally **mode-aware** — melee keeps Accurate/Aggressive/Defensive; ranged and magic use Accurate/Rapid/Defensive with distinct XP tables and boost targets. The core ADR decision (do not merge routing and boosts into one map) is unchanged; only the present-tense "byte-identical today" observation is superseded by this note, not by deleting ADR-0002.

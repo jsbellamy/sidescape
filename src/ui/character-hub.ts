@@ -5,7 +5,14 @@
 
 import type { Engine } from "../core/engine";
 import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
-import type { AttackType, AutoEatThreshold, CombatStyle, GearSlot, Snapshot } from "../core/types";
+import type {
+  AttackType,
+  AutoEatThreshold,
+  CombatMode,
+  CombatStyle,
+  GearSlot,
+  Snapshot,
+} from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { slotSilhouette, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
@@ -24,10 +31,14 @@ const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
   magic: "mg",
 };
 
+const MELEE_STYLES: CombatStyle[] = ["accurate", "aggressive", "defensive"];
+const RANGED_MAGIC_STYLES: CombatStyle[] = ["accurate", "rapid", "defensive"];
+
 const STYLE_LABELS: Record<CombatStyle, string> = {
   accurate: "Accurate",
   aggressive: "Aggressive",
   defensive: "Defensive",
+  rapid: "Rapid",
 };
 
 const AUTO_EAT_LABELS: Record<AutoEatThreshold, string> = {
@@ -77,6 +88,10 @@ export interface CharacterHubUiOptions {
 
 function defVectorLabel(def: Record<AttackType, number>): string {
   return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
+}
+
+function stylesForMode(mode: CombatMode): CombatStyle[] {
+  return mode === "melee" ? MELEE_STYLES : RANGED_MAGIC_STYLES;
 }
 
 function characterNavMarkup(): string {
@@ -145,11 +160,7 @@ function characterShellMarkup(): string {
       <button id="character-levels-summary" data-destination="skills">
         Combat <span id="summary-combat-level"></span> · Total <span id="summary-total-level"></span> ›
       </button>
-      <div id="style-row" class="style-row">
-        ${Object.entries(STYLE_LABELS)
-          .map(([style, label]) => `<button data-style="${style}">${label}</button>`)
-          .join("")}
-      </div>
+      <div id="style-row" class="style-row"></div>
     </div>
     <div class="card-scroll">
       <div id="character-bank-tray" class="tile-grid"></div>
@@ -208,8 +219,24 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
     onChanged();
   }
 
+  function weaponCombatModeFor(weaponId: string | null): CombatMode {
+    if (weaponId === null) return "melee";
+    const def = content.itemsById.get(weaponId);
+    if (def?.kind !== "equipment") return "melee";
+    const type = def.attackType ?? "crush";
+    if (type === "ranged") return "ranged";
+    if (type === "magic") return "magic";
+    return "melee";
+  }
+
   function renderCharacter(player: Snapshot["player"], bankItems: Snapshot["bank"]["items"]): void {
-    host.querySelectorAll<HTMLButtonElement>("#style-row button").forEach((btn) => {
+    const mode = weaponCombatModeFor(player.equipment.weapon);
+    const styleRow = el("#style-row");
+    const legalStyles = stylesForMode(mode);
+    styleRow.innerHTML = legalStyles
+      .map((style) => `<button data-style="${style}">${STYLE_LABELS[style]}</button>`)
+      .join("");
+    styleRow.querySelectorAll<HTMLButtonElement>("button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["style"] === player.combatStyle);
     });
 

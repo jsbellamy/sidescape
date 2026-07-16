@@ -17,11 +17,11 @@ Attack (hit chance), Strength (max hit), Defence (damage avoidance), Hitpoints (
 _Avoid_: stat, attribute
 
 **Combat Style**:
-The player's training selector — Accurate / Aggressive / Defensive — which decides whether melee kill XP goes to Attack, Strength, or Defence. Applies only while the equipped weapon's Combat Mode is melee; Hitpoints XP always trickles regardless of mode.
+The player's training selector — legal choices depend on **Combat Mode**: melee shows Accurate / Aggressive / Defensive; ranged and magic show Accurate / Rapid / Defensive. Routes damage XP per mode-aware tables (melee: one Skill via style; ranged/magic Accurate/Rapid train the mode Skill at `4 * damage`, Defensive splits `2 * damage` to the mode Skill and `2 * damage` to Defence). Hitpoints XP always trickles regardless of mode. Weapon swaps remap Aggressive ↔ Rapid; Accurate and Defensive keep the same id.
 _Avoid_: stance, mode
 
 **Combat Mode**:
-Melee, Ranged, or Magic — the family a weapon belongs to, derived from the weapon's own **Attack Type** (stab/slash/crush → melee, ranged → Ranged, magic → Magic). Decides which Skill an attack's kill XP trains: melee routes through Combat Style, while Ranged and Magic each train their own Skill directly. Orthogonal to Combat Style — picking a Combat Style never changes Combat Mode, and vice versa.
+Melee, Ranged, or Magic — the family a weapon belongs to, derived from the weapon's own **Attack Type** (stab/slash/crush → melee, ranged → Ranged, magic → Magic). Together with **Combat Style**, decides which Skills gain damage XP and which receive combat boosts (+3 effective level). Orthogonal to Combat Style — picking a Combat Style never changes Combat Mode, and vice versa.
 _Avoid_: stance, style (reserved for Combat Style)
 
 **Attack Type**:
@@ -217,8 +217,8 @@ restores the scaled closed Compact Widget.
 - A **Monster** has exactly one **Drop Table**
 - A **Drop Table** roll yields **Drops** (quantities of **Items**)
 - A piece of **Equipment** occupies one **Gear Slot** and has one **Gear Tier**
-- A weapon's **Combat Mode** decides which **Skill** an attack's XP trains: melee routes through the active **Combat Style**, Ranged and Magic each train their own Skill
-- Combat advances one **Tick** at a time; each kill grants XP to **Skills** according to the equipped weapon's **Combat Mode** (and, for melee, the active **Combat Style**)
+- A weapon's **Combat Mode** and active **Combat Style** together decide which **Skills** an attack's XP trains; Hitpoints always trickles
+- Combat advances one **Tick** at a time; each damaging hit grants XP to **Skills** according to the equipped weapon's **Combat Mode** and active **Combat Style**
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot** and is the player's sole Item store; **Gold** is tracked separately as a player-level balance, never a Bank stack

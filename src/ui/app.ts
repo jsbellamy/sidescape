@@ -34,9 +34,9 @@ const TOAST_DISMISS_MS = 2500;
 /** Rare-Drop screen-flash duration (#4); mirrors styles.css's `rare-flash` keyframes. */
 const FLASH_DURATION_MS = 400;
 /** Combat-style Skills (#285) — the only Skills a floating xp-gained number renders for. Excludes
- * Hitpoints (pinned decision: exactly one floated number per hit, the style skill's 4*damage
- * grant; the ~1.33x damage Hitpoints trickle never floats) and non-combat Skills (fishing,
- * production, …). */
+ * Hitpoints (the ~1.33x damage Hitpoints trickle never floats) and non-combat Skills (fishing,
+ * production, …). Most styles float one row per hit; Defensive ranged/magic floats two (primary
+ * Skill + Defence). */
 const COMBAT_STYLE_SKILLS: ReadonlySet<SkillName> = new Set([
   "attack",
   "strength",

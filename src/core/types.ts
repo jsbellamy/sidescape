@@ -44,13 +44,14 @@ export type Element = (typeof ELEMENTS)[number];
 export const THEMES = ["meadow", "forest", "sewer", "crypt", "town", "glacier"] as const;
 export type Theme = (typeof THEMES)[number];
 
-export type CombatStyle = "accurate" | "aggressive" | "defensive";
+export type CombatStyle = "accurate" | "aggressive" | "defensive" | "rapid";
 /** A weapon's Combat Mode (#7) — deliberately NOT a widening of CombatStyle: CombatStyle is the
- * player's melee training selector (Accurate/Aggressive/Defensive), while Combat Mode is which of
- * Attack's three families a weapon belongs to. A melee weapon's damage XP still routes through
- * CombatStyle (STYLE_SKILL in engine.ts); a ranged or magic weapon routes straight to its own
- * Skill instead, bypassing Combat Style entirely. See ADR-0002 for why STYLE_SKILL/STYLE_BOOST
- * stay separate maps — this type is orthogonal to both. Since #99 there is no stored `combatMode`
+ * player's training selector whose legal set depends on Combat Mode (melee: Accurate/Aggressive/
+ * Defensive; ranged/magic: Accurate/Rapid/Defensive), while Combat Mode is which of Attack's
+ * three families a weapon belongs to. Damage XP routes through mode-aware tables in engine.ts
+ * (STYLE_SKILL for melee; ranged/magic Accurate/Rapid train the mode Skill, Defensive splits
+ * 50/50 with Defence); combat boosts resolve separately in combat.ts (ADR-0002). Since #99 there
+ * is no stored `combatMode`
  * field: it's derived from the weapon's `attackType` (stab|slash|crush -> melee, ranged -> ranged,
  * magic -> magic) — see weaponCombatModeFor in engine.ts, the one source of truth. */
 export type CombatMode = "melee" | "ranged" | "magic";

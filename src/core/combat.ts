@@ -1,15 +1,31 @@
 import { ATTACK_TYPES } from "./types";
-import type { AttackType, CombatStyle, SkillName } from "./types";
+import type { AttackType, CombatMode, CombatStyle, SkillName } from "./types";
 
-/** Combat Style grants +3 effective levels to its matching Skill. */
-const STYLE_BOOST: Record<CombatStyle, SkillName> = {
-  accurate: "attack",
-  aggressive: "strength",
-  defensive: "defence",
-};
+/** Which Skill a Combat Style boosts for a given Combat Mode (#339). Kept separate from XP routing
+ * in engine.ts per ADR-0002 — the two maps encode independent facts and are intentionally
+ * mode-aware rather than byte-identical. */
+export function styleBoostSkill(mode: CombatMode, style: CombatStyle): SkillName | null {
+  if (mode === "melee") {
+    if (style === "accurate") return "attack";
+    if (style === "aggressive") return "strength";
+    if (style === "defensive") return "defence";
+    return null;
+  }
+  if (mode === "ranged" || mode === "magic") {
+    if (style === "accurate") return mode === "ranged" ? "ranged" : "magic";
+    if (style === "defensive") return "defence";
+    return null;
+  }
+  return null;
+}
 
-export function effectiveLevel(level: number, skill: SkillName, style: CombatStyle): number {
-  return level + 8 + (STYLE_BOOST[style] === skill ? 3 : 0);
+export function effectiveLevel(
+  level: number,
+  skill: SkillName,
+  style: CombatStyle,
+  mode: CombatMode,
+): number {
+  return level + 8 + (styleBoostSkill(mode, style) === skill ? 3 : 0);
 }
 
 /** OSRS-style max hit from effective Strength and equipment strength bonus. */

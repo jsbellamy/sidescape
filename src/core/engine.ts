@@ -274,10 +274,36 @@ function loadAutoSellDuplicates(saved: Snapshot): boolean {
   return typeof raw === "boolean" ? raw : DEFAULT_AUTO_SELL_DUPLICATES;
 }
 
-const COMBAT_STYLES: readonly CombatStyle[] = ["accurate", "aggressive", "defensive"];
+const COMBAT_STYLES: readonly CombatStyle[] = ["accurate", "aggressive", "defensive", "rapid"];
 
 function isCombatStyle(value: unknown): value is CombatStyle {
   return (COMBAT_STYLES as readonly unknown[]).includes(value);
+}
+
+function isStyleLegalForMode(style: CombatStyle, mode: CombatMode): boolean {
+  if (mode === "melee") return style !== "rapid";
+  return style !== "aggressive";
+}
+
+/** Aggressive ↔ Rapid when the equipped weapon's Combat Mode changes (#339). */
+function remapCombatStyle(style: CombatStyle, newMode: CombatMode): CombatStyle {
+  if (newMode === "melee") {
+    return style === "rapid" ? "aggressive" : style;
+  }
+  return style === "aggressive" ? "rapid" : style;
+}
+
+function styleAdjustedWeaponSpeed(
+  weaponId: string | null,
+  style: CombatStyle,
+  mode: CombatMode,
+  content: ResolvedContent,
+): number {
+  let speed = weaponSpeedFor(weaponId, content);
+  if (style === "rapid" && (mode === "ranged" || mode === "magic")) {
+    speed = Math.max(1, speed - 1);
+  }
+  return speed;
 }
 
 /** Ticks between player attacks for `weaponId`; unarmed (or an unresolvable/non-equipment id)
@@ -698,6 +724,11 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
   const equipment = loadEquipment(saved, content);
   const bank = loadBank(saved, content, currencyId);
   const gold = loadGold(saved, currencyId);
+  const combatMode = weaponCombatModeFor(equipment.weapon, content);
+  let combatStyle: CombatStyle = isCombatStyle(saved.player?.combatStyle)
+    ? saved.player.combatStyle
+    : "aggressive";
+  combatStyle = remapCombatStyle(combatStyle, combatMode);
 
   // Mid-run Dungeon state is NEVER persisted: a reload is an abandon. A save captured mid-run
   // ignores BOTH saved.dungeon and saved.monster — the naive path (spawnMonster(saved.monster.id))
@@ -731,7 +762,7 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
         typeof savedMonsterHp === "number" && Number.isFinite(savedMonsterHp)
           ? savedMonsterHp
           : monster.hp,
-      playerCooldown: weaponSpeedFor(equipment.weapon, content),
+      playerCooldown: styleAdjustedWeaponSpeed(equipment.weapon, combatStyle, combatMode, content),
       monsterCooldown: monster.attackSpeed,
     };
   } else if (spot) {
@@ -748,7 +779,7 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
   return {
     xp,
     hp: loadHp(saved, maxHp),
-    combatStyle: isCombatStyle(saved.player?.combatStyle) ? saved.player.combatStyle : "aggressive",
+    combatStyle,
     autoEatThreshold: isAutoEatThreshold(saved.player?.autoEatThreshold)
       ? saved.player.autoEatThreshold
       : DEFAULT_AUTO_EAT_THRESHOLD,
@@ -921,7 +952,8 @@ export function createEngine(
   }
 
   function weaponSpeed(): number {
-    return weaponSpeedFor(state.equipment.weapon, resolved);
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
+    return styleAdjustedWeaponSpeed(state.equipment.weapon, state.combatStyle, mode, resolved);
   }
 
   /** Every currently-active modifier source (#114): every owned pet (#120 — unconditional, no
@@ -1303,7 +1335,7 @@ export function createEngine(
     sweepLootZone();
   }
 
-  const STYLE_SKILL: Record<CombatStyle, SkillName> = {
+  const STYLE_SKILL: Record<"accurate" | "aggressive" | "defensive", SkillName> = {
     accurate: "attack",
     aggressive: "strength",
     defensive: "defence",
@@ -1317,22 +1349,30 @@ export function createEngine(
     if (after > before) emit({ type: "levelup", skill, level: after });
   }
 
-  /** Which Skill an attack's damage XP trains (#7): the equipped weapon's Combat Mode decides —
-   * melee keeps the existing Combat Style routing via STYLE_SKILL unchanged, while a ranged or
-   * magic weapon routes straight to its own Skill instead. Accuracy/damage math (attackRoll,
-   * maxHit, effectiveLevel below) intentionally stays keyed off Attack/Strength + Combat Style
-   * regardless of weapon mode — issue #7 scopes only XP routing and combat level's display
-   * formula, not a ranged/magic-specific hit/damage model. */
-  function combatXpSkill(): SkillName {
-    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
-    if (mode === "ranged") return "ranged";
-    if (mode === "magic") return "magic";
-    return STYLE_SKILL[state.combatStyle];
-  }
-
+  /** Mode-aware damage XP routing (#339). Hitpoints always trickles last via a separate grantXp. */
   function awardCombatXp(damage: number): void {
     if (damage <= 0) return;
-    grantXp(combatXpSkill(), 4 * damage);
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
+    const style = state.combatStyle;
+
+    if (mode === "melee") {
+      grantXp(STYLE_SKILL[style as keyof typeof STYLE_SKILL], 4 * damage);
+    } else if (mode === "ranged") {
+      if (style === "defensive") {
+        grantXp("ranged", 2 * damage);
+        grantXp("defence", 2 * damage);
+      } else {
+        grantXp("ranged", 4 * damage);
+      }
+    } else if (mode === "magic") {
+      if (style === "defensive") {
+        grantXp("magic", 2 * damage);
+        grantXp("defence", 2 * damage);
+      } else {
+        grantXp("magic", 4 * damage);
+      }
+    }
+
     grantXp("hitpoints", (4 / 3) * damage);
   }
 
@@ -1349,7 +1389,7 @@ export function createEngine(
     const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     if (mode === "ranged") {
       const eff = Math.floor(
-        effectiveLevel(level("ranged"), "ranged", state.combatStyle) *
+        effectiveLevel(level("ranged"), "ranged", state.combatStyle, mode) *
           skillLevelMultiplier("ranged"),
       );
       // Arrow strength (#119): the loaded Quiver arrow's rangedStr folds into max hit alongside
@@ -1367,7 +1407,8 @@ export function createEngine(
     }
     if (mode === "magic") {
       const eff = Math.floor(
-        effectiveLevel(level("magic"), "magic", state.combatStyle) * skillLevelMultiplier("magic"),
+        effectiveLevel(level("magic"), "magic", state.combatStyle, mode) *
+          skillLevelMultiplier("magic"),
       );
       return {
         atkRoll: attackRoll(eff, gearBonus("atkBonus")),
@@ -1382,14 +1423,14 @@ export function createEngine(
     return {
       atkRoll: attackRoll(
         Math.floor(
-          effectiveLevel(level("attack"), "attack", state.combatStyle) *
+          effectiveLevel(level("attack"), "attack", state.combatStyle, mode) *
             skillLevelMultiplier("attack"),
         ),
         gearBonus("atkBonus"),
       ),
       max: maxHit(
         Math.floor(
-          effectiveLevel(level("strength"), "strength", state.combatStyle) *
+          effectiveLevel(level("strength"), "strength", state.combatStyle, mode) *
             skillLevelMultiplier("strength"),
         ),
         gearBonus("strBonus"),
@@ -1659,9 +1700,10 @@ export function createEngine(
   }
 
   function monsterAttack(monster: MonsterDef): void {
+    const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     const atkRoll = attackRoll(monster.attackLevel + 8, 0);
     const defRoll = defenceRoll(
-      effectiveLevel(level("defence"), "defence", state.combatStyle),
+      effectiveLevel(level("defence"), "defence", state.combatStyle, mode),
       gearDef(monster.attackType),
     );
     const { hit, damage } = rollDamage(hitChance(atkRoll, defRoll), monster.maxHit);
@@ -1922,6 +1964,13 @@ export function createEngine(
       };
     },
     setCombatStyle(style) {
+      if (!isCombatStyle(style)) {
+        throw new Error(`invalid combat style: ${style}`);
+      }
+      const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
+      if (!isStyleLegalForMode(style, mode)) {
+        throw new Error(`combat style ${style} is illegal for ${mode} weapons`);
+      }
       state.combatStyle = style;
     },
     setAutoEatThreshold(threshold) {
@@ -1958,7 +2007,15 @@ export function createEngine(
       if (previous !== null) {
         state.bank.set(previous, (state.bank.get(previous) ?? 0) + 1);
       }
+      const oldMode =
+        def.slot === "weapon" ? weaponCombatModeFor(state.equipment.weapon, resolved) : null;
       state.equipment[def.slot] = itemId;
+      if (oldMode !== null) {
+        const newMode = weaponCombatModeFor(state.equipment.weapon, resolved);
+        if (oldMode !== newMode) {
+          state.combatStyle = remapCombatStyle(state.combatStyle, newMode);
+        }
+      }
       emit({ type: "equipped", itemId });
     },
     assignFoodSlot(slotIndex, itemId) {
