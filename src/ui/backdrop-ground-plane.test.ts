@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 // to preview in, so this loads the actual shipped `src/styles.css` text into a `<style>` element
 // and inspects the parsed rules directly, instead of re-deriving expectations by hand.
 
-const THEMES = ["meadow", "forest", "sewer", "crypt", "town"] as const;
+const THEMES = ["meadow", "forest", "sewer", "crypt", "town", "glacier"] as const;
 
 function loadStyleSheet(): CSSStyleSheet {
   const css = readFileSync(join(__dirname, "..", "styles.css"), "utf8");

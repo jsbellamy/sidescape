@@ -102,27 +102,59 @@ Sound effects for the SFX module (`src/ui/sfx.ts`) come from two Kenney.nl packs
 
 Source files were re-encoded from the packs' `.ogg` originals to `.wav` (PCM 16-bit, 44.1 kHz) for broad WebView audio-element compatibility (notably WKWebView on macOS, which Tauri uses, does not reliably decode Ogg Vorbis). Each clip was also loudness-matched via a single-pass EBU R128 normalization (`ffmpeg ... loudnorm=I=-16:TP=-1.5:LRA=11`, integrated target -16 LUFS / true peak -1.5 dBTP) so no one cue sits jarringly louder than the others; no other alteration was made to the audio content.
 
-## Scene backdrops and activity overlays (#80, #141, #254)
+## Scene backdrops and activity overlays (#80, #141, #254, #293)
 
 The per-Area parallax backdrop (`#backdrop`'s `.layer-sky`/`.layer-mid`/`.layer-near`, one set per
-Theme) are original pixel-art PNG tiles. #305 adds a source-driven backdrop pipeline
+Theme) are original pixel-art PNG tiles. #305 adds the source-driven backdrop pipeline
 (`docs/backdrop-gen.md`, `scripts/art/ingest-backdrop.mjs`, and deterministic source support in
-`scripts/art/backdrops.mjs`), but the production registry remains **deliberately empty** here.
-The five approved existing biomes remain hand-committed and `npm run art` writes no backdrop bytes;
-#293 is the first planned source-driven consumer. This preserves all historical provenance below.
-The `glacier` set
-(Frostspire, #254) was procedurally hand-assembled with a small throwaway script rather than
-painted pixel-by-pixel, drawing from the `glacier` zone sub-palette (`scripts/art/palettes.mjs`)
-plus plain white for snow highlights (backdrops bypass the quantization pipeline entirely, so they
-are not restricted to the named-ramp vocabulary icons/sprites use). Every repeating shape (cloud,
-mountain peak, foreground hummock/icicle) is drawn at every `k * period + phase` position across a
-working canvas several tiles wide, where `period` evenly divides the 160px tile width — this makes
-each 160×120 tile exactly horizontally periodic by construction rather than by eye, verified by
-asserting `pixel(x, y) === pixel(x + 160, y)` across the full working canvas before the final crop
-(zero mismatches for all three layers). The five activity
-overlays are original transparent 80×60 native-pixel assets under `src/assets/activity-overlays/`:
-Smithing's anvil, Cooking's campfire, Crafting's tanning rack, Herblore's cauldron, and Fishing's
-planted rod/line/ripple. They are not CSS shapes and require no third-party provenance.
+`scripts/art/backdrops.mjs`); #311 normalizes recovered cells to each layer's registered cap; #313
+conforms decoded cells to a Theme-level HSL gamut before medoid normalization and validates that
+gamut in Stage 2.
+
+The five original biomes (meadow, forest, sewer, crypt, town) remain hand-committed authoring
+inputs under `src/assets/backdrops/` — `npm run art` does not rewrite them. Glacier (Frostspire) is
+the first production `kind: "source"` consumer.
+
+### Glacier / Frostspire provenance (#254 superseded by #293)
+
+#254's throwaway procedural Glacier layers and the rejected PR #304 band-and-formula painters are
+superseded. #293 reingests three untouched image-generator raws through the #305 + #311 + #313
+pipeline:
+
+| Layer | Compact source                                  | Shipped output                          | Alpha  | Cap |
+| ----- | ----------------------------------------------- | --------------------------------------- | ------ | --- |
+| sky   | `scripts/art/backdrop-sources/glacier-sky.png`  | `src/assets/backdrops/glacier-sky.png`  | opaque | 48  |
+| mid   | `scripts/art/backdrop-sources/glacier-mid.png`  | `src/assets/backdrops/glacier-mid.png`  | binary | 64  |
+| near  | `scripts/art/backdrop-sources/glacier-near.png` | `src/assets/backdrops/glacier-near.png` | binary | 48  |
+
+- **Registry:** `scripts/art/backdrops.mjs` registers Glacier with Theme gamut
+  `{ neutralMaxSaturation: 20, chromaticHueRange: [175, 240], chromaticMaxSaturation: 65 }`.
+- **Raws / previews:** git-ignored under `scripts/art/backdrop-gen-inbox/` (including `preview/`).
+- **Ingest overrides (all three layers):** `--crop 0,0,1439,1079 --pitch 9 --pitch-y 9`.
+- **Ingest reports (#313 fields):**
+
+  | Layer | sampled | gamut-conformed | gamut cells changed | normalized | normalization changes | original→final changes |
+  | ----- | ------- | --------------- | ------------------- | ---------- | --------------------- | ---------------------- |
+  | sky   | 3549    | 3051            | 6161                | 48         | 17385                 | 18464                  |
+  | mid   | 5983    | 5982            | 29                  | 64         | 11064                 | 11077                  |
+  | near  | 4354    | 4354            | 11                  | 48         | 6299                  | 6304                   |
+
+- **Deterministic build:** `npm run art` copies each compact source byte-identically to the shipped
+  path after Stage 2 dimension/alpha/cap/gamut validation; a second run is byte-stable.
+- **Zone anchor:** the shared Glacier row in `scripts/art/palettes.mjs` /
+  `docs/art-style.md` is `#10263d #244763 #4c718d #7f9eb3 #b8cbd4 #e8f0ed`. That correction may
+  retint only assets that declare `zoneNames: ["glacier"]` — today the Frost Giant sprite — so
+  `src/assets/sprites/frost-giant.png` and the two sprite contact sheets are allowed derivatives;
+  the Frost Giant compact source, registry row, size, alpha, and material/zone arrays stay fixed.
+- **Prompts:** sky / mid / near used the issue #293 copy-ready Frostspire prompts (Meadow density
+  reference, continuous scene, 160×120 logical grid, magenta key for mid/near, cold palette
+  anchored by the six hexes above). Native 1× and unscaled three-period previews passed the
+  mechanical gates after #313 reingest.
+
+The five activity overlays are original transparent 80×60 native-pixel assets under
+`src/assets/activity-overlays/`: Smithing's anvil, Cooking's campfire, Crafting's tanning rack,
+Herblore's cauldron, and Fishing's planted rod/line/ripple. They are not CSS shapes and require no
+third-party provenance.
 
 Backdrops use one native pixel per CSS pixel (160×120), while player/Monster sprites and activity
 overlays use the player grain: the overlay's 80×60 source is rendered at 2× as a 160×120 fixed,
@@ -134,8 +166,8 @@ flat-background source generation from the git-ignored `scripts/art/icon-gen-inb
 `trace-core.mjs` to recover its chunky grid, then bottom-anchors the fitted subject onto a
 transparent 80×60 canvas. Run it manually (or `npm run art:overlay -- ...`) when an overlay needs
 adjustment. `scripts/art/overlays.mjs` records the five committed placements and fits; `npm run
-art:overlays` rebuilds all five once their raw inbox generations are present. `npm run art` remains
-the icon-only deterministic build.
+art:overlays` rebuilds all five once their raw inbox generations are present. `npm run art`
+rebuilds icons, sprites, and registered source-driven backdrop themes.
 
 ## Item icons (#78)
 

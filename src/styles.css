@@ -704,18 +704,18 @@ body {
 /* Frostspire (#254): the 5th Area's glacial theme. */
 #backdrop[data-theme="glacier"] .layer-sky {
   background-image:
-    url("./assets/backdrops/glacier-sky.png"), linear-gradient(to bottom, #bcdff0, #eef7fb);
+    url("./assets/backdrops/glacier-sky.png"), linear-gradient(to bottom, #10263d, #b8cbd4);
 }
 #backdrop[data-theme="glacier"] .layer-mid {
   background-image:
     url("./assets/backdrops/glacier-mid.png"),
-    linear-gradient(to top, #0e8ae9 0 var(--mid-horizon), rgba(14, 138, 233, 0) var(--tile-h));
+    linear-gradient(to top, #244763 0 var(--mid-horizon), rgba(36, 71, 99, 0) var(--tile-h));
   animation: backdrop-drift 90s linear infinite;
 }
 #backdrop[data-theme="glacier"] .layer-near {
   background-image:
     url("./assets/backdrops/glacier-near.png"),
-    linear-gradient(to top, #041437 0 var(--near-horizon), rgba(4, 20, 55, 0) var(--tile-h));
+    linear-gradient(to top, #10263d 0 var(--near-horizon), rgba(16, 38, 61, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
 
