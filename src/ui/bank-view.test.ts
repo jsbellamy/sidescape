@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fixtureContent } from "../core/fixture-content";
+import { fixtureContent } from "../core/testing/fixture-content";
 import { resolveContent } from "../core/validate-content";
 import { BANK_FILTERS, BANK_VIEW_KEY, createBankPresentation } from "./bank-view";
 import type { Snapshot } from "../core/types";

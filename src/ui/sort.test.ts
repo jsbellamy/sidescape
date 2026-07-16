@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureContent } from "../core/fixture-content";
+import { fixtureContent } from "../core/testing/fixture-content";
 import { resolveContent } from "../core/validate-content";
 import { compareStacks, sortStacks } from "./sort";
 import type { Stack } from "./sort";

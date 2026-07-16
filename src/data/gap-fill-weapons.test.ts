@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
-import { makeSnapshot } from "../core/make-snapshot";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";

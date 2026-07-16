@@ -1,4 +1,4 @@
-import type { Engine } from "../core/engine";
+import { LOOT_ZONE_CAPACITY, type Engine } from "../core/engine";
 import type { SkillName, Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import {
@@ -54,12 +54,6 @@ const PRODUCTION_SKILL_LABELS: Record<ProductionSkill, string> = {
   crafting: "Crafting",
   herblore: "Herblore",
 };
-
-/** Mirrors core/engine.ts's own internal `LOOT_ZONE_CAPACITY` (CONTEXT.md's Loot Zone: "the small
- * buffer (10 stacks)"). Unlike the Bank's own dynamic capacity (`Snapshot.bank.capacity`), the Loot
- * Zone's capacity never changes, so the Activity page's header can safely know this literal
- * without a new Snapshot field or Engine/data change (#209 is a UI-only issue). */
-const LOOT_ZONE_DISPLAY_CAPACITY = 10;
 
 /** The two Management Row cards (#206: replaces the three-card World/Character/Resources
  * workspace) — a fixed Character hub plus one shared Management card whose body swaps between
@@ -488,7 +482,7 @@ export function mountApp(
    * without scrolling. The strip keeps a fixed height regardless of content — an empty zone
    * disables `Loot all` rather than hiding the strip, so nothing jumps on every sweep. */
   function renderLootStrip(lootZone: Snapshot["lootZone"]): void {
-    el("#loot-strip-count").textContent = `${lootZone.length}/${LOOT_ZONE_DISPLAY_CAPACITY}`;
+    el("#loot-strip-count").textContent = `${lootZone.length}/${LOOT_ZONE_CAPACITY}`;
     el("#loot-strip-items").innerHTML = lootZone
       .map(
         (s) =>

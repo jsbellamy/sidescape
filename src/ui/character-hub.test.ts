@@ -4,8 +4,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";

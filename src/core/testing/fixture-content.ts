@@ -1,4 +1,4 @@
-import type { Content } from "./types";
+import type { Content } from "../types";
 
 /**
  * Minimal two-Area world for Engine tests. "dummy" barely fights back;

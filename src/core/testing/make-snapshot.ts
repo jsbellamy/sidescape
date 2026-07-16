@@ -1,5 +1,5 @@
 import { fixtureContent } from "./fixture-content";
-import type { Snapshot } from "./types";
+import type { Snapshot } from "../types";
 
 /** A recursive Partial: plain nested objects may supply a subset of their fields; arrays and
  * scalars are taken wholesale (no element-wise partials) when supplied. */

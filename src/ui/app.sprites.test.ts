@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
-import { fixtureContent } from "../core/fixture-content";
-import { makeSnapshot } from "../core/make-snapshot";
+import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import {
   content as cryptContent,
   content as darkrootContent,
