@@ -13,7 +13,7 @@ An enemy inside an **Area** that the player farms. Has HP, attack/defence stats 
 _Avoid_: mob, enemy, NPC
 
 **Skill**:
-Attack (hit chance), Strength (max hit), Defence (damage avoidance), Hitpoints (HP pool), Ranged, and Magic — the six combat Skills — plus Fishing and Smithing, the non-combat Skills. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
+Eleven Skills in all: the six combat Skills — Attack (hit chance), Strength (max hit), Defence (damage avoidance), Hitpoints (HP pool), Ranged, and Magic — plus Fishing, Smithing, Cooking, Crafting, and Herblore. Each holds XP and a derived Level (1–99, RuneScape-style exponential table).
 _Avoid_: stat, attribute
 
 **Combat Style**:
@@ -48,6 +48,14 @@ _Avoid_: resistance (reserved for **Defence Vector**), elemental wheel (not impl
 A Monster's lowest **Defence Vector** entry — the **Attack Type** it defends worst, so the type most rewarding to switch a weapon to. Derived by the **Engine** (`weakSpot` in `src/core/combat.ts`) and carried on the **Snapshot**'s monster view, not a stored Content field: ties break by ATTACK_TYPES order (stab, slash, crush, ranged, magic). Distinct from **Weakness**, which is `weakElement`-based and Magic-only; a Monster always has a Weak Spot, but only some carry a `weakElement` too.
 _Avoid_: weakness (reserved for the `weakElement` mechanic above), soft spot
 
+**Theme**:
+One of meadow, forest, sewer, crypt, town, or glacier — required on every **Area** (`AreaDef.theme`) so an unthemed new Area is a compile error; drives backdrop and palette gamut resolution in the UI.
+_Avoid_: zone palette (as the general term — use Theme)
+
+**Modifier**:
+The boost system: temporary percentage boosts from an active **Potion**, permanent percentage boosts from owned **Pets** (summing across the roster), plus the +3 **Combat Style** effective-level boost. Accuracy/level-side only — the Hybrid model's one damage-side modifier remains **Weakness**.
+_Avoid_: buff (as the general term), multiplier (reserved for Weakness damage)
+
 **Tick**:
 The 600ms unit of game time. All combat timing (attack speeds, regen) is expressed in Ticks.
 _Avoid_: frame, step, cycle
@@ -64,14 +72,14 @@ _Avoid_: loot (as a noun for a single item)
 Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
-An **Item** worn in one of five **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus, for weapons only, attack/strength bonuses and an **Attack Type** of its own.
+An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus, for weapons only, attack/strength bonuses and an **Attack Type** of its own.
 _Avoid_: gear (alone), armor (as the general term)
 
 **Gear Slot**:
-One of: weapon, shield, head, body, legs.
+One of: weapon, shield, head, body, legs, amulet, ring.
 
 **Gear Tier**:
-Equipment progression rank: bronze → iron → steel → mithril. Area gating references Gear Tiers.
+Equipment progression rank: bronze → iron → steel → mithril → adamant → rune. Area gating references Gear Tiers.
 
 **Food**:
 An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP. Eaten only via a **Food Slot** — never directly from the Bank.
@@ -83,8 +91,16 @@ One of 3 loadout slots holding the player's active Food; the slot is that Food's
 A slot in the player's loadout that is an **Item**'s home while assigned — the **Food Slots**, the Potion Slot, the Quiver, and the Rune Slot are its four kinds. Assigning pulls the Item's whole **Bank** stock into the slot; swapping returns the displaced stock to the Bank, room-checked before the swap lands (the incoming Item's freed Bank Slot counts). One shared implementation inside the Engine; each kind keeps only its own rules (Food's 3 indexed slots, the Potion's charges, the Rune Slot's single loaded rune, which IS the player's **Spell** choice). The UI mirrors this with one deep, mounted `createLoadoutSlotUi` module (`src/ui/loadout-slot.ts`) owning all four kinds' chooser state, Item eligibility, and Engine command dispatch; at most one Loadout Slot chooser is open at a time.
 _Avoid_: store slot, gear slot (reserved for worn **Equipment**), Rune Pouch (superseded singular Rune Slot — a rune's Element no longer keys a per-Element stack)
 
+**Potion**:
+A **Potion** Item opened via the singular Potion Slot (a **Loadout Slot** kind); carries `charges` that drain on qualifying actions. Re-assigning the same potion tops up qty while keeping open charges; swapping to a different potion consumes the open one and returns qty−1 to the **Bank**.
+_Avoid_: elixir, flask
+
+**Pet**:
+An owned collectible dropped by activity — never an **Item**, never in the **Bank**. `PetDef` declares `target` (a **Skill** or `fishing-speed` / `production-speed`), `boostPct` (deliberately tiny), and `source` (`combat`, `fishing`, `production`, or `{ boss: monsterId }`). Combat/fishing/production pets roll at 1/2000 per qualifying action; boss pets at 1/300. Duplicate ownership is impossible (`ownedPets` set). Every owned pet's boost is always-on and boosts sum across the roster — no active-pet slot. Emits `pet-dropped`.
+_Avoid_: companion, familiar
+
 **Material**:
-An **Item** consumed as a **Recipe** input — stackable, unequippable, uneatable; sellable when it carries a value and always bankable, same as any other Item. A **Bar** is the only Material in v1.
+An **Item** consumed as a **Recipe** input — stackable, unequippable, uneatable; sellable when it carries a value and always bankable, same as any other Item.
 _Avoid_: resource, ingredient (as the general term)
 
 **Bar**:
@@ -110,15 +126,19 @@ _Avoid_: inventory, loot bag
 One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
 
 **Gold**:
-The player's currency balance — a number on the player, not an Item stack, so it never occupies a **Bank Slot**. Currency Drops credit it directly; selling an Item and buying Bank Slots are its only other movements.
+The player's currency balance — a number on the player, not an Item stack, so it never occupies a **Bank Slot**. Currency Drops credit it directly; selling an Item, buying Bank Slots, and **Vendor** purchases are its other movements.
 _Avoid_: coins, cash, currency (as the general term — use Gold, the v1 currency's name)
+
+**Vendor**:
+The shop: `Content.vendor` is a `VendorEntry { itemId, price }[]`. `buy(itemId, qty?)` spends **Gold** (a gold sink alongside Bank Slots); `sell` credits it.
+_Avoid_: shop (as the general term — use Vendor)
 
 **Fishing Spot**:
 A location inside an **Area** where the player fishes instead of fighting, gated by the Area's own gate (see **Area**) and its own Fishing level requirement. Yields exactly one kind of **Food** per **Catch** (mirroring "a Monster has exactly one Drop Table"); progression comes from unlocking better spots, not from scaling odds.
 _Avoid_: fishing node, resource node
 
 **Catch**:
-The **Food** produced by a successful attempt at a **Fishing Spot**, rolled once per its cooldown at a flat per-spot chance. Immediately edible ("cooked catch") — v1 has no Cooking Skill in between.
+The **Food** produced by a successful attempt at a **Fishing Spot**, rolled once per its cooldown at a flat per-spot chance. Immediately edible ("cooked catch").
 _Avoid_: loot (for fish)
 
 **Dungeon**:
@@ -144,9 +164,21 @@ The scrolling UI log of kills, **Drops**, and level-ups. It is the Activity mana
 The single deep module that owns all game state and advances it one **Tick** per call; the only place combat rules live.
 _Avoid_: game loop, simulator, game manager
 
+**Offline Progress**:
+On boot, elapsed away time is converted to **Ticks** and pumped through the **Engine** (`pumpOffline`, `src/ui/offline-progress.ts`), capped at `OFFLINE_CAP_TICKS = 48_000` (~8h; tuning, not spec — durations beyond the cap render "8h+"). Realizes ADR-0001's "pump N ticks on reopen" prediction; no new architecture.
+_Avoid_: idle gains (as the general term — use Offline Progress)
+
 **Snapshot**:
 An immutable view of the **Engine**'s state at a point in time — what the UI renders from and what gets saved.
 _Avoid_: state (as an interface term), view model
+
+**Save Transfer**:
+Manual export/import of a save as a portable string: `encodeSave(snapshot)` / tolerant `decodeSave(text): Snapshot | null` (`src/ui/save-transfer.ts`); decode never throws.
+_Avoid_: cloud save, backup file
+
+**SFX**:
+Sound effects mounted as an **Engine**-event subscriber (`mountSfx`, `src/ui/sfx.ts`) with a UI mute toggle; presentation-only, never in a **Snapshot**.
+_Avoid_: audio engine, sound system
 
 **Respawn**:
 The brief post-death state during which the player cannot act; combat auto-resumes on the same **Monster** when it ends — except during a **Dungeon** run, which death abandons, so Respawn ends idle instead.
@@ -222,6 +254,8 @@ restores the scaled closed Compact Widget.
 - The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot** and is the player's sole Item store; **Gold** is tracked separately as a player-level balance, never a Bank stack
+- **Gold** sinks: **Bank Slot** expansion and **Vendor** purchases
+- A **Pet** is dropped by combat, fishing, production, or boss kills and passively boosts its target **Skill** (or activity speed); owned **Pets**' boosts sum
 - A **Drop** or **Chest** item lands in the **Loot Zone** first, not the Bank directly; leaving combat (or the on-demand Loot all) sweeps it into the Bank
 - An **Area** may also hold **Fishing Spots**; at most one of a Monster or a Fishing Spot is selected at a time, and selecting one cancels the other
 - An **Area** may also host a **Dungeon**: an ordered sequence of **Waves** ending in a **Boss**, rewarding a **Chest** on completion; entering one cancels any selected Monster or Fishing Spot, and vice versa

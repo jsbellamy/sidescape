@@ -1,6 +1,6 @@
 # SideScape
 
-A taskbar-sized, RuneScape-like incremental idle game. It lives in a slim, always-on-top window (320×640) you park at the edge of your screen — pick an Area and a Monster, and it auto-grinds combat while open, earning skill XP (Attack / Strength / Defence / Hitpoints, levels 1–99) and gear drops that improve your character.
+A taskbar-sized, RuneScape-like incremental idle game. It lives in a slim, always-on-top window (320×220) you park at the edge of your screen — pick an Area and a Monster, and it auto-grinds combat while open, earning skill XP (11 skills, from Attack to Herblore, levels 1–99) and gear drops that improve your character.
 
 Built with Tauri v2 (Rust shell) + TypeScript + Vite, with plain DOM/CSS rendering — no game engine. All game logic is headless TypeScript in `src/core/`. See `docs/design.md` for the full v1 design and `CONTEXT.md` for the domain glossary.
 
