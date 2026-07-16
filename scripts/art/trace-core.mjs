@@ -23,6 +23,205 @@ function rgbToHex([r, g, b]) {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
+/** Validates Theme-level HSL gamut contracts used by source-driven backdrops (#313). */
+export function validateHslGamut(gamut, { label = "gamut" } = {}) {
+  if (!gamut || typeof gamut !== "object" || Array.isArray(gamut)) {
+    throw new Error(`${label}: must be an object`);
+  }
+  const keys = Object.keys(gamut);
+  const expected = ["neutralMaxSaturation", "chromaticHueRange", "chromaticMaxSaturation"];
+  const missing = expected.filter((key) => !keys.includes(key));
+  const extra = keys.filter((key) => !expected.includes(key));
+  if (missing.length || extra.length) {
+    throw new Error(
+      `${label}: unknown/missing/extra keys (expected exactly ${expected.join(", ")})`,
+    );
+  }
+  const { neutralMaxSaturation, chromaticHueRange, chromaticMaxSaturation } = gamut;
+  for (const [name, value] of [
+    ["neutralMaxSaturation", neutralMaxSaturation],
+    ["chromaticMaxSaturation", chromaticMaxSaturation],
+  ]) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+      throw new Error(`${label}: ${name} must be a finite percentage in 0..100`);
+    }
+  }
+  if (
+    !Array.isArray(chromaticHueRange) ||
+    chromaticHueRange.length !== 2 ||
+    chromaticHueRange.some((value) => typeof value !== "number" || !Number.isFinite(value))
+  ) {
+    throw new Error(`${label}: chromaticHueRange must be exactly two finite numbers`);
+  }
+  const [minHue, maxHue] = chromaticHueRange;
+  if (!(minHue >= 0 && minHue <= maxHue && maxHue < 360)) {
+    throw new Error(
+      `${label}: chromaticHueRange must satisfy 0 <= min <= max < 360 (wrapping unsupported)`,
+    );
+  }
+  if (neutralMaxSaturation > chromaticMaxSaturation) {
+    throw new Error(`${label}: neutralMaxSaturation must be <= chromaticMaxSaturation`);
+  }
+  return gamut;
+}
+
+function assertRgbTriple(rgb) {
+  if (
+    !Array.isArray(rgb) ||
+    rgb.length !== 3 ||
+    rgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)
+  ) {
+    throw new Error(`RGB must be exactly three integers in 0..255, got ${JSON.stringify(rgb)}`);
+  }
+}
+
+/**
+ * Standard sRGB→HSL. Hue in degrees [0, 360); saturation and lightness as percentages.
+ * Achromatic hue is 0.
+ */
+export function rgbToHsl(rgb) {
+  assertRgbTriple(rgb);
+  const [r8, g8, b8] = rgb;
+  const r = r8 / 255,
+    g = g8 / 255,
+    b = b8 / 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  let hue = 0;
+  let saturation = 0;
+  if (delta !== 0) {
+    saturation = delta / (1 - Math.abs(2 * lightness - 1));
+    if (max === r) hue = (((g - b) / delta) % 6) * 60;
+    else if (max === g) hue = ((b - r) / delta + 2) * 60;
+    else hue = ((r - g) / delta + 4) * 60;
+    if (hue < 0) hue += 360;
+  }
+  return { h: hue, s: saturation * 100, l: lightness * 100 };
+}
+
+/** Inverse of `rgbToHsl`: HSL percentages/degrees → rounded integer sRGB. */
+export function hslToRgb(h, s, l) {
+  if (![h, s, l].every((value) => typeof value === "number" && Number.isFinite(value))) {
+    throw new Error("HSL channels must be finite numbers");
+  }
+  const saturation = s / 100;
+  const lightness = l / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const huePrime = (((h % 360) + 360) % 360) / 60;
+  const x = chroma * (1 - Math.abs((huePrime % 2) - 1));
+  let r1 = 0,
+    g1 = 0,
+    b1 = 0;
+  if (huePrime >= 0 && huePrime < 1) [r1, g1, b1] = [chroma, x, 0];
+  else if (huePrime < 2) [r1, g1, b1] = [x, chroma, 0];
+  else if (huePrime < 3) [r1, g1, b1] = [0, chroma, x];
+  else if (huePrime < 4) [r1, g1, b1] = [0, x, chroma];
+  else if (huePrime < 5) [r1, g1, b1] = [x, 0, chroma];
+  else [r1, g1, b1] = [chroma, 0, x];
+  const m = lightness - chroma / 2;
+  return [
+    Math.max(0, Math.min(255, Math.round((r1 + m) * 255))),
+    Math.max(0, Math.min(255, Math.round((g1 + m) * 255))),
+    Math.max(0, Math.min(255, Math.round((b1 + m) * 255))),
+  ];
+}
+
+function circularHueDistance(a, b) {
+  const delta = Math.abs(a - b) % 360;
+  return Math.min(delta, 360 - delta);
+}
+
+/** Inclusive union predicate: neutral by saturation, or chromatic by hue+saturation. */
+export function isRgbWithinHslGamut(rgb, gamut) {
+  assertRgbTriple(rgb);
+  validateHslGamut(gamut);
+  return rgbWithinValidatedGamut(rgb, gamut);
+}
+
+function rgbWithinValidatedGamut(rgb, gamut) {
+  const { h, s } = rgbToHsl(rgb);
+  const [minHue, maxHue] = gamut.chromaticHueRange;
+  return (
+    s <= gamut.neutralMaxSaturation ||
+    (h >= minHue && h <= maxHue && s <= gamut.chromaticMaxSaturation)
+  );
+}
+
+/**
+ * Projects recovered cells into a Theme HSL gamut before Oklab medoid normalization.
+ * Valid colors stay byte-identical; invalid ones keep lightness and move hue/sat inward.
+ */
+export function conformCellPaletteToHslGamut(cells, gamut) {
+  validateHslGamut(gamut);
+  const [minHue, maxHue] = gamut.chromaticHueRange;
+  const midpoint = (minHue + maxHue) / 2;
+  // Enough steps to walk from either endpoint to the midpoint and from 100% sat to neutral.
+  const searchCeiling = Math.ceil(Math.max(100, (maxHue - minHue) / 2) / 0.1) + 1;
+
+  const memo = new Map();
+  let inputColorCount = 0;
+  const project = (rgb) => {
+    assertRgbTriple(rgb);
+    const key = rgb.join(",");
+    if (memo.has(key)) return memo.get(key);
+    inputColorCount++;
+    if (rgbWithinValidatedGamut(rgb, gamut)) {
+      memo.set(key, rgb);
+      return rgb;
+    }
+    const { h, s, l } = rgbToHsl(rgb);
+    let targetHue = h;
+    if (h < minHue || h > maxHue) {
+      const distMin = circularHueDistance(h, minHue);
+      const distMax = circularHueDistance(h, maxHue);
+      targetHue = distMin < distMax || distMin === distMax ? minHue : maxHue;
+    }
+    let targetSat = Math.min(s, gamut.chromaticMaxSaturation);
+    let projected = null;
+    for (let attempt = 0; attempt < searchCeiling; attempt++) {
+      const candidate = hslToRgb(targetHue, targetSat, l);
+      if (rgbWithinValidatedGamut(candidate, gamut)) {
+        projected = candidate;
+        break;
+      }
+      targetSat = Math.max(0, targetSat - 0.1);
+      if (targetHue < midpoint) targetHue = Math.min(midpoint, targetHue + 0.1);
+      else if (targetHue > midpoint) targetHue = Math.max(midpoint, targetHue - 0.1);
+    }
+    if (!projected) {
+      const gray = Math.max(0, Math.min(255, Math.round((l / 100) * 255)));
+      projected = [gray, gray, gray];
+      if (!rgbWithinValidatedGamut(projected, gamut)) {
+        throw new Error(
+          `conformCellPaletteToHslGamut: grayscale fallback ${JSON.stringify(projected)} failed gamut`,
+        );
+      }
+    }
+    memo.set(key, projected);
+    return projected;
+  };
+
+  let changedCellCount = 0;
+  const outputKeys = new Set();
+  const out = cells.map((row) =>
+    row.map((cell) => {
+      if (cell === null) return null;
+      const next = project(cell);
+      if (next[0] !== cell[0] || next[1] !== cell[1] || next[2] !== cell[2]) changedCellCount++;
+      outputKeys.add(next.join(","));
+      return next;
+    }),
+  );
+  return {
+    cells: out,
+    inputColorCount,
+    outputColorCount: outputKeys.size,
+    changedCellCount,
+  };
+}
+
 function sqDist(a, b) {
   const dr = a[0] - b[0],
     dg = a[1] - b[1],

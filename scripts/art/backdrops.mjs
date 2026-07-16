@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { isRgbWithinHslGamut, rgbToHsl, validateHslGamut } from "./trace-core.mjs";
 import { writePng } from "./write-png.mjs";
 
 /** Native pixel dimensions of one shipped backdrop layer (#263). */
@@ -92,6 +93,16 @@ export function validateBackdropDefinition(def) {
       `writeBackdrops: ${def.theme} has missing or unknown kind ${JSON.stringify(def.kind)}`,
     );
   }
+  if (def.kind === "paint") {
+    if (def.gamut !== undefined) {
+      throw new Error(`writeBackdrops: ${def.theme} painter definition must not declare gamut`);
+    }
+  } else {
+    if (def.gamut === undefined) {
+      throw new Error(`writeBackdrops: ${def.theme} source definition requires gamut`);
+    }
+    validateHslGamut(def.gamut, { label: `writeBackdrops: ${def.theme}.gamut` });
+  }
   for (const layerName of LAYER_NAMES) {
     const layer = def.layers[layerName];
     if (def.kind === "paint") {
@@ -117,21 +128,45 @@ export function validateBackdropDefinition(def) {
   return def;
 }
 
-export function validateBackdropImage(image, { layerName, maxColors, label = layerName }) {
+function formatHslChannel(value) {
+  return String(Number(value.toFixed(3)));
+}
+
+function describeHslGamutRule(gamut) {
+  const [minHue, maxHue] = gamut.chromaticHueRange;
+  return `allowed saturation <= ${gamut.neutralMaxSaturation}% OR hue ${minHue}..${maxHue} and saturation <= ${gamut.chromaticMaxSaturation}%`;
+}
+
+export function validateBackdropImage(image, { layerName, maxColors, gamut, label = layerName }) {
   if (image.width !== BACKDROP_WIDTH || image.height !== BACKDROP_HEIGHT) {
     throw new Error(
       `${label}: expected ${BACKDROP_WIDTH}x${BACKDROP_HEIGHT}, got ${image.width}x${image.height}`,
     );
   }
-  const colors = new Set();
-  for (let i = 0; i < image.data.length; i += 4) {
-    const alpha = image.data[i + 3];
-    if (layerName === "sky" && alpha !== 255) throw new Error(`${label}: sky must be fully opaque`);
-    if (layerName !== "sky" && alpha !== 0 && alpha !== 255) {
-      throw new Error(`${label}: ${layerName} requires binary alpha (0 or 255)`);
-    }
-    if (alpha !== 0) colors.add(`${image.data[i]},${image.data[i + 1]},${image.data[i + 2]}`);
+  if (gamut === undefined) {
+    throw new Error(`${label}: gamut is required`);
   }
+  validateHslGamut(gamut, { label: `${label} gamut` });
+  const colors = new Set();
+  for (let y = 0; y < image.height; y++)
+    for (let x = 0; x < image.width; x++) {
+      const i = (y * image.width + x) * 4;
+      const alpha = image.data[i + 3];
+      if (layerName === "sky" && alpha !== 255)
+        throw new Error(`${label}: sky must be fully opaque`);
+      if (layerName !== "sky" && alpha !== 0 && alpha !== 255) {
+        throw new Error(`${label}: ${layerName} requires binary alpha (0 or 255)`);
+      }
+      if (alpha === 0) continue;
+      const rgb = [image.data[i], image.data[i + 1], image.data[i + 2]];
+      colors.add(rgb.join(","));
+      if (!isRgbWithinHslGamut(rgb, gamut)) {
+        const { h, s, l } = rgbToHsl(rgb);
+        throw new Error(
+          `${label}: out-of-gamut pixel at (${x}, ${y}): RGB [${rgb.join(", ")}], HSL [${formatHslChannel(h)}, ${formatHslChannel(s)}%, ${formatHslChannel(l)}%]; ${describeHslGamutRule(gamut)}`,
+        );
+      }
+    }
   if (colors.size > maxColors)
     throw new Error(`${label}: ${colors.size} recovered colors exceeds cap ${maxColors}`);
   return { colorCount: colors.size };
@@ -164,6 +199,7 @@ async function prepareSourceDefinition(def, sourceDir) {
     validateBackdropImage(image, {
       layerName,
       maxColors: layer.maxColors,
+      gamut: def.gamut,
       label: `writeBackdrops: ${def.theme}.${layerName}`,
     });
     const review = sourceReview(image);
