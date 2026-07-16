@@ -779,7 +779,7 @@ export const content: Content = composeContent(
         id: "brew-strength-potion",
         name: "Strength Potion",
         skill: "herblore",
-        levelReq: 3,
+        levelReq: 1, // was 3
         inputs: [{ itemId: "guam-herb", qty: 1 }],
         outputItemId: "strength-potion",
         xp: 50,
