@@ -56,11 +56,11 @@ const SOURCE_PALETTES = {
     zoneNames: ["sewer", "forest", "crypt"],
   },
   "golden-base-iron-full-helm.png": { materialRampNames: ["steel"], zoneNames: ["sewer"] },
-  // Platelegs family (#341): ingest winners were steel + forest/sewer/crypt/town/glacier cells
-  // (steel.glint reduced into glacier[5] on the compact pass).
+  // Platelegs family (#341 remake): match full-helm scope — steel + sewer only — so Stage-2
+  // stays on the same cool-grey iron planes as chainbody/helm (glacier/crypt tinted earlier gens).
   "golden-base-iron-platelegs.png": {
     materialRampNames: ["steel"],
-    zoneNames: ["forest", "sewer", "crypt", "town", "glacier"],
+    zoneNames: ["sewer"],
   },
   "golden-base-kiln-cat.png": { materialRampNames: ["blood", "ember"], zoneNames: ["town"] },
   "golden-base-leather-chaps.png": { materialRampNames: [], zoneNames: ["town"] },
@@ -859,21 +859,15 @@ export const icons = [
       },
     },
   },
-  // --- Platelegs family (#341) ---
+  // --- Platelegs family (#341 remake) ---
   {
-    // Gear Tier ladder platelegs: bronze baseline, a recolor of the shared iron-platelegs source.
-    // Mirrors bronze-chainbody's town[] bronze mapping for this same steel-source armour family.
+    // Bronze baseline: mirrors bronze-chainbody town[] mapping for the shared steel-source armour.
     name: "bronze-platelegs",
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "town[0]",
         "sewer[1]": "town[0]",
         "sewer[0]": "P.outline",
-        "crypt[3]": "town[2]",
-        "glacier[4]": "town[3]",
-        "glacier[5]": "town[4]",
-        "town[5]": "P.outline",
         "steel.shadow": "town[0]",
         "steel.base": "town[2]",
         "steel.light": "town[3]",
@@ -888,13 +882,8 @@ export const icons = [
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "steel.shadow",
         "sewer[1]": "steel.shadow",
         "sewer[0]": "P.outline",
-        "crypt[3]": "steel.base",
-        "glacier[4]": "steel.light",
-        "glacier[5]": "steel.glint",
-        "town[5]": "P.outline",
         'P["text-dim"]': "steel.base",
         "P.text": "steel.glint",
       },
@@ -905,13 +894,8 @@ export const icons = [
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "P.outline",
         "sewer[1]": "P.outline",
         "sewer[0]": "P.ink",
-        "crypt[3]": "steel.shadow",
-        "glacier[4]": "steel.base",
-        "glacier[5]": "steel.light",
-        "town[5]": "P.ink",
         "steel.shadow": "P.outline",
         "steel.base": "steel.shadow",
         "steel.light": "steel.base",
@@ -925,13 +909,8 @@ export const icons = [
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "water.shadow",
         "sewer[1]": "water.shadow",
         "sewer[0]": "P.outline",
-        "crypt[3]": "water.base",
-        "glacier[4]": "water.light",
-        "glacier[5]": "water.glint",
-        "town[5]": "P.outline",
         "steel.shadow": "water.shadow",
         "steel.base": "water.base",
         "steel.light": "water.light",
@@ -945,13 +924,8 @@ export const icons = [
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "adamant.shadow",
         "sewer[1]": "adamant.shadow",
         "sewer[0]": "P.outline",
-        "crypt[3]": "adamant.base",
-        "glacier[4]": "adamant.light",
-        "glacier[5]": "adamant.glint",
-        "town[5]": "P.outline",
         "steel.shadow": "adamant.shadow",
         "steel.base": "adamant.base",
         "steel.light": "adamant.light",
@@ -965,13 +939,8 @@ export const icons = [
     source: "golden-base-iron-platelegs.png",
     opts: {
       recolor: {
-        "forest[1]": "rune.shadow",
         "sewer[1]": "rune.shadow",
         "sewer[0]": "P.outline",
-        "crypt[3]": "rune.base",
-        "glacier[4]": "rune.light",
-        "glacier[5]": "rune.glint",
-        "town[5]": "P.outline",
         "steel.shadow": "rune.shadow",
         "steel.base": "rune.base",
         "steel.light": "rune.light",
