@@ -75,6 +75,10 @@ describe("sprites", () => {
     expect(spriteEdgePx(monsterSpriteSize("crypt-shade")!)).toBe(128);
     expect(spriteEdgePx(monsterSpriteSize("sewer-king")!)).toBe(96);
     expect(spriteEdgePx(monsterSpriteSize("hollow-warden")!)).toBe(128);
+    expect(spriteEdgePx(monsterSpriteSize("frost-wolf")!)).toBe(64);
+    expect(spriteEdgePx(monsterSpriteSize("ice-wraith")!)).toBe(96);
+    expect(spriteEdgePx(monsterSpriteSize("frost-giant")!)).toBe(128);
+    expect(spriteEdgePx(monsterSpriteSize("frost-warden")!)).toBe(128);
   });
 });
 

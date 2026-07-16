@@ -192,41 +192,40 @@ export const sprites = [
     materialRampNames: ["steel", "water", "rune", "skin"],
     zoneNames: ["meadow", "forest", "sewer", "crypt"],
   },
-  // Frostspire (#254): the 5th Area's own cast. Interim CC0 derivatives, same provenance and
-  // derivation pattern as the rest of this registry's sources (see docs/assets.md); #142 replaces
-  // them along with the rest of the cast. Frost Warden's 48x48 canvas is its explicit visual
-  // scale; canvas size is not a Boss-only allowance.
+  // Frostspire (#269): original-art cast recovered through the source-driven sprite pipeline.
+  // Canvas size is explicit visual scale (wolf 32, wraith 48, giant/warden 64), not a Boss-only
+  // allowance. materialRampNames/zoneNames are filled from ingest dry-run audits.
   {
     name: "frost-wolf",
     source: "sprite-frost-wolf.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["steel"],
-    zoneNames: [],
+    materialRampNames: ["water"],
+    zoneNames: ["forest", "sewer", "crypt", "town", "glacier"],
   },
   {
     name: "ice-wraith",
     source: "sprite-ice-wraith.png",
-    size: 32,
+    size: 48,
     alpha: "binary",
     materialRampNames: ["steel", "water"],
-    zoneNames: [],
+    zoneNames: ["meadow", "crypt", "town", "glacier"],
   },
   {
     name: "frost-giant",
     source: "sprite-frost-giant.png",
-    size: 32,
+    size: 64,
     alpha: "binary",
-    materialRampNames: ["steel", "rune", "blood"],
-    zoneNames: ["glacier"],
+    materialRampNames: ["steel", "water"],
+    zoneNames: ["meadow", "sewer", "crypt", "glacier"],
   },
   {
     name: "frost-warden",
     source: "sprite-frost-warden.png",
-    size: 48,
+    size: 64,
     alpha: "binary",
-    materialRampNames: ["steel"],
-    zoneNames: [],
+    materialRampNames: ["steel", "water"],
+    zoneNames: ["forest", "crypt", "glacier"],
   },
 ];
 

@@ -143,9 +143,10 @@ pipeline:
   path after Stage 2 dimension/alpha/cap/gamut validation; a second run is byte-stable.
 - **Zone anchor:** the shared Glacier row in `scripts/art/palettes.mjs` /
   `docs/art-style.md` is `#10263d #244763 #4c718d #7f9eb3 #b8cbd4 #e8f0ed`. That correction may
-  retint only assets that declare `zoneNames: ["glacier"]` — today the Frost Giant sprite — so
-  `src/assets/sprites/frost-giant.png` and the two sprite contact sheets are allowed derivatives;
-  the Frost Giant compact source, registry row, size, alpha, and material/zone arrays stay fixed.
+  retint only assets that declare `glacier` in `zoneNames` — at #293 that was Frost Giant alone;
+  #269's Frostspire redraw also includes glacier in the other three Frost sprite allowlists — so
+  those Frost sprites and the two sprite contact sheets are allowed derivatives of a Glacier
+  palette change; compact sources, sizes, and alpha policies stay owned by the sprite issues.
 - **Prompts:** sky / mid / near used the issue #293 copy-ready Frostspire prompts (Meadow density
   reference, continuous scene, 160×120 logical grid, magenta key for mid/near, cold palette
   anchored by the six hexes above). Native 1× and unscaled three-period previews passed the
@@ -382,7 +383,8 @@ are the deterministic production assets.
 ### Frostspire's own cast: Frost Wolf, Ice Wraith, Frost Giant, and Frost Warden (#254)
 
 The 5th Area needed four new Monster sprites: three open-world (32×32) plus the dungeon-only Frost
-Warden boss (48×48, the sanctioned Boss canvas — `crypt-shade` is the existing precedent). Per the
+Warden boss (48×48 at the time — an explicitly declared visual scale, not a Boss-only canvas rule;
+`crypt-shade` / later 64×64 casts are the later precedents). Per the
 same owner placeholder-art decision #253 already applied, all four are further crops of the same
 **Tiny Creatures** sheet already used for Goblin Warrior, Zombie, Skeleton, Crypt Ghoul, and Bone
 Knight (see "Darkroot Forest, Old Sewers, and Bone Crypt Monsters" and "Bone Crypt's own cast"
@@ -407,13 +409,14 @@ above):
   `sprite-frost-giant.png` is tile index 43 (a white yeti/abominable-snowman with a blue eye) — all
   three nearest-neighbor upscaled 2× from their native 16×16 cell to this registry's 32×32 native-
   source contract. `sprite-frost-warden.png` is tile index 30 (a white/silver dragon head-and-neck
-  bust), nearest-neighbor upscaled 3× from its native 16×16 cell to the 48×48 Boss canvas — the
+  bust), nearest-neighbor upscaled 3× from its native 16×16 cell to the then-declared 48×48 visual
+  scale — the
   same normalization principle #253 used for 32×32, just a larger factor to fill the bigger canvas.
   This pack's tiles are portrait/front-facing rather than a true left/right walk cycle, so "facing
   left" (`docs/art-style.md`) is satisfied trivially, matching precedent. No other alteration was
   made to any of the four. Like the rest of the sources under `scripts/art/sprite-sources/`, these
-  are interim CC0 derivatives; #142 (which explicitly says it "should absorb them") replaces the
-  whole cast with original art.
+  are interim CC0 derivatives; #269 replaces all four with original art (see the Frostspire
+  original-art subsection below).
 
 ## Source-driven combat sprite pipeline (#188)
 
@@ -421,7 +424,8 @@ The 20 combat sprites now regenerate through `scripts/art/sprites.mjs` as part o
 (this count grew from 11 through #253's Crypt Ghoul/Bone Knight, #254's Frost cast, #292's Meadows
 completion, and #266's Darkroot redraw). Its registry keeps the runtime ids and filenames in
 `src/ui/sprites.ts` unchanged while declaring each source's canvas and alpha policy explicitly:
-12 sprites use 32×32 binary-alpha canvases, seven use 48×48, and `hollow-warden` uses 64×64. Canvas
+six sprites use 32×32 binary-alpha canvases, eleven use 48×48, and `hollow-warden`, `crypt-shade`,
+`frost-giant`, and `frost-warden` use 64×64. Canvas
 size is explicit visual scale rather than a Monster or Boss classification; `crypt-shade` may contain
 at most one intermediate alpha value, while every other entry is binary-alpha. The writer rejects invalid sources, projects colors onto the named
 house ramps, reduces each sprite to at most `maxColors` RGB colors, and despeckles color clusters
@@ -543,6 +547,26 @@ previews retained their defining silhouettes.
 This subsection supersedes only the historical CC0 Giant Rat, Zombie, and Skeleton outputs
 recorded above. Their provenance remains preserved as historical context; Sewer King is new
 original art.
+
+### Frostspire (#269)
+
+Frost Wolf, Ice Wraith, Frost Giant, and the dungeon-only Frost Warden now form one original
+Frostspire combat set against the final Glacier palette and backdrops from #293. Each compact
+source was recovered from one untouched built-in image-generation PNG on the ignored
+`sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized, re-exported,
+downsampled, or hand-edited. Frost Wolf uses a compact 32×32 binary canvas, Ice Wraith a
+player-scale 48×48 binary canvas, and both Frost Giant and Frost Warden use looming 64×64 binary
+canvases. Canvas size is explicit visual scale rather than a Boss-only rule: the Giant remains a
+normal open-world Monster while filling most of a 64 canvas, and the Warden stays distinct on the
+same 64 canvas through a taller ordered armored silhouette and forked rune staff. Sources are
+bottom-anchored and face right toward the left-facing player. Ice Wraith remains binary alpha so
+its pale body stays readable against pale Glacier layers without a particle outline. All four retain
+the standard `maxColors: 12` and three-pass cleanup defaults because compact previews retained their
+defining silhouettes; each row's `materialRampNames` / `zoneNames` match the winning ingest audit.
+
+This subsection supersedes the historical CC0 Tiny Creatures Frost Wolf, Ice Wraith, Frost Giant,
+and Frost Warden outputs recorded under #254 above. That provenance remains preserved as historical
+context.
 
 ## Empty-slot reliefs (#306)
 
