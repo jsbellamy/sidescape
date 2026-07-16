@@ -2,6 +2,7 @@ import { createEngine } from "../core/engine";
 import { resolveContent } from "../core/validate-content";
 import type { Content, Snapshot } from "../core/types";
 import { mountApp } from "./app";
+import { assertRegisteredContentIcons } from "./content-icons";
 import type { WorkspaceChrome } from "./workspace-chrome";
 import { mountSfx } from "./sfx";
 import {
@@ -72,7 +73,8 @@ export interface BootDeps {
 
 /**
  * The real boot sequence (moved out of main.ts's DOMContentLoaded body so it can be imported by
- * tests): load save → create engine → compute/pump offline ticks → mountApp → mountSfx → wire
+ * tests): load save → assert icon registry → create engine → compute/pump offline ticks → mountApp →
+ * mountSfx → wire
  * close/export/import buttons → show away card → start tick + autosave intervals. Preserve this
  * order exactly — it encodes #69's invariant (offline pump BEFORE mountApp, away-card shown after)
  * and #138 §4's (button wiring after mountApp builds the DOM, including #widget-controls — the
@@ -87,6 +89,7 @@ export function boot(
   dispose(): void;
 } {
   const savedSnapshot = loadSave();
+  assertRegisteredContentIcons(deps.content);
   // Resolve once for UI by-id maps (#185). `createEngine` also calls the idempotent
   // `resolveContent`, so passing this same object reuses it without re-validating or rebuilding
   // maps — the private marker short-circuits the second pass.
