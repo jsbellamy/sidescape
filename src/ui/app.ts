@@ -1,15 +1,11 @@
-import { UNARMED_SPEED } from "../core/engine";
 import type { Engine } from "../core/engine";
 import { ATTACK_TYPES, SKILL_NAMES } from "../core/types";
 import type {
-  AmmoDef,
   AttackType,
   AutoEatThreshold,
   CombatStyle,
   DropTableEntry,
-  EquipmentDef,
   GearSlot,
-  PotionDef,
   SkillName,
   SkillSnapshot,
   Snapshot,
@@ -34,6 +30,7 @@ import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { resolveActiveAreaId } from "./area-context";
 import { itemIcon, skillIcon, slotSilhouette, tabIcon } from "./icons";
+import { createItemPresentation } from "./item-presentation";
 import { formatQty } from "./format";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -99,59 +96,6 @@ const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
  * Shared by per-piece Gear Slot rows and the Character panel's totals row. */
 function defVectorLabel(def: Record<AttackType, number>): string {
   return ATTACK_TYPES.map((t) => `${ATTACK_TYPE_ABBR[t]} ${def[t]}`).join(" · ");
-}
-
-/** Human-readable target label for a PotionDef (#118): "fishing-speed"/"production-speed" get a
- * spaced-out label, a combat SkillName is title-cased as-is. Shared by `itemDetailLines` (the
- * hover/detail-strip stat line) and the Potion Slot tile's charges readout. */
-function potionTargetLabel(target: PotionDef["target"]): string {
-  if (target === "fishing-speed") return "Fishing speed";
-  if (target === "production-speed") return "Production speed";
-  return target.charAt(0).toUpperCase() + target.slice(1);
-}
-
-/** "qualifying action" noun for a PotionDef's `charges` count (#118, mirrors PotionDef.charges's
- * own doc): a combat-Skill target counts attacks, "fishing-speed" counts catches,
- * "production-speed" counts crafts. */
-function potionActionNoun(target: PotionDef["target"]): string {
-  if (target === "fishing-speed") return "catches";
-  if (target === "production-speed") return "crafts";
-  return "attacks";
-}
-
-/** One stat line for a PotionDef: "+20% Strength for 50 attacks" (the owner's own worked example
- * shape) plus its sell value if any. Shared by `itemDetailLines` below. */
-function potionDetailLines(def: PotionDef): string[] {
-  const pct = Math.round(def.boostPct * 100);
-  const lines = [
-    `+${pct}% ${potionTargetLabel(def.target)} for ${def.charges} ${potionActionNoun(def.target)}`,
-  ];
-  if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
-  return lines;
-}
-
-/** One stat line for an AmmoDef (#119): an arrow shows its rangedStr bonus (folded into ranged
- * max hit alongside gear's strBonus — see engine.ts's playerAccuracyAndMaxHit), a rune shows its
- * Element, plus its sell value if any. Shared by `itemDetailLines` below, mirrors
- * `potionDetailLines`'s shape. */
-function ammoDetailLines(def: AmmoDef): string[] {
-  const lines =
-    def.ammoType === "arrow" ? [`+${def.rangedStr ?? 0} ranged str`] : [`Element: ${def.element}`];
-  if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
-  return lines;
-}
-
-/** One line per stat on `def`: the weapon's own attack type (weapon rows only), non-zero
- * atk/str bonuses, the compact defence vector (#99, always shown — it's the piece's whole
- * defensive contribution), and the weapon's own speed for weapon-slot items. */
-function equipmentStatParts(def: EquipmentDef): string[] {
-  const parts: string[] = [];
-  if (def.slot === "weapon" && def.attackType) parts.push(def.attackType);
-  if (def.atkBonus) parts.push(`+${def.atkBonus} atk`);
-  if (def.strBonus) parts.push(`+${def.strBonus} str`);
-  parts.push(defVectorLabel(def.def));
-  if (def.slot === "weapon") parts.push(`spd ${def.attackSpeed ?? UNARMED_SPEED}t`);
-  return parts;
 }
 
 /** Renders a per-kill chance as a short human-readable fraction (e.g. "1/24") when the chance
@@ -326,6 +270,7 @@ export function mountApp(
   // Whether the Character hub's Settings popover (Mute, Export, Import) is open (#206) — purely
   // presentational UI state, an anchored popover that never changes card height.
   let openSettings = false;
+  const items = createItemPresentation(content);
   async function syncScaleSelector(): Promise<void> {
     const selected = windowChrome.getScale?.() ?? 1;
     const options = await windowChrome.getScaleOptions?.();
@@ -580,65 +525,11 @@ export function mountApp(
     }
   }
 
-  function itemName(itemId: string): string {
-    return content.itemsById.get(itemId)?.name ?? itemId;
-  }
-
-  /** Gold per unit if `itemId` can be sold from the Bank; undefined otherwise. */
-  function sellPrice(itemId: string): number | undefined {
-    const def = content.itemsById.get(itemId);
-    return def && def.kind !== "currency" ? def.value : undefined;
-  }
-
-  /** One compact line per stat-worthy fact about an item — equipment's own `equipmentStatParts`
-   * joined onto a single line (#99's defence-vector readout lives here now: #78 moved per-piece
-   * stats off the always-visible slot row and into this shared hover-panel/detail-strip
-   * treatment); Food's heal amount plus its sell value if any; a sellable Material's value;
-   * nothing extra for currency (its name alone is enough). Shared by the Bank detail strip and
-   * the `#item-tooltip` hover panel so the two never drift apart. */
-  function itemDetailLines(itemId: string): string[] {
-    const def = content.itemsById.get(itemId);
-    if (!def) return [];
-    switch (def.kind) {
-      case "equipment":
-        return [equipmentStatParts(def).join(" ")];
-      case "food": {
-        const lines = [`Heals ${def.heals}`];
-        if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
-        return lines;
-      }
-      case "material":
-        return def.value !== undefined ? [`Worth ${def.value}g`] : [];
-      case "currency":
-        return [];
-      case "potion":
-        return potionDetailLines(def);
-      case "ammo":
-        return ammoDetailLines(def);
-    }
-  }
-
-  /** `<img>` for `itemId`'s icon (#78) — resolved through `icons.ts`'s no-fallback registry, same
-   * discipline as `itemName`/`sellPrice` above: every Content item has a real icon key, so there's
-   * no placeholder branch here. */
-  function iconMarkup(itemId: string): string {
-    const def = content.itemsById.get(itemId);
-    const src = def ? itemIcon(def.icon) : "";
-    return `<img class="icon pixel" src="${src}" alt="${itemName(itemId)}" />`;
-  }
-
-  /** Icon + a corner quantity badge (`formatQty`) — the standard Bank/Food-Slot/Loot tile body.
-   * Character Gear Slot tiles use `iconMarkup` alone (a worn piece is always qty 1, so a badge
-   * would just be noise). */
-  function tileMarkup(itemId: string, qty: number): string {
-    return `${iconMarkup(itemId)}<span class="tile-qty">×${formatQty(qty)}</span>`;
-  }
-
   /** One tooltip line per Drop Table entry: item name, quantity, band, and human-readable chance. */
   function dropEntryLine(entry: DropTableEntry): string {
     const chanceLabel =
       entry.band === "guaranteed" ? "always" : `${entry.band} ${formatChance(entry.chance)}`;
-    return `${itemName(entry.itemId)} ×${entry.qty} — ${chanceLabel}`;
+    return `${items.name(entry.itemId)} ×${entry.qty} — ${chanceLabel}`;
   }
 
   /** `title` tooltip text previewing a Monster's full Drop Table. */
@@ -734,9 +625,9 @@ export function mountApp(
    * (which has no detail strip of its own) still surfaces #99's defence-vector readout and every
    * other per-item stat purely through hover. */
   function fillTooltip(itemId: string): void {
-    const lines = itemDetailLines(itemId);
+    const lines = items.detailLines(itemId);
     el<HTMLElement>("#item-tooltip").innerHTML =
-      `<p class="tooltip-name">${itemName(itemId)}</p>` +
+      `<p class="tooltip-name">${items.name(itemId)}</p>` +
       lines.map((line) => `<p class="tooltip-stat">${line}</p>`).join("");
   }
 
@@ -817,7 +708,7 @@ export function mountApp(
         row.dataset["vendorRow"] = entry.itemId;
         const name = document.createElement("p");
         name.className = "recipe-name";
-        name.append(itemName(entry.itemId), " ");
+        name.append(items.name(entry.itemId), " ");
         const price = document.createElement("span");
         price.className = "recipe-level";
         price.textContent = `${entry.price}g`;
@@ -1056,7 +947,7 @@ export function mountApp(
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
       if (itemId) {
-        return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${iconMarkup(itemId)}</div>`;
+        return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${items.iconMarkup(itemId)}</div>`;
       }
       const stacks = bankItems.filter((s) => {
         const def = content.itemsById.get(s.itemId);
@@ -1070,7 +961,7 @@ export function mountApp(
                   ? stacks
                       .map(
                         (s) =>
-                          `<button data-gear-assign="${s.itemId}">${itemName(s.itemId)} ×${s.qty}</button>`,
+                          `<button data-gear-assign="${s.itemId}">${items.name(s.itemId)} ×${s.qty}</button>`,
                       )
                       .join("")
                   : `<p class="hint">No ${slot} Equipment in Bank</p>`
@@ -1104,7 +995,7 @@ export function mountApp(
    * tray (`renderEquipmentTray`, #206) so the two detail strips can never drift apart. */
   function bankDetailMarkup(stack: { itemId: string; qty: number }): string {
     const def = content.itemsById.get(stack.itemId);
-    const price = sellPrice(stack.itemId);
+    const price = items.sellPrice(stack.itemId);
     const sellBtn =
       price !== undefined
         ? `<button class="sell-btn" data-sell="${stack.itemId}">Sell ${price}g</button>`
@@ -1113,8 +1004,9 @@ export function mountApp(
       def?.kind === "equipment"
         ? `<button class="equip-btn" data-equip="${stack.itemId}">Equip</button>`
         : "";
-    return `<p class="detail-name">${itemName(stack.itemId)} ×${formatQty(stack.qty)}</p>
-      ${itemDetailLines(stack.itemId)
+    return `<p class="detail-name">${items.name(stack.itemId)} ×${formatQty(stack.qty)}</p>
+      ${items
+        .detailLines(stack.itemId)
         .map((line) => `<p class="detail-stat">${line}</p>`)
         .join("")}
       <div class="detail-actions">${equipBtn}${sellBtn}</div>`;
@@ -1135,7 +1027,7 @@ export function mountApp(
     el("#loot-strip-items").innerHTML = lootZone
       .map(
         (s) =>
-          `<button class="loot-chip tile" data-item="${s.itemId}">${tileMarkup(s.itemId, s.qty)}</button>`,
+          `<button class="loot-chip tile" data-item="${s.itemId}">${items.tileMarkup(s.itemId, s.qty)}</button>`,
       )
       .join("");
     el<HTMLButtonElement>("#loot-strip-all-btn").disabled = lootZone.length === 0;
@@ -1196,7 +1088,7 @@ export function mountApp(
       .map(
         (s) =>
           `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === presented.selected?.itemId}">
-             ${tileMarkup(s.itemId, s.qty)}
+             ${items.tileMarkup(s.itemId, s.qty)}
            </button>`,
       )
       .join("");
@@ -1234,7 +1126,7 @@ export function mountApp(
       .map(
         (s) =>
           `<button class="tile" data-item="${s.itemId}" aria-pressed="${s.itemId === presented.selected?.itemId}">
-             ${tileMarkup(s.itemId, s.qty)}
+             ${items.tileMarkup(s.itemId, s.qty)}
            </button>`,
       )
       .join("");
@@ -1635,7 +1527,6 @@ export function mountApp(
     root,
     content,
     commands: engine,
-    tileMarkup,
     onChanged: () => render(),
   });
 
@@ -1663,23 +1554,23 @@ export function mountApp(
     showXpGain(lane, e.skill, e.amount);
   });
   engine.on("kill", (e) => feedLine(`Killed ${content.monstersById.get(e.monsterId)?.name}`));
-  engine.on("drop", (e) => feedLine(`+${e.qty} ${itemName(e.itemId)}`, `drop-${e.band}`));
+  engine.on("drop", (e) => feedLine(`+${e.qty} ${items.name(e.itemId)}`, `drop-${e.band}`));
   engine.on("drop", (e) => {
     if (e.band === "rare") triggerRareFlash();
   });
   engine.on("levelup", (e) => feedLine(`⭐ ${e.skill} level ${e.level}!`, "levelup"));
   engine.on("levelup", (e) => showToast(`⭐ ${e.skill} level ${e.level}!`));
   engine.on("death", () => feedLine("💀 You died — respawning…", "death"));
-  engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${itemName(e.itemId)} (+${e.healed})`, "eat"));
-  engine.on("item-sold", (e) => feedLine(`Sold ${itemName(e.itemId)} (+${e.gold}g)`, "sell"));
+  engine.on("food-eaten", (e) => feedLine(`🍖 Ate ${items.name(e.itemId)} (+${e.healed})`, "eat"));
+  engine.on("item-sold", (e) => feedLine(`Sold ${items.name(e.itemId)} (+${e.gold}g)`, "sell"));
   engine.on("overflow-sold", (e) =>
-    feedLine(`⚠ Bank full — sold ${itemName(e.itemId)} (+${e.gold}g)`, "overflow"),
+    feedLine(`⚠ Bank full — sold ${items.name(e.itemId)} (+${e.gold}g)`, "overflow"),
   );
   engine.on("overflow-lost", (e) =>
-    feedLine(`⚠ Bank full — ${itemName(e.itemId)} lost!`, "overflow"),
+    feedLine(`⚠ Bank full — ${items.name(e.itemId)} lost!`, "overflow"),
   );
   engine.on("duplicate-sold", (e) =>
-    feedLine(`⚠ Auto-sold duplicate ${itemName(e.itemId)} (+${e.gold}g)`, "overflow"),
+    feedLine(`⚠ Auto-sold duplicate ${items.name(e.itemId)} (+${e.gold}g)`, "overflow"),
   );
   // Loot Zone (#60): a sweep (auto-loot on leaving combat, or the Loot all button) banks whatever
   // fits and leaves the rest in the zone — check the post-sweep Snapshot for leftovers right here,
@@ -1688,7 +1579,7 @@ export function mountApp(
   engine.on("looted", (e) => {
     if (e.items.length <= 3) {
       for (const item of [...e.items].reverse()) {
-        feedLine(`Banked ${item.qty} ${itemName(item.itemId)}`, "loot");
+        feedLine(`Banked ${item.qty} ${items.name(item.itemId)}`, "loot");
       }
     } else {
       feedLine(`Banked ${e.items.length} stacks of loot`, "loot");
@@ -1699,15 +1590,17 @@ export function mountApp(
   });
   engine.on("dungeon-failed", (e) => {
     for (const item of [...e.lostItems].reverse()) {
-      feedLine(`-${item.qty} ${itemName(item.itemId)}`, "dungeon-failed");
+      feedLine(`-${item.qty} ${items.name(item.itemId)}`, "dungeon-failed");
     }
     feedLine("💀 Run failed — loot lost!", "dungeon-failed");
   });
-  engine.on("fish-caught", (e) => feedLine(`🎣 Caught ${itemName(e.itemId)} (+${e.qty})`, "catch"));
-  engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${itemName(e.itemId)}`, "craft"));
-  engine.on("equipped", (e) => feedLine(`Equipped ${itemName(e.itemId)}`));
+  engine.on("fish-caught", (e) =>
+    feedLine(`🎣 Caught ${items.name(e.itemId)} (+${e.qty})`, "catch"),
+  );
+  engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${items.name(e.itemId)}`, "craft"));
+  engine.on("equipped", (e) => feedLine(`Equipped ${items.name(e.itemId)}`));
   engine.on("item-bought", (e) =>
-    feedLine(`Bought ${e.qty} ${itemName(e.itemId)} (-${e.gold}g)`, "buy"),
+    feedLine(`Bought ${e.qty} ${items.name(e.itemId)} (-${e.gold}g)`, "buy"),
   );
   // Out-of-ammo (#119): a toast (the acceptance criterion's own required surface) plus a feed
   // line, mirroring the overflow-sold/overflow-lost/duplicate-sold warnings' "⚠" + "overflow"
@@ -1743,7 +1636,7 @@ export function mountApp(
     // feedLine prepends, so the newest call ends up on top: insert items in reverse, then the
     // header last, so the visual (top-to-bottom) order reads header followed by items in order.
     for (const item of [...e.items].reverse()) {
-      feedLine(`+${item.qty} ${itemName(item.itemId)}`, `drop-${item.band}`);
+      feedLine(`+${item.qty} ${items.name(item.itemId)}`, `drop-${item.band}`);
     }
     feedLine("📦 Chest opened!", "chest-header");
   });

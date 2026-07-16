@@ -12,6 +12,7 @@ import type { Engine } from "../core/engine";
 import type { Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { slotSilhouette, type LoadoutSlotKind } from "./icons";
+import { createItemPresentation } from "./item-presentation";
 
 /** The slice of `Snapshot["player"]` every Loadout Slot kind's render/gating logic reads —
  * `skills` for the Rune Slot's Magic-level gate, the rest for each kind's own filled/empty state. */
@@ -49,10 +50,6 @@ export interface LoadoutSlotUiOptions {
   root: HTMLElement;
   content: ResolvedContent;
   commands: LoadoutSlotCommands;
-  /** The shared icon+qty-badge tile body (app.ts's own `tileMarkup`) — kept as an injected
-   * function rather than duplicated here, so every tile in the app (Gear Slots, Bank, Loadout
-   * Slots) renders from one implementation. */
-  tileMarkup(itemId: string, qty: number): string;
   /** Called exactly once per handled click (an unassign, an eat, an assign, or a chooser
    * open/close toggle) — never for an irrelevant click. `mountApp` wires this to its own top-level
    * `render()`, so a Loadout Slot action reaches the rest of the app the same way every other
@@ -140,7 +137,8 @@ function tileShellMarkup(config: TileShellConfig, filled: boolean): string {
 }
 
 export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotUi {
-  const { root, content, commands, tileMarkup, onChanged } = options;
+  const { root, content, commands, onChanged } = options;
+  const items = createItemPresentation(content);
 
   // Session-only chooser state, private to this mounted instance (#235's "two instances never
   // share state" requirement) — never part of the Snapshot/save, mirroring the pre-#235 booleans'
@@ -151,10 +149,6 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     return root.querySelector(selector) as T;
   }
 
-  function itemName(itemId: string): string {
-    return content.itemsById.get(itemId)?.name ?? itemId;
-  }
-
   function foodSlotsMarkup(
     foodSlots: LoadoutSlotPlayer["foodSlots"],
     bankItems: Snapshot["bank"]["items"],
@@ -162,7 +156,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     const foodStacks = bankItems.filter((s) => content.itemsById.get(s.itemId)?.kind === "food");
     const chooserItems: ChooserRow[] = foodStacks.map((s) => ({
       itemId: s.itemId,
-      label: `${itemName(s.itemId)} ×${s.qty}`,
+      label: `${items.name(s.itemId)} ×${s.qty}`,
     }));
 
     return foodSlots
@@ -173,7 +167,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
             keyAttr: `data-slot="${i}"`,
             filledInner: slot
               ? `<button class="food-slot-eat tile" data-eat="${i}" data-item="${slot.itemId}">
-                   ${tileMarkup(slot.itemId, slot.qty)}
+                   ${items.tileMarkup(slot.itemId, slot.qty)}
                  </button>`
               : "",
             unassignClass: "food-slot-unassign",
@@ -210,13 +204,13 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     );
     const chooserItems: ChooserRow[] = potionStacks.map((s) => ({
       itemId: s.itemId,
-      label: `${itemName(s.itemId)} ×${s.qty}`,
+      label: `${items.name(s.itemId)} ×${s.qty}`,
     }));
     const filledInner = potionSlot
       ? (() => {
           const def = content.itemsById.get(potionSlot.itemId);
           const maxCharges = def?.kind === "potion" ? def.charges : potionSlot.charges;
-          return `<div class="tile" data-item="${potionSlot.itemId}">${tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
+          return `<div class="tile" data-item="${potionSlot.itemId}">${items.tileMarkup(potionSlot.itemId, potionSlot.qty)}</div>
                   <span class="potion-slot-charges">${potionSlot.charges}/${maxCharges}</span>`;
         })()
       : "";
@@ -252,10 +246,10 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
     });
     const chooserItems: ChooserRow[] = arrowStacks.map((s) => ({
       itemId: s.itemId,
-      label: `${itemName(s.itemId)} ×${s.qty}`,
+      label: `${items.name(s.itemId)} ×${s.qty}`,
     }));
     const filledInner = quiver
-      ? `<div class="tile" data-item="${quiver.itemId}">${tileMarkup(quiver.itemId, quiver.qty)}</div>`
+      ? `<div class="tile" data-item="${quiver.itemId}">${items.tileMarkup(quiver.itemId, quiver.qty)}</div>`
       : "";
 
     el("#quiver-slot").innerHTML = tileShellMarkup(
@@ -293,12 +287,12 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       const gated = spell !== undefined && magicLevel < spell.levelReq;
       return {
         itemId: s.itemId,
-        label: `${itemName(s.itemId)} ×${s.qty}${gated ? ` <span class="rune-req">Lv ${spell.levelReq}</span>` : ""}`,
+        label: `${items.name(s.itemId)} ×${s.qty}${gated ? ` <span class="rune-req">Lv ${spell.levelReq}</span>` : ""}`,
         disabled: gated,
       };
     });
     const filledInner = runeSlot
-      ? `<div class="tile" data-item="${runeSlot.itemId}">${tileMarkup(runeSlot.itemId, runeSlot.qty)}</div>`
+      ? `<div class="tile" data-item="${runeSlot.itemId}">${items.tileMarkup(runeSlot.itemId, runeSlot.qty)}</div>`
       : "";
 
     el("#rune-slot").innerHTML = tileShellMarkup(
