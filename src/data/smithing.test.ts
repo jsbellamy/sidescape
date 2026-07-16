@@ -152,4 +152,62 @@ describe("Smithing content", () => {
     expect(snap.player.skills.smithing.xp).toBeGreaterThan(xpForLevel(24));
     expect(snap.production).toBeNull(); // no bars left for another craft
   });
+
+  it("all six platelegs smithing recipes exist with pinned level/bars/ticks/xp and output ids (#342)", () => {
+    const byId = Object.fromEntries(content.recipes.map((r) => [r.id, r]));
+    const expected = [
+      { id: "bronze-platelegs", levelReq: 7, bars: 3, craftTicks: 11, xp: 36 },
+      { id: "iron-platelegs", levelReq: 21, bars: 3, craftTicks: 12, xp: 84 },
+      { id: "steel-platelegs", levelReq: 36, bars: 3, craftTicks: 13, xp: 150 },
+      { id: "mithril-platelegs", levelReq: 51, bars: 3, craftTicks: 14, xp: 240 },
+      { id: "adamant-platelegs", levelReq: 66, bars: 3, craftTicks: 15, xp: 360 },
+      { id: "rune-platelegs", levelReq: 81, bars: 3, craftTicks: 16, xp: 510 },
+    ] as const;
+    for (const row of expected) {
+      const tier = row.id.split("-")[0]!;
+      const barId = `${tier}-bar`;
+      expect(byId[row.id]).toMatchObject({
+        skill: "smithing",
+        levelReq: row.levelReq,
+        inputs: [{ itemId: barId, qty: row.bars }],
+        outputItemId: row.id,
+        xp: row.xp,
+        craftTicks: row.craftTicks,
+      });
+      const item = content.items.find((i) => i.id === row.id);
+      expect(item).toMatchObject({ kind: "equipment", icon: row.id, slot: "legs" });
+    }
+  });
+
+  it("a Smith at level 7 crafts bronze platelegs end-to-end, then equips them to legs (#342)", () => {
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({
+        player: {
+          skills: { smithing: { level: 7, xp: xpForLevel(7) } },
+        },
+        bank: { items: [{ itemId: "bronze-bar", qty: 3 }] },
+      }),
+    );
+    engine.selectRecipe("bronze-platelegs");
+    for (let i = 0; i < 11; i++) engine.tick();
+
+    const afterCraft = engine.snapshot();
+    expect(afterCraft.bank.items.find((s) => s.itemId === "bronze-bar")).toBeUndefined();
+    expect(afterCraft.bank.items.find((s) => s.itemId === "bronze-platelegs")?.qty).toBe(1);
+    expect(afterCraft.player.skills.smithing.xp).toBe(xpForLevel(7) + 36);
+
+    engine.equip("bronze-platelegs");
+    expect(engine.snapshot().player.equipment.legs).toBe("bronze-platelegs");
+  });
+
+  it("leather chaps crafting and equip behavior is unchanged (#342)", () => {
+    const byId = Object.fromEntries(content.recipes.map((r) => [r.id, r]));
+    expect(byId["craft-leather-chaps"]).toMatchObject({
+      outputItemId: "leather-chaps",
+    });
+    const chaps = content.items.find((i) => i.id === "leather-chaps");
+    expect(chaps).toMatchObject({ kind: "equipment", slot: "legs" });
+  });
 });
