@@ -129,6 +129,12 @@ describe("Bone Crypt content", () => {
     expect(shadeBladeEntry!.chance).toBeLessThanOrEqual(1 / 256);
   });
 
+  it("shade-blade still carries strBonus 34 and no rangedStr (#361)", () => {
+    const shadeBlade = content.items.find((i) => i.id === "shade-blade");
+    expect(shadeBlade).toMatchObject({ strBonus: 34 });
+    expect(shadeBlade?.kind === "equipment" && shadeBlade.rangedStr).toBeUndefined();
+  });
+
   it("the Shade Blade out-bonuses every mithril weapon and every earlier weapon in the game", () => {
     const shadeBlade = content.items.find((i) => i.id === "shade-blade");
     const mithrilDagger = content.items.find((i) => i.id === "mithril-dagger");
@@ -144,7 +150,8 @@ describe("Bone Crypt content", () => {
         i.slot === "weapon" &&
         i.id !== "shade-blade" &&
         !i.id.startsWith("adamant-") &&
-        !i.id.startsWith("rune-"),
+        !i.id.startsWith("rune-") &&
+        i.attackType !== "ranged",
     ) as { atkBonus: number; strBonus: number }[];
     expect(weapons.length).toBeGreaterThan(0);
     for (const weapon of weapons) {
@@ -167,12 +174,12 @@ describe("Bone Crypt content", () => {
     };
     const runeShortbow = content.items.find((i) => i.id === "rune-shortbow") as {
       atkBonus: number;
-      strBonus: number;
+      rangedStr: number;
     };
     expect(runeSword.atkBonus).toBeLessThan(shadeBlade.atkBonus);
     expect(runeSword.strBonus).toBeLessThan(shadeBlade.strBonus);
     expect(runeShortbow.atkBonus).toBeGreaterThan(shadeBlade.atkBonus);
-    expect(runeShortbow.strBonus).toBeGreaterThan(shadeBlade.strBonus);
+    expect(runeShortbow.rangedStr).toBeGreaterThan(shadeBlade.strBonus);
   });
 
   it("mithril Equipment out-bonuses its steel equivalent", () => {

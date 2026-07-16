@@ -4695,7 +4695,7 @@ describe("Ranged and Magic Skills (#7, #339 mode-aware Combat Style)", () => {
             slot: "weapon" as const,
             attackType: "ranged" as const,
             atkBonus: 10,
-            strBonus: 30,
+            rangedStr: 30,
             def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
             attackSpeed: 1,
             value: 20,
@@ -5141,6 +5141,146 @@ describe("Attack Type axis (#99)", () => {
       const lowAtkStr = runRanged(40, 1, 1);
       const highAtkStr = runRanged(40, 99, 99);
       expect(highAtkStr).toEqual(lowAtkStr);
+    });
+  });
+
+  describe("#361: split strBonus — rangedStr is ranged-only, strBonus is melee-only", () => {
+    function observedRangedMaxDamage(
+      content = fixtureContent,
+      equipment: Record<string, string> = {},
+      rangedLevel = 99,
+    ): number {
+      const engine = createEngine(
+        content,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "accurate",
+            skills: {
+              ranged: { level: rangedLevel, xp: xpForLevel(rangedLevel) },
+              hitpoints: { level: 40, xp: xpForLevel(40) },
+            },
+            equipment: { weapon: "bow", ...equipment },
+            quiver: { itemId: "arrow", qty: 100_000 },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy");
+      let max = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") max = Math.max(max, e.damage);
+      });
+      for (let i = 0; i < 2000; i++) engine.tick();
+      expect(max).toBeGreaterThan(0);
+      return max;
+    }
+
+    function observedMeleeMaxDamage(
+      content = fixtureContent,
+      equipment: Record<string, string> = {},
+    ): number {
+      const engine = createEngine(
+        content,
+        seededRng(42),
+        makeSnapshot({
+          player: {
+            combatStyle: "aggressive",
+            skills: {
+              attack: { level: 90, xp: xpForLevel(90) },
+              strength: { level: 90, xp: xpForLevel(90) },
+              hitpoints: { level: 40, xp: xpForLevel(40) },
+            },
+            equipment: { weapon: "bronze-sword", ...equipment },
+          },
+        }),
+      );
+      engine.selectMonster("control-dummy");
+      let max = 0;
+      engine.on("attack", (e) => {
+        if (e.actor === "player") max = Math.max(max, e.damage);
+      });
+      for (let i = 0; i < 2000; i++) engine.tick();
+      expect(max).toBeGreaterThan(0);
+      return max;
+    }
+
+    it("an item with only strBonus contributes zero to ranged max hit", () => {
+      const strOnlyAmulet = {
+        kind: "equipment" as const,
+        id: "str-only-amulet",
+        name: "Str Only Amulet",
+        icon: "goblin-charm",
+        slot: "amulet" as const,
+        strBonus: 50,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const content = {
+        ...fixtureContent,
+        items: [
+          ...fixtureContent.items.map((i) => {
+            if (i.id === "bow" && i.kind === "equipment") {
+              const { strBonus: _strBonus, ...bow } = i;
+              return { ...bow, rangedStr: 0 };
+            }
+            return i;
+          }),
+          strOnlyAmulet,
+        ],
+      };
+      const without = observedRangedMaxDamage(content);
+      const withAmulet = observedRangedMaxDamage(content, { amulet: "str-only-amulet" });
+      expect(withAmulet).toBe(without);
+    });
+
+    it("an item with only rangedStr contributes zero to melee max hit", () => {
+      const rangedOnlyAmulet = {
+        kind: "equipment" as const,
+        id: "ranged-only-amulet",
+        name: "Ranged Only Amulet",
+        icon: "goblin-charm",
+        slot: "amulet" as const,
+        rangedStr: 50,
+        def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+        value: 1,
+      };
+      const content = {
+        ...fixtureContent,
+        items: [...fixtureContent.items, rangedOnlyAmulet],
+      };
+      const without = observedMeleeMaxDamage(content);
+      const withAmulet = observedMeleeMaxDamage(content, { amulet: "ranged-only-amulet" });
+      expect(withAmulet).toBe(without);
+    });
+
+    it("bow rangedStr + arrow rangedStr asserts the exact ranged max hit", () => {
+      const bowRangedStr = 20;
+      const arrowRangedStr = 10;
+      const rangedLevel = 50;
+      const content = {
+        ...fixtureContent,
+        items: fixtureContent.items.map((i) => {
+          if (i.id === "bow" && i.kind === "equipment") {
+            const { strBonus: _strBonus, ...bow } = i;
+            return { ...bow, rangedStr: bowRangedStr };
+          }
+          if (i.id === "arrow" && i.kind === "ammo") {
+            return { ...i, rangedStr: arrowRangedStr };
+          }
+          return i;
+        }),
+      };
+      const eff = Math.floor(effectiveLevel(rangedLevel, "ranged", "accurate", "ranged") * 1);
+      const expected = maxHit(eff, bowRangedStr + arrowRangedStr);
+      const observed = observedRangedMaxDamage(content, {}, rangedLevel);
+      expect(observed).toBe(expected);
+    });
+
+    it("melee max hit is byte-for-byte unchanged for a pinned bronze-sword loadout", () => {
+      const eff = Math.floor(effectiveLevel(90, "strength", "aggressive", "melee") * 1);
+      const expected = maxHit(eff, 30); // bronze-sword strBonus
+      const observed = observedMeleeMaxDamage();
+      expect(observed).toBe(expected);
     });
   });
 

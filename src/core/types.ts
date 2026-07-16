@@ -107,8 +107,13 @@ export interface EquipmentDef {
    * amulets/rings may carry atk/str bonuses, mechanically distinct from every other armour slot,
    * which must NOT declare these (validateContent enforces both halves of this rule). */
   atkBonus?: number;
-  /** Weapons only, PLUS jewelry (slot amulet|ring, #117) — see atkBonus's doc above. */
+  /** Melee Strength bonus — flat, folded into melee max hit. Weapons + jewelry only. MELEE ONLY:
+   * ranged reads `rangedStr`, magic reads `magicDamage` (see #362). */
   strBonus?: number;
+  /** Ranged Strength bonus — flat, folded into ranged max hit alongside the loaded arrow's own
+   * `AmmoDef.rangedStr`. Bows + jewelry. Mirrors OSRS, where Ranged Strength is a stat distinct
+   * from melee Strength bonus and appears on gear as well as ammunition. */
+  rangedStr?: number;
   /** Every piece's defence, per Attack Type (#99) — replaces the old scalar defBonus. All five
    * keys are required (a compile error forces every content site to update). */
   def: Record<AttackType, number>;
@@ -219,7 +224,7 @@ export interface AmmoDef {
    * (`SpellDef.runeId` -> this item; validateContent enforces agreement). Required for runes,
    * forbidden on arrows (validateContent enforces both halves). */
   element?: Element;
-  /** Arrows only: ranged-strength bonus folded into ranged max hit alongside gear's strBonus
+  /** Arrows only: ranged-strength bonus folded into ranged max hit alongside gear's rangedStr
    * (`playerAccuracyAndMaxHit`'s ranged branch, engine.ts) — the bow decides accuracy, the arrow
    * decides power. Required for arrows, forbidden on runes (magic max hit is spell-driven, not
    * strength-shaped — runes add no strength). */

@@ -220,6 +220,10 @@ export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef
   const tierIndex = GEAR_TIERS.indexOf(tier);
   const row = WEAPON_TABLE[family];
   const { id, name } = resolveIdName(tier, family);
+  // baseStr/stepStr are one power curve interpreted per family: ranged weapons emit rangedStr,
+  // melee/magic weapons emit strBonus (#361; #362 adds the magic case).
+  const strValue = row.baseStr + sumSteps(row.stepStr, tierIndex);
+  const strField = row.attackType === "ranged" ? { rangedStr: strValue } : { strBonus: strValue };
   return {
     kind: "equipment",
     id,
@@ -228,7 +232,7 @@ export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef
     slot: row.slot,
     attackType: row.attackType,
     atkBonus: row.baseAtk + sumSteps(row.stepAtk, tierIndex),
-    strBonus: row.baseStr + sumSteps(row.stepStr, tierIndex),
+    ...strField,
     def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
     attackSpeed: row.attackSpeed,
     ...(family === "shortbow" ? { twoHanded: true as const } : {}),
