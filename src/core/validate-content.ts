@@ -12,6 +12,16 @@ import type {
   SpellDef,
 } from "./types";
 
+/** Module-private nominal marker: only `resolveContent` attaches this to a value. */
+const RESOLVED_CONTENT_MARKER: unique symbol = Symbol("resolvedContent");
+
+function isResolvedContent(content: Content | ResolvedContent): content is ResolvedContent {
+  return (
+    RESOLVED_CONTENT_MARKER in content &&
+    (content as ResolvedContent)[RESOLVED_CONTENT_MARKER] === true
+  );
+}
+
 /**
  * Validates Content once, at the construction seam (called by `createEngine`).
  * Pure and aggregate: it never stops at the first problem, so a content author
@@ -288,6 +298,7 @@ function duplicateIds(entries: { id: string }[], collectionName: string): string
  * id in O(1) instead of re-scanning a `Content` array on every read.
  */
 export interface ResolvedContent extends Content {
+  [RESOLVED_CONTENT_MARKER]: true;
   areasById: ReadonlyMap<string, AreaDef>;
   monstersById: ReadonlyMap<string, MonsterDef>;
   itemsById: ReadonlyMap<string, ItemDef>;
@@ -306,9 +317,14 @@ export interface ResolvedContent extends Content {
  * Validates `content` (same aggregate pass as `validateContent`, thrown with the byte-identical
  * message `createEngine` used to build inline) and, once clean, builds the by-id maps once. The
  * single construction seam for `ResolvedContent` — `createEngine` and `boot.ts` both call this
- * instead of validating and indexing separately.
+ * instead of validating and indexing separately. Idempotent: an already-resolved value (private
+ * marker present) is returned as-is without re-validating or rebuilding maps.
  */
-export function resolveContent(content: Content): ResolvedContent {
+export function resolveContent(content: Content | ResolvedContent): ResolvedContent {
+  if (isResolvedContent(content)) {
+    return content;
+  }
+
   const violations = validateContent(content);
   if (violations.length > 0) {
     throw new Error(`Invalid Content:\n${violations.map((v) => `  - ${v}`).join("\n")}`);
@@ -325,6 +341,7 @@ export function resolveContent(content: Content): ResolvedContent {
     spellsById: byId(content.spells),
     spellsByRuneId: new Map(content.spells.map((s) => [s.runeId, s])),
     petsById: byId(content.pets),
+    [RESOLVED_CONTENT_MARKER]: true,
   };
 }
 

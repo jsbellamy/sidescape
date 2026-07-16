@@ -766,4 +766,36 @@ describe("resolveContent (#185)", () => {
       /Content defines no currency item[\s\S]*Content defines no spells/,
     );
   });
+
+  it("returns the exact same object when called again on ResolvedContent", () => {
+    const once = resolveContent(fixtureContent);
+    const twice = resolveContent(once);
+    expect(twice).toBe(once);
+  });
+
+  it("does not rebuild by-id maps on re-resolve", () => {
+    const once = resolveContent(fixtureContent);
+    const twice = resolveContent(once);
+    expect(twice.monstersById).toBe(once.monstersById);
+    expect(twice.itemsById).toBe(once.itemsById);
+  });
+
+  it("validates and re-indexes Content that has map-shaped properties but no private marker", () => {
+    const first = resolveContent(fixtureContent);
+    const forged = {
+      ...fixtureContent,
+      areasById: first.areasById,
+      monstersById: first.monstersById,
+      itemsById: first.itemsById,
+      fishingSpotsById: first.fishingSpotsById,
+      dungeonsById: first.dungeonsById,
+      recipesById: first.recipesById,
+      spellsById: first.spellsById,
+      spellsByRuneId: first.spellsByRuneId,
+      petsById: first.petsById,
+    };
+    const resolved = resolveContent(forged);
+    expect(resolved).not.toBe(forged);
+    expect(resolveContent(resolved)).toBe(resolved);
+  });
 });
