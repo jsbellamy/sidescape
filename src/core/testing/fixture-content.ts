@@ -189,7 +189,7 @@ export const fixtureContent: Content = {
       slot: "weapon",
       attackType: "magic",
       atkBonus: 10,
-      strBonus: 30,
+      magicDamage: 0,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 4,
       value: 20,

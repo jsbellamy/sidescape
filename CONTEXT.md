@@ -32,8 +32,12 @@ _Avoid_: attack style (reserved for Combat Style), damage type
 A piece of Equipment's or a Monster's defence bonus, broken out per **Attack Type** rather than a single scalar — five numbers (stab/slash/crush/ranged/magic) instead of one. An accuracy roll checks the Defence Vector entry matching the attacker's own Attack Type; the level half of the roll (Defence Skill for the player, `defenceLevel` for a Monster) stays a single number, untouched.
 _Avoid_: defence bonus (singular, pre-Combat-Depth terminology), resistance
 
+**Offence stats (three-stat model)**:
+Equipment carries one of three mode-specific power stats, each summed across equipped gear slots: **Strength bonus** (`strBonus`, flat — melee max hit only), **Ranged Strength** (`rangedStr`, flat — ranged max hit, alongside arrow `rangedStr`), and **Magic damage** (`magicDamage`, percent — multiplies the cast Spell's `baseMaxHit`). A stat on gear for one mode never bleeds into another; melee reads `strBonus`, ranged reads `rangedStr`, magic reads `magicDamage`.
+_Avoid_: strBonus as a catch-all power stat (split across modes since #361/#362)
+
 **Spell**:
-Magic's own content ladder — a Magic-level-gated selection (`levelReq`) that decides the player's magic max hit (`baseMaxHit`) directly, the way a weapon decides melee/Ranged's; Magic level gates WHICH Spell can be selected, the Spell itself decides the damage. Selecting a Spell is a loadout choice like Combat Style, legal any time and independent of the active Monster/Fishing Spot/Dungeon/Recipe. Every Spell carries one **Element**.
+Magic's own content ladder — a Magic-level-gated selection (`levelReq`) whose `baseMaxHit` sets the spell's base damage ceiling; equipped gear's **Magic damage** % scales that ceiling (`floor(baseMaxHit × (1 + magicDamage / 100))`), the way melee/Ranged gear scales their max hits. Magic level gates WHICH Spell can be selected and drives accuracy only — it never raises max hit. Selecting a Spell is a loadout choice like Combat Style, legal any time and independent of the active Monster/Fishing Spot/Dungeon/Recipe. Every Spell carries one **Element**.
 _Avoid_: element-on-staff (rejected design — Spells are content, not a weapon property)
 
 **Element**:
@@ -41,7 +45,7 @@ One of air, water, earth, or fire — a property of a **Spell** only; melee and 
 _Avoid_: damage type (reserved for **Attack Type**)
 
 **Weakness**:
-A Monster's optional `weakElement` and the ×1.5 damage bonus a matching **Spell** deals against it — the ONE damage-side modifier in the otherwise accuracy-only Hybrid combat model (every other Skill/Attack Type change is an accuracy or max-hit shift, never a multiplier). Keys off the `attack` event's `hit` flag: an accuracy miss never gets it, a zero-damage hit still does.
+A Monster's optional `weakElement` and the ×1.5 damage bonus a matching **Spell** deals against it — one of two damage-side multipliers in combat (the other is gear **Magic damage** % on max hit). Both apply independently: `magicDamage` scales the spell's max-hit ceiling before the roll; **Weakness** multiplies the rolled damage after. Keys off the `attack` event's `hit` flag: an accuracy miss never gets it, a zero-damage hit still does.
 _Avoid_: resistance (reserved for **Defence Vector**), elemental wheel (not implemented — explicit per-Monster weakness only)
 
 **Weak Spot**:
@@ -53,7 +57,7 @@ One of meadow, forest, sewer, crypt, town, or glacier — required on every **Ar
 _Avoid_: zone palette (as the general term — use Theme)
 
 **Modifier**:
-The boost system: temporary percentage boosts from an active **Potion**, permanent percentage boosts from owned **Pets** (summing across the roster), plus the +3 **Combat Style** effective-level boost. Accuracy/level-side only — the Hybrid model's one damage-side modifier remains **Weakness**.
+The boost system: temporary percentage boosts from an active **Potion**, permanent percentage boosts from owned **Pets** (summing across the roster), plus the +3 **Combat Style** effective-level boost. Accuracy/level-side only — combat's damage-side multipliers are **Weakness** (rolled damage) and gear **Magic damage** % (max hit).
 _Avoid_: buff (as the general term), multiplier (reserved for Weakness damage)
 
 **Tick**:

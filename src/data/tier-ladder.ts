@@ -113,9 +113,11 @@ export const WEAPON_TABLE: Record<WeaponFamily, WeaponFamilyRow> = {
     attackType: "magic",
     attackSpeed: 6,
     baseAtk: 4,
-    baseStr: 5,
+    // #362: percent magic-damage scale (0→15%), not the old flat str curve — staves are mostly
+    // an accuracy ladder; spell progression carries magic's damage scaling (#364).
+    baseStr: 0,
     stepAtk: [5, 5, 5, 8, 8],
-    stepStr: [6, 6, 6, 9, 9],
+    stepStr: [3, 2, 3, 4, 3],
     baseValue: 25,
   },
 };
@@ -220,10 +222,15 @@ export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef
   const tierIndex = GEAR_TIERS.indexOf(tier);
   const row = WEAPON_TABLE[family];
   const { id, name } = resolveIdName(tier, family);
-  // baseStr/stepStr are one power curve interpreted per family: ranged weapons emit rangedStr,
-  // melee/magic weapons emit strBonus (#361; #362 adds the magic case).
+  // baseStr/stepStr are one power curve interpreted per family: ranged → rangedStr, magic →
+  // magicDamage (%), melee → strBonus (#361, #362).
   const strValue = row.baseStr + sumSteps(row.stepStr, tierIndex);
-  const strField = row.attackType === "ranged" ? { rangedStr: strValue } : { strBonus: strValue };
+  const strField =
+    row.attackType === "ranged"
+      ? { rangedStr: strValue }
+      : row.attackType === "magic"
+        ? { magicDamage: strValue }
+        : { strBonus: strValue };
   return {
     kind: "equipment",
     id,

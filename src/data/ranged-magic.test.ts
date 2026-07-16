@@ -31,7 +31,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       slot: "weapon",
       attackType: "magic",
       atkBonus: 4,
-      strBonus: 5,
+      magicDamage: 0,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 6,
       value: 25,

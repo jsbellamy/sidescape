@@ -129,10 +129,11 @@ describe("Bone Crypt content", () => {
     expect(shadeBladeEntry!.chance).toBeLessThanOrEqual(1 / 256);
   });
 
-  it("shade-blade still carries strBonus 34 and no rangedStr (#361)", () => {
+  it("shade-blade still carries strBonus 34 and no rangedStr or magicDamage (#361, #362)", () => {
     const shadeBlade = content.items.find((i) => i.id === "shade-blade");
     expect(shadeBlade).toMatchObject({ strBonus: 34 });
     expect(shadeBlade?.kind === "equipment" && shadeBlade.rangedStr).toBeUndefined();
+    expect(shadeBlade?.kind === "equipment" && shadeBlade.magicDamage).toBeUndefined();
   });
 
   it("the Shade Blade out-bonuses every mithril weapon and every earlier weapon in the game", () => {
@@ -151,7 +152,8 @@ describe("Bone Crypt content", () => {
         i.id !== "shade-blade" &&
         !i.id.startsWith("adamant-") &&
         !i.id.startsWith("rune-") &&
-        i.attackType !== "ranged",
+        i.attackType !== "ranged" &&
+        i.attackType !== "magic",
     ) as { atkBonus: number; strBonus: number }[];
     expect(weapons.length).toBeGreaterThan(0);
     for (const weapon of weapons) {

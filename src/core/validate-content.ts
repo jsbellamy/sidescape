@@ -79,6 +79,10 @@ export function validateContent(content: Content): string[] {
         if (item.rangedStr === undefined) {
           violations.push(`weapon "${item.id}" declares no rangedStr`);
         }
+      } else if (item.attackType === "magic") {
+        if (item.magicDamage === undefined) {
+          violations.push(`weapon "${item.id}" declares no magicDamage`);
+        }
       } else if (item.strBonus === undefined) {
         violations.push(`weapon "${item.id}" declares no strBonus`);
       }
