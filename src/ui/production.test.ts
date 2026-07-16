@@ -79,8 +79,139 @@ describe("productionLabel", () => {
   });
 });
 
+/** Extract `data-recipe-row` ids in DOM order from production panel markup. */
+function recipeRowOrder(markup: string): string[] {
+  return [...markup.matchAll(/data-recipe-row="([^"]+)"/g)]
+    .map((m) => m[1])
+    .filter((id): id is string => id !== undefined);
+}
+
 describe("productionPanelMarkup", () => {
   const smithing = PRODUCTION_SKILLS.find((d) => d.skill === "smithing")!;
+
+  const sortFixtureContent = {
+    ...fixtureContent,
+    recipes: [
+      {
+        id: "z-high",
+        name: "High Level",
+        skill: "smithing" as const,
+        levelReq: 8,
+        inputs: [{ itemId: "bar", qty: 1 }],
+        outputItemId: "bronze-sword",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+      {
+        id: "a-low",
+        name: "Low Level",
+        skill: "smithing" as const,
+        levelReq: 1,
+        inputs: [{ itemId: "bar", qty: 1 }],
+        outputItemId: "bronze-sword",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+      {
+        id: "m-mid",
+        name: "Mid Level",
+        skill: "smithing" as const,
+        levelReq: 6,
+        inputs: [{ itemId: "bar", qty: 1 }],
+        outputItemId: "bronze-sword",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+      // Same levelReq — input order is z-before-a; display must sort by id ascending.
+      {
+        id: "z-tie",
+        name: "Z Tie",
+        skill: "smithing" as const,
+        levelReq: 3,
+        inputs: [{ itemId: "bar", qty: 1 }],
+        outputItemId: "bronze-sword",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+      {
+        id: "a-tie",
+        name: "A Tie",
+        skill: "smithing" as const,
+        levelReq: 3,
+        inputs: [{ itemId: "bar", qty: 1 }],
+        outputItemId: "bronze-sword",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+    ],
+  };
+
+  it("sorts recipes by levelReq ascending, then id, regardless of content.recipes insertion order (#338)", () => {
+    const markup = productionPanelMarkup(smithing, sortFixtureContent, [], 99);
+    expect(recipeRowOrder(markup)).toEqual(["a-low", "a-tie", "z-tie", "m-mid", "z-high"]);
+  });
+
+  it("sorts cooking, crafting, and herblore recipe lists the same way (#338)", () => {
+    const sharedRecipes = [
+      {
+        id: "z-recipe",
+        name: "Z Recipe",
+        skill: "cooking" as const,
+        levelReq: 10,
+        inputs: [{ itemId: "raw-fish", qty: 1 }],
+        outputItemId: "meat",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+      {
+        id: "a-recipe",
+        name: "A Recipe",
+        skill: "cooking" as const,
+        levelReq: 2,
+        inputs: [{ itemId: "raw-fish", qty: 1 }],
+        outputItemId: "meat",
+        xp: 10,
+        craftTicks: 1,
+      } satisfies RecipeDef,
+    ];
+
+    const cooking = PRODUCTION_SKILLS.find((d) => d.skill === "cooking")!;
+    const cookingMarkup = productionPanelMarkup(
+      cooking,
+      { ...fixtureContent, recipes: sharedRecipes },
+      [],
+      99,
+    );
+    expect(recipeRowOrder(cookingMarkup)).toEqual(["a-recipe", "z-recipe"]);
+
+    const craftingRecipes = sharedRecipes.map((r) => ({
+      ...r,
+      skill: "crafting" as const,
+      inputs: [{ itemId: "hide", qty: 1 }],
+    }));
+    const crafting = PRODUCTION_SKILLS.find((d) => d.skill === "crafting")!;
+    const craftingMarkup = productionPanelMarkup(
+      crafting,
+      { ...fixtureContent, recipes: craftingRecipes },
+      [],
+      99,
+    );
+    expect(recipeRowOrder(craftingMarkup)).toEqual(["a-recipe", "z-recipe"]);
+
+    const herbloreRecipes = sharedRecipes.map((r) => ({
+      ...r,
+      skill: "herblore" as const,
+      inputs: [{ itemId: "herb", qty: 1 }],
+    }));
+    const herblore = PRODUCTION_SKILLS.find((d) => d.skill === "herblore")!;
+    const herbloreMarkup = productionPanelMarkup(
+      herblore,
+      { ...fixtureContent, recipes: herbloreRecipes },
+      [],
+      99,
+    );
+    expect(recipeRowOrder(herbloreMarkup)).toEqual(["a-recipe", "z-recipe"]);
+  });
 
   it("renders one recipe row per matching Recipe, with level req and owned counts for each input", () => {
     const markup = productionPanelMarkup(smithing, fixtureContent, [{ itemId: "bar", qty: 0 }], 1);
