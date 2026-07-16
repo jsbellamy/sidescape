@@ -1660,6 +1660,186 @@ describe.skip("Event ticker (moved to Activity by #210)", () => {
   });
 });
 
+describe("Bank overflow feed lines (composition, #60/#63)", () => {
+  it("logs an overflow-sold feed line when a sellable combat Drop can't fit a full Loot Zone (#60)", () => {
+    const contentExt = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        ...Array.from({ length: 7 }, (_, i) => ({
+          kind: "material" as const,
+          id: `junk-${i}`,
+          name: `Junk ${i}`,
+          icon: "bronze-bar",
+          value: 1,
+        })),
+      ],
+    };
+    const engine = createEngine(
+      contentExt,
+      seededRng(1),
+      makeSnapshot({
+        lootZone: [
+          { itemId: "bar", qty: 1 },
+          { itemId: "bow", qty: 1 },
+          { itemId: "staff", qty: 1 },
+          { itemId: "junk-0", qty: 1 },
+          { itemId: "junk-1", qty: 1 },
+          { itemId: "junk-2", qty: 1 },
+          { itemId: "junk-3", qty: 1 },
+          { itemId: "junk-4", qty: 1 },
+          { itemId: "junk-5", qty: 1 },
+          { itemId: "junk-6", qty: 1 },
+        ],
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(contentExt), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>('#world-page-host [data-monster="dummy"]')?.click();
+
+    let sold = false;
+    engine.on("overflow-sold", () => {
+      sold = true;
+    });
+    for (let i = 0; i < 20_000 && !sold; i++) engine.tick();
+    expect(sold).toBe(true);
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*sold/i);
+  });
+
+  it("logs an overflow-lost feed line when an unsellable passive arrival can't fit a full Bank", () => {
+    const noValueContent = {
+      ...fixtureContent,
+      items: fixtureContent.items.map((i) => {
+        if (i.id !== "raw-fish" || i.kind === "currency") return i;
+        const { value: _value, ...rest } = i;
+        return rest;
+      }),
+    };
+    const engine = createEngine(
+      noValueContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { skills: { fishing: { level: 1, xp: 0 } } },
+        bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(noValueContent), noopWindowChrome);
+    engine.selectFishingSpot("pond");
+
+    for (let i = 0; i < 3; i++) engine.tick();
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank full.*lost/i);
+  });
+
+  it("logs a duplicate-sold feed line when a repeat Equipment Drop is auto-sold (#63)", () => {
+    const guaranteedSwordDropContent = {
+      ...fixtureContent,
+      monsters: fixtureContent.monsters.map((m) =>
+        m.id === "dummy"
+          ? {
+              ...m,
+              dropTable: [{ itemId: "bronze-sword", qty: 1, chance: 1, band: "uncommon" as const }],
+            }
+          : m,
+      ),
+    };
+    const engine = createEngine(
+      guaranteedSwordDropContent,
+      seededRng(7),
+      makeSnapshot({ bank: { items: [{ itemId: "bronze-sword", qty: 1 }] } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(guaranteedSwordDropContent), noopWindowChrome);
+    engine.selectMonster("dummy");
+
+    let killed = false;
+    engine.on("kill", () => {
+      killed = true;
+    });
+    for (let i = 0; i < 5000 && !killed; i++) engine.tick();
+    expect(killed).toBe(true);
+
+    expect(root.querySelector("#feed li")?.textContent).toMatch(
+      /auto-sold duplicate bronze sword \(\+20g\)/i,
+    );
+  });
+});
+
+describe("Bank destination lifecycle (composition, #327)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", stubLocalStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mixedBank() {
+    return makeSnapshot({
+      player: { gold: 500 },
+      bank: {
+        items: [
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "meat", qty: 3 },
+          { itemId: "bar", qty: 2 },
+          { itemId: "strength-potion", qty: 1 },
+          { itemId: "arrow", qty: 10 },
+        ],
+      },
+    });
+  }
+
+  it("search clears once the Bank Management destination closes, but the filter choice does not", async () => {
+    const engine = createEngine(fixtureContent, seededRng(1), mixedBank());
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+
+    root.querySelector<HTMLButtonElement>("#menu-toggle")?.click();
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
+    );
+
+    root.querySelector<HTMLButtonElement>('[data-bank-filter="food"]')?.click();
+    const searchInput = root.querySelector<HTMLInputElement>("#bank-search");
+    if (!searchInput) throw new Error("#bank-search not found");
+    searchInput.value = "meat";
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(searchInput.value).toBe("meat");
+
+    root.querySelector<HTMLButtonElement>("[data-management-back]")?.click();
+    expect(root.querySelector<HTMLInputElement>("#bank-search")?.value).toBe("");
+
+    root.querySelector<HTMLButtonElement>("#expand-bank-btn")?.click();
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('[data-management-page="bank"]')?.hidden).toBe(false),
+    );
+    expect(
+      root
+        .querySelector<HTMLButtonElement>('[data-bank-filter="food"]')
+        ?.classList.contains("active"),
+    ).toBe(true);
+    const bankIds = [...root.querySelectorAll<HTMLElement>("#bank .tile")].map(
+      (tile) => tile.dataset["item"],
+    );
+    expect(bankIds).toEqual(["meat"]);
+  });
+
+  it("clicking Buy +10 slots logs a feed line via mountApp composition", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ player: { gold: 1000 } }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    root.querySelector<HTMLButtonElement>("#buy-slots-btn")?.click();
+    expect(root.querySelector("#feed li")?.textContent).toMatch(/bank expanded to 110 slots/i);
+  });
+});
+
 describe("Food Slot bar (#61)", () => {
   function foodMount(overrides: Parameters<typeof makeSnapshot>[0] = {}) {
     const engine = createEngine(fixtureContent, seededRng(1), makeSnapshot(overrides));
