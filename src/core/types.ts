@@ -456,7 +456,7 @@ export interface Snapshot {
     /** The Quiver (#119): the single active arrow stack for ranged combat — ONE arrow type at a
      * time, unlike the Rune Pouch below (mirrors a Food Slot's "the store is that ammo's home"
      * shape, but singular, like PotionSlot). `null` = empty. Empty != unloaded: qty may sit at 0
-     * while `itemId` persists (a depleted stack stays "loaded" — see `loadQuiver`/`unloadQuiver`,
+     * while `itemId` persists (a depleted stack stays "loaded" — see `assignLoadoutSlot`/`clearLoadoutSlot`,
      * engine.ts), same as a Food Slot's own qty-0-while-assigned rule. Tolerant load: missing/
      * pre-#119 -> null. */
     quiver: { itemId: string; qty: number } | null;
@@ -464,7 +464,7 @@ export interface Snapshot {
      * Replaces the pre-#221 four-Element Rune Pouch. The loaded rune determines the Spell that is
      * cast (`SpellDef.runeId`) and its `qty` is the number of casts remaining. Empty != unloaded:
      * qty may sit at 0 while `itemId` persists (a depleted stack stays "loaded" — mirrors the
-     * Quiver above exactly, see `loadRuneSlot`/`unloadRuneSlot`, engine.ts). Tolerant load:
+     * Quiver above exactly, see `assignLoadoutSlot`/`clearLoadoutSlot`, engine.ts). Tolerant load:
      * missing/pre-#221 `player.runePouch` -> null, and any stacks found in the old pouch are
      * returned to the Bank (see loadState). */
     runeSlot: { itemId: string; qty: number } | null;

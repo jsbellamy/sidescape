@@ -310,7 +310,7 @@ export interface ResolvedContent extends Content {
   recipesById: ReadonlyMap<string, RecipeDef>;
   spellsById: ReadonlyMap<string, SpellDef>;
   /** Rune itemId -> the one Spell it casts (#221) — validateContent's 1:1 rule guarantees this is
-   * total over every rune item, so `currentSpell()`/`loadRuneSlot` (engine.ts) never need to
+   * total over every rune item, so `currentSpell()`/`assignLoadoutSlot` (engine.ts) never need to
    * re-scan `content.spells` on every lookup. */
   spellsByRuneId: ReadonlyMap<string, SpellDef>;
   petsById: ReadonlyMap<string, PetDef>;

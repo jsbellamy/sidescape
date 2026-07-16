@@ -201,7 +201,7 @@ describe("Herblore content (#118): herbs and charge potions", () => {
           bank: { items: withPotion ? [{ itemId: "strength-potion", qty: 1000 }] : [] },
         }),
       );
-      if (withPotion) engine.assignPotionSlot("strength-potion");
+      if (withPotion) engine.assignLoadoutSlot("potion", "strength-potion");
       // "crypt-shade" has a large HP pool (110) relative to any single hit, so most sampled
       // swings land un-clamped; the rare finishing blow that DOES clamp can only ever read low,
       // never artificially high, so it can't inflate Math.max below.

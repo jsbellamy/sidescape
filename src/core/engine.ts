@@ -137,6 +137,8 @@ type EventHandler<T extends EngineEvent["type"]> = (
   event: Extract<EngineEvent, { type: T }>,
 ) => void;
 
+export type LoadoutKind = "food" | "potion" | "quiver" | "rune";
+
 export interface Engine {
   tick(): void;
   selectMonster(monsterId: string): void;
@@ -149,55 +151,19 @@ export interface Engine {
    * isDuplicateEquipment for the rule. Throws on a non-boolean value. */
   setAutoSellDuplicates(on: boolean): void;
   equip(itemId: string): void;
-  /** Assigns `itemId` (must be Food) to Food Slot `slotIndex` (#61): moves the entire Bank stock
-   * into the slot, which becomes that Food's home — see FoodSlot's doc. Throws on: an out-of-
-   * range index, an unknown/non-Food itemId, that Food already assigned to a DIFFERENT slot, or
-   * zero of it in the Bank. If the slot already holds a different Food, that stock returns to the
-   * Bank first (a swap); if the Bank is full and that return needs a new Bank Slot, throws
-   * "bank is full" (a player command, never auto-sold — same rule as `equip`). */
-  assignFoodSlot(slotIndex: number, itemId: string): void;
-  /** Clears Food Slot `slotIndex` back to `null`, returning its stock to the Bank (same
-   * bank-full throw as `assignFoodSlot`'s swap). A slot already at qty 0 unassigns without
-   * touching the Bank. Throws only on an out-of-range index; unassigning an already-empty
-   * (`null`) slot is a harmless no-op. */
-  unassignFoodSlot(slotIndex: number): void;
+  /** Assigns `itemId` to the named Loadout Slot kind. `slotIndex` picks WHICH Food Slot
+   * (0..FOOD_SLOT_COUNT-1) and is REQUIRED for kind "food"; for the singular kinds
+   * (potion/quiver/rune) it must be omitted. Per ADR-0001 invalid commands throw loudly:
+   * missing/out-of-range food index throws, a provided index on a singular kind throws.
+   * All per-kind rules are preserved verbatim from the commands this replaces. */
+  assignLoadoutSlot(kind: LoadoutKind, itemId: string, slotIndex?: number): void;
+  /** Clears the named slot back to null, returning its stock to the Bank — same throw
+   * and no-op rules as the unassign/unload commands this replaces. Same slotIndex rule
+   * as assignLoadoutSlot (required for "food", forbidden otherwise). */
+  clearLoadoutSlot(kind: LoadoutKind, slotIndex?: number): void;
   /** Eats one unit from Food Slot `slotIndex` (no-overheal, same math as the old `eatFood`).
    * Throws on an out-of-range index, or a `null`/qty-0 slot. */
   eatFromSlot(slotIndex: number): void;
-  /** Assigns `itemId` (must be a Potion the player owns) to the single Potion Slot (#118): moves
-   * the entire Bank stock into the slot and opens one (`qty` = the moved stock, `charges` =
-   * `PotionDef.charges`) — mirrors `assignFoodSlot`'s "the slot is that Item's home" shape, but
-   * singular. Re-assigning the SAME potion type already open tops up `qty` in place (the open
-   * potion's remaining `charges` are kept, buff stays unbroken) rather than wasting it. If a
-   * DIFFERENT potion is already open with `charges > 0`, that potion is consumed/wasted first and
-   * `qty - 1` of it returns to the Bank (owner decision, grilled: "if a player swaps a potion
-   * while there are charges left, it also consumes the potion") — same bank-full throw as
-   * `assignFoodSlot`'s swap if that return needs a new Bank Slot. Throws on an unknown/non-Potion
-   * itemId or zero owned. */
-  assignPotionSlot(itemId: string): void;
-  /** Clears the Potion Slot back to `null`: the open potion is consumed/wasted (same rule as a
-   * swap above) and `qty - 1` of it returns to the Bank (same bank-full throw as
-   * `assignFoodSlot`'s unassign). No-op if the slot is already `null`. */
-  unassignPotionSlot(): void;
-  /** Loads `arrowItemId` (must be an `ammoType: "arrow"` AmmoDef the player owns in the Bank)
-   * into the Quiver (#119): moves the whole Bank stack in. Swapping arrow tiers returns the
-   * previous Quiver stack to the Bank first (bank-full -> loud throw, mirrors `equip`). Throws on
-   * an unknown/non-arrow id or zero owned. */
-  loadQuiver(arrowItemId: string): void;
-  /** Returns the Quiver's stack to the Bank (bank-full -> loud throw); Quiver -> null. No-op if
-   * already empty. */
-  unloadQuiver(): void;
-  /** Loads `runeItemId` (an `ammoType: "rune"` AmmoDef the player owns in the Bank) into the Rune
-   * Slot (#221), moving the whole Bank stack in. Selecting a rune IS selecting a Spell. Throws on:
-   * an unknown or non-rune id; zero owned; and — per ADR-0001 (invalid commands throw loudly,
-   * never silently no-op) — `magic level too low: need ${levelReq}` when the player's Magic level
-   * is below the Spell's levelReq. A rune already in the slot is returned to the Bank first
-   * (bank-full -> loud throw, mirroring `assignFoodSlot`'s swap). Loading the SAME rune tops up
-   * its stack in place. */
-  loadRuneSlot(runeItemId: string): void;
-  /** Returns the Rune Slot's stack to the Bank and empties the slot (bank-full -> loud throw). A
-   * no-op when the slot is already empty. */
-  unloadRuneSlot(): void;
   /** Buys `qty` (default 1) of `itemId` from `content.vendor`'s fixed price list (#119): cost is
    * `price * qty`; throws `` `not enough gold: need ${cost}` `` if short (mirrors `buyBankSlots`)
    * and "bank is full" if a brand-new Bank stack is needed at capacity (a player command, never
@@ -489,7 +455,7 @@ function isNonNegativeIntQty(value: unknown): value is number {
  * `ammoType: "arrow"` AmmoDef -> null (dropped/renamed content, or a corrupted save). qty is
  * coerced to a finite non-negative integer, falling back to 0 (a depleted Quiver legitimately
  * sits at qty 0 while still loaded — see isNonNegativeIntQty above). */
-function loadQuiver(
+function loadSavedQuiver(
   saved: Snapshot,
   content: ResolvedContent,
 ): { itemId: string; qty: number } | null {
@@ -508,8 +474,8 @@ function loadQuiver(
  * dropped `spellId`). An itemId that doesn't resolve to an `ammoType: "rune"` AmmoDef -> null
  * (dropped/renamed content, or a corrupted save). qty is coerced to a finite non-negative integer,
  * falling back to 0 (a depleted Rune Slot legitimately sits at qty 0 while still loaded — mirrors
- * loadQuiver's own tolerance exactly). */
-function loadRuneSlot(
+ * loadSavedQuiver's own tolerance exactly). */
+function loadSavedRuneSlot(
   saved: Snapshot,
   content: ResolvedContent,
 ): { itemId: string; qty: number } | null {
@@ -802,8 +768,8 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
     autoSellDuplicates: loadAutoSellDuplicates(saved),
     foodSlots: loadFoodSlots(saved, content),
     potionSlot: loadPotionSlot(saved, content),
-    quiver: loadQuiver(saved, content),
-    runeSlot: loadRuneSlot(saved, content),
+    quiver: loadSavedQuiver(saved, content),
+    runeSlot: loadSavedRuneSlot(saved, content),
     quiverOutWarned: false,
     runeOutWarned: false,
     activity,
@@ -1059,7 +1025,7 @@ export function createEngine(
 
   /** The Bank Slot invariant, stated once (#88): a top-up of an existing stack always fits; a
    * brand-new stack needs a free slot. `pulled` (default 0) is how many stacks the caller is
-   * about to remove from `store` in the same operation — equip/assignFoodSlot check the
+   * about to remove from `store` in the same operation — equip/assignLoadoutSlot check the
    * swap-back AFTER pulling the incoming item's own stack, because pulling its last unit can
    * itself free the slot the swap needs. */
   function hasRoomForNewStack(
@@ -1073,10 +1039,10 @@ export function createEngine(
   }
 
   // --- Loadout Slot seam (#182): the resolve-item/assert-kind/assert-ownership/pull-then-check
-  // swap dance shared by the eight Food Slot / Potion Slot / Quiver / Rune Pouch commands below.
+  // swap dance shared by assignLoadoutSlot/clearLoadoutSlot below.
   // Per-kind specifics (Food's slot bounds and "already assigned" check, Potion's charge
-  // top-up/waste rules, the Rune Pouch's per-Element keying) stay in their own commands; only the
-  // dance's shared pieces live here.
+  // top-up/waste rules, the Rune Slot's levelReq gate) stay in their own private assign/clear
+  // branches; only the dance's shared pieces live here.
 
   /** Resolves `itemId` to its ItemDef, throwing `kindError` unless it exists and `isKind`
    * accepts it — the resolve-and-assert-kind half of the Loadout Slot dance. Kept separate from
@@ -1104,8 +1070,8 @@ export function createEngine(
 
   /** The combined resolve/assert-kind/assert-ownership dance (#182) for the Loadout Slot commands
    * whose per-kind checks never need to run between the kind and ownership checks (Potion Slot).
-   * Food Slot's own "already assigned" check DOES run between the two, so `assignFoodSlot`
-   * composes `resolveItem`/`assertOwned` directly instead of this. */
+   * Food Slot's own "already assigned" check DOES run between the two, so the food branch of
+   * assignLoadoutSlot composes `resolveItem`/`assertOwned` directly instead of this. */
   function takeOwned<T extends ItemDef>(
     itemId: string,
     isKind: (def: ItemDef) => def is T,
@@ -1911,6 +1877,138 @@ export function createEngine(
   // Activity resume (monster/fishing selection, cooldowns, monster HP) is already folded into
   // loadState/freshState above — nothing left to do here.
 
+  function requireFoodSlotIndex(slotIndex: number | undefined): number {
+    if (slotIndex === undefined) {
+      throw new Error("food loadout slot requires slotIndex");
+    }
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
+      throw new Error(`invalid food slot index: ${slotIndex}`);
+    }
+    return slotIndex;
+  }
+
+  function rejectSlotIndexForSingularKind(kind: LoadoutKind, slotIndex: number | undefined): void {
+    if (slotIndex !== undefined) {
+      throw new Error(`${kind} loadout slot does not take slotIndex`);
+    }
+  }
+
+  function foodAssignAt(slotIndex: number, itemId: string): void {
+    const def = resolveItem(
+      itemId,
+      (d): d is FoodDef => d.kind === "food",
+      `${itemId} is not Food`,
+    );
+    const elsewhere = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
+    if (elsewhere !== -1 && elsewhere !== slotIndex) {
+      throw new Error(`${def.name} is already assigned to a Food Slot`);
+    }
+    const owned = assertOwned(itemId, def);
+
+    const current = state.foodSlots[slotIndex];
+    let homeQty = owned;
+    if (current && current.itemId === itemId) {
+      homeQty += current.qty;
+    } else {
+      swapBackToBank(current);
+    }
+
+    state.bank.delete(itemId);
+    state.foodSlots[slotIndex] = { itemId, qty: homeQty };
+  }
+
+  function foodClearAt(slotIndex: number): void {
+    const slot = state.foodSlots[slotIndex];
+    if (!slot) return;
+    returnToBank(slot.itemId, slot.qty);
+    state.foodSlots[slotIndex] = null;
+  }
+
+  function potionAssignAt(itemId: string): void {
+    const { def, owned } = takeOwned(
+      itemId,
+      (d): d is PotionDef => d.kind === "potion",
+      `${itemId} is not a Potion`,
+    );
+
+    const current = state.potionSlot;
+    if (current && current.itemId === itemId) {
+      state.bank.delete(itemId);
+      state.potionSlot = { itemId, qty: current.qty + owned, charges: current.charges };
+      return;
+    }
+    if (current && current.charges > 0) {
+      const remaining = current.qty - 1;
+      swapBackToBank(remaining > 0 ? { itemId: current.itemId, qty: remaining } : null);
+    }
+
+    state.bank.delete(itemId);
+    state.potionSlot = { itemId, qty: owned, charges: def.charges };
+  }
+
+  function potionClearAt(): void {
+    const current = state.potionSlot;
+    if (!current) return;
+    returnToBank(current.itemId, current.qty - 1);
+    state.potionSlot = null;
+  }
+
+  function quiverAssignAt(arrowItemId: string): void {
+    const { owned } = takeOwned(
+      arrowItemId,
+      (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "arrow",
+      `${arrowItemId} is not an Arrow`,
+    );
+
+    const current = state.quiver;
+    let homeQty = owned;
+    if (current && current.itemId === arrowItemId) {
+      homeQty += current.qty;
+    } else {
+      swapBackToBank(current);
+    }
+
+    state.bank.delete(arrowItemId);
+    state.quiver = { itemId: arrowItemId, qty: homeQty };
+  }
+
+  function quiverClearAt(): void {
+    const current = state.quiver;
+    if (!current) return;
+    returnToBank(current.itemId, current.qty);
+    state.quiver = null;
+  }
+
+  function runeAssignAt(runeItemId: string): void {
+    const { def, owned } = takeOwned(
+      runeItemId,
+      (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "rune",
+      `${runeItemId} is not a Rune`,
+    );
+    const spell = resolved.spellsByRuneId.get(def.id);
+    if (spell && level("magic") < spell.levelReq) {
+      throw new Error(`magic level too low: need ${spell.levelReq}`);
+    }
+
+    const current = state.runeSlot;
+    let homeQty = owned;
+    if (current && current.itemId === runeItemId) {
+      homeQty += current.qty;
+    } else {
+      swapBackToBank(current);
+    }
+
+    state.bank.delete(runeItemId);
+    state.runeSlot = { itemId: runeItemId, qty: homeQty };
+  }
+
+  function runeClearAt(): void {
+    const current = state.runeSlot;
+    if (!current) return;
+    returnToBank(current.itemId, current.qty);
+    state.runeSlot = null;
+  }
+
   return {
     tick,
     snapshot,
@@ -2066,42 +2164,47 @@ export function createEngine(
       }
       emit({ type: "equipped", itemId });
     },
-    assignFoodSlot(slotIndex, itemId) {
-      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
-        throw new Error(`invalid food slot index: ${slotIndex}`);
+    assignLoadoutSlot(kind, itemId, slotIndex) {
+      switch (kind) {
+        case "food":
+          foodAssignAt(requireFoodSlotIndex(slotIndex), itemId);
+          return;
+        case "potion":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          potionAssignAt(itemId);
+          return;
+        case "quiver":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          quiverAssignAt(itemId);
+          return;
+        case "rune":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          runeAssignAt(itemId);
+          return;
+        default:
+          throw new Error(`unknown loadout kind: ${kind satisfies never}`);
       }
-      const def = resolveItem(
-        itemId,
-        (d): d is FoodDef => d.kind === "food",
-        `${itemId} is not Food`,
-      );
-      const elsewhere = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
-      if (elsewhere !== -1 && elsewhere !== slotIndex) {
-        throw new Error(`${def.name} is already assigned to a Food Slot`);
-      }
-      const owned = assertOwned(itemId, def);
-
-      const current = state.foodSlots[slotIndex];
-      let homeQty = owned;
-      if (current && current.itemId === itemId) {
-        homeQty += current.qty; // topping up a slot that already holds this Food
-      } else {
-        // Swap (or a null/qty-0 slot, a harmless no-op): the old stock returns to the Bank
-        // first — mirrors equip's own pull-then-check ordering above.
-        swapBackToBank(current);
-      }
-
-      state.bank.delete(itemId);
-      state.foodSlots[slotIndex] = { itemId, qty: homeQty };
     },
-    unassignFoodSlot(slotIndex) {
-      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
-        throw new Error(`invalid food slot index: ${slotIndex}`);
+    clearLoadoutSlot(kind, slotIndex) {
+      switch (kind) {
+        case "food":
+          foodClearAt(requireFoodSlotIndex(slotIndex));
+          return;
+        case "potion":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          potionClearAt();
+          return;
+        case "quiver":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          quiverClearAt();
+          return;
+        case "rune":
+          rejectSlotIndexForSingularKind(kind, slotIndex);
+          runeClearAt();
+          return;
+        default:
+          throw new Error(`unknown loadout kind: ${kind satisfies never}`);
       }
-      const slot = state.foodSlots[slotIndex];
-      if (!slot) return; // already unassigned — harmless no-op
-      returnToBank(slot.itemId, slot.qty);
-      state.foodSlots[slotIndex] = null;
     },
     eatFromSlot(slotIndex) {
       if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= FOOD_SLOT_COUNT) {
@@ -2112,98 +2215,6 @@ export function createEngine(
       const def = resolved.itemsById.get(slot.itemId);
       if (!def || def.kind !== "food") throw new Error(`food slot ${slotIndex} is empty`);
       eatFromSlotAt(slotIndex, def);
-    },
-    assignPotionSlot(itemId) {
-      const { def, owned } = takeOwned(
-        itemId,
-        (d): d is PotionDef => d.kind === "potion",
-        `${itemId} is not a Potion`,
-      );
-
-      const current = state.potionSlot;
-      if (current && current.itemId === itemId) {
-        // Re-assigning the same potion type that's already open: top up the stack in place,
-        // keeping its remaining charges — the buff stays unbroken, mirrors assignFoodSlot's own
-        // "topping up a slot that already holds this Item" branch.
-        state.bank.delete(itemId);
-        state.potionSlot = { itemId, qty: current.qty + owned, charges: current.charges };
-        return;
-      }
-      if (current && current.charges > 0) {
-        // Swap: the open potion is consumed/wasted (owner's rule); qty-1 of it returns to the
-        // Bank via the same pull-then-check swap-back as the other three kinds.
-        const remaining = current.qty - 1;
-        swapBackToBank(remaining > 0 ? { itemId: current.itemId, qty: remaining } : null);
-      }
-
-      state.bank.delete(itemId);
-      state.potionSlot = { itemId, qty: owned, charges: def.charges };
-    },
-    unassignPotionSlot() {
-      const current = state.potionSlot;
-      if (!current) return; // already unassigned — harmless no-op
-      // The open potion is consumed/wasted (same rule as a swap above; PotionSlot's invariant
-      // guarantees charges > 0 whenever the slot is non-null, so this always applies).
-      returnToBank(current.itemId, current.qty - 1);
-      state.potionSlot = null;
-    },
-    loadQuiver(arrowItemId) {
-      const { owned } = takeOwned(
-        arrowItemId,
-        (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "arrow",
-        `${arrowItemId} is not an Arrow`,
-      );
-
-      const current = state.quiver;
-      let homeQty = owned;
-      if (current && current.itemId === arrowItemId) {
-        homeQty += current.qty; // topping up the Quiver's already-loaded arrow tier
-      } else {
-        // Swap (or a null/qty-0 Quiver, a harmless no-op): the previous arrow tier returns to
-        // the Bank first — mirrors assignFoodSlot's own pull-then-check ordering.
-        swapBackToBank(current);
-      }
-
-      state.bank.delete(arrowItemId);
-      state.quiver = { itemId: arrowItemId, qty: homeQty };
-    },
-    unloadQuiver() {
-      const current = state.quiver;
-      if (!current) return; // already empty — harmless no-op
-      returnToBank(current.itemId, current.qty);
-      state.quiver = null;
-    },
-    loadRuneSlot(runeItemId) {
-      const { def, owned } = takeOwned(
-        runeItemId,
-        (d): d is AmmoDef => d.kind === "ammo" && d.ammoType === "rune",
-        `${runeItemId} is not a Rune`,
-      );
-      // Selecting a rune IS selecting a Spell (#221): validateContent guarantees every rune
-      // resolves to exactly one Spell, so `spell` is always found here for a resolvable rune.
-      const spell = resolved.spellsByRuneId.get(def.id);
-      if (spell && level("magic") < spell.levelReq) {
-        throw new Error(`magic level too low: need ${spell.levelReq}`);
-      }
-
-      const current = state.runeSlot;
-      let homeQty = owned;
-      if (current && current.itemId === runeItemId) {
-        homeQty += current.qty; // topping up the Rune Slot's already-loaded rune
-      } else {
-        // Swap (or a null/qty-0 Rune Slot, a harmless no-op): the previously loaded rune returns
-        // to the Bank first — mirrors loadQuiver's own pull-then-check ordering.
-        swapBackToBank(current);
-      }
-
-      state.bank.delete(runeItemId);
-      state.runeSlot = { itemId: runeItemId, qty: homeQty };
-    },
-    unloadRuneSlot() {
-      const current = state.runeSlot;
-      if (!current) return; // already empty — harmless no-op
-      returnToBank(current.itemId, current.qty);
-      state.runeSlot = null;
     },
     buy(itemId, qty = 1) {
       if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid buy quantity: ${qty}`);

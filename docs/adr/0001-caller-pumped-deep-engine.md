@@ -17,3 +17,4 @@ The whole game simulation lives behind a single Engine module created via `creat
 ## Status (2026-07-16, issue #350)
 
 The caller-pumped, no-timer, throw-on-invalid, snapshot/events split **stands**. The stated command surface ("selectMonster, setCombatStyle, equip only") is superseded: the Engine now also covers fishing, dungeons, production, Loadout Slots, banking, and the Vendor — see the `Engine` interface in `src/core/engine.ts`. "No idle state" is superseded: `Activity` is nullable; idle exists. Offline gains shipped exactly as this ADR predicted ("pump N ticks on reopen" via `src/ui/offline-progress.ts` at boot); the hypothetical tense above is superseded.
+Loadout Slot commands were collapsed to a parameterised `assignLoadoutSlot`/`clearLoadoutSlot` pair; `eatFromSlot` remains.
