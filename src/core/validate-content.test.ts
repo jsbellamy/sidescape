@@ -136,6 +136,60 @@ describe("validateContent", () => {
     expect(validateContent(content)).toContain('non-weapon "cursed-shield" declares attackType');
   });
 
+  it("permits twoHanded on weapons and rejects it on non-weapons (#340)", () => {
+    const legalTwoHanded: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "two-hand-sword",
+          name: "Two Hand Sword",
+          icon: "bronze-sword",
+          slot: "weapon" as const,
+          attackType: "slash" as const,
+          atkBonus: 10,
+          strBonus: 10,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+          attackSpeed: 4,
+          twoHanded: true,
+        },
+        {
+          kind: "equipment" as const,
+          id: "one-hand-sword",
+          name: "One Hand Sword",
+          icon: "bronze-sword",
+          slot: "weapon" as const,
+          attackType: "slash" as const,
+          atkBonus: 8,
+          strBonus: 8,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+          attackSpeed: 4,
+        },
+      ],
+    };
+    expect(validateContent(legalTwoHanded)).toEqual([]);
+
+    const illegalShield: Content = {
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "cursed-shield",
+          name: "Cursed Shield",
+          icon: "bronze-shield",
+          slot: "shield" as const,
+          def: { stab: 1, slash: 1, crush: 1, ranged: 1, magic: 1 },
+          twoHanded: false,
+        },
+      ],
+    };
+    expect(validateContent(illegalShield)).toContain(
+      'non-weapon "cursed-shield" declares twoHanded',
+    );
+  });
+
   it("permits atkBonus/strBonus on jewelry (amulet/ring slots, #117 — the owner's offence-slot decision)", () => {
     const content: Content = {
       ...fixtureContent,

@@ -218,6 +218,7 @@ export function ladderWeapon(tier: GearTier, family: WeaponFamily): EquipmentDef
     strBonus: row.baseStr + sumSteps(row.stepStr, tierIndex),
     def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
     attackSpeed: row.attackSpeed,
+    ...(family === "shortbow" ? { twoHanded: true as const } : {}),
     value: row.baseValue * 2 ** tierIndex,
   };
 }

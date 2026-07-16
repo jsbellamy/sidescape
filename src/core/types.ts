@@ -114,6 +114,10 @@ export interface EquipmentDef {
   def: Record<AttackType, number>;
   /** Weapons only: Ticks between player attacks. */
   attackSpeed?: number;
+  /** When true, occupying the weapon slot also occupies the shield hand. Equipping this weapon
+   * clears `equipment.shield` to bank; equipping a shield while this is worn clears the weapon to
+   * bank. Omit/false = one-handed. Shortbows are two-handed; staves are not. */
+  twoHanded?: boolean;
   /** Gold per unit when sold from the Bank; omit to make it unsellable. */
   value?: number;
 }

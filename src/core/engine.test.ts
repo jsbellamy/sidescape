@@ -1267,6 +1267,253 @@ describe("Equipment and gates", () => {
       expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
     });
   });
+
+  describe("two-handed shortbows (#340)", () => {
+    it("equipping a bow clears an equipped shield to the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword", shield: "test-shield" } },
+          bank: { items: [{ itemId: "bow", qty: 1 }] },
+        }),
+      );
+      engine.equip("bow");
+      const snap = engine.snapshot();
+      expect(snap.player.equipment.weapon).toBe("bow");
+      expect(snap.player.equipment.shield).toBeNull();
+      expect(snap.bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "test-shield", qty: 1 },
+        ]),
+      );
+    });
+
+    it("equipping a shield while a bow is worn clears the bow to the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bow" } },
+          bank: { items: [{ itemId: "test-shield", qty: 1 }] },
+        }),
+      );
+      engine.equip("test-shield");
+      const snap = engine.snapshot();
+      expect(snap.player.equipment.weapon).toBeNull();
+      expect(snap.player.equipment.shield).toBe("test-shield");
+      expect(snap.bank.items).toEqual([{ itemId: "bow", qty: 1 }]);
+    });
+
+    it("staff and shield may both stay equipped", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "staff" } },
+          bank: { items: [{ itemId: "test-shield", qty: 1 }] },
+        }),
+      );
+      engine.equip("test-shield");
+      const snap = engine.snapshot();
+      expect(snap.player.equipment.weapon).toBe("staff");
+      expect(snap.player.equipment.shield).toBe("test-shield");
+    });
+
+    it("melee weapon and shield remain unchanged when equipping another melee weapon", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword", shield: "test-shield" } },
+          bank: {
+            items: [
+              { itemId: "bronze-sword", qty: 1 },
+              { itemId: "test-shield", qty: 1 },
+            ],
+          },
+        }),
+      );
+      engine.equip("bronze-sword");
+      const snap = engine.snapshot();
+      expect(snap.player.equipment.weapon).toBe("bronze-sword");
+      expect(snap.player.equipment.shield).toBe("test-shield");
+    });
+
+    it('throws "bank is full" when the displaced set needs two new Bank stacks but only one slot is freed', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword", shield: "test-shield" } },
+          bank: {
+            items: [
+              { itemId: "bow", qty: 2 },
+              { itemId: "bar", qty: 1 },
+            ],
+            capacity: 2,
+          },
+        }),
+      );
+      const equipped: string[] = [];
+      engine.on("equipped", (e) => equipped.push(e.itemId));
+      expect(() => engine.equip("bow")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.equipment.weapon).toBe("bronze-sword");
+      expect(engine.snapshot().player.equipment.shield).toBe("test-shield");
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bow", qty: 2 },
+          { itemId: "bar", qty: 1 },
+        ]),
+      );
+      expect(equipped).toEqual([]);
+    });
+
+    it("aggregate preflight: a displaced item that already has a Bank stack does not consume capacity", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword", shield: "test-shield" } },
+          bank: {
+            items: [
+              { itemId: "bow", qty: 1 },
+              { itemId: "test-shield", qty: 1 },
+              { itemId: "bar", qty: 1 },
+            ],
+            capacity: 3,
+          },
+        }),
+      );
+      expect(() => engine.equip("bow")).not.toThrow();
+      expect(engine.snapshot().player.equipment.shield).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "test-shield", qty: 2 },
+        ]),
+      );
+    });
+
+    it("aggregate preflight: pulling the last incoming unit frees one slot for a displaced return", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { shield: "test-shield" } },
+          bank: { items: [{ itemId: "bow", qty: 1 }], capacity: 1 },
+        }),
+      );
+      expect(() => engine.equip("bow")).not.toThrow();
+      expect(engine.snapshot().player.equipment.weapon).toBe("bow");
+      expect(engine.snapshot().player.equipment.shield).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "test-shield", qty: 1 }]);
+    });
+
+    it("aggregate preflight: incoming qty > 1 does not free a slot for displaced returns", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { shield: "test-shield" } },
+          bank: { items: [{ itemId: "bow", qty: 2 }], capacity: 1 },
+        }),
+      );
+      expect(() => engine.equip("bow")).toThrow(/bank is full/i);
+      expect(engine.snapshot().player.equipment.shield).toBe("test-shield");
+    });
+
+    it("quantity-neutral re-equip with another banked copy emits exactly once and never duplicates items", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bow", shield: "test-shield" } },
+          bank: { items: [{ itemId: "bow", qty: 1 }] },
+        }),
+      );
+      const equipped: string[] = [];
+      engine.on("equipped", (e) => equipped.push(e.itemId));
+      engine.equip("bow");
+      expect(equipped).toEqual(["bow"]);
+      expect(engine.snapshot().player.equipment.weapon).toBe("bow");
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "test-shield", qty: 1 },
+          { itemId: "bow", qty: 1 },
+        ]),
+      );
+      const bowCount =
+        (engine.snapshot().bank.items.find((s) => s.itemId === "bow")?.qty ?? 0) +
+        (engine.snapshot().player.equipment.weapon === "bow" ? 1 : 0);
+      expect(bowCount).toBe(2);
+    });
+
+    it("equipping a shield while a bow is worn remaps combat style ranged → melee (#339 compose)", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            combatStyle: "rapid",
+            equipment: { weapon: "bow" },
+          },
+          bank: { items: [{ itemId: "test-shield", qty: 1 }] },
+        }),
+      );
+      engine.equip("test-shield");
+      expect(engine.snapshot().player.combatStyle).toBe("aggressive");
+      expect(engine.snapshot().player.equipment.weapon).toBeNull();
+    });
+
+    it("loads bow+shield saves by moving the shield into the Bank", () => {
+      const noStack = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bow", shield: "test-shield" } },
+          bank: { items: [], capacity: 1 },
+        }),
+      );
+      expect(noStack.snapshot().player.equipment.shield).toBeNull();
+      expect(noStack.snapshot().bank.items).toEqual([{ itemId: "test-shield", qty: 1 }]);
+
+      const withStack = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bow", shield: "test-shield" } },
+          bank: { items: [{ itemId: "test-shield", qty: 2 }] },
+        }),
+      );
+      expect(withStack.snapshot().player.equipment.shield).toBeNull();
+      expect(withStack.snapshot().bank.items).toEqual([{ itemId: "test-shield", qty: 3 }]);
+
+      const fullBank = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bow", shield: "test-shield" } },
+          bank: {
+            items: [
+              { itemId: "bar", qty: 1 },
+              { itemId: "meat", qty: 1 },
+            ],
+            capacity: 2,
+          },
+        }),
+      );
+      expect(fullBank.snapshot().player.equipment.shield).toBeNull();
+      expect(fullBank.snapshot().bank.items).toEqual(
+        expect.arrayContaining([
+          { itemId: "bar", qty: 1 },
+          { itemId: "meat", qty: 1 },
+          { itemId: "test-shield", qty: 1 },
+        ]),
+      );
+    });
+  });
 });
 
 describe("Snapshot player.bonuses (#26)", () => {

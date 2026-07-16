@@ -724,6 +724,22 @@ function loadState(saved: Snapshot, content: ResolvedContent): State {
   const equipment = loadEquipment(saved, content);
   const bank = loadBank(saved, content, currencyId);
   const gold = loadGold(saved, currencyId);
+
+  // Two-handed weapons occupy the shield hand (#340): old saves may have bow+shield both set.
+  // Reconcile immediately after equipment/bank restore, before combat-mode/style derivation.
+  // Tolerant load may temporarily exceed bankCapacity — capacity is enforced at command time only.
+  const weaponId = equipment.weapon;
+  const weaponDef = weaponId ? content.itemsById.get(weaponId) : undefined;
+  if (
+    weaponDef?.kind === "equipment" &&
+    weaponDef.twoHanded === true &&
+    equipment.shield !== null
+  ) {
+    const shieldId = equipment.shield;
+    bank.set(shieldId, (bank.get(shieldId) ?? 0) + 1);
+    equipment.shield = null;
+  }
+
   const combatMode = weaponCombatModeFor(equipment.weapon, content);
   let combatStyle: CombatStyle = isCombatStyle(saved.player?.combatStyle)
     ? saved.player.combatStyle
@@ -1990,31 +2006,63 @@ export function createEngine(
       const owned = state.bank.get(itemId) ?? 0;
       if (owned <= 0) throw new Error(`you do not own ${def.name}`);
 
-      // A player command, so it fails loud rather than auto-selling gear the player owns (#59):
-      // if the previously equipped piece would need a brand-new Bank Slot to return to, and the
-      // Bank is full, throw before mutating anything. Checked as it will be AFTER pulling itemId
-      // out of the Bank below — pulling itemId's own last unit can itself free the Slot the swap
-      // needs, so equipping the same item back into its own slot never wrongly reports full.
+      const oldMode = weaponCombatModeFor(state.equipment.weapon, resolved);
+
+      // Build the complete displaced set for one atomic bank-capacity preflight (#59, #340).
+      const returns: string[] = [];
       const previous = state.equipment[def.slot];
-      if (previous !== null && previous !== itemId) {
-        if (!hasRoomForNewStack(state.bank, state.bankCapacity, previous, owned === 1 ? 1 : 0)) {
+      const sameSlotReequip = previous === itemId;
+      if (previous !== null && !sameSlotReequip) {
+        returns.push(previous);
+      }
+
+      let clearShield = false;
+      let clearWeapon = false;
+      if (def.slot === "weapon" && def.twoHanded === true && state.equipment.shield !== null) {
+        returns.push(state.equipment.shield);
+        clearShield = true;
+      }
+      if (def.slot === "shield") {
+        const weaponId = state.equipment.weapon;
+        const weaponDef = weaponId ? resolved.itemsById.get(weaponId) : undefined;
+        if (weaponDef?.kind === "equipment" && weaponDef.twoHanded === true) {
+          returns.push(weaponId!);
+          clearWeapon = true;
+        }
+      }
+
+      const pulled = owned === 1 ? 1 : 0;
+      const sim = new Map(state.bank);
+      if (owned > 1) sim.set(itemId, owned - 1);
+      else sim.delete(itemId);
+      let simPulled = pulled;
+      for (const returnId of returns) {
+        if (!hasRoomForNewStack(sim, state.bankCapacity, returnId, simPulled)) {
           throw new Error("bank is full");
         }
+        sim.set(returnId, (sim.get(returnId) ?? 0) + 1);
+        simPulled = 0;
+      }
+      if (sameSlotReequip) {
+        sim.set(itemId, (sim.get(itemId) ?? 0) + 1);
       }
 
       if (owned > 1) state.bank.set(itemId, owned - 1);
       else state.bank.delete(itemId);
-      if (previous !== null) {
-        state.bank.set(previous, (state.bank.get(previous) ?? 0) + 1);
+      for (const returnId of returns) {
+        state.bank.set(returnId, (state.bank.get(returnId) ?? 0) + 1);
       }
-      const oldMode =
-        def.slot === "weapon" ? weaponCombatModeFor(state.equipment.weapon, resolved) : null;
+      if (sameSlotReequip) {
+        state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + 1);
+      }
+
       state.equipment[def.slot] = itemId;
-      if (oldMode !== null) {
-        const newMode = weaponCombatModeFor(state.equipment.weapon, resolved);
-        if (oldMode !== newMode) {
-          state.combatStyle = remapCombatStyle(state.combatStyle, newMode);
-        }
+      if (clearShield) state.equipment.shield = null;
+      if (clearWeapon) state.equipment.weapon = null;
+
+      const newMode = weaponCombatModeFor(state.equipment.weapon, resolved);
+      if (oldMode !== newMode) {
+        state.combatStyle = remapCombatStyle(state.combatStyle, newMode);
       }
       emit({ type: "equipped", itemId });
     },
