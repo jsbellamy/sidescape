@@ -18,6 +18,7 @@ describe("Ranged and Magic starter weapons (#7)", () => {
       strBonus: 4,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 5,
+      twoHanded: true,
       value: 25,
     });
 

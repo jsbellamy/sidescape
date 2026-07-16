@@ -220,6 +220,18 @@ describe("ladderWeapon", () => {
     expect(ladderWeapon("mithril", "shortbow").atkBonus).toBe(23);
     expect(ladderWeapon("mithril", "staff").strBonus).toBe(23);
   });
+
+  it("every shortbow is two-handed; staves and melee weapons are one-handed (#340)", () => {
+    for (const family of ["dagger", "mace", "sword"] as const) {
+      for (const tier of GEAR_TIERS) {
+        expect(ladderWeapon(tier, family).twoHanded).toBeUndefined();
+      }
+    }
+    for (const tier of GEAR_TIERS) {
+      expect(ladderWeapon(tier, "shortbow").twoHanded).toBe(true);
+      expect(ladderWeapon(tier, "staff").twoHanded).toBeUndefined();
+    }
+  });
 });
 
 describe("ladderArmour", () => {

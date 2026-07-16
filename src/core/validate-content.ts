@@ -93,6 +93,9 @@ export function validateContent(content: Content): string[] {
           violations.push(`non-weapon "${item.id}" declares strBonus`);
         }
       }
+      if (item.twoHanded !== undefined) {
+        violations.push(`non-weapon "${item.id}" declares twoHanded`);
+      }
     }
   }
 

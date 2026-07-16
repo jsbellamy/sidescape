@@ -168,7 +168,17 @@ export const fixtureContent: Content = {
       strBonus: 30,
       def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
       attackSpeed: 4,
+      twoHanded: true,
       value: 20,
+    },
+    {
+      kind: "equipment",
+      id: "test-shield",
+      name: "Test Shield",
+      icon: "bronze-shield",
+      slot: "shield",
+      def: { stab: 2, slash: 2, crush: 2, ranged: 2, magic: 0 },
+      value: 10,
     },
     {
       kind: "equipment",
