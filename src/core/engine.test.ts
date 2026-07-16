@@ -54,8 +54,11 @@ describe("createEngine content resolution (#320)", () => {
   });
 
   it("constructs from pre-resolved fixtureContent with an equivalent initial snapshot", () => {
-    const fromRaw = createEngine(fixtureContent, seededRng(1));
-    const fromResolved = createEngine(resolveContent(fixtureContent), seededRng(1));
+    // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+    // calls a millisecond apart would flake this equality — pin the clock instead.
+    const now = () => 1_000_000;
+    const fromRaw = createEngine(fixtureContent, seededRng(1), undefined, now);
+    const fromResolved = createEngine(resolveContent(fixtureContent), seededRng(1), undefined, now);
     expect(fromResolved.snapshot()).toEqual(fromRaw.snapshot());
   });
 });
