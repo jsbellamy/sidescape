@@ -191,3 +191,28 @@ describe("close-btn save persistence (#219 chrome pass: #close-btn moved into #w
     expect(saved.player.gold).toBe(engine.snapshot().player.gold);
   });
 });
+
+describe("boot disposal (#325)", () => {
+  it("dispose() clears tick/autosave intervals and reaches mountApp so World clicks no longer dispatch", () => {
+    const now = 10_000_000_000;
+    const root = document.createElement("main");
+    const running = boot(root, {
+      content: fixtureContent,
+      rng: seededRng(1),
+      now: () => now,
+      createChrome: () => noopWindowChrome,
+      closeWindow: async () => {},
+      reload: () => {},
+      confirm: () => true,
+    });
+    runningBoots.push(running);
+
+    const monsterBefore = running.engine.snapshot().monster?.id ?? null;
+    running.dispose();
+    running.dispose();
+
+    root.querySelector<HTMLButtonElement>('#world-page-host [data-monster="dummy"]')?.click();
+
+    expect(running.engine.snapshot().monster?.id ?? null).toBe(monsterBefore);
+  });
+});
