@@ -6,6 +6,7 @@ import type { Content, Rng } from "../core/types";
 import { fixtureContent } from "../core/testing/fixture-content";
 import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
+import { xpForLevel } from "../core/xp";
 import { resolveContent } from "../core/validate-content";
 import { createItemPresentation } from "./item-presentation";
 import { createLootFeed, FEED_MAX_LINES } from "./loot-feed";
@@ -270,6 +271,22 @@ describe("createLootFeed", () => {
       for (let i = 0; i < 20; i++) engine.tick();
       const line = feedItems(root).find((li) => /no rune loaded/i.test(li.textContent ?? ""));
       expect(line?.textContent).toBe("⚠ 🔮 No rune loaded!");
+      expect(line?.className).toBe("overflow");
+    });
+
+    it("out-of-ammo → ⚠ Out of {element} runes! when Rune Slot is depleted (rune need, with element)", () => {
+      const { engine, root } = mountLootFeed(fixtureContent, seededRng(11), {
+        player: {
+          equipment: { weapon: "staff" },
+          runeSlot: { itemId: "air-rune", qty: 0 },
+          skills: { hitpoints: { level: 20, xp: xpForLevel(20) } },
+        },
+      });
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 20; i++) engine.tick();
+      const line = feedItems(root).find((li) => /out of air runes/i.test(li.textContent ?? ""));
+      expect(line?.textContent).toBe("⚠ 🔮 Out of air runes!");
+      expect(line?.className).toBe("overflow");
     });
 
     it("pet-dropped → 🐾 New pet: {name}! with pet-dropped class", () => {
@@ -334,19 +351,26 @@ describe("createLootFeed", () => {
 
   describe("multi-line handlers — prepend order", () => {
     it("dungeon-failed: trailer visually first, then lost stacks", () => {
-      const lethal = {
+      const longRunContent = {
         ...fixtureContent,
         monsters: fixtureContent.monsters.map((m) =>
-          m.id === "dummy" ? { ...m, attackLevel: 99, maxHit: 20, attackSpeed: 1 } : m,
+          m.id === "dummy" ? { ...m, attackLevel: 5, maxHit: 2, attackSpeed: 3 } : m,
+        ),
+        dungeons: fixtureContent.dungeons.map((d) =>
+          d.id === "gauntlet" ? { ...d, waves: [...Array(20).fill("dummy"), "boss-dummy"] } : d,
         ),
       };
-      const { engine, root } = mountLootFeed(lethal, seededRng(42));
+      const { engine, root } = mountLootFeed(longRunContent, seededRng(8));
       engine.enterDungeon("gauntlet");
       pumpUntil(engine, () =>
-        feedItems(root).some((li) => /run failed/i.test(li.textContent ?? "")),
+        feedItems(root).some((li) => li.textContent === "💀 Run failed — loot lost!"),
       );
       const texts = feedItems(root).map((li) => li.textContent);
-      expect(texts).toContain("💀 Run failed — loot lost!");
+      const trailerIdx = texts.indexOf("💀 Run failed — loot lost!");
+      const lostIdx = texts.findIndex((t) => t?.startsWith("-"));
+      expect(trailerIdx).toBeGreaterThanOrEqual(0);
+      expect(lostIdx).toBeGreaterThanOrEqual(0);
+      expect(trailerIdx).toBeLessThan(lostIdx);
     });
 
     it("looted: ≤3 items → one Banked line per item (reversed prepend)", () => {
