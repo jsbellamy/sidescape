@@ -1,6 +1,6 @@
 ---
 name: asset-pipeline
-description: Source-driven SideScape art workflow for generating, ingesting, registering, reviewing, and shipping combat sprites or icons. Use when creating or replacing image-generated raster art, changing sprite/icon compact sources, running art ingest commands, or implementing/reviewing a SideScape asset issue.
+description: Source-driven SideScape art workflow for generating, ingesting, registering, reviewing, and shipping combat sprites or icons. Use when creating or replacing image-generated raster art, changing sprite/icon compact sources, running art ingest commands, implementing/reviewing a SideScape asset issue, or removing stray review PNGs from docs/.
 ---
 
 # Source-driven art
@@ -9,14 +9,16 @@ Move each generated silhouette through the repository's deterministic pipeline. 
 
 ## 1. Ground the run
 
+Pin the **worktree**: run `pwd` and `git rev-parse --show-toplevel` and confirm both are the declared checkout for this issue (the isolated worktree path when one was provided). Every generate, ingest, `npm`, and `git` command starts from that root. When the runtime sandboxes writes, request write access to this worktree so art outputs land here rather than in another checkout.
+
 Read `AGENTS.md` and `docs/art-style.md`. Then read the complete branch guide:
 
 - Combat sprite: `docs/sprite-gen.md`
 - Icon: `docs/icon-gen.md`
 
-For issue work, read the live issue and comments. Record the initial `git status --short`, the named assets, and the issue's allowed file/output list. Preserve unrelated worktree changes. When the live issue conflicts with the current pipeline or repository contract, stop and resolve the specification instead of silently choosing one.
+For issue work, read the live issue and comments. Record the initial `git status --short`, the named assets, and the issue's allowed file/output list (**scope**). Preserve unrelated worktree changes. When the live issue conflicts with the current pipeline or repository contract, stop and resolve the specification instead of silently choosing one.
 
-Done when the asset branch, registry entry, canvas, facing, alpha policy, palette vocabulary, and allowed changed files are known from repository sources rather than guessed.
+Done when the worktree root is verified, and the asset branch, registry entry, canvas, facing, alpha policy, palette vocabulary, and allowed changed files are known from repository sources rather than guessed.
 
 ## 2. Choose the source
 
@@ -69,7 +71,10 @@ Done when ingest passes, the compact source is committed-path material, registry
 
 ## 5. Pass the 1× gate
 
-Inspect the exact Stage-2 preview and then run `npm run art`. Judge the asset at native scale on the relevant 1× sheet, beside its peers and the golden master named by `docs/art-style.md`.
+Inspect the exact Stage-2 preview and then run `npm run art`. Judge the asset at native scale on the pipeline **contact sheet**, beside its peers and the golden master named by `docs/art-style.md`:
+
+- Sprites: `docs/sprite-sheet-1x.png` (and `docs/sprite-sheet-4x.png` when useful)
+- Icons: `docs/icon-silhouette-sheet-1x.png` first, then `docs/icon-sheet-1x.png`
 
 The 1× gate requires all of these:
 
@@ -81,7 +86,9 @@ The 1× gate requires all of these:
 
 Ingest success is not passage through the gate. When the compact result fails, regenerate from the untouched workflow. State the compact failure in the retry prompt, attach the failed compact preview as the negative reference, and exaggerate only the lost feature. Keep a geometrically successful generation fixed when only its palette vocabulary failed.
 
-Done when every requested asset passes the 1× gate; do not advance a merely technically valid asset.
+**Contact-sheet evidence.** Cite those contact sheets in the PR for visual acceptance; the contact sheet is the single visual evidence surface. Stage-2 previews under `scripts/art/*-gen-out/` stay local and uncommitted.
+
+Done when every requested asset passes the 1× gate on the contact sheet; do not advance a merely technically valid asset.
 
 ## 6. Prove the build
 
@@ -94,19 +101,28 @@ npm run typecheck
 npm test
 ```
 
-Run `npm run art` a second time and compare hashes of every affected generated PNG and contact sheet before/after that second run. They must be byte-identical. Inspect `git status --short` and the asset diff against the initial scope; the raw inbox and previews stay uncommitted, and no unrelated generated asset drifts.
+Run `npm run art` a second time and compare hashes of every affected generated PNG and contact sheet before/after that second run. They must be byte-identical.
 
-For issue work, map every acceptance criterion to direct evidence: test/command output for mechanical claims and the named 1× sheet/preview for visual claims.
+**Docs hygiene.** Inspect `git status --short` under `docs/` and against the initial scope. Under `docs/`, the asset diff may include only:
 
-Done only when all intended assets are registered, the second build is byte-stable, checks pass, every criterion has evidence, and the changed-file set matches the declared scope.
+- `docs/assets.md` when provenance changed;
+- the contact sheets `npm run art` rewrote for this branch (`sprite-sheet-*.png`, `icon-sheet-*.png`, `icon-silhouette-sheet-1x.png`).
+
+Delete any other agent-authored file under `docs/` (especially one-off PNGs such as `docs/pr-*` comparison crops) before commit. Raw inbox PNGs and Stage-2 previews stay uncommitted. No unrelated generated asset drifts outside scope.
+
+For issue work, map every acceptance criterion to direct evidence: test/command output for mechanical claims and the named contact sheet for visual claims.
+
+Done only when all intended assets are registered, the second build is byte-stable, checks pass, every criterion has evidence, `docs/` hygiene is clean, and the changed-file set matches the declared scope.
 
 ## Handoff
 
 Report:
 
+- verified worktree root;
 - final prompt and image-generation mode for each new silhouette;
 - raw inbox path, committed compact-source path, and shipped asset path;
 - effective ingest overrides and palette-scope changes;
-- 1× review result;
+- 1× review result on the contact sheet;
 - typecheck, tests, and second-build determinism result;
+- confirmation that `docs/` contains no ad-hoc review PNGs;
 - anything deliberately left outside scope.
