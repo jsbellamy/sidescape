@@ -528,6 +528,21 @@ scoping means adding it recolors nothing else. The regenerated `player.png` tuni
 This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
 provenance remains recorded as history.
 
+### Lumbry Meadows spider and boar (#389)
+
+Spider and Boar extend the Lumbry Meadows starter cast as two new original 32×32 combat
+sprites, sized beside Chicken and Goblin so they do not out-scale the Area. Each compact
+source was recovered from one untouched built-in image-generation PNG on the ignored
+`sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized, re-exported,
+downsampled, or hand-edited. Both are bottom-anchored binary-alpha sources that face right
+toward the left-facing player. A silhouette rework replaced the first landed pair: the
+spider is a wide low profile with a bulbous abdomen pinched from the front body, thick
+banded legs separated by negative space, and a dark front-right eye cluster; the boar keeps
+a pronounced shoulder hump, broad snout wedge, large cream upward tusks, four separated
+sturdy legs, and a bristled back so it does not read as Cow. Both retain the standard
+`maxColors: 12` and three-pass finishing defaults; registry `materialRampNames` /
+`zoneNames` match the winning ingest audits.
+
 ### Lumbry Meadows (#265)
 
 Chicken, Cow, and Goblin now form the first original-art Monster mini-set. Each source began as a
