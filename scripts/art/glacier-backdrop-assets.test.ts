@@ -36,8 +36,8 @@ describe("Glacier source-driven backdrop assets (#293)", () => {
   });
 
   it("registers Glacier as the first production source Theme with the pinned gamut and caps", () => {
-    expect(backdrops).toHaveLength(1);
-    expect(glacier).toEqual({
+    expect(backdrops).toHaveLength(2);
+    expect(backdrops[0]).toEqual({
       theme: "glacier",
       kind: "source",
       gamut: GLACIER_GAMUT,
@@ -47,6 +47,7 @@ describe("Glacier source-driven backdrop assets (#293)", () => {
         near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
       },
     });
+    expect(glacier).toEqual(backdrops[0]);
   });
 
   it("uses the pinned Glacier CSS fallbacks without changing shared drift contracts", () => {

@@ -75,22 +75,21 @@ describe("backdrop generator infrastructure (#263)", () => {
   });
 
   it("registers Glacier as the first production source backdrop with its pinned compact caps", () => {
-    expect(backdrops).toEqual([
-      {
-        theme: "glacier",
-        kind: "source",
-        gamut: {
-          neutralMaxSaturation: 20,
-          chromaticHueRange: [175, 240],
-          chromaticMaxSaturation: 65,
-        },
-        layers: {
-          sky: { source: "glacier-sky.png", alpha: "opaque", maxColors: 48 },
-          mid: { source: "glacier-mid.png", alpha: "binary", maxColors: 64 },
-          near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
-        },
+    expect(backdrops[0]).toEqual({
+      theme: "glacier",
+      kind: "source",
+      gamut: {
+        neutralMaxSaturation: 20,
+        chromaticHueRange: [175, 240],
+        chromaticMaxSaturation: 65,
       },
-    ]);
+      layers: {
+        sky: { source: "glacier-sky.png", alpha: "opaque", maxColors: 48 },
+        mid: { source: "glacier-mid.png", alpha: "binary", maxColors: 64 },
+        near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
+      },
+    });
+    expect(backdrops.map((entry) => entry.theme)).toEqual(["glacier", "workshop"]);
   });
 
   it("writes exact <theme>-<layer>.png filenames for sky/mid/near", async () => {

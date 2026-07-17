@@ -27,6 +27,9 @@ export const zonePalettes = {
   // palettes are scoped by `materialRampNames`. New entries can only affect a source that declares
   // the zone, but declaration order remains load-bearing for equal-distance quantization ties.
   glacier: ["#10263d", "#244763", "#4c718d", "#7f9eb3", "#b8cbd4", "#e8f0ed"],
+  // Workshop interior (#434): warm timber / ember ramp for the shared Production backdrop.
+  // Appended, never inserted or reordered — declaration order is load-bearing for quantization ties.
+  workshop: ["#1c110b", "#3a1e12", "#6b3a1c", "#a85c28", "#d4a06a", "#e07a30"],
 };
 
 /** Material ramps used by close-up UI icons. Zone palettes establish atmosphere; these ramps
