@@ -40,13 +40,6 @@ describe("fixed scalable workspace geometry", () => {
     expect(rect(2, 2)).toMatchObject({ width: 1216, height: 1656 });
   });
 
-  it("derives capacity from scaled card widths", () => {
-    expect(workspaceCapacity(607, 1)).toBe(1);
-    expect(workspaceCapacity(608, 1)).toBe(2);
-    expect(workspaceCapacity(911, 1.5)).toBe(1);
-    expect(workspaceCapacity(912, 1.5)).toBe(2);
-  });
-
   it("reports scale support from the full fixed vertical workspace", () => {
     expect(scaleFitsMonitorHeight(827, 1)).toBe(false);
     expect(scaleFitsMonitorHeight(828, 1)).toBe(true);
@@ -54,12 +47,31 @@ describe("fixed scalable workspace geometry", () => {
     expect(scaleFitsMonitorHeight(1656, 2)).toBe(true);
   });
 
-  it("keeps upper/lower anchors and monitor-clamps without reducing scale", () => {
-    expect(rect(1, 1).anchor).toBe("top");
-    const lower = rect(1, 1, { current: { x: 500, y: 1200, width: 320, height: 220 } });
-    expect(lower.anchor).toBe("bottom");
-    expect(lower.height).toBe(828);
-    const constrained = rect(2, 2, { monitor: { x: 0, y: 0, width: 1000, height: 1000 } });
-    expect(constrained).toMatchObject({ width: 640, height: 1656, capacity: 1 });
+  describe("manual-check: narrow-monitor", () => {
+    it("derives capacity from scaled card widths", () => {
+      expect(workspaceCapacity(607, 1)).toBe(1);
+      expect(workspaceCapacity(608, 1)).toBe(2);
+      expect(workspaceCapacity(911, 1.5)).toBe(1);
+      expect(workspaceCapacity(912, 1.5)).toBe(2);
+    });
+
+    it("clamps workspace width on a narrow monitor without reducing scale", () => {
+      const constrained = rect(2, 2, { monitor: { x: 0, y: 0, width: 1000, height: 1000 } });
+      expect(constrained).toMatchObject({ width: 640, height: 1656, capacity: 1 });
+    });
+  });
+
+  describe("manual-check: upper-half", () => {
+    it("resolves top-positioned rects to a top anchor", () => {
+      expect(rect(1, 1).anchor).toBe("top");
+    });
+  });
+
+  describe("manual-check: lower-half", () => {
+    it("resolves lower-positioned rects to a bottom anchor", () => {
+      const lower = rect(1, 1, { current: { x: 500, y: 1200, width: 320, height: 220 } });
+      expect(lower.anchor).toBe("bottom");
+      expect(lower.height).toBe(828);
+    });
   });
 });
