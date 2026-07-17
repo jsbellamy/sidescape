@@ -990,6 +990,9 @@ export const content: Content = composeContent(
       { itemId: "rune-arrow", price: 40 },
       // Spell ladder (#364): Bolt/Blast runes — see spell-ladder.ts and the economy comment above.
       ...spellLadderVendor(),
+      // OSRS-style safety-net food (economy wave): the only Food the Vendor sells; premium-priced
+      // (4× sell value, tuning) so Fishing stays the real food source.
+      { itemId: "cooked-shrimp", price: 8 },
     ],
     pets: [
       {

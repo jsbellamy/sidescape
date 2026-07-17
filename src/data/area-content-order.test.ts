@@ -97,6 +97,7 @@ const GOLDEN_VENDOR_ITEM_IDS = [
   "water-blast-rune",
   "earth-blast-rune",
   "fire-blast-rune",
+  "cooked-shrimp",
 ] as const;
 
 const GOLDEN_PET_IDS = ["rock-golem", "fishing-frog", "kiln-cat", "shade-wisp"] as const;
