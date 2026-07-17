@@ -137,6 +137,7 @@ describe("scene backdrop (#80)", () => {
     engine.selectFishingSpot("shrimp-pool"); // lumbry-meadows
     app.render();
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
+    expect(root.querySelector<HTMLElement>("#scene")?.classList.contains("prop-active")).toBe(true);
     expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe("prop-fishing");
     expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
   });
