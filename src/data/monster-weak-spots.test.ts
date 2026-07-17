@@ -24,7 +24,7 @@ const WEAK_SPOT_TABLE: {
   { id: "bandit", attackType: "stab", weakTo: "stab" },
   { id: "zombie", attackType: "crush", weakTo: "slash", weakElement: "fire" },
   { id: "skeleton", attackType: "slash", weakTo: "crush" },
-  { id: "sewer-slime", attackType: "crush", weakTo: "slash" },
+  { id: "sewer-slime", attackType: "crush", weakTo: "slash", weakElement: "fire" },
   { id: "grave-robber", attackType: "stab", weakTo: "magic" },
   { id: "hollow-warden", attackType: "magic", weakTo: "crush", weakElement: "fire" },
   { id: "sewer-king", attackType: "crush", weakTo: "stab", weakElement: "earth" },
@@ -80,11 +80,12 @@ describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
     }
   });
 
-  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden), Dark Druid, Tomb Wight, Rime Sorcerer, and the Zombie carry a weakElement", () => {
+  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden), Dark Druid, Tomb Wight, Rime Sorcerer, Sewer Slime, and the Zombie carry a weakElement", () => {
     const withWeakElement = content.monsters.filter((m) => m.weakElement).map((m) => m.id);
     expect(new Set(withWeakElement)).toEqual(
       new Set([
         "zombie",
+        "sewer-slime",
         "dark-druid",
         "hollow-warden",
         "sewer-king",

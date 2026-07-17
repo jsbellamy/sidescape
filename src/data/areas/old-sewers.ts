@@ -99,6 +99,7 @@ export const oldSewers: AreaContent = {
       maxHit: 7,
       attackSpeed: 6,
       attackType: "crush",
+      weakElement: "fire",
       // Amorphous: crush and stab bury themselves harmlessly in the mass; a blade cleaves it.
       def: { stab: 14, slash: 4, crush: 18, ranged: 12, magic: 8 },
       dropTable: [
@@ -121,8 +122,6 @@ export const oldSewers: AreaContent = {
       def: { stab: 12, slash: 14, crush: 10, ranged: 12, magic: 8 },
       dropTable: [
         { itemId: "gold", qty: 45, chance: 1, band: "guaranteed" },
-        // A living human plausibly carries a caught fish — see the drop-table pass, which removed
-        // raw-pike from this Area's undead. Do NOT move this drop onto an undead Monster.
         { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "steel-bar", qty: 1, chance: 0.25, band: "common" },
         { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },

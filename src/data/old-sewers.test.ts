@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
-import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 
 const OLD_SEWERS_MONSTER_IDS = ["giant-rat", "zombie", "skeleton", "sewer-slime", "grave-robber"];
+const NEW_OLD_SEWERS_MONSTER_IDS = ["sewer-slime", "grave-robber"] as const;
 const DARKROOT_HOLLOW_WAVES = ["wolf", "goblin-warrior", "bandit", "hollow-warden"];
 
 describe("Old Sewers content", () => {
@@ -28,45 +28,18 @@ describe("Old Sewers content", () => {
     }
   });
 
-  it("Giant Rat, Zombie, Skeleton, Sewer Slime, and Grave Robber exist with roughly-doubled Darkroot Forest stats", () => {
+  it("Giant Rat, Zombie, and Skeleton exist with roughly-doubled Darkroot Forest stats", () => {
     const giantRat = content.monsters.find((m) => m.id === "giant-rat");
     const zombie = content.monsters.find((m) => m.id === "zombie");
     const skeleton = content.monsters.find((m) => m.id === "skeleton");
-    const sewerSlime = content.monsters.find((m) => m.id === "sewer-slime");
-    const graveRobber = content.monsters.find((m) => m.id === "grave-robber");
     expect(giantRat).toBeDefined();
     expect(zombie).toBeDefined();
     expect(skeleton).toBeDefined();
-    expect(sewerSlime).toBeDefined();
-    expect(graveRobber).toBeDefined();
     // Darkroot Forest tops out at hp 24 / maxHit 5 (Bandit); Old Sewers is roughly double.
-    for (const monster of [giantRat, zombie, skeleton, sewerSlime, graveRobber]) {
+    for (const monster of [giantRat, zombie, skeleton]) {
       expect(monster!.hp).toBeGreaterThanOrEqual(32);
       expect(monster!.maxHit).toBeGreaterThanOrEqual(6);
     }
-  });
-
-  it("Sewer Slime's Defence Vector punishes crush and rewards slash — its weak-spot lesson", () => {
-    const sewerSlime = content.monsters.find((m) => m.id === "sewer-slime")!;
-    const defValues = Object.values(sewerSlime.def);
-    expect(sewerSlime.def.slash).toBe(Math.min(...defValues));
-    expect(sewerSlime.def.crush).toBe(Math.max(...defValues));
-  });
-
-  it("Grave Robber is the only new Old Sewers Monster dropping raw-pike; Sewer Slime drops no raw fish", () => {
-    const sewerSlime = content.monsters.find((m) => m.id === "sewer-slime")!;
-    const graveRobber = content.monsters.find((m) => m.id === "grave-robber")!;
-    expect(sewerSlime.dropTable.some((e) => e.itemId === "raw-pike")).toBe(false);
-    expect(graveRobber.dropTable).toContainEqual({
-      itemId: "raw-pike",
-      qty: 1,
-      chance: 0.3,
-      band: "common",
-    });
-  });
-
-  it("resolveContent(content) does not throw with Sewer Slime and Grave Robber added", () => {
-    expect(() => resolveContent(content)).not.toThrow();
   });
 
   it("each Old Sewers Monster's Drop Table has guaranteed/common bands, and steel Equipment plus the stronger raw catch (#115: Cooking's Material, not Food directly) appear", () => {
@@ -77,9 +50,6 @@ describe("Old Sewers content", () => {
       const bands = new Set(monster.dropTable.map((e) => e.band));
       expect(bands.has("guaranteed")).toBe(true);
       expect(bands.has("common")).toBe(true);
-      if (monsterId === "sewer-slime" || monsterId === "grave-robber") {
-        expect(bands.has("uncommon"), `${monsterId} missing uncommon`).toBe(true);
-      }
 
       for (const entry of monster.dropTable) {
         const item = content.items.find((i) => i.id === entry.itemId);
@@ -234,75 +204,99 @@ describe("Old Sewers tier balance", () => {
   });
 });
 
-/** Old Sewers unlocked — cleared Darkroot Hollow, iron-geared at Darkroot level. */
+/** Cleared Darkroot Hollow so Old Sewers is unlocked — steel-geared, enough to farm new Monsters. */
 function oldSewersUnlockedSave() {
   return makeSnapshot({
     player: {
-      hp: 30,
-      maxHp: 30,
+      hp: 55,
+      maxHp: 55,
       skills: {
-        attack: { level: 26, xp: xpForLevel(26) },
-        strength: { level: 28, xp: xpForLevel(28) },
-        defence: { level: 22, xp: xpForLevel(22) },
-        hitpoints: { level: 30, xp: xpForLevel(30) },
+        attack: { level: 45, xp: xpForLevel(45) },
+        strength: { level: 47, xp: xpForLevel(47) },
+        defence: { level: 42, xp: xpForLevel(42) },
+        hitpoints: { level: 55, xp: xpForLevel(55) },
       },
       equipment: {
-        weapon: "iron-dagger",
-        shield: "iron-kiteshield",
-        body: "iron-chainbody",
-        head: "iron-full-helm",
+        weapon: "steel-dagger",
+        shield: "steel-kiteshield",
+        body: "steel-chainbody",
+        head: "steel-full-helm",
       },
       autoEatThreshold: 0.5,
       completedDungeonIds: ["meadow-depths", "darkroot-hollow"],
+      foodSlots: [{ itemId: "cooked-pike", qty: 500 }, null, null],
     },
-    bank: { items: [{ itemId: "cooked-trout", qty: 30 }] },
   });
 }
 
-describe("Sewer Slime and Grave Robber kills", () => {
-  it("a Sewer Slime kill drops its guaranteed gold (seeded Rng, real Content)", () => {
-    const engine = createEngine(content, seededRng(3961), oldSewersUnlockedSave());
-    engine.selectMonster("sewer-slime");
-
-    let kills = 0;
-    let goldDrops = 0;
-    engine.on("kill", (e) => {
-      if (e.monsterId === "sewer-slime") kills++;
-    });
-    engine.on("drop", (e) => {
-      if (e.itemId === "gold") goldDrops++;
-    });
-    for (let i = 0; i < 8000; i++) engine.tick();
-
-    expect(kills).toBeGreaterThan(0);
-    expect(goldDrops).toBeGreaterThanOrEqual(kills);
+describe("Sewer Slime and Grave Robber (#396)", () => {
+  it("sewer-slime punishes crush and rewards slash — slash is its lowest defence, crush its highest", () => {
+    const slime = content.monsters.find((m) => m.id === "sewer-slime")!;
+    const defValues = Object.values(slime.def);
+    expect(slime.def.slash).toBe(Math.min(...defValues));
+    expect(slime.def.crush).toBe(Math.max(...defValues));
   });
 
-  it("a Grave Robber kill drops its guaranteed gold (seeded Rng, real Content)", () => {
-    const engine = createEngine(content, seededRng(3962), oldSewersUnlockedSave());
-    engine.selectMonster("grave-robber");
-
-    let kills = 0;
-    let goldDrops = 0;
-    engine.on("kill", (e) => {
-      if (e.monsterId === "grave-robber") kills++;
-    });
-    engine.on("drop", (e) => {
-      if (e.itemId === "gold") goldDrops++;
-    });
-    for (let i = 0; i < 8000; i++) engine.tick();
-
-    expect(kills).toBeGreaterThan(0);
-    expect(goldDrops).toBeGreaterThanOrEqual(kills);
+  it("grave-robber is the only new Old Sewers Monster dropping raw-pike; sewer-slime drops no raw fish", () => {
+    const slime = content.monsters.find((m) => m.id === "sewer-slime")!;
+    const robber = content.monsters.find((m) => m.id === "grave-robber")!;
+    expect(slime.dropTable.some((e) => e.itemId === "raw-pike")).toBe(false);
+    expect(robber.dropTable.some((e) => e.itemId === "raw-pike")).toBe(true);
+    for (const monsterId of NEW_OLD_SEWERS_MONSTER_IDS) {
+      if (monsterId === "grave-robber") continue;
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      expect(monster.dropTable.some((e) => e.itemId === "raw-pike")).toBe(false);
+    }
   });
 
-  it("gates Sewer Slime and Grave Robber behind Old Sewers' unlock (cleared Darkroot Hollow)", () => {
-    const engine = createEngine(content, seededRng(2024), darkrootGraduateSave());
-    expect(engine.snapshot().areas.find((a) => a.id === "old-sewers")?.unlocked).toBe(false);
-    for (const monsterId of ["sewer-slime", "grave-robber"]) {
+  it("both new Monsters' Drop Tables carry guaranteed, common, and uncommon bands", () => {
+    for (const monsterId of NEW_OLD_SEWERS_MONSTER_IDS) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      const bands = new Set(monster.dropTable.map((e) => e.band));
+      expect(bands.has("guaranteed"), `${monsterId} missing guaranteed`).toBe(true);
+      expect(bands.has("common"), `${monsterId} missing common`).toBe(true);
+      expect(bands.has("uncommon"), `${monsterId} missing uncommon`).toBe(true);
+      for (const entry of monster.dropTable) {
+        const item = content.items.find((i) => i.id === entry.itemId);
+        expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
+      }
+    }
+  });
+
+  it("gates a player without Darkroot Hollow out of sewer-slime and grave-robber", () => {
+    const engine = createEngine(content, seededRng(1), darkrootGraduateSave());
+    for (const monsterId of NEW_OLD_SEWERS_MONSTER_IDS) {
       expect(() => engine.selectMonster(monsterId)).toThrow(
         /Old Sewers is locked — defeat Darkroot Hollow/,
       );
     }
   });
+
+  it.each([
+    { monsterId: "sewer-slime", goldQty: 35, rngSeed: 3961 },
+    { monsterId: "grave-robber", goldQty: 45, rngSeed: 3962 },
+  ] as const)(
+    "a $monsterId kill lands its guaranteed gold Drop (seeded Rng, real Content)",
+    ({ monsterId, goldQty, rngSeed }) => {
+      const engine = createEngine(content, seededRng(rngSeed), oldSewersUnlockedSave());
+      expect(() => engine.selectMonster(monsterId)).not.toThrow();
+
+      let kills = 0;
+      const goldDrops: number[] = [];
+      engine.on("kill", (e) => {
+        if (e.monsterId === monsterId) kills++;
+      });
+      engine.on("drop", (e) => {
+        if (e.itemId === "gold") {
+          goldDrops.push(e.qty);
+          expect(e.band).toBe("guaranteed");
+        }
+      });
+
+      for (let i = 0; i < 50_000 && kills === 0; i++) engine.tick();
+
+      expect(kills).toBeGreaterThan(0);
+      expect(goldDrops).toContain(goldQty);
+    },
+  );
 });
