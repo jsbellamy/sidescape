@@ -18,6 +18,8 @@ const GOLDEN_MONSTER_IDS = [
   "chicken",
   "cow",
   "goblin",
+  "spider",
+  "boar",
   "wolf",
   "goblin-warrior",
   "bandit",
@@ -126,7 +128,7 @@ describe("Area content composition (#321): global collection ordering parity", (
     }
 
     const meadows = content.areas.find((a) => a.id === "lumbry-meadows")!;
-    expect(meadows.monsterIds).toEqual(["chicken", "cow", "goblin"]);
+    expect(meadows.monsterIds).toEqual(["chicken", "cow", "goblin", "spider", "boar"]);
     expect(meadows.fishingSpotIds).toEqual(["shrimp-pool"]);
 
     const forest = content.areas.find((a) => a.id === "darkroot-forest")!;

@@ -77,6 +77,44 @@ export const lumbryMeadows: AreaContent = {
         { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
+    {
+      id: "spider",
+      name: "Spider",
+      hp: 6,
+      attackLevel: 3,
+      defenceLevel: 2,
+      maxHit: 1,
+      attackSpeed: 3, // fast, but hits for almost nothing
+      attackType: "stab", // fangs
+      // Soft-bodied, weak to slash; a crush swing mostly misses the mass.
+      def: { stab: 2, slash: 1, crush: 4, ranged: 3, magic: 2 },
+      dropTable: [
+        { itemId: "gold", qty: 3, chance: 1, band: "guaranteed" },
+        // Silk: groundwork for magic robes. INTERIM — no Crafting recipe consumes silk yet; it is
+        // sellable only. A later slice adds the robe line. Do not add a recipe here.
+        { itemId: "silk", qty: 1, chance: 0.35, band: "common" },
+        { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
+      ],
+    },
+    {
+      id: "boar",
+      name: "Boar",
+      hp: 12,
+      attackLevel: 6,
+      defenceLevel: 4,
+      maxHit: 3,
+      attackSpeed: 5,
+      attackType: "stab", // tusks
+      // Thick-hided beast; the hump turns a crush blow, the flank does not stop a blade.
+      def: { stab: 4, slash: 2, crush: 5, ranged: 3, magic: 3 },
+      dropTable: [
+        { itemId: "gold", qty: 10, chance: 1, band: "guaranteed" },
+        { itemId: "raw-beef", qty: 1, chance: 0.45, band: "common" },
+        { itemId: "cowhide", qty: 1, chance: 0.4, band: "common" },
+        { itemId: "bronze-mace", qty: 1, chance: 1 / 24, band: "uncommon" },
+        { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
+      ],
+    },
   ],
   fishingSpots: [
     {
