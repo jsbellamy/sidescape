@@ -36,6 +36,8 @@ const WEAK_SPOT_TABLE: {
   { id: "frost-wolf", attackType: "slash", weakTo: "slash" },
   { id: "ice-wraith", attackType: "magic", weakTo: "ranged" },
   { id: "frost-giant", attackType: "crush", weakTo: "crush" },
+  { id: "ice-troll", attackType: "crush", weakTo: "crush" },
+  { id: "rime-sorcerer", attackType: "magic", weakTo: "ranged", weakElement: "fire" },
   { id: "frost-warden", attackType: "magic", weakTo: "stab", weakElement: "fire" },
 ];
 
@@ -46,8 +48,8 @@ function lowestDefType(def: Record<AttackType, number>): AttackType {
 }
 
 describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
-  it("covers all 20 Monsters from the table", () => {
-    expect(WEAK_SPOT_TABLE).toHaveLength(20);
+  it("covers all 22 Monsters from the table", () => {
+    expect(WEAK_SPOT_TABLE).toHaveLength(22);
   });
 
   for (const row of WEAK_SPOT_TABLE) {
@@ -74,10 +76,17 @@ describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
     }
   });
 
-  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden) plus the Zombie carry a weakElement", () => {
+  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden) plus the Zombie and Rime Sorcerer carry a weakElement", () => {
     const withWeakElement = content.monsters.filter((m) => m.weakElement).map((m) => m.id);
     expect(new Set(withWeakElement)).toEqual(
-      new Set(["zombie", "hollow-warden", "sewer-king", "crypt-shade", "frost-warden"]),
+      new Set([
+        "zombie",
+        "hollow-warden",
+        "sewer-king",
+        "crypt-shade",
+        "rime-sorcerer",
+        "frost-warden",
+      ]),
     );
   });
 });

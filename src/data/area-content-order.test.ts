@@ -34,6 +34,8 @@ const GOLDEN_MONSTER_IDS = [
   "frost-wolf",
   "ice-wraith",
   "frost-giant",
+  "ice-troll",
+  "rime-sorcerer",
   "frost-warden",
 ] as const;
 
@@ -142,7 +144,13 @@ describe("Area content composition (#321): global collection ordering parity", (
     expect(crypt.fishingSpotIds).toEqual(["flooded-ossuary"]);
 
     const frost = content.areas.find((a) => a.id === "frostspire")!;
-    expect(frost.monsterIds).toEqual(["frost-wolf", "ice-wraith", "frost-giant"]);
+    expect(frost.monsterIds).toEqual([
+      "frost-wolf",
+      "ice-wraith",
+      "frost-giant",
+      "ice-troll",
+      "rime-sorcerer",
+    ]);
     expect(frost.fishingSpotIds).toEqual(["glacial-melt"]);
   });
 

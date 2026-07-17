@@ -71,6 +71,43 @@ export const frostspire: AreaContent = {
         { itemId: "adamant-bar", qty: 1, chance: 0.28, band: "common" },
       ],
     },
+    {
+      id: "ice-troll",
+      name: "Ice Troll",
+      hp: 145,
+      attackLevel: 70,
+      defenceLevel: 52,
+      maxHit: 26,
+      attackSpeed: 6,
+      attackType: "crush",
+      // Frost-crusted hide: turns blades and arrows; a thrust finds the gaps between plates of rime.
+      def: { stab: 40, slash: 38, crush: 24, ranged: 36, magic: 32 },
+      dropTable: [
+        { itemId: "gold", qty: 210, chance: 1, band: "guaranteed" },
+        { itemId: "adamant-bar", qty: 1, chance: 0.25, band: "common" },
+        { itemId: "adamant-mace", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "adamant-full-helm", qty: 1, chance: 1 / 180, band: "rare" },
+      ],
+    },
+    {
+      id: "rime-sorcerer",
+      name: "Rime Sorcerer",
+      hp: 135,
+      attackLevel: 74,
+      defenceLevel: 56,
+      maxHit: 28,
+      attackSpeed: 5,
+      attackType: "magic",
+      weakElement: "fire",
+      // Robed and warded: physical blows land, but his own element turns aside.
+      def: { stab: 38, slash: 40, crush: 36, ranged: 28, magic: 48 },
+      dropTable: [
+        { itemId: "gold", qty: 220, chance: 1, band: "guaranteed" },
+        { itemId: "adamant-bar", qty: 1, chance: 0.25, band: "common" },
+        { itemId: "adamant-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "adamant-chainbody", qty: 1, chance: 1 / 170, band: "rare" },
+      ],
+    },
   ],
   dungeons: [
     {
