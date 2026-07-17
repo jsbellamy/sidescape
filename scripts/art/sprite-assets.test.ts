@@ -40,6 +40,8 @@ const EXPECTED_SPRITES = [
   { name: "crypt-shade", size: 64, alpha: "one-intermediate" },
   { name: "crypt-ghoul", size: 48, alpha: "binary" },
   { name: "bone-knight", size: 48, alpha: "binary" },
+  { name: "bone-archer", size: 48, alpha: "binary" },
+  { name: "tomb-wight", size: 48, alpha: "binary" },
   { name: "frost-wolf", size: 32, alpha: "binary" },
   { name: "ice-wraith", size: 48, alpha: "binary" },
   { name: "frost-giant", size: 64, alpha: "binary" },
