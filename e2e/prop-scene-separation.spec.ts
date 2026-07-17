@@ -26,7 +26,7 @@ test("prop-active Smithing scene records dedicated screenshot evidence (#433)", 
 
   await expect(page.locator("#scene")).toHaveClass(/prop-active/);
   await expect(page.locator("#activity-prop")).toHaveClass(/prop-anvil/);
-  await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "town");
+  await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "workshop");
 
   await page.locator("#menu-toggle").click();
   await expect(page.locator("#management-row")).toBeHidden();

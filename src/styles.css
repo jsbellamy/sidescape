@@ -728,6 +728,24 @@ body {
   animation: backdrop-drift 60s linear infinite;
 }
 
+/* Workshop interior (#434): Production backdrop theme. */
+#backdrop[data-theme="workshop"] .layer-sky {
+  background-image:
+    url("./assets/backdrops/workshop-sky.png"), linear-gradient(to bottom, #2a1810, #a85c28);
+}
+#backdrop[data-theme="workshop"] .layer-mid {
+  background-image:
+    url("./assets/backdrops/workshop-mid.png"),
+    linear-gradient(to top, #3a1e12 0 var(--mid-horizon), rgba(58, 30, 18, 0) var(--tile-h));
+  animation: backdrop-drift 90s linear infinite;
+}
+#backdrop[data-theme="workshop"] .layer-near {
+  background-image:
+    url("./assets/backdrops/workshop-near.png"),
+    linear-gradient(to top, #1c110b 0 var(--near-horizon), rgba(28, 17, 11, 0) var(--tile-h));
+  animation: backdrop-drift 60s linear infinite;
+}
+
 @keyframes backdrop-drift {
   from {
     transform: translateX(0);
