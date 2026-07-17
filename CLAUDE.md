@@ -24,8 +24,8 @@ Claude-Code specifics (skills, subagent types, Claude-only toolchain notes).
   (`.claude/agents/issue-implementer.md`), pinned to **Sonnet at high effort**.
   Never override the model upward and never run it above high effort. It
   implements one GitHub issue end-to-end in an isolated worktree and opens a PR.
-- The model-neutral definition of the same agent lives in
-  `.agents/issue-implementer.md` for non-Claude runtimes; keep the two in sync.
+- The process lives in `.agents/issue-implementer.md`; the `.claude` variant
+  contributes only the frontmatter pins and Claude-runtime notes.
 
 ## Toolchain notes
 
