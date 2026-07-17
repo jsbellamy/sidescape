@@ -10,7 +10,6 @@ const overlays = [
   "cooking",
   "crafting",
   "cauldron",
-  "fishing",
   "fishing-meadow",
   "fishing-forest",
   "fishing-sewer",

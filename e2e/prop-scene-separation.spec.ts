@@ -40,6 +40,10 @@ test("prop-active while fishing uses the same separation path (#433)", async ({ 
   await page.locator('[data-spot="shrimp-pool"]').click();
 
   await expect(page.locator("#scene")).toHaveClass(/prop-active/);
-  await expect(page.locator("#activity-prop")).toHaveClass(/prop-fishing/);
+  await expect(page.locator("#activity-prop")).toHaveClass(/prop-fishing-meadow/);
   await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "meadow");
+
+  await page.locator("#menu-toggle").click();
+  await expect(page.locator("#management-row")).toBeHidden();
+  await page.screenshot({ path: `${screenshots}/fishing-meadow.png`, fullPage: true });
 });

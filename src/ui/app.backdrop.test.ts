@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/testing/fixture-content";
 import { makeSnapshot } from "../core/testing/make-snapshot";
-import { content as meadowsContent } from "../data";
+import { content, content as meadowsContent } from "../data";
+import { xpForLevel } from "../core/xp";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
+const resolvedContent = resolveContent(content);
 const resolvedMeadowsContent = resolveContent(meadowsContent);
 const resolvedFixtureContent = resolveContent(fixtureContent);
 const stylesheet = readFileSync("src/styles.css", "utf8");
@@ -21,11 +23,22 @@ const noopWindowChrome: WorkspaceChrome = {
 
 describe("scene backdrop (#80)", () => {
   it("uses one fixed, pixelated 2× near-scene overlay plane for every activity focus", () => {
-    const overlayNames = ["anvil", "cooking", "crafting", "cauldron", "fishing"];
+    const overlayNames = [
+      "anvil",
+      "cooking",
+      "crafting",
+      "cauldron",
+      "fishing-meadow",
+      "fishing-forest",
+      "fishing-sewer",
+      "fishing-crypt",
+      "fishing-glacier",
+    ];
     for (const name of overlayNames) {
       expect(stylesheet).toContain(`.prop-${name}`);
       expect(stylesheet).toContain(`url("./assets/activity-overlays/activity-${name}-near.png")`);
     }
+    expect(stylesheet).not.toContain("activity-fishing-near.png");
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?inset:\s*0;/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?background-size:\s*160px 120px;/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?image-rendering:\s*pixelated;/);
@@ -138,9 +151,44 @@ describe("scene backdrop (#80)", () => {
     app.render();
     expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
     expect(root.querySelector<HTMLElement>("#scene")?.classList.contains("prop-active")).toBe(true);
-    expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe("prop-fishing");
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe(
+      "prop-fishing-meadow",
+    );
     expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
   });
+
+  it.each([
+    { spotId: "shrimp-pool", theme: "meadow", prop: "fishing-meadow" },
+    { spotId: "trout-run", theme: "forest", prop: "fishing-forest" },
+    { spotId: "sewer-outflow", theme: "sewer", prop: "fishing-sewer" },
+    { spotId: "flooded-ossuary", theme: "crypt", prop: "fishing-crypt" },
+    { spotId: "glacial-melt", theme: "glacier", prop: "fishing-glacier" },
+  ])(
+    "shows the themed fishing prop for $spotId in the $theme Area (#439)",
+    ({ spotId, theme, prop }) => {
+      const engine = createEngine(
+        content,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            skills: { fishing: { level: 99, xp: xpForLevel(99) } },
+            completedDungeonIds: ["meadow-depths", "darkroot-hollow", "sewer-king", "shade-crypt"],
+          },
+        }),
+      );
+      const root = document.createElement("main");
+      const app = mountApp(engine, root, resolvedContent, noopWindowChrome);
+
+      engine.selectFishingSpot(spotId);
+      app.render();
+
+      expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe(theme);
+      expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe(`prop-${prop}`);
+      expect(root.querySelector<HTMLElement>("#scene")?.classList.contains("prop-active")).toBe(
+        true,
+      );
+    },
+  );
 
   it("pins prop-left / player-right offset rules in the stylesheet (#433)", () => {
     expect(stylesheet).toMatch(

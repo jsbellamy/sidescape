@@ -800,8 +800,20 @@ body {
 .prop-cauldron {
   background-image: url("./assets/activity-overlays/activity-cauldron-near.png");
 }
-.prop-fishing {
-  background-image: url("./assets/activity-overlays/activity-fishing-near.png");
+.prop-fishing-meadow {
+  background-image: url("./assets/activity-overlays/activity-fishing-meadow-near.png");
+}
+.prop-fishing-forest {
+  background-image: url("./assets/activity-overlays/activity-fishing-forest-near.png");
+}
+.prop-fishing-sewer {
+  background-image: url("./assets/activity-overlays/activity-fishing-sewer-near.png");
+}
+.prop-fishing-crypt {
+  background-image: url("./assets/activity-overlays/activity-fishing-crypt-near.png");
+}
+.prop-fishing-glacier {
+  background-image: url("./assets/activity-overlays/activity-fishing-glacier-near.png");
 }
 
 /* #433: when an activity prop is visible, separate prop (left) and player (right) horizontally. */
