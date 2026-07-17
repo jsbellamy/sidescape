@@ -36,12 +36,22 @@ export type AttackType = (typeof ATTACK_TYPES)[number];
 export const ELEMENTS = ["air", "water", "earth", "fire"] as const;
 export type Element = (typeof ELEMENTS)[number];
 
-/** Scene-backdrop themes (#80): one per Area, plus the shared `town` theme for non-Area activities
- * (Smithing today; #76's other production Skills later). Theme resolution itself is a UI-only
- * concern (ADR-0001's #20 Engine/Snapshot boundary — see ui/theme.ts's `resolveTheme`); this type
- * lives in core/types.ts only because `AreaDef.theme` (below) needs it. */
+/** Scene-backdrop themes (#80): one per Area, plus shared themes for non-Area activities
+ * (Smithing and the other Production Skills today use `workshop`; `town` remains registered for
+ * future town content). Theme resolution itself is a UI-only concern (ADR-0001's #20 Engine/
+ * Snapshot boundary — see ui/theme.ts's `resolveTheme`); this type lives in core/types.ts only
+ * because `AreaDef.theme` (below) needs it. */
 // Frostspire (#254): the 5th Area's glacial theme. Appended, never inserted.
-export const THEMES = ["meadow", "forest", "sewer", "crypt", "town", "glacier"] as const;
+// Workshop interior (#434): Production backdrop theme. Appended, never inserted.
+export const THEMES = [
+  "meadow",
+  "forest",
+  "sewer",
+  "crypt",
+  "town",
+  "glacier",
+  "workshop",
+] as const;
 export type Theme = (typeof THEMES)[number];
 
 export type CombatStyle = "accurate" | "aggressive" | "defensive" | "rapid";

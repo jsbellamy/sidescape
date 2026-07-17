@@ -44,11 +44,11 @@ describe("resolveTheme (#80)", () => {
     });
   });
 
-  it("resolves the shared town theme while Smithing, with no Area id", () => {
+  it("resolves the shared workshop theme while Smithing, with no Area id", () => {
     const snap = makeSnapshot({
       production: { recipeId: "bronze-dagger", name: "Bronze Dagger", skill: "smithing" },
     });
-    expect(resolveTheme(snap, resolvedContent, null)).toEqual({ theme: "town", areaId: null });
+    expect(resolveTheme(snap, resolvedContent, null)).toEqual({ theme: "workshop", areaId: null });
   });
 
   // makeSnapshot()'s default `areas` array is shaped from fixtureContent (2 Areas), not the real

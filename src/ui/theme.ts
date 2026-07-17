@@ -4,8 +4,8 @@ import type { ResolvedContent } from "../core/validate-content";
 import { resolveActiveAreaId } from "./area-context";
 
 /** `resolveTheme`'s return: the Theme to paint, plus (when it came from an actual Area) that
- * Area's id — callers use the id to remember "last-used" across idle stretches; Smithing's `town`
- * theme has no Area id (`town` is shared, not owned by any one Area). */
+ * Area's id — callers use the id to remember "last-used" across idle stretches; Production's
+ * `workshop` theme has no Area id (`workshop` is activity-resolved, not owned by any one Area). */
 export interface ResolvedTheme {
   theme: Theme;
   areaId: string | null;
@@ -21,7 +21,7 @@ export interface ResolvedTheme {
  * 1. Mid-Dungeon-run, or fighting/fishing in the open world: the shared `resolveActiveAreaId`
  *    (#236) resolver's host Area, in its own Dungeon → Monster → Fishing Spot order — see that
  *    module's doc for why Dungeon must be checked first.
- * 2. Smithing (a non-Area activity, #28): the shared `town` theme, no Area id.
+ * 2. Production (a non-Area activity, #28): the shared `workshop` theme, no Area id.
  * 3. Idle (nothing selected): the last-used Area this session (`lastAreaId`, tracked by the
  *    caller — see app.ts), else the first unlocked Area, so the scene is never blank/flashing.
  */
@@ -35,7 +35,7 @@ export function resolveTheme(
   if (activeArea) return { theme: activeArea.theme, areaId: activeArea.id };
 
   if (snap.production) {
-    return { theme: "town", areaId: null };
+    return { theme: "workshop", areaId: null };
   }
 
   // Idle: prefer the last-used Area (tracked by the caller across renders); an unrecognized id

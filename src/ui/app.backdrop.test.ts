@@ -34,7 +34,7 @@ describe("scene backdrop (#80)", () => {
     expect(planeRule).not.toContain("animation:");
   });
   it("references a pixel-art sky, mid, and near tile for every theme", () => {
-    const themes = ["meadow", "forest", "sewer", "crypt", "town", "glacier"];
+    const themes = ["meadow", "forest", "sewer", "crypt", "town", "glacier", "workshop"];
     const layers = ["sky", "mid", "near"];
 
     for (const theme of themes) {
@@ -184,7 +184,7 @@ describe("scene backdrop (#80)", () => {
     expect(combatRoot.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(true);
   });
 
-  it("switches to the town theme and shows the anvil prop when Smithing starts, switching cleanly from whatever theme was showing before", () => {
+  it("switches to the workshop theme and shows the anvil prop when Smithing starts, switching cleanly from whatever theme was showing before", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -201,13 +201,13 @@ describe("scene backdrop (#80)", () => {
     app.render();
 
     const backdrop = root.querySelector<HTMLElement>("#backdrop");
-    expect(backdrop?.dataset["theme"]).toBe("town");
+    expect(backdrop?.dataset["theme"]).toBe("workshop");
     const prop = root.querySelector<HTMLElement>("#activity-prop");
     expect(prop?.hidden).toBe(false);
     expect(prop?.classList.contains("prop-anvil")).toBe(true);
   });
 
-  it("switches to the town theme and shows the cooking prop when Cooking starts (#115)", () => {
+  it("switches to the workshop theme and shows the cooking prop when Cooking starts (#115)", () => {
     const engine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -220,7 +220,7 @@ describe("scene backdrop (#80)", () => {
     app.render();
 
     const backdrop = root.querySelector<HTMLElement>("#backdrop");
-    expect(backdrop?.dataset["theme"]).toBe("town");
+    expect(backdrop?.dataset["theme"]).toBe("workshop");
     const prop = root.querySelector<HTMLElement>("#activity-prop");
     expect(prop?.hidden).toBe(false);
     expect(prop?.classList.contains("prop-cooking")).toBe(true);
