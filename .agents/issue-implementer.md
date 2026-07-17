@@ -47,6 +47,8 @@ runtime supports worktrees.
   data files never import Engine code.
 - Do not modify another issue's scope.
 - Do not work directly on `main`.
+- For asset / art issues, follow `.agents/skills/asset-pipeline/SKILL.md` end to end
+  (worktree pin, contact-sheet evidence, `docs/` hygiene) before opening the PR.
 - Do not merge the pull request yourself.
 - Do not require a specific AI provider, model, or reasoning/effort setting.
   Select any capable coding agent available in the current runtime, or complete
