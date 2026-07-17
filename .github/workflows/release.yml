@@ -2,9 +2,65 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Bump version
+        id: bump
+        run: |
+          set -euo pipefail
+          version="$(npm version ${{ inputs.bump }} --no-git-tag-version)"
+          version="${version#v}"
+          node -e '
+            const fs = require("fs");
+            const v = process.argv[1];
+            const conf = "src-tauri/tauri.conf.json";
+            const json = JSON.parse(fs.readFileSync(conf, "utf8"));
+            json.version = v;
+            fs.writeFileSync(conf, JSON.stringify(json, null, 2) + "\n");
+          ' "$version"
+          # Only the [package] version at the top of the manifest.
+          perl -0pi -e 's/^version = "[^"]*"/version = "'"$version"'"/m' src-tauri/Cargo.toml
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=app-v$version" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Sync Cargo.lock
+        working-directory: src-tauri
+        run: cargo update --workspace --offline
+      - name: Commit and tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "Release ${{ steps.bump.outputs.tag }}"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "${{ steps.bump.outputs.tag }}"
+
   release:
+    needs: version
     permissions:
       contents: write
     strategy:
@@ -18,6 +74,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 26
@@ -31,8 +89,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "SideScape v__VERSION__"
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: "SideScape v${{ needs.version.outputs.version }}"
           releaseBody: "Unsigned personal-distribution builds for macOS and Windows."
           releaseDraft: true
           prerelease: false
