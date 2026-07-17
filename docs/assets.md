@@ -535,9 +535,11 @@ sprites, sized beside Chicken and Goblin so they do not out-scale the Area. Each
 source was recovered from one untouched built-in image-generation PNG on the ignored
 `sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized, re-exported,
 downsampled, or hand-edited. Both are bottom-anchored binary-alpha sources that face right
-toward the left-facing player. At 1× the fat brown meadow spider reads as a wide low
-silhouette with a bulbous abdomen and banded legs, and the bristly boar stays distinct from
-Cow via its shoulder hump and large light-valued tusks. Both retain the standard
+toward the left-facing player. A silhouette rework replaced the first landed pair: the
+spider is a wide low profile with a bulbous abdomen pinched from the front body, thick
+banded legs separated by negative space, and a dark front-right eye cluster; the boar keeps
+a pronounced shoulder hump, broad snout wedge, large cream upward tusks, four separated
+sturdy legs, and a bristled back so it does not read as Cow. Both retain the standard
 `maxColors: 12` and three-pass finishing defaults; registry `materialRampNames` /
 `zoneNames` match the winning ingest audits.
 

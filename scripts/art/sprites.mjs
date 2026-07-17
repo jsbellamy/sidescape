@@ -75,7 +75,7 @@ export const sprites = [
     source: "sprite-spider.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["blood", "skin", "leather"],
+    materialRampNames: ["skin", "leather"],
     zoneNames: ["town"],
   },
   {
@@ -83,8 +83,8 @@ export const sprites = [
     source: "sprite-boar.png",
     size: 32,
     alpha: "binary",
-    materialRampNames: ["blood", "skin", "leather"],
-    zoneNames: ["sewer"],
+    materialRampNames: ["steel", "gold", "skin", "leather"],
+    zoneNames: ["meadow", "town"],
   },
   {
     name: "cow",
