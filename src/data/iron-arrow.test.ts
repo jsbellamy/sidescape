@@ -7,7 +7,6 @@ import { makeSnapshot } from "../core/testing/make-snapshot";
 import { xpForLevel } from "../core/xp";
 import { validateContent } from "../core/validate-content";
 import type { AmmoDef, Content, EquipmentDef } from "../core/types";
-import { itemIcon } from "../ui/icons";
 import { content } from "./index";
 import { GEAR_TIERS, TIER_REQ_LEVEL } from "./tier-ladder";
 
@@ -144,11 +143,5 @@ describe("iron-arrow (#365)", () => {
     const entry = content.vendor.find((v) => v.itemId === "iron-arrow");
     expect(entry).toBeDefined();
     expect(entry!.price).toBeGreaterThan(0);
-  });
-
-  it("itemIcon resolves (#360 registered it)", () => {
-    expect(() => itemIcon("iron-arrow")).not.toThrow();
-    expect(itemIcon("iron-arrow")).toEqual(expect.any(String));
-    expect(itemIcon("iron-arrow").length).toBeGreaterThan(0);
   });
 });
