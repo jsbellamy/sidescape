@@ -407,7 +407,7 @@ export function mountApp(
     if (resolved.areaId) lastAreaId = resolved.areaId;
     el<HTMLElement>("#backdrop").dataset["theme"] = resolved.theme;
 
-    const prop = resolveProp(snap);
+    const prop = resolveProp(snap, resolved.theme);
     const propEl = el<HTMLElement>("#activity-prop");
     propEl.hidden = prop === null;
     propEl.className = prop ? `prop-${prop}` : "";

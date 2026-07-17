@@ -109,7 +109,7 @@ test("activity overlay composition remains player-plane pixel art at every UiSca
   // player-plane composition and writes inspection screenshots at all supported scale stops.
   await page.locator("#activity-prop").evaluate((element) => {
     element.removeAttribute("hidden");
-    element.className = "prop-fishing";
+    element.className = "prop-fishing-meadow";
   });
   for (const scale of ["1", "1.5", "2"]) {
     await page
@@ -167,7 +167,7 @@ test("Frostspire Glacier backdrop evidence at native compact scale (#293)", asyn
   // native-scale activity screenshot without leaving the retained Theme.
   await page.locator("#activity-prop").evaluate((element) => {
     element.removeAttribute("hidden");
-    element.className = "prop-fishing";
+    element.className = "prop-fishing-glacier";
   });
   await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "glacier");
   await page.screenshot({ path: `${screenshots}/glacier-activity.png`, fullPage: true });
