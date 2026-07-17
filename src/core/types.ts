@@ -395,6 +395,7 @@ export type EngineEvent =
   | { type: "fish-caught"; spotId: string; itemId: string; qty: number }
   | { type: "item-crafted"; recipeId: string; itemId: string }
   | { type: "equipped"; itemId: string }
+  | { type: "unequipped"; itemId: string }
   /** A passive arrival (drop, Catch, craft output) that needed a NEW Bank stack while the Bank
    * was full: sellable, so it was auto-sold instead of lost (#59 — passive flows auto-sell on
    * overflow, player commands throw). Top-ups of an existing stack never trigger this. */

@@ -68,6 +68,7 @@ export function createLootFeed(deps: LootFeedDeps): LootFeedHandle {
   );
   engine.on("item-crafted", (e) => feedLine(`🔨 Crafted ${items.name(e.itemId)}`, "craft"));
   engine.on("equipped", (e) => feedLine(`Equipped ${items.name(e.itemId)}`));
+  engine.on("unequipped", (e) => feedLine(`Unequipped ${items.name(e.itemId)}`));
   engine.on("item-bought", (e) =>
     feedLine(`Bought ${e.qty} ${items.name(e.itemId)} (-${e.gold}g)`, "buy"),
   );

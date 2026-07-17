@@ -242,6 +242,16 @@ describe("createLootFeed", () => {
       expect(line?.className).toBe("");
     });
 
+    it("unequipped → Unequipped {name}", () => {
+      const { engine, root } = mountLootFeed(fixtureContent, seededRng(1), {
+        player: { equipment: { weapon: "bronze-sword" } },
+      });
+      engine.unequip("weapon");
+      const line = feedItems(root)[0];
+      expect(line?.textContent).toBe("Unequipped Bronze Sword");
+      expect(line?.className).toBe("");
+    });
+
     it("item-bought → Bought qty name (-gold g) with buy class", () => {
       const { engine, root } = mountLootFeed(fixtureContent, seededRng(1), {
         player: { gold: 100 },

@@ -65,7 +65,7 @@ const CHARACTER_NAV_DESTINATIONS: ManagementDestination[] = [
 
 export type CharacterCommands = Pick<
   Engine,
-  "setCombatStyle" | "setAutoEatThreshold" | "setAutoSellDuplicates" | "equip"
+  "setCombatStyle" | "setAutoEatThreshold" | "setAutoSellDuplicates" | "equip" | "unequip"
 >;
 
 export interface CharacterHubUi {
@@ -240,7 +240,10 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
     el("#character-slots").innerHTML = GEAR_SLOT_ORDER.map((slot) => {
       const itemId = player.equipment[slot];
       if (itemId) {
-        return `<div class="tile" data-slot="${slot}" data-item="${itemId}">${items.iconMarkup(itemId)}</div>`;
+        return `<div class="tile filled" data-slot="${slot}" data-item="${itemId}">
+          ${items.iconMarkup(itemId)}
+          <button class="gear-slot-unassign" data-gear-unassign="${slot}" title="Unequip">✕</button>
+        </div>`;
       }
       const stacks = bankItems.filter((s) => {
         const def = content.itemsById.get(s.itemId);
@@ -304,6 +307,13 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
 
   const onGearSlotsClick = (event: Event): void => {
     const target = event.target as HTMLElement;
+    const unassignBtn = target.closest<HTMLElement>("[data-gear-unassign]");
+    if (unassignBtn) {
+      commands.unequip(unassignBtn.dataset["gearUnassign"] as GearSlot);
+      openGearChooserSlot = null;
+      onChanged();
+      return;
+    }
     const assignBtn = target.closest<HTMLElement>("[data-gear-assign]");
     if (assignBtn) {
       commands.equip(assignBtn.dataset["gearAssign"] as string);
@@ -317,6 +327,16 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
       openGearChooserSlot = openGearChooserSlot === slot ? null : slot;
       onChanged();
     }
+  };
+
+  const onGearSlotsContextMenu = (event: MouseEvent): void => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>("[data-slot]");
+    const slot = tile?.dataset["slot"] as GearSlot | undefined;
+    if (!slot || !tile?.dataset["item"]) return;
+    event.preventDefault();
+    commands.unequip(slot);
+    openGearChooserSlot = null;
+    onChanged();
   };
 
   const onStyleRowClick = (event: Event): void => {
@@ -352,6 +372,7 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
 
   host.addEventListener("click", onHostClick);
   el("#character-slots").addEventListener("click", onGearSlotsClick);
+  el("#character-slots").addEventListener("contextmenu", onGearSlotsContextMenu);
   el("#style-row").addEventListener("click", onStyleRowClick);
   el("#autoeat-row").addEventListener("click", onAutoEatRowClick);
   el<HTMLInputElement>("#autosell-duplicates-toggle").addEventListener("change", onAutoSellChange);
@@ -369,6 +390,7 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
       disposed = true;
       host.removeEventListener("click", onHostClick);
       el("#character-slots").removeEventListener("click", onGearSlotsClick);
+      el("#character-slots").removeEventListener("contextmenu", onGearSlotsContextMenu);
       el("#style-row").removeEventListener("click", onStyleRowClick);
       el("#autoeat-row").removeEventListener("click", onAutoEatRowClick);
       el<HTMLInputElement>("#autosell-duplicates-toggle").removeEventListener(

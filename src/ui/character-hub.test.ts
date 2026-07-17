@@ -35,6 +35,7 @@ function mountCharacterHub(
     setAutoEatThreshold: vi.fn(engine.setAutoEatThreshold.bind(engine)),
     setAutoSellDuplicates: vi.fn(engine.setAutoSellDuplicates.bind(engine)),
     equip: vi.fn(engine.equip.bind(engine)),
+    unequip: vi.fn(engine.unequip.bind(engine)),
   };
   const onChanged = vi.fn();
   const onDestinationRequested = vi.fn();
@@ -259,6 +260,70 @@ describe("createCharacterHubUi — Gear Slots and chooser", () => {
   });
 });
 
+describe("createCharacterHubUi — gear unequip (#375)", () => {
+  it("renders a ✕ on filled gear tiles only", () => {
+    const { host } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bronze-sword" } },
+    });
+    expect(host.querySelector('[data-slot="weapon"] [data-gear-unassign]')).not.toBeNull();
+    expect(host.querySelector('[data-slot="shield"] [data-gear-unassign]')).toBeNull();
+  });
+
+  it("clicking a gear ✕ unequips, returns the tile to empty, and banks the item", () => {
+    const { engine, host, commands, onChanged } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bronze-sword" } },
+    });
+    host.querySelector<HTMLButtonElement>('[data-gear-unassign="weapon"]')?.click();
+    expect(commands.unequip).toHaveBeenCalledWith("weapon");
+    expect(engine.snapshot().player.equipment.weapon).toBeNull();
+    expect(engine.snapshot().bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    expect(host.querySelector('[data-slot="weapon"] [data-gear-add]')).not.toBeNull();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("right-click on a filled gear tile unequips and calls preventDefault", () => {
+    const { engine, host, commands } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bronze-sword" } },
+    });
+    const tile = host.querySelector<HTMLElement>('[data-slot="weapon"][data-item]')!;
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    const prevented = !tile.dispatchEvent(event);
+    expect(prevented).toBe(true);
+    expect(commands.unequip).toHaveBeenCalledWith("weapon");
+    expect(engine.snapshot().player.equipment.weapon).toBeNull();
+  });
+
+  it("right-click on an empty gear tile does not call preventDefault", () => {
+    const { host, commands } = mountCharacterHub();
+    const tile = host.querySelector<HTMLElement>('[data-slot="weapon"]')!;
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    const prevented = !tile.dispatchEvent(event);
+    expect(prevented).toBe(false);
+    expect(commands.unequip).not.toHaveBeenCalled();
+  });
+
+  it("clicking a gear ✕ unequips without opening the slot chooser", () => {
+    const { host } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bronze-sword" } },
+      bank: { items: [{ itemId: "bow", qty: 1 }] },
+    });
+    host.querySelector<HTMLButtonElement>('[data-gear-unassign="weapon"]')?.click();
+    expect(host.querySelector(".gear-slot-chooser")).toBeNull();
+    expect(host.querySelector('[data-slot="weapon"] [data-gear-add]')).not.toBeNull();
+  });
+
+  it("dispose() removes the gear contextmenu listener", () => {
+    const { host, ui, commands } = mountCharacterHub(1, {
+      player: { equipment: { weapon: "bronze-sword" } },
+    });
+    ui.dispose();
+    const tile = host.querySelector<HTMLElement>('[data-slot="weapon"][data-item]')!;
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    tile.dispatchEvent(event);
+    expect(commands.unequip).not.toHaveBeenCalled();
+  });
+});
+
 describe("createCharacterHubUi — chooser dismissal", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -469,6 +534,7 @@ describe("createCharacterHubUi — disposal", () => {
       setAutoEatThreshold: vi.fn(),
       setAutoSellDuplicates: vi.fn(),
       equip: vi.fn(),
+      unequip: vi.fn(),
     };
     const host = document.createElement("section");
     const ui = createCharacterHubUi({

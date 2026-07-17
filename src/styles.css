@@ -1113,20 +1113,29 @@ body {
   border-color: var(--accent);
 }
 
-.food-slot-unassign {
+.food-slot-unassign,
+.potion-slot-unassign,
+.gear-slot-unassign {
   position: absolute;
   top: 1px;
   right: 1px;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 10px;
+  /* #375: `background: none` + `--text-dim` at 10px made this glyph unreadable on top of
+     high-contrast 34x34 item art — it was never occluded (an absolutely-positioned element
+     already paints above its static icon sibling), it simply had no contrast of its own. The
+     opaque backing disc, not a z-index, is what makes it legible. */
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  font-size: 11px;
   line-height: 1;
-  padding: 3px 4px;
+  padding: 2px 3px;
   cursor: pointer;
 }
 
-.food-slot-unassign:hover {
+.food-slot-unassign:hover,
+.potion-slot-unassign:hover,
+.gear-slot-unassign:hover {
   color: var(--accent);
 }
 
@@ -1220,23 +1229,6 @@ body {
 
 .potion-slot-add:hover {
   border-color: var(--accent);
-}
-
-.potion-slot-unassign {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 4px;
-  cursor: pointer;
-}
-
-.potion-slot-unassign:hover {
-  color: var(--accent);
 }
 
 .potion-slot-chooser {

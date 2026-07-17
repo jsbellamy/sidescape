@@ -318,7 +318,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
   // Food Slot bar: dispatch order is load-bearing — unassign (✕) is checked before the slot-level
   // eat, so unassigning never also eats; a chooser pick is checked before the [+] toggle so
   // picking a Food both assigns it and doesn't re-toggle the chooser.
-  el("#character-food-slots").addEventListener("click", (event) => {
+  const onFoodSlotsClick = (event: Event): void => {
     const target = event.target as HTMLElement;
 
     const unassignValue = target.dataset["unassign"];
@@ -354,11 +354,25 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       openChooser = alreadyOpen ? null : { kind: "food", slotIndex }; // re-click dismisses
       onChanged();
     }
-  });
+  };
+
+  const onFoodSlotsContextMenu = (event: MouseEvent): void => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(".food-slot.filled");
+    if (!tile) return;
+    const slotIndex = tile.dataset["slot"];
+    if (slotIndex === undefined) return;
+    event.preventDefault();
+    commands.clearLoadoutSlot("food", Number(slotIndex));
+    openChooser = null;
+    onChanged();
+  };
+
+  el("#character-food-slots").addEventListener("click", onFoodSlotsClick);
+  el("#character-food-slots").addEventListener("contextmenu", onFoodSlotsContextMenu);
 
   // Potion Slot tile: dispatch order mirrors the Food Slot bar above — unassign (✕) is checked
   // before a chooser pick, which is checked before the [+] toggle.
-  el("#potion-slot").addEventListener("click", (event) => {
+  const onPotionSlotClick = (event: Event): void => {
     const target = event.target as HTMLElement;
 
     if (target.dataset["potionUnassign"] !== undefined) {
@@ -381,11 +395,25 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       openChooser = alreadyOpen ? null : { kind: "potion" }; // re-click dismisses
       onChanged();
     }
-  });
+  };
+
+  const onPotionSlotContextMenu = (event: MouseEvent): void => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(
+      "#potion-slot .potion-slot-tile.filled",
+    );
+    if (!tile) return;
+    event.preventDefault();
+    commands.clearLoadoutSlot("potion");
+    openChooser = null;
+    onChanged();
+  };
+
+  el("#potion-slot").addEventListener("click", onPotionSlotClick);
+  el("#potion-slot").addEventListener("contextmenu", onPotionSlotContextMenu);
 
   // Quiver tile: dispatch order mirrors the Potion Slot above — unassign (✕) before a chooser
   // pick, before the [+] toggle.
-  el("#quiver-slot").addEventListener("click", (event) => {
+  const onQuiverSlotClick = (event: Event): void => {
     const target = event.target as HTMLElement;
 
     if (target.dataset["quiverUnassign"] !== undefined) {
@@ -408,12 +436,26 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       openChooser = alreadyOpen ? null : { kind: "quiver" }; // re-click dismisses
       onChanged();
     }
-  });
+  };
+
+  const onQuiverSlotContextMenu = (event: MouseEvent): void => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(
+      "#quiver-slot .potion-slot-tile.filled",
+    );
+    if (!tile) return;
+    event.preventDefault();
+    commands.clearLoadoutSlot("quiver");
+    openChooser = null;
+    onChanged();
+  };
+
+  el("#quiver-slot").addEventListener("click", onQuiverSlotClick);
+  el("#quiver-slot").addEventListener("contextmenu", onQuiverSlotContextMenu);
 
   // Rune Slot tile: dispatch order mirrors the Quiver above — unassign (✕) before a chooser pick,
   // before the [+] toggle. A gated (disabled) chooser row never fires click at all, so
   // `assignLoadoutSlot`'s own "magic level too low" throw is a backstop, never the primary gate.
-  el("#rune-slot").addEventListener("click", (event) => {
+  const onRuneSlotClick = (event: Event): void => {
     const target = event.target as HTMLElement;
 
     if (target.dataset["runeUnassign"] !== undefined) {
@@ -436,7 +478,21 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       openChooser = alreadyOpen ? null : { kind: "rune" }; // re-click dismisses
       onChanged();
     }
-  });
+  };
+
+  const onRuneSlotContextMenu = (event: MouseEvent): void => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>(
+      "#rune-slot .potion-slot-tile.filled",
+    );
+    if (!tile) return;
+    event.preventDefault();
+    commands.clearLoadoutSlot("rune");
+    openChooser = null;
+    onChanged();
+  };
+
+  el("#rune-slot").addEventListener("click", onRuneSlotClick);
+  el("#rune-slot").addEventListener("contextmenu", onRuneSlotContextMenu);
 
   return { render };
 }

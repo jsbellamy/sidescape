@@ -75,3 +75,17 @@ describe("fixed 34px icon chassis (#168)", () => {
     );
   });
 });
+
+describe("loadout and gear unassign legibility (#375)", () => {
+  it("gives unassign buttons an opaque background, non-dim text, and no z-index", () => {
+    const rule = css.match(
+      /\.food-slot-unassign,\s*\.potion-slot-unassign,\s*\.gear-slot-unassign\s*{([^}]*)}/s,
+    );
+    expect(rule).not.toBeNull();
+    const body = rule![1]!.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(body).toMatch(/background:\s*var\(--bg\)/);
+    expect(body).toMatch(/color:\s*var\(--text\)/);
+    expect(body).not.toMatch(/z-index/);
+    expect(body).not.toMatch(/color:\s*var\(--text-dim\)/);
+  });
+});

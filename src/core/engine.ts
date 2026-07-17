@@ -151,6 +151,13 @@ export interface Engine {
    * isDuplicateEquipment for the rule. Throws on a non-boolean value. */
   setAutoSellDuplicates(on: boolean): void;
   equip(itemId: string): void;
+  /** Returns the item worn in `slot` to the Bank and empties the slot. A no-op on an already-empty
+   * slot (same rule as `clearLoadoutSlot`/`foodClearAt`). Throws "bank is full" if the item needs a
+   * brand-new Bank stack and the Bank is at capacity — a player command, never auto-sold (the
+   * universal "passive flows auto-sell on overflow; player commands throw" rule). Deliberately does
+   * NOT check `levelReq`: under-levelled gear from a grandfathered save (#363) can always be taken
+   * off — it just cannot be put back on. Emits `unequipped`. */
+  unequip(slot: GearSlot): void;
   /** Assigns `itemId` to the named Loadout Slot kind. `slotIndex` picks WHICH Food Slot
    * (0..FOOD_SLOT_COUNT-1) and is REQUIRED for kind "food"; for the singular kinds
    * (potion/quiver/rune) it must be omitted. Per ADR-0001 invalid commands throw loudly:
@@ -2175,6 +2182,22 @@ export function createEngine(
         state.combatStyle = remapCombatStyle(state.combatStyle, newMode);
       }
       emit({ type: "equipped", itemId });
+    },
+    unequip(slot) {
+      if (!(slot in state.equipment)) throw new Error(`unknown gear slot: ${slot}`);
+      const itemId = state.equipment[slot];
+      if (itemId === null) return;
+
+      const oldMode = weaponCombatModeFor(state.equipment.weapon, resolved);
+
+      returnToBank(itemId, 1);
+      state.equipment[slot] = null;
+
+      const newMode = weaponCombatModeFor(state.equipment.weapon, resolved);
+      if (oldMode !== newMode) {
+        state.combatStyle = remapCombatStyle(state.combatStyle, newMode);
+      }
+      emit({ type: "unequipped", itemId });
     },
     assignLoadoutSlot(kind, itemId, slotIndex) {
       switch (kind) {
