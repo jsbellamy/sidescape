@@ -185,10 +185,14 @@ Herblore). Art + `scripts/art` registration only — Theme wiring lands in a fol
   subject (timber beams, shelves/tools, warm hearth glow — not smithing-specific). Native 1× and
   unscaled three-period previews are the approval surfaces.
 
-The five activity overlays are original transparent 80×60 native-pixel assets under
+The activity overlays are original transparent 80×60 native-pixel assets under
 `src/assets/activity-overlays/`: Smithing's anvil, Cooking's campfire, Crafting's tanning rack,
-Herblore's cauldron, and Fishing's planted rod/line/ripple. They are not CSS shapes and require no
-third-party provenance.
+Herblore's cauldron, Fishing's shared planted rod/line/ripple (`activity-fishing-near.png`, interim),
+and five per-Theme fishing water props (#435) — meadow reedy pond, forest woodland stream, sewer
+outflow/grate pool, crypt flooded ossuary pool, and glacier ice hole — each quantized through
+`ingest-overlay.mjs --zone <Theme>`. The Theme props are **water-source only** (no planted rod);
+the player sprite holds the rod after #436. They are not CSS shapes and require no third-party
+provenance.
 
 Backdrops use one native pixel per CSS pixel (160×120), while player/Monster sprites and activity
 overlays use the player grain: the overlay's 80×60 source is rendered at 2× as a 160×120 fixed,
@@ -199,8 +203,9 @@ native ground line y=50; it never embeds a player or maps Fishing variants per A
 flat-background source generation from the git-ignored `scripts/art/icon-gen-inbox/`, reuses
 `trace-core.mjs` to recover its chunky grid, then bottom-anchors the fitted subject onto a
 transparent 80×60 canvas. Run it manually (or `npm run art:overlay -- ...`) when an overlay needs
-adjustment. `scripts/art/overlays.mjs` records the five committed placements and fits; `npm run
-art:overlays` rebuilds all five once their raw inbox generations are present. `npm run art`
+adjustment. `scripts/art/overlays.mjs` records the committed placements, fits, and optional per-overlay
+`zone` Theme for fishing water props; `npm run
+art:overlays` rebuilds every entry once their raw inbox generations are present. `npm run art`
 rebuilds icons, sprites, and registered source-driven backdrop themes.
 
 ## Item icons (#78)
