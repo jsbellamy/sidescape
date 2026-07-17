@@ -37,9 +37,10 @@ describe("adamant/rune Bars and Arrows (#252)", () => {
     });
   });
 
-  it("all five arrow tiers carry Ranged levelReq 1/10/20/30/40 (#363)", () => {
+  it("all six arrow tiers carry Ranged levelReq 1/5/10/20/30/40 (#363, iron filled by #365)", () => {
     const expected: Record<string, number> = {
       "bronze-arrow": 1,
+      "iron-arrow": 5,
       "steel-arrow": 10,
       "mithril-arrow": 20,
       "adamant-arrow": 30,

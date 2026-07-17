@@ -64,6 +64,7 @@ const GOLDEN_SPELL_IDS = [
 
 const GOLDEN_VENDOR_ITEM_IDS = [
   "bronze-arrow",
+  "iron-arrow",
   "steel-arrow",
   "mithril-arrow",
   "air-rune",
