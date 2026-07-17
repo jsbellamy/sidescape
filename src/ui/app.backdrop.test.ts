@@ -227,12 +227,6 @@ describe("scene backdrop (#80)", () => {
     // without disturbing #backdrop staying first (the z-order pin the sibling test above checks).
     // It's `position: absolute` (see styles.css), so — unlike a flow sibling — it never adds to
     // #scene's own layout height.
-    expect(ids).toEqual([
-      "backdrop",
-      "toast-container",
-      "sprite-row",
-      "no-food-warning",
-      "widget-controls",
-    ]);
+    expect(ids).toEqual(["backdrop", "toast-container", "sprite-row", "widget-controls"]);
   });
 });

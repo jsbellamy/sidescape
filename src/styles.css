@@ -511,15 +511,19 @@ body {
   height: 100%;
   background: #9fbc62;
 }
-#no-food-warning {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  padding: 4px 8px;
+/* #376: the no-Food badge shares #widget-controls' 24x24 chassis with the two buttons beside
+   it, but it is a non-interactive <span> — no hover/active state, no pointer cursor, and it is
+   deliberately NOT matched by the `#widget-controls button` rule above. */
+#no-food-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
   border-radius: 4px;
-  background: rgba(69, 30, 22, 0.9);
-  color: #ffd4ba;
-  font-size: 11px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 /* Parallax scene backdrop (#80): three stacked, absolutely-positioned layers keyed off
