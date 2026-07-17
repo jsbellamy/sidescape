@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 import type { Snapshot } from "../core/types";
 
-const DARKROOT_MONSTER_IDS = ["wolf", "goblin-warrior", "bandit"];
+const DARKROOT_MONSTER_IDS = ["wolf", "goblin-warrior", "bandit", "giant-spider", "dark-druid"];
+
+describe("resolveContent(content)", () => {
+  it("does not throw with Giant Spider and Dark Druid added to Darkroot Forest", () => {
+    expect(() => resolveContent(content)).not.toThrow();
+  });
+});
 
 describe("Darkroot Forest content", () => {
   it("appears in the picker, locked until Meadow Depths is completed", () => {
@@ -88,6 +95,44 @@ describe("Darkroot Forest content", () => {
     }
     expect(ironEquipmentSeen).toBe(true);
   });
+
+  it("giant-spider's silk chance ramps above Lumbry's spider", () => {
+    const giantSpider = content.monsters.find((m) => m.id === "giant-spider")!;
+    const giantSilk = giantSpider.dropTable.find((e) => e.itemId === "silk")!;
+    const spiderSilkChance =
+      content.monsters.find((m) => m.id === "spider")?.dropTable.find((e) => e.itemId === "silk")
+        ?.chance ?? 0.35;
+    expect(giantSilk.chance).toBe(0.45);
+    expect(giantSilk.chance).toBeGreaterThan(spiderSilkChance);
+  });
+
+  it("dark-druid is Darkroot's only open-world magic attacker and weak to fire", () => {
+    const darkDruid = content.monsters.find((m) => m.id === "dark-druid")!;
+    expect(darkDruid.attackType).toBe("magic");
+    expect(darkDruid.weakElement).toBe("fire");
+
+    const openWorldIds = content.areas.find((a) => a.id === "darkroot-forest")!.monsterIds;
+    const magicAttackers = openWorldIds.filter(
+      (id) => content.monsters.find((m) => m.id === id)!.attackType === "magic",
+    );
+    expect(magicAttackers).toEqual(["dark-druid"]);
+  });
+
+  it("each newcomer's Drop Table has guaranteed, common, and uncommon bands", () => {
+    for (const monsterId of ["giant-spider", "dark-druid"]) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      const bands = new Set(monster.dropTable.map((e) => e.band));
+      expect(bands.has("guaranteed"), `${monsterId} missing guaranteed`).toBe(true);
+      expect(bands.has("common"), `${monsterId} missing common`).toBe(true);
+      expect(bands.has("uncommon"), `${monsterId} missing uncommon`).toBe(true);
+      for (const entry of monster.dropTable) {
+        expect(
+          content.items.find((i) => i.id === entry.itemId),
+          `${monsterId} drops unknown item ${entry.itemId}`,
+        ).toBeDefined();
+      }
+    }
+  });
 });
 
 /** A saved Snapshot for a player who just graduated Lumbry Meadows: cleared its Meadow Depths
@@ -128,6 +173,55 @@ describe("Darkroot Forest tier balance", () => {
     expect(() => createEngine(content, seededRng(2024)).selectMonster("wolf")).toThrow(
       /Darkroot Forest is locked — defeat Meadow Depths/,
     );
+    for (const monsterId of ["giant-spider", "dark-druid"]) {
+      expect(() => createEngine(content, seededRng(2024)).selectMonster(monsterId)).toThrow(
+        /Darkroot Forest is locked — defeat Meadow Depths/,
+      );
+    }
+  });
+
+  it("a Meadows graduate can select Giant Spider and Dark Druid", () => {
+    const engine = createEngine(content, seededRng(2024), meadowsGraduateSave());
+    expect(() => engine.selectMonster("giant-spider")).not.toThrow();
+    expect(() => engine.selectMonster("dark-druid")).not.toThrow();
+  });
+});
+
+describe("Giant Spider and Dark Druid kills (#395)", () => {
+  it("a Giant Spider kill drops guaranteed gold (seeded Rng, real Content)", () => {
+    const engine = createEngine(content, seededRng(3951), meadowsGraduateSave());
+    engine.selectMonster("giant-spider");
+
+    let kills = 0;
+    let goldDrops = 0;
+    engine.on("kill", (e) => {
+      if (e.monsterId === "giant-spider") kills++;
+    });
+    engine.on("drop", (e) => {
+      if (e.itemId === "gold") goldDrops++;
+    });
+    for (let i = 0; i < 8000; i++) engine.tick();
+
+    expect(kills).toBeGreaterThan(0);
+    expect(goldDrops).toBeGreaterThanOrEqual(kills);
+  });
+
+  it("a Dark Druid kill drops guaranteed gold (seeded Rng, real Content)", () => {
+    const engine = createEngine(content, seededRng(3952), meadowsGraduateSave());
+    engine.selectMonster("dark-druid");
+
+    let kills = 0;
+    let goldDrops = 0;
+    engine.on("kill", (e) => {
+      if (e.monsterId === "dark-druid") kills++;
+    });
+    engine.on("drop", (e) => {
+      if (e.itemId === "gold") goldDrops++;
+    });
+    for (let i = 0; i < 8000; i++) engine.tick();
+
+    expect(kills).toBeGreaterThan(0);
+    expect(goldDrops).toBeGreaterThanOrEqual(kills);
   });
 });
 
