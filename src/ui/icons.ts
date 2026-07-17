@@ -23,6 +23,9 @@ import bronzeMaceUrl from "../assets/icons/bronze-mace.png";
 import bronzePlatelegsUrl from "../assets/icons/bronze-platelegs.png";
 import bronzeShieldUrl from "../assets/icons/bronze-shield.png";
 import bronzeSwordUrl from "../assets/icons/bronze-sword.png";
+import cookedCaveEelUrl from "../assets/icons/cooked-cave-eel.png";
+import cookedChickenUrl from "../assets/icons/cooked-chicken.png";
+import cookedIcefinUrl from "../assets/icons/cooked-icefin.png";
 import cookedMeatUrl from "../assets/icons/cooked-meat.png";
 import cookedPikeUrl from "../assets/icons/cooked-pike.png";
 import cookedShrimpUrl from "../assets/icons/cooked-shrimp.png";
@@ -75,10 +78,14 @@ import mithrilStaffUrl from "../assets/icons/mithril-staff.png";
 import mithrilSwordUrl from "../assets/icons/mithril-sword.png";
 import productionPotionUrl from "../assets/icons/production-potion.png";
 import rawBeefUrl from "../assets/icons/raw-beef.png";
+import rawCaveEelUrl from "../assets/icons/raw-cave-eel.png";
+import rawChickenUrl from "../assets/icons/raw-chicken.png";
+import rawIcefinUrl from "../assets/icons/raw-icefin.png";
 import rawPikeUrl from "../assets/icons/raw-pike.png";
 import rawShrimpUrl from "../assets/icons/raw-shrimp.png";
 import rawTroutUrl from "../assets/icons/raw-trout.png";
 import rockGolemUrl from "../assets/icons/rock-golem.png";
+import silkUrl from "../assets/icons/silk.png";
 import rubyUrl from "../assets/icons/ruby.png";
 import rubyAmuletUrl from "../assets/icons/ruby-amulet.png";
 import rubyRingUrl from "../assets/icons/ruby-ring.png";
@@ -166,6 +173,9 @@ const icons: Record<string, string> = {
   "bronze-dagger": bronzeDaggerUrl,
   "bronze-shield": bronzeShieldUrl,
   "bronze-sword": bronzeSwordUrl,
+  "cooked-cave-eel": cookedCaveEelUrl,
+  "cooked-chicken": cookedChickenUrl,
+  "cooked-icefin": cookedIcefinUrl,
   "cooked-meat": cookedMeatUrl,
   "cooked-pike": cookedPikeUrl,
   "cooked-shrimp": cookedShrimpUrl,
@@ -244,6 +254,12 @@ const icons: Record<string, string> = {
   "raw-shrimp": rawShrimpUrl,
   "raw-trout": rawTroutUrl,
   "raw-pike": rawPikeUrl,
+  // Wave icons (#386): silk + cave eel + chicken (new compact sources) and icefin (pike fish
+  // base + glacier recolor). Cooked variants share each raw species source.
+  silk: silkUrl,
+  "raw-cave-eel": rawCaveEelUrl,
+  "raw-chicken": rawChickenUrl,
+  "raw-icefin": rawIcefinUrl,
   // Crafting wave (#116) hides + leather/ranged armour: source-driven icons conformed from
   // committed golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   cowhide: cowhideUrl,

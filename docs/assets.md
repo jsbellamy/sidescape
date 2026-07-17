@@ -249,6 +249,17 @@ silhouette. `cooked-meat`, `cooked-shrimp`, `cooked-trout`, and `cooked-pike` re
 raw compact source and deterministically remap only its material colors to a cooked brown/orange
 ramp. Cooked states are never separately generated, so raw and cooked geometry remains identical.
 
+## Wave icons: silk, cave eel, chicken, icefin (#386)
+
+Seven source-driven production icons for the next content wave (icons only — no ItemDefs).
+`silk`, `raw-cave-eel`, and `raw-chicken` are new prompt-kit generations ingested to compact sources
+`scripts/art/icon-sources/silk.png`, `raw-cave-eel.png`, and `raw-chicken.png`. `raw-icefin` reuses
+the existing `golden-base-raw-pike.png` fish base with a deterministic cold `glacier` ramp (not a
+new silhouette). `cooked-chicken`, `cooked-cave-eel`, and `cooked-icefin` reuse each raw species
+source with cooked brown/ember remaps — no cooked icon was image-generated. No new material ramp or
+zone was added to `scripts/art/palettes.mjs`. Shipped under `src/assets/icons/` and registered in
+`src/ui/icons.ts`.
+
 ## Gem and jewelry icons (Crafting wave, #117)
 
 Loose gems, amulets, and rings are three source-driven silhouette families using

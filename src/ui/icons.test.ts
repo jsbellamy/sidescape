@@ -72,6 +72,25 @@ describe("icons registry (#78)", () => {
     const allUrls = registeredIconKeys().map((key) => itemIcon(key));
     expect(new Set(allUrls).size).toBe(allUrls.length);
   });
+
+  // #386: silk + cave eel + chicken + icefin (+ cooked variants) registered ahead of Items.
+  it("resolves Wave icons (#386) to distinct non-empty URLs", () => {
+    const keys = [
+      "silk",
+      "raw-cave-eel",
+      "raw-chicken",
+      "raw-icefin",
+      "cooked-chicken",
+      "cooked-cave-eel",
+      "cooked-icefin",
+    ] as const;
+    const urls = keys.map((key) => itemIcon(key));
+    for (const url of urls) {
+      expect(url).toEqual(expect.any(String));
+      expect(url.length).toBeGreaterThan(0);
+    }
+    expect(new Set(urls).size).toBe(urls.length);
+  });
 });
 
 // UI & Assets wave 1/8 (#131): the eleven Skill icons + six workspace/navigation icons, resolved

@@ -172,6 +172,20 @@ const SOURCE_PALETTES = {
   },
   "skill-fishing.png": { materialRampNames: ["steel", "water"], zoneNames: [] },
   "skill-strength.png": { materialRampNames: ["ember"], zoneNames: ["town"] },
+  // Wave icons (#386): silk / raw-cave-eel / raw-chicken — scopes from full-palette winners on
+  // each committed compact source (no new material/zone ramps).
+  "silk.png": {
+    materialRampNames: ["leather", "skin"],
+    zoneNames: ["town"],
+  },
+  "raw-cave-eel.png": {
+    materialRampNames: ["leather", "skin"],
+    zoneNames: ["forest", "sewer"],
+  },
+  "raw-chicken.png": {
+    materialRampNames: ["blood", "leather", "skin"],
+    zoneNames: ["crypt", "town"],
+  },
 };
 
 /** The `{ materialRampNames, zoneNames }` scope a given icon source may quantize into. Exported
@@ -459,6 +473,97 @@ export const icons = [
         "meadow[2]": "ember.base",
         "forest[3]": "ember.light",
         "forest[5]": "ember.glint",
+      },
+    },
+  },
+  // Wave icons (#386): silk + cave eel + chicken (generated compact sources) and icefin
+  // (derived from the existing pike fish base with a cold glacier ramp). Cooked variants
+  // reuse each raw species source — never separately image-generated.
+  {
+    name: "silk",
+    source: "silk.png",
+  },
+  {
+    name: "raw-cave-eel",
+    source: "raw-cave-eel.png",
+  },
+  {
+    name: "cooked-cave-eel",
+    source: "raw-cave-eel.png",
+    opts: {
+      // Warm town/ember remap of the raw eel's forest+sewer body — same silhouette.
+      recolor: {
+        "forest[2]": "ember.base",
+        "sewer[0]": "town[0]",
+        "sewer[1]": "town[1]",
+        "sewer[2]": "town[2]",
+        "sewer[4]": "town[5]",
+        "leather.shadow": "town[0]",
+        "skin.light": "ember.glint",
+        "P.sand": "ember.light",
+        'P["text-dim"]': "ember.base",
+        "P.umber": "town[1]",
+        "P.shadow": "town[0]",
+        "P.border": "town[0]",
+        'P["bg-panel"]': "town[0]",
+        "P.bg": "town[5]",
+      },
+    },
+  },
+  {
+    name: "raw-chicken",
+    source: "raw-chicken.png",
+  },
+  {
+    name: "cooked-chicken",
+    source: "raw-chicken.png",
+    opts: {
+      // Warm town/ember remap matching raw-beef→cooked-meat / raw→cooked fish relationship.
+      recolor: {
+        "skin.shadow": "town[0]",
+        "skin.base": "town[1]",
+        "skin.light": "town[3]",
+        "skin.glint": "town[4]",
+        "blood.shadow": "town[0]",
+        "blood.glint": "ember.glint",
+        "leather.shadow": "town[0]",
+        "leather.light": "ember.light",
+        "P.parchment": "ember.light",
+        "P.cream": "ember.glint",
+        "P.sand": "ember.base",
+        "P.glint": "ember.glint",
+      },
+    },
+  },
+  {
+    name: "raw-icefin",
+    source: "golden-base-raw-pike.png",
+    opts: {
+      recolor: {
+        "forest[4]": "glacier[0]",
+        "forest[0]": "glacier[1]",
+        "meadow[4]": "glacier[2]",
+        "meadow[3]": "glacier[3]",
+        "meadow[2]": "glacier[4]",
+        "forest[3]": "glacier[4]",
+        "forest[5]": "glacier[5]",
+      },
+    },
+  },
+  {
+    name: "cooked-icefin",
+    source: "golden-base-raw-pike.png",
+    opts: {
+      // Same pike silhouette as cooked-pike, but a warmer ember-forward cooked ramp so the
+      // two cooked fish stay distinct at 34×34 while matching the raw→cooked relationship.
+      recolor: {
+        "forest[4]": "town[0]",
+        "forest[0]": "town[1]",
+        "meadow[4]": "town[1]",
+        "meadow[3]": "ember.base",
+        "meadow[2]": "ember.light",
+        "forest[3]": "ember.glint",
+        "forest[5]": "town[4]",
       },
     },
   },
