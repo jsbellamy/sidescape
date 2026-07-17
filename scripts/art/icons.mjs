@@ -174,14 +174,17 @@ const SOURCE_PALETTES = {
   "skill-strength.png": { materialRampNames: ["ember"], zoneNames: ["town"] },
   // Wave icons (#386): silk / raw-cave-eel / raw-chicken — scopes from full-palette winners on
   // each committed compact source (no new material/zone ramps).
-  "silk.png": { materialRampNames: ["skin", "leather"], zoneNames: ["sewer"] },
+  "silk.png": {
+    materialRampNames: ["adamant", "leather", "moss", "skin", "steel"],
+    zoneNames: ["crypt", "glacier", "sewer"],
+  },
   "raw-cave-eel.png": {
-    materialRampNames: ["skin", "leather", "moss"],
-    zoneNames: ["sewer"],
+    materialRampNames: ["leather", "skin"],
+    zoneNames: ["forest", "sewer"],
   },
   "raw-chicken.png": {
-    materialRampNames: ["blood", "skin", "leather"],
-    zoneNames: ["town"],
+    materialRampNames: ["blood", "leather", "skin"],
+    zoneNames: ["crypt", "town"],
   },
 };
 
@@ -488,12 +491,18 @@ export const icons = [
     name: "cooked-cave-eel",
     source: "raw-cave-eel.png",
     opts: {
+      // Warm town/ember remap of the raw eel's forest+sewer body — same silhouette.
       recolor: {
+        "forest[2]": "ember.base",
         "sewer[0]": "town[0]",
         "sewer[1]": "town[1]",
-        "leather.base": "town[2]",
+        "sewer[2]": "town[2]",
+        "sewer[4]": "town[5]",
+        "leather.shadow": "town[0]",
+        "skin.light": "ember.glint",
         "P.sand": "ember.light",
         'P["text-dim"]': "ember.base",
+        "P.umber": "town[1]",
         "P.shadow": "town[0]",
         "P.border": "town[0]",
         'P["bg-panel"]': "town[0]",
@@ -509,16 +518,20 @@ export const icons = [
     name: "cooked-chicken",
     source: "raw-chicken.png",
     opts: {
+      // Warm town/ember remap matching raw-beef→cooked-meat / raw→cooked fish relationship.
       recolor: {
         "skin.shadow": "town[0]",
         "skin.base": "town[1]",
+        "skin.light": "town[3]",
         "skin.glint": "town[4]",
+        "blood.shadow": "town[0]",
         "blood.glint": "ember.glint",
-        "blood.light": "ember.light",
         "leather.shadow": "town[0]",
+        "leather.light": "ember.light",
         "P.parchment": "ember.light",
         "P.cream": "ember.glint",
         "P.sand": "ember.base",
+        "P.glint": "ember.glint",
       },
     },
   },
