@@ -93,8 +93,9 @@ const PRE_251_ITEM_IDS = [
 
 /** The four new items #251 added, followed by #252's 20 new items (16 adamant/rune Equipment +
  * adamant-bar/rune-bar + adamant-arrow/rune-arrow, issue's "Full generated Equipment" family
- * order per tier, then the bars, then the arrows), then #342's six platelegs — must appear only
- * after every PRE_251_ITEM_IDS entry, in this exact order (append-only). */
+ * order per tier, then the bars, then the arrows), then #342's six platelegs, then #364's eight
+ * Bolt/Blast runes — must appear only after every PRE_251_ITEM_IDS entry, in this exact order
+ * (append-only). */
 const NEW_ITEM_IDS = [
   "bronze-chainbody",
   "bronze-full-helm",
@@ -126,6 +127,14 @@ const NEW_ITEM_IDS = [
   "mithril-platelegs",
   "adamant-platelegs",
   "rune-platelegs",
+  "air-bolt-rune",
+  "water-bolt-rune",
+  "earth-bolt-rune",
+  "fire-bolt-rune",
+  "air-blast-rune",
+  "water-blast-rune",
+  "earth-blast-rune",
+  "fire-blast-rune",
 ] as const;
 
 const PRE_251_RECIPE_IDS = [

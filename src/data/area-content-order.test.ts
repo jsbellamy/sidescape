@@ -47,7 +47,20 @@ const GOLDEN_DUNGEON_IDS = [
   "frost-warden",
 ] as const;
 
-const GOLDEN_SPELL_IDS = ["air-strike", "water-strike", "earth-strike", "fire-strike"] as const;
+const GOLDEN_SPELL_IDS = [
+  "air-strike",
+  "water-strike",
+  "earth-strike",
+  "fire-strike",
+  "air-bolt",
+  "water-bolt",
+  "earth-bolt",
+  "fire-bolt",
+  "air-blast",
+  "water-blast",
+  "earth-blast",
+  "fire-blast",
+] as const;
 
 const GOLDEN_VENDOR_ITEM_IDS = [
   "bronze-arrow",
@@ -59,6 +72,14 @@ const GOLDEN_VENDOR_ITEM_IDS = [
   "fire-rune",
   "adamant-arrow",
   "rune-arrow",
+  "air-bolt-rune",
+  "water-bolt-rune",
+  "earth-bolt-rune",
+  "fire-bolt-rune",
+  "air-blast-rune",
+  "water-blast-rune",
+  "earth-blast-rune",
+  "fire-blast-rune",
 ] as const;
 
 const GOLDEN_PET_IDS = ["rock-golem", "fishing-frog", "kiln-cat", "shade-wisp"] as const;
