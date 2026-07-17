@@ -38,6 +38,8 @@ describe("sprites", () => {
       "giant-rat",
       "zombie",
       "skeleton",
+      "sewer-slime",
+      "grave-robber",
       "sewer-king",
       "crypt-shade",
       "crypt-ghoul",
