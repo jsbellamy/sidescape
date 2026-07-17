@@ -35,6 +35,8 @@ const { values } = parseArgs({
     "pitch-y": { type: "string" },
     place: { type: "string" },
     fit: { type: "string" },
+    // Per-Theme fishing water props (#435) need the matching zone ramp; production props keep town.
+    zone: { type: "string", default: "town" },
   },
 });
 
@@ -95,13 +97,22 @@ let grid = sampleCells(tile, fg, bbox, {
   phaseY: pitchY.phase,
 });
 if (fit) grid = resizeGrid(grid, fit[0], fit[1]);
-// This skips icon-only outline stripping but still locks scene art to the town palette. Fishing
-// additionally gets water highlights for a neutral ripple: twelve named colors at most.
+const zoneName = values.zone;
+if (!zonePalettes[zoneName]) {
+  fail(
+    `--zone must be one of ${Object.keys(zonePalettes).join(", ")} (got ${JSON.stringify(zoneName)})`,
+  );
+}
+// Scene props lock to one Theme zone plus shared ink/water. Fishing water props (#435) pass the
+// Area Theme; the interim shared fishing ripple and production props keep the town default.
 const overlayPalette = [
   ...masterPalette
     .filter(([name]) => ["ink", "outline", "shadow"].includes(name))
     .map(([name, hex]) => ({ ref: `P.${name}`, rgb: hexToRgb(hex) })),
-  ...zonePalettes.town.map((hex, index) => ({ ref: `town[${index}]`, rgb: hexToRgb(hex) })),
+  ...zonePalettes[zoneName].map((hex, index) => ({
+    ref: `${zoneName}[${index}]`,
+    rgb: hexToRgb(hex),
+  })),
   ...["base", "light", "glint"].map((role) => ({
     ref: `water.${role}`,
     rgb: hexToRgb(materialPalettes.water[role]),
