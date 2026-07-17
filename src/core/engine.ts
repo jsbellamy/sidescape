@@ -8,12 +8,10 @@ import type {
   AttackType,
   AutoEatThreshold,
   CombatMode,
-  CurrencyDef,
   DropBand,
   DungeonDef,
   EquipmentDef,
   FishingSpotDef,
-  ItemDef,
   MonsterDef,
   PetDef,
   RecipeDef,
@@ -36,6 +34,7 @@ import {
 import { buildSnapshot } from "./snapshot";
 import { createLoadoutSlots } from "./loadout";
 import type { LoadoutKind } from "./loadout";
+import { createBank } from "./bank";
 import type {
   CombatActivity,
   DungeonActivity,
@@ -59,7 +58,7 @@ export interface Engine {
   selectRecipe(recipeId: string): void;
   setCombatStyle(style: CombatStyle): void;
   setAutoEatThreshold(threshold: AutoEatThreshold): void;
-  /** Toggles auto-sell of duplicate Equipment (#63, default ON) — see creditCombatItem/
+  /** Toggles auto-sell of duplicate Equipment (#63, default ON) — see bank.creditCombatItem/
    * isDuplicateEquipment for the rule. Throws on a non-boolean value. */
   setAutoSellDuplicates(on: boolean): void;
   equip(itemId: string): void;
@@ -111,9 +110,7 @@ const REGEN_TICKS = 10;
  * free-form eat-from-Bank. Slot order (array index) is auto-eat's draining priority. */
 const FOOD_SLOT_COUNT = 3;
 
-/** Loot Zone capacity (#60): max STACKS the zone holds, mirroring a Bank Slot's "1 stack, any
- * qty" rule. Tuning, not spec. */
-export const LOOT_ZONE_CAPACITY = 10;
+export { LOOT_ZONE_CAPACITY } from "./bank";
 
 /** Element weakness damage multiplier (Combat Depth wave 3/4, #101) — the ONE damage-side
  * modifier in the otherwise accuracy-only Hybrid combat model: a spell whose element matches
@@ -128,22 +125,6 @@ const ELEMENT_WEAKNESS_MULT = 1.5;
  * (#234). */
 const PET_DROP_CHANCE = 1 / 2000;
 const BOSS_PET_DROP_CHANCE = 1 / 300;
-
-/** Bank Slot capacity: 1 slot = 1 item stack, regardless of stack quantity. */
-const BANK_START_CAPACITY = 100;
-/** Tuning default: how many Bank Slots one `buyBankSlots()` purchase grants. */
-const BANK_SLOTS_PER_PURCHASE = 10;
-const BANK_FIRST_PRICE = 1000;
-const BANK_PRICE_STEP = 500;
-
-/** The gold cost of the next `buyBankSlots()` purchase, always derived from current capacity
- * (never stored): 1000, 1500, 2000, … as capacity grows past BANK_START_CAPACITY. */
-function nextBankSlotsPrice(capacity: number): number {
-  return (
-    BANK_FIRST_PRICE +
-    BANK_PRICE_STEP * ((capacity - BANK_START_CAPACITY) / BANK_SLOTS_PER_PURCHASE)
-  );
-}
 
 function isAutoEatThreshold(value: unknown): value is AutoEatThreshold {
   return (AUTO_EAT_THRESHOLDS as readonly unknown[]).includes(value);
@@ -199,12 +180,6 @@ export function createEngine(
   // maps every lookup below reads from instead of re-scanning a Content array (#185).
   const resolved: ResolvedContent = resolveContent(content);
 
-  // Located once here, never by a hard-coded id: whichever Item Content declares as currency.
-  // Non-null: validateContent guarantees exactly one currency item.
-  const currencyDef: CurrencyDef = content.items.find(
-    (i): i is CurrencyDef => i.kind === "currency",
-  )!;
-
   // Loads are tolerant (ADR-0001, extended to a full field-by-field sweep by loadState): a
   // corrupted or schema-drifted save still loads and keeps the player's progress.
   const state: State = saved ? loadState(saved, resolved) : freshState(content);
@@ -214,19 +189,6 @@ export function createEngine(
   function emit(event: EngineEvent): void {
     for (const handler of handlers.get(event.type) ?? []) handler(event);
   }
-
-  // Rune Slot migration (#221): a pre-#221 `player.runePouch` may hold up to four valid stacks
-  // that `loadState` deliberately did NOT turn into a loaded `state.runeSlot` (owner decision:
-  // "bank everything, start empty" — see loadLegacyRuneStacks' own doc). Each stack is folded into
-  // the Bank here, once `addToBank`/`emit` exist (it auto-sells on overflow rather than throwing,
-  // so a full Bank can never make an old save unloadable) — `state.bank`/`state.gold` are already
-  // final by the time any command or the first `snapshot()` runs. No listener has subscribed yet
-  // at construction time, so an `overflow-sold`/`overflow-lost` fired here is unobservable via
-  // events; the resulting Bank/gold state is the durable evidence instead.
-  for (const { itemId, qty } of state.pendingLegacyRuneBank) {
-    addToBank(itemId, qty);
-  }
-  state.pendingLegacyRuneBank = [];
 
   function level(skill: SkillName): number {
     return levelForXp(state.xp[skill]);
@@ -324,11 +286,6 @@ export function createEngine(
     return equippedDefs().reduce((sum, def) => sum + def.def[type], 0);
   }
 
-  /** Gold per unit if `def` can be sold; undefined for currency or anything without a value. */
-  function sellValue(def: ItemDef): number | undefined {
-    return def.kind === "currency" ? undefined : def.value;
-  }
-
   function weaponSpeed(): number {
     const mode = weaponCombatModeFor(state.equipment.weapon, resolved);
     return styleAdjustedWeaponSpeed(state.equipment.weapon, state.combatStyle, mode, resolved);
@@ -419,237 +376,42 @@ export function createEngine(
     return { hit: true, damage: Math.floor(rng.next() * (max + 1)) };
   }
 
-  /** The Bank Slot invariant, stated once (#88): a top-up of an existing stack always fits; a
-   * brand-new stack needs a free slot. `pulled` (default 0) is how many stacks the caller is
-   * about to remove from `store` in the same operation — equip/assignLoadoutSlot check the
-   * swap-back AFTER pulling the incoming item's own stack, because pulling its last unit can
-   * itself free the slot the swap needs. */
-  function hasRoomForNewStack(
-    store: Map<string, number>,
-    capacity: number,
-    itemId: string,
-    pulled = 0,
-  ): boolean {
-    if (store.has(itemId)) return true;
-    return store.size - pulled < capacity;
-  }
-
-  // --- Loadout Slot seam (#182): the resolve-item/assert-kind/assert-ownership/pull-then-check
-  // swap dance shared by assignLoadoutSlot/clearLoadoutSlot below.
-  // Per-kind specifics (Food's slot bounds and "already assigned" check, Potion's charge
-  // top-up/waste rules, the Rune Slot's levelReq gate) stay in their own private assign/clear
-  // branches; only the dance's shared pieces live here.
-
-  /** Resolves `itemId` to its ItemDef, throwing `kindError` unless it exists and `isKind`
-   * accepts it — the resolve-and-assert-kind half of the Loadout Slot dance. Kept separate from
-   * ownership (see `assertOwned`) so a per-kind check that must run BETWEEN the kind and
-   * ownership checks (Food's "already assigned to a Food Slot") can still slot in between,
-   * preserving each command's original error-precedence order exactly. */
-  function resolveItem<T extends ItemDef>(
-    itemId: string,
-    isKind: (def: ItemDef) => def is T,
-    kindError: string,
-  ): T {
-    const def = resolved.itemsById.get(itemId);
-    if (!def || !isKind(def)) throw new Error(kindError);
-    return def;
-  }
-
-  /** Asserts the player owns at least one of `itemId` (its ItemDef already resolved), returning
-   * the owned quantity, or throws `you do not own ${def.name}` — the ownership half of the
-   * Loadout Slot dance. */
-  function assertOwned(itemId: string, def: ItemDef): number {
-    const owned = state.bank.get(itemId) ?? 0;
-    if (owned <= 0) throw new Error(`you do not own ${def.name}`);
-    return owned;
-  }
-
-  /** The combined resolve/assert-kind/assert-ownership dance (#182) for the Loadout Slot commands
-   * whose per-kind checks never need to run between the kind and ownership checks (Potion Slot).
-   * Food Slot's own "already assigned" check DOES run between the two, so the food branch of
-   * assignLoadoutSlot composes `resolveItem`/`assertOwned` directly instead of this. */
-  function takeOwned<T extends ItemDef>(
-    itemId: string,
-    isKind: (def: ItemDef) => def is T,
-    kindError: string,
-  ): { def: T; owned: number } {
-    const def = resolveItem(itemId, isKind, kindError);
-    const owned = assertOwned(itemId, def);
-    return { def, owned };
-  }
-
-  /** Returns a displaced Loadout Slot occupant's stock to the Bank on a SWAP (#182) — the exact
-   * pull-then-check call that used to be copied at all four assign/load commands: the incoming
-   * Item's own Bank stack is about to fully clear elsewhere in the same command (its ENTIRE stock
-   * is about to move into the slot), which may itself free the Bank Slot this swap-back needs, so
-   * room is tested with that freed slot already counted (pulled=1) BEFORE the swap-back lands.
-   * No-op when there is nothing to return (`current` is null/undefined or already at qty 0).
-   * Throws "bank is full". */
-  function swapBackToBank(current: { itemId: string; qty: number } | null | undefined): void {
-    if (!current || current.qty <= 0) return;
-    if (!hasRoomForNewStack(state.bank, state.bankCapacity, current.itemId, 1)) {
-      throw new Error("bank is full");
-    }
-    state.bank.set(current.itemId, (state.bank.get(current.itemId) ?? 0) + current.qty);
-  }
-
-  /** Returns a Loadout Slot's stock to the Bank on a plain unassign/unload (#182) — swapBackToBank's
-   * sibling: no incoming Item is being pulled in the same command, so room is tested with nothing
-   * yet freed (pulled=0). No-op when `qty` is <= 0. Throws "bank is full". */
-  function returnToBank(itemId: string, qty: number): void {
-    if (qty <= 0) return;
-    if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
-      throw new Error("bank is full");
-    }
-    state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
-  }
-
-  const loadout = createLoadoutSlots({
+  let loadout: ReturnType<typeof createLoadoutSlots>;
+  const bank = createBank({
+    state,
+    content,
+    resolved,
+    emit,
+    routeToHome: (itemId, qty) => loadout.creditToFoodSlotIfHome(itemId, qty),
+  });
+  loadout = createLoadoutSlots({
     state,
     resolved,
     emit,
     maxHp,
     level,
     checkLevelReq,
-    bank: {
-      resolveItem,
-      assertOwned,
-      takeOwned,
-      swapBackToBank,
-      returnToBank,
-    },
+    bank,
   });
 
-  /** Adds `qty` of `itemId` to the Bank (#59), or to its assigned Food Slot when slot-homed
-   * (#61): a top-up of an existing stack always fits (the #25 rule). A brand-new stack needed
-   * while the Bank is already at capacity is instead auto-sold (sellable) or discarded
-   * (unsellable) — the universal "passive flows auto-sell on overflow; player commands throw"
-   * rule. Slot-first routing costs Bank capacity nothing — the Slot IS that Food's home. Never
-   * throws — this is only ever reached from a passive arrival (drop, Catch, craft output), never
-   * a player command. */
-  function addToBank(itemId: string, qty: number): void {
-    if (creditToFoodSlotIfHome(itemId, qty)) return;
-    if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
-      const def = resolved.itemsById.get(itemId);
-      const value = def ? sellValue(def) : undefined;
-      if (value !== undefined) {
-        const gold = value * qty;
-        state.gold += gold;
-        emit({ type: "overflow-sold", itemId, qty, gold });
-      } else {
-        emit({ type: "overflow-lost", itemId, qty });
-      }
-      return;
-    }
-    state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+  // Rune Slot migration (#221): a pre-#221 `player.runePouch` may hold up to four valid stacks
+  // that `loadState` deliberately did NOT turn into a loaded `state.runeSlot` (owner decision:
+  // "bank everything, start empty" — see loadLegacyRuneStacks' own doc). Each stack is folded into
+  // the Bank here, once `bank.addToBank`/`emit` exist (it auto-sells on overflow rather than throwing,
+  // so a full Bank can never make an old save unloadable) — `state.bank`/`state.gold` are already
+  // final by the time any command or the first `snapshot()` runs. No listener has subscribed yet
+  // at construction time, so an `overflow-sold`/`overflow-lost` fired here is unobservable via
+  // events; the resulting Bank/gold state is the durable evidence instead.
+  for (const { itemId, qty } of state.pendingLegacyRuneBank) {
+    bank.addToBank(itemId, qty);
   }
-
-  /** Adds `qty` of `itemId` to the Loot Zone (#60): a top-up of an existing zone stack always
-   * fits, mirroring addToBank's rule. A brand-new stack needed while the zone already holds
-   * LOOT_ZONE_CAPACITY stacks is instead auto-sold (sellable) or discarded (unsellable) — the
-   * same universal overflow rule and events as a full Bank (#59). Never throws — reached only
-   * from a combat arrival (kill Drop or Dungeon Chest item), never a player command. */
-  function addToLootZone(itemId: string, qty: number): void {
-    if (!hasRoomForNewStack(state.lootZone, LOOT_ZONE_CAPACITY, itemId)) {
-      const def = resolved.itemsById.get(itemId);
-      const value = def ? sellValue(def) : undefined;
-      if (value !== undefined) {
-        const gold = value * qty;
-        state.gold += gold;
-        emit({ type: "overflow-sold", itemId, qty, gold });
-      } else {
-        emit({ type: "overflow-lost", itemId, qty });
-      }
-      return;
-    }
-    state.lootZone.set(itemId, (state.lootZone.get(itemId) ?? 0) + qty);
-  }
-
-  /** Whether the player already owns `def` (#63): equipped in its own Gear Slot, holding a Bank
-   * stack, or already sitting in the Loot Zone (an earlier Drop this session not yet swept).
-   * Stackables never reach this check — creditCombatItem only calls it for EquipmentDefs. */
-  function isDuplicateEquipment(def: EquipmentDef): boolean {
-    return (
-      state.equipment[def.slot] === def.id ||
-      (state.bank.get(def.id) ?? 0) > 0 ||
-      (state.lootZone.get(def.id) ?? 0) > 0
-    );
-  }
-
-  /** Sells a duplicate Equipment arrival immediately (#63) instead of routing it to the Loot
-   * Zone: credits `value * qty` to gold and emits duplicate-sold, or — if unsellable — discards
-   * it with the existing overflow-lost event, the same "no value -> discarded" rule a full Loot
-   * Zone/Bank already uses. */
-  function sellDuplicate(def: EquipmentDef, qty: number): void {
-    const value = sellValue(def);
-    if (value !== undefined) {
-      const gold = value * qty;
-      state.gold += gold;
-      emit({ type: "duplicate-sold", itemId: def.id, gold });
-    } else {
-      emit({ type: "overflow-lost", itemId: def.id, qty });
-    }
-  }
-
-  /** Routes one passive arrival (drop or Chest entry) to its destination (#59, extended by
-   * #60 and #63): the currency item credits `state.gold` directly, never touching the Bank or
-   * the Loot Zone. An EquipmentDef the player already owns is instead auto-sold on the spot when
-   * the toggle is ON (#63) — see isDuplicateEquipment/sellDuplicate. Everything else goes to the
-   * Loot Zone via addToLootZone's top-up/overflow rules above — combat outputs buffer there
-   * instead of landing straight in the Bank. */
-  function creditCombatItem(itemId: string, qty: number): void {
-    if (itemId === currencyDef.id) {
-      state.gold += qty;
-      return;
-    }
-    const def = resolved.itemsById.get(itemId);
-    if (state.autoSellDuplicates && def?.kind === "equipment" && isDuplicateEquipment(def)) {
-      sellDuplicate(def, qty);
-      return;
-    }
-    addToLootZone(itemId, qty);
-  }
-
-  /** Slot-as-home routing (#61): if `itemId` is assigned to a Food Slot, credits `qty` straight
-   * into that slot and reports true — Slots have no qty cap, so a slot-bound arrival never
-   * overflows. Returns false (no-op) when `itemId` isn't assigned anywhere, leaving the caller to
-   * fall back to its own Bank/Loot-Zone placement. */
-  function creditToFoodSlotIfHome(itemId: string, qty: number): boolean {
-    const slotIndex = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
-    if (slotIndex === -1) return false;
-    (state.foodSlots[slotIndex] as { itemId: string; qty: number }).qty += qty;
-    return true;
-  }
-
-  /** Moves every Loot Zone stack to its home (#60, extended by #61's Slot-as-home routing): a
-   * Food assigned to a Slot lands there (no cap, never overflows); everything else goes to the
-   * Bank, where a top-up of an existing stack always fits and a stack that would need a brand-new
-   * Bank Slot while the Bank is already at capacity stays in the Loot Zone untouched — a sweep
-   * never sells, unlike zone-full overflow above. Emits one `looted` event listing exactly the
-   * stacks actually moved; emits nothing if none moved. Shared by every auto-loot trigger and the
-   * on-demand lootAll() command — both idempotent by construction, since a second sweep simply
-   * finds nothing left that fits. */
-  function sweepLootZone(): void {
-    const banked: { itemId: string; qty: number }[] = [];
-    for (const [itemId, qty] of [...state.lootZone]) {
-      if (creditToFoodSlotIfHome(itemId, qty)) {
-        state.lootZone.delete(itemId);
-        banked.push({ itemId, qty });
-        continue;
-      }
-      if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) continue; // stays in the zone
-      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
-      state.lootZone.delete(itemId);
-      banked.push({ itemId, qty });
-    }
-    if (banked.length > 0) emit({ type: "looted", items: banked });
-  }
+  state.pendingLegacyRuneBank = [];
 
   function rollDrops(monster: MonsterDef): void {
     for (const entry of monster.dropTable) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
       emit({ type: "drop", itemId: entry.itemId, qty: entry.qty, band: entry.band });
-      creditCombatItem(entry.itemId, entry.qty);
+      bank.creditCombatItem(entry.itemId, entry.qty);
     }
   }
 
@@ -688,7 +450,7 @@ export function createEngine(
     const items: { itemId: string; qty: number; band: DropBand }[] = [];
     for (const entry of dungeon.chest) {
       if (entry.chance < 1 && rng.next() >= entry.chance) continue;
-      creditCombatItem(entry.itemId, entry.qty);
+      bank.creditCombatItem(entry.itemId, entry.qty);
       items.push({ itemId: entry.itemId, qty: entry.qty, band: entry.band });
     }
     return items;
@@ -719,7 +481,7 @@ export function createEngine(
     state.activity = null;
     emit({ type: "dungeon-completed", dungeonId: dungeon.id });
     emit({ type: "chest-opened", dungeonId: dungeon.id, items });
-    sweepLootZone();
+    bank.sweepLootZone();
   }
 
   const STYLE_SKILL: Record<"accurate" | "aggressive" | "defensive", SkillName> = {
@@ -938,7 +700,7 @@ export function createEngine(
       dungeonDef,
       fishingSpotDef,
       recipeDef,
-      nextBankSlotsPrice,
+      nextBankSlotsPrice: bank.nextBankSlotsPrice,
     });
   }
 
@@ -987,9 +749,9 @@ export function createEngine(
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
       // a Catch is always a raw Material (validateContent, #115), never Food or currency — no
-      // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so addToBank
+      // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so bank.addToBank
       // always falls through to the ordinary Bank top-up/overflow rules.
-      addToBank(spot.itemId, 1);
+      bank.addToBank(spot.itemId, 1);
       // Pet roll (#120): a successful Catch (not merely an attempt — mirrors the "qualifying
       // action" language in the issue, distinct from the charge-decrement rule just above, which
       // fires on every attempt) is the "fishing" pet's qualifying action.
@@ -1018,7 +780,7 @@ export function createEngine(
       if (remaining > 0) state.bank.set(input.itemId, remaining);
       else state.bank.delete(input.itemId);
     }
-    addToBank(recipe.outputItemId, 1);
+    bank.addToBank(recipe.outputItemId, 1);
     grantXp(recipe.skill, recipe.xp);
     emit({ type: "item-crafted", recipeId: recipe.id, itemId: recipe.outputItemId });
     // Pet roll (#120): a craft COMPLETION (this point, reached every time the cooldown elapses)
@@ -1135,7 +897,7 @@ export function createEngine(
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
-      sweepLootZone();
+      bank.sweepLootZone();
       state.activity = {
         kind: "fishing",
         spotId,
@@ -1152,7 +914,7 @@ export function createEngine(
       // Entering a Dungeon also auto-loots first (#60, owner amendment): any open-world loot is
       // banked before the run starts, so the zone is empty at run start and only ever holds the
       // current run's own drops while inside — nothing pre-run is ever lost to a failed run.
-      sweepLootZone();
+      bank.sweepLootZone();
       state.activity = {
         kind: "dungeon",
         dungeonId,
@@ -1171,7 +933,7 @@ export function createEngine(
       state.respawnTicksLeft = 0;
       state.hp = Math.max(state.hp, 1);
       // Leaving combat for a non-combat activity auto-loots the Loot Zone (#60).
-      sweepLootZone();
+      bank.sweepLootZone();
       state.activity = {
         kind: "production",
         recipeId: recipe.id,
@@ -1238,7 +1000,7 @@ export function createEngine(
       else sim.delete(itemId);
       let simPulled = pulled;
       for (const returnId of returns) {
-        if (!hasRoomForNewStack(sim, state.bankCapacity, returnId, simPulled)) {
+        if (!bank.hasRoomForNewStack(sim, state.bankCapacity, returnId, simPulled)) {
           throw new Error("bank is full");
         }
         sim.set(returnId, (sim.get(returnId) ?? 0) + 1);
@@ -1274,7 +1036,7 @@ export function createEngine(
 
       const oldMode = weaponCombatModeFor(state.equipment.weapon, resolved);
 
-      returnToBank(itemId, 1);
+      bank.returnToBank(itemId, 1);
       state.equipment[slot] = null;
 
       const newMode = weaponCombatModeFor(state.equipment.weapon, resolved);
@@ -1299,48 +1061,17 @@ export function createEngine(
       if (!def || def.kind !== "food") throw new Error(`food slot ${slotIndex} is empty`);
       loadout.eatFromSlotAt(slotIndex, def);
     },
-    buy(itemId, qty = 1) {
-      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid buy quantity: ${qty}`);
-      const entry = content.vendor.find((v) => v.itemId === itemId);
-      if (!entry) throw new Error(`${itemId} is not sold by the vendor`);
-      const cost = entry.price * qty;
-      if (state.gold < cost) throw new Error(`not enough gold: need ${cost}`);
-      const slotHomed = creditToFoodSlotIfHome(itemId, qty);
-      if (!slotHomed && !hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
-        throw new Error("bank is full");
-      }
-
-      state.gold -= cost;
-      if (!slotHomed) {
-        state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
-      }
-      emit({ type: "item-bought", itemId, qty, gold: cost });
+    buy(itemId, qty) {
+      bank.buy(itemId, qty);
     },
-    sell(itemId, qty = 1) {
-      if (!Number.isInteger(qty) || qty < 1) throw new Error(`invalid sell quantity: ${qty}`);
-      const def = resolved.itemsById.get(itemId);
-      if (!def) throw new Error(`unknown item: ${itemId}`);
-      const value = sellValue(def);
-      if (value === undefined) throw new Error(`${def.name} cannot be sold`);
-      const owned = state.bank.get(itemId) ?? 0;
-      if (owned < qty) throw new Error(`you do not own ${qty} ${def.name}`);
-
-      const remaining = owned - qty;
-      if (remaining > 0) state.bank.set(itemId, remaining);
-      else state.bank.delete(itemId);
-      const gold = value * qty;
-      state.gold += gold;
-      emit({ type: "item-sold", itemId, qty, gold });
+    sell(itemId, qty) {
+      bank.sell(itemId, qty);
     },
     buyBankSlots() {
-      const price = nextBankSlotsPrice(state.bankCapacity);
-      if (state.gold < price) throw new Error(`not enough gold: need ${price}`);
-
-      state.gold -= price;
-      state.bankCapacity += BANK_SLOTS_PER_PURCHASE;
+      bank.buyBankSlots();
     },
     lootAll() {
-      sweepLootZone();
+      bank.lootAll();
     },
     on(type, handler) {
       const list = handlers.get(type) ?? [];
