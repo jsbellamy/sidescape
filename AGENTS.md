@@ -39,8 +39,8 @@ Store submission.
 - `src/core/` is the headless game Engine: pure TypeScript with **no DOM
   access**. It owns game state and combat rules (combat Ticks, XP curve, drop
   rolls, save serialization), emits discrete happenings as the `EngineEvent`
-  union in `src/core/types.ts` (22 variants — e.g. `kill`, `attack`, `drop`,
-  `levelup`, `death`, `xp-gained`, `pet-dropped`) on a tiny event bus, and is
+  union in `src/core/types.ts` (e.g. `kill`, `attack`, `drop`, `levelup`,
+  `death`, `xp-gained`, `pet-dropped`) on a tiny event bus, and is
   unit tested. Continuous state such as HP is read from `snapshot()`, not events.
 - `src/data/` assembles shared content in `src/data/index.ts` via
   `composeContent` (`src/data/area-content.ts`); per-Area modules live under
@@ -72,8 +72,9 @@ behaviour with DOM integration tests.
   nothing.
 - Do not add DOM access to `src/core/` or move Engine rules into UI callers.
 - Preserve intentional duplication documented by an ADR. In particular,
-  `STYLE_SKILL` and `STYLE_BOOST` represent separate domain facts and must stay
-  separate unless a new ADR supersedes ADR-0002.
+  `STYLE_SKILL` (`src/core/engine.ts`) and `styleBoostSkill`
+  (`src/core/combat.ts`) represent separate domain facts and must stay separate
+  unless a new ADR supersedes ADR-0002.
 - **Assets** are original art following `docs/art-style.md`, generated via
   `scripts/art` (`npm run art`); third-party assets are allowed only if CC0 with
   provenance recorded in `docs/assets.md`.
