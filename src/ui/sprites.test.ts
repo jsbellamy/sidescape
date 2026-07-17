@@ -23,6 +23,8 @@ describe("sprites", () => {
   it("maps every production Monster sprite, including dungeon-only bosses, to a distinct URL", () => {
     const ids = [
       "chicken",
+      "spider",
+      "boar",
       "cow",
       "goblin",
       "goblin-brute",

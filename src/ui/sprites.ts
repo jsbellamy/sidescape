@@ -1,4 +1,5 @@
 import banditUrl from "../assets/sprites/bandit.png";
+import boarUrl from "../assets/sprites/boar.png";
 import boneKnightUrl from "../assets/sprites/bone-knight.png";
 import chickenUrl from "../assets/sprites/chicken.png";
 import cowUrl from "../assets/sprites/cow.png";
@@ -17,6 +18,7 @@ import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
 import sewerKingUrl from "../assets/sprites/sewer-king.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
+import spiderUrl from "../assets/sprites/spider.png";
 import wolfUrl from "../assets/sprites/wolf.png";
 import zombieUrl from "../assets/sprites/zombie.png";
 
@@ -57,6 +59,8 @@ export const playerSpriteSize = 48;
  */
 const monsterSprites: Record<string, SpriteAsset> = {
   chicken: { url: chickenUrl, size: 32 },
+  spider: { url: spiderUrl, size: 32 },
+  boar: { url: boarUrl, size: 32 },
   cow: { url: cowUrl, size: 48 },
   goblin: { url: goblinUrl, size: 32 },
   "goblin-brute": { url: goblinBruteUrl, size: 48 },
