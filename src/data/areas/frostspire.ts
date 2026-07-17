@@ -44,7 +44,6 @@ export const frostspire: AreaContent = {
       def: { stab: 40, slash: 42, crush: 38, ranged: 22, magic: 46 },
       dropTable: [
         { itemId: "gold", qty: 200, chance: 1, band: "guaranteed" },
-        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "adamant-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
         { itemId: "adamant-chainbody", qty: 1, chance: 1 / 170, band: "rare" },
         { itemId: "adamant-bar", qty: 1, chance: 0.25, band: "common" },
