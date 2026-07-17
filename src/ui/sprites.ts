@@ -5,10 +5,12 @@ import chickenUrl from "../assets/sprites/chicken.png";
 import cowUrl from "../assets/sprites/cow.png";
 import cryptGhoulUrl from "../assets/sprites/crypt-ghoul.png";
 import cryptShadeUrl from "../assets/sprites/crypt-shade.png";
+import darkDruidUrl from "../assets/sprites/dark-druid.png";
 import frostGiantUrl from "../assets/sprites/frost-giant.png";
 import frostWardenUrl from "../assets/sprites/frost-warden.png";
 import frostWolfUrl from "../assets/sprites/frost-wolf.png";
 import giantRatUrl from "../assets/sprites/giant-rat.png";
+import giantSpiderUrl from "../assets/sprites/giant-spider.png";
 import goblinUrl from "../assets/sprites/goblin.png";
 import goblinBruteUrl from "../assets/sprites/goblin-brute.png";
 import goblinChiefUrl from "../assets/sprites/goblin-chief.png";
@@ -68,6 +70,8 @@ const monsterSprites: Record<string, SpriteAsset> = {
   wolf: { url: wolfUrl, size: 32 },
   "goblin-warrior": { url: goblinWarriorUrl, size: 32 },
   bandit: { url: banditUrl, size: 48 },
+  "giant-spider": { url: giantSpiderUrl, size: 48 },
+  "dark-druid": { url: darkDruidUrl, size: 48 },
   "hollow-warden": { url: hollowWardenUrl, size: 64 },
   "giant-rat": { url: giantRatUrl, size: 32 },
   zombie: { url: zombieUrl, size: 48 },
