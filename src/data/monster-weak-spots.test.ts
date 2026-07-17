@@ -30,6 +30,8 @@ const WEAK_SPOT_TABLE: {
   // Shade. Neither is a boss, so neither carries a weakElement.
   { id: "crypt-ghoul", attackType: "slash", weakTo: "stab" },
   { id: "bone-knight", attackType: "crush", weakTo: "crush" },
+  { id: "bone-archer", attackType: "ranged", weakTo: "crush" },
+  { id: "tomb-wight", attackType: "magic", weakTo: "magic", weakElement: "fire" },
   { id: "crypt-shade", attackType: "magic", weakTo: "ranged", weakElement: "fire" },
   // Frostspire (#254): the 5th Area's open-world cast plus the dungeon-only Frost Warden boss.
   // Only Frost Warden carries a weakElement (bosses-only, per house rule).
@@ -46,8 +48,8 @@ function lowestDefType(def: Record<AttackType, number>): AttackType {
 }
 
 describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
-  it("covers all 20 Monsters from the table", () => {
-    expect(WEAK_SPOT_TABLE).toHaveLength(20);
+  it("covers all 22 Monsters from the table", () => {
+    expect(WEAK_SPOT_TABLE).toHaveLength(22);
   });
 
   for (const row of WEAK_SPOT_TABLE) {
@@ -74,7 +76,7 @@ describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
     }
   });
 
-  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden), Dark Druid, and the Zombie carry a weakElement", () => {
+  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden), Dark Druid, Tomb Wight, and the Zombie carry a weakElement", () => {
     const withWeakElement = content.monsters.filter((m) => m.weakElement).map((m) => m.id);
     expect(new Set(withWeakElement)).toEqual(
       new Set([
@@ -82,6 +84,7 @@ describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
         "dark-druid",
         "hollow-warden",
         "sewer-king",
+        "tomb-wight",
         "crypt-shade",
         "frost-warden",
       ]),
