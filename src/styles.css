@@ -753,7 +753,7 @@ body {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;
-  background-position: bottom center;
+  background-position: bottom 0 left 15%;
   background-size: 160px 120px;
   image-rendering: pixelated;
   pointer-events: none;
@@ -784,6 +784,11 @@ body {
 }
 .prop-fishing {
   background-image: url("./assets/activity-overlays/activity-fishing-near.png");
+}
+
+/* #433: when an activity prop is visible, separate prop (left) and player (right) horizontally. */
+#scene.prop-active #player-sprite-wrap {
+  transform: translateX(56px);
 }
 
 #sprite-row {

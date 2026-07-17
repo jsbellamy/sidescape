@@ -411,6 +411,7 @@ export function mountApp(
     const propEl = el<HTMLElement>("#activity-prop");
     propEl.hidden = prop === null;
     propEl.className = prop ? `prop-${prop}` : "";
+    el<HTMLElement>("#scene").classList.toggle("prop-active", prop !== null);
   }
 
   /** Renders the compact live stage. Persistent labels and numeric readouts live in cards. */
