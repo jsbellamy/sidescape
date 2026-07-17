@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/testing/fixture-content";
@@ -3732,5 +3733,52 @@ describe("no-Food readiness badge (#376)", () => {
     expect(css).toMatch(/#widget-controls button\s*{/);
     expect(css.match(/#widget-controls button\s*{([^}]*)}/s)![1]).toMatch(/cursor:\s*pointer/);
     expect(css.match(/#no-food-badge\s*{([^}]*)}/s)![1]).not.toMatch(/cursor:\s*pointer/);
+  });
+});
+
+describe("no-Food badge [hidden] computed display (#384)", () => {
+  let styleEl: HTMLStyleElement;
+
+  beforeEach(() => {
+    const css = readFileSync(join(__dirname, "..", "styles.css"), "utf8");
+    styleEl = document.createElement("style");
+    styleEl.textContent = css;
+    document.head.appendChild(styleEl);
+  });
+
+  afterEach(() => {
+    styleEl.remove();
+  });
+
+  it("computes display:none when Food is assigned and hidden is set", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+    );
+    const root = document.createElement("main");
+    document.body.appendChild(root);
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    engine.assignLoadoutSlot("food", "meat", 0);
+    app.render();
+    const badge = root.querySelector<HTMLElement>("#no-food-badge")!;
+    expect(badge.hidden).toBe(true);
+    expect(getComputedStyle(badge).display).toBe("none");
+    root.remove();
+  });
+
+  it("computes display:flex when no Food is assigned", () => {
+    const root = document.createElement("main");
+    document.body.appendChild(root);
+    mountApp(
+      createEngine(fixtureContent, seededRng(1)),
+      root,
+      resolveContent(fixtureContent),
+      noopWindowChrome,
+    );
+    const badge = root.querySelector<HTMLElement>("#no-food-badge")!;
+    expect(badge.hidden).toBe(false);
+    expect(getComputedStyle(badge).display).toBe("flex");
+    root.remove();
   });
 });

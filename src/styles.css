@@ -525,6 +525,11 @@ body {
   background: rgba(0, 0, 0, 0.35);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
+/* Same cascade-order gotcha as `.management-card[hidden]`/the Settings/Pets popovers above: an
+   author `display` rule otherwise beats the UA `[hidden]` default. */
+#no-food-badge[hidden] {
+  display: none;
+}
 
 /* Parallax scene backdrop (#80): three stacked, absolutely-positioned layers keyed off
    #backdrop[data-theme], sat behind every other #scene child via `isolation` (above) + this
