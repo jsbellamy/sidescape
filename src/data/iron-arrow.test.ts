@@ -37,8 +37,8 @@ describe("iron-arrow (#365)", () => {
     expect(ironArrow).not.toHaveProperty("tier");
 
     const ids = content.items.map((i) => i.id);
-    expect(ids[ids.length - 1]).toBe("iron-arrow");
-    expect(ids[ids.length - 2]).toBe("fire-blast-rune");
+    expect(ids[ids.length - 1]).toBe("cooked-icefin");
+    expect(ids[ids.length - 8]).toBe("iron-arrow");
   });
 
   it("passes validateContent (declares rangedStr, declares no element)", () => {

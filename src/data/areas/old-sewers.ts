@@ -129,4 +129,15 @@ export const oldSewers: AreaContent = {
       ],
     },
   ],
+  fishingSpots: [
+    {
+      id: "sewer-outflow",
+      name: "Sewer Outflow",
+      levelReq: 30,
+      itemId: "raw-pike",
+      xp: 80,
+      catchTicks: 5,
+      catchChance: 0.45,
+    },
+  ],
 };

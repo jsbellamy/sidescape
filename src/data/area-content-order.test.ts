@@ -37,7 +37,13 @@ const GOLDEN_MONSTER_IDS = [
   "frost-warden",
 ] as const;
 
-const GOLDEN_FISHING_SPOT_IDS = ["shrimp-pool", "trout-run"] as const;
+const GOLDEN_FISHING_SPOT_IDS = [
+  "shrimp-pool",
+  "trout-run",
+  "sewer-outflow",
+  "flooded-ossuary",
+  "glacial-melt",
+] as const;
 
 const GOLDEN_DUNGEON_IDS = [
   "meadow-depths",
@@ -129,15 +135,15 @@ describe("Area content composition (#321): global collection ordering parity", (
 
     const sewers = content.areas.find((a) => a.id === "old-sewers")!;
     expect(sewers.monsterIds).toEqual(["giant-rat", "zombie", "skeleton"]);
-    expect(sewers.fishingSpotIds).toBeUndefined();
+    expect(sewers.fishingSpotIds).toEqual(["sewer-outflow"]);
 
     const crypt = content.areas.find((a) => a.id === "bone-crypt")!;
     expect(crypt.monsterIds).toEqual(["crypt-ghoul", "bone-knight"]);
-    expect(crypt.fishingSpotIds).toBeUndefined();
+    expect(crypt.fishingSpotIds).toEqual(["flooded-ossuary"]);
 
     const frost = content.areas.find((a) => a.id === "frostspire")!;
     expect(frost.monsterIds).toEqual(["frost-wolf", "ice-wraith", "frost-giant"]);
-    expect(frost.fishingSpotIds).toBeUndefined();
+    expect(frost.fishingSpotIds).toEqual(["glacial-melt"]);
   });
 
   it("hosted dungeons receive areaId from their enclosing Area bundle", () => {
