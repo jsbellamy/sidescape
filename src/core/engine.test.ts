@@ -1787,7 +1787,8 @@ describe("Equipment and gates", () => {
     });
 
     it("on an already-empty slot is a no-op: no throw, no event, no state change", () => {
-      const engine = freshEngine();
+      const now = () => 1_000_000;
+      const engine = createEngine(fixtureContent, seededRng(42), undefined, now);
       const before = engine.snapshot();
       const unequipped: string[] = [];
       engine.on("unequipped", (e) => unequipped.push(e.itemId));
