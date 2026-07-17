@@ -32,6 +32,20 @@ export const backdrops = [
       near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
     },
   },
+  {
+    theme: "workshop",
+    kind: "source",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [15, 45],
+      chromaticMaxSaturation: 65,
+    },
+    layers: {
+      sky: { source: "workshop-sky.png", alpha: "opaque", maxColors: 48 },
+      mid: { source: "workshop-mid.png", alpha: "binary", maxColors: 64 },
+      near: { source: "workshop-near.png", alpha: "binary", maxColors: 48 },
+    },
+  },
 ];
 
 export function renderPeriodicLayer(paint) {

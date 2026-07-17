@@ -113,7 +113,8 @@ gamut in Stage 2.
 
 The five original biomes (meadow, forest, sewer, crypt, town) remain hand-committed authoring
 inputs under `src/assets/backdrops/` — `npm run art` does not rewrite them. Glacier (Frostspire) is
-the first production `kind: "source"` consumer.
+the first production `kind: "source"` consumer; workshop (#434) is the second (shared Production
+Skills interior — art-only until the wiring slice registers the Theme).
 
 ### Glacier / Frostspire provenance (#254 superseded by #293)
 
@@ -151,6 +152,38 @@ pipeline:
   reference, continuous scene, 160×120 logical grid, magenta key for mid/near, cold palette
   anchored by the six hexes above). Native 1× and unscaled three-period previews passed the
   mechanical gates after #313 reingest.
+
+### Workshop interior provenance (#434)
+
+Shared artisan-workshop parallax set for all four Production Skills (Smithing, Cooking, Crafting,
+Herblore). Art + `scripts/art` registration only — Theme wiring lands in a follow-up slice.
+
+| Layer | Compact source                                   | Shipped output                           | Alpha  | Cap |
+| ----- | ------------------------------------------------ | ---------------------------------------- | ------ | --- |
+| sky   | `scripts/art/backdrop-sources/workshop-sky.png`  | `src/assets/backdrops/workshop-sky.png`  | opaque | 48  |
+| mid   | `scripts/art/backdrop-sources/workshop-mid.png`  | `src/assets/backdrops/workshop-mid.png`  | binary | 64  |
+| near  | `scripts/art/backdrop-sources/workshop-near.png` | `src/assets/backdrops/workshop-near.png` | binary | 48  |
+
+- **Registry:** `scripts/art/backdrops.mjs` appends workshop after Glacier with Theme gamut
+  `{ neutralMaxSaturation: 20, chromaticHueRange: [15, 45], chromaticMaxSaturation: 65 }`.
+- **Raws / previews:** git-ignored under `scripts/art/backdrop-gen-inbox/` (including `preview/`).
+- **Ingest overrides (all three layers):** `--crop 48,32,1487,991 --pitch 9 --pitch-y 8`
+  (sky default tolerance 40; mid/near `--tolerance 50`).
+- **Ingest reports (#313 fields):**
+
+  | Layer | sampled | gamut-conformed | gamut cells changed | normalized | normalization changes | original→final changes |
+  | ----- | ------- | --------------- | ------------------- | ---------- | --------------------- | ---------------------- |
+  | sky   | 6573    | 5522            | 2651                | 48         | 18879                 | 18892                  |
+  | mid   | 5681    | 5366            | 1055                | 64         | 9686                  | 9715                   |
+  | near  | 5026    | 1849            | 5748                | 48         | 5933                  | 6070                   |
+
+- **Deterministic build:** `npm run art` copies each compact source byte-identically to the shipped
+  path after Stage 2 dimension/alpha/cap/gamut validation; a second run is byte-stable.
+- **Zone anchor:** the shared workshop row in `scripts/art/palettes.mjs` /
+  `docs/art-style.md` is `#1c110b #3a1e12 #6b3a1c #a85c28 #d4a06a #e07a30` (append-only).
+- **Prompts:** `docs/backdrop-gen.md` opaque-sky / keyed mid-near kits with generic artisan interior
+  subject (timber beams, shelves/tools, warm hearth glow — not smithing-specific). Native 1× and
+  unscaled three-period previews are the approval surfaces.
 
 The five activity overlays are original transparent 80×60 native-pixel assets under
 `src/assets/activity-overlays/`: Smithing's anvil, Cooking's campfire, Crafting's tanning rack,

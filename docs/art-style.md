@@ -12,14 +12,15 @@ parchment `#f5ebcf`, cream `#e6d4aa`, sand `#c6ad79`, and glint `#fff8df`.
 
 ## Zone palettes
 
-| Theme   | Six-color sub-palette                             | Direction                          |
-| ------- | ------------------------------------------------- | ---------------------------------- |
-| meadow  | `#86b6d8 #cfe6a8 #5f8a4f #3f6b3b #2c4a26 #e7c65a` | spring green, sky blue             |
-| forest  | `#233b39 #3f5f50 #567b5b #78945d #172b24 #a7bf71` | cold deep green                    |
-| sewer   | `#3a4136 #59624b #7d8857 #a5c64c #263027 #c4d46b` | moss grey-green, sickly glow       |
-| crypt   | `#241a33 #3a2f4a #5c4c74 #806b9c #d9d3bc #150f1c` | purple, bone white                 |
-| town    | `#4a2e1a #70421f #9c6331 #c5823b #e2ad57 #2b1b12` | timber brown, forge orange         |
-| glacier | `#10263d #244763 #4c718d #7f9eb3 #b8cbd4 #e8f0ed` | dark polar-blue through snow-white |
+| Theme    | Six-color sub-palette                             | Direction                          |
+| -------- | ------------------------------------------------- | ---------------------------------- |
+| meadow   | `#86b6d8 #cfe6a8 #5f8a4f #3f6b3b #2c4a26 #e7c65a` | spring green, sky blue             |
+| forest   | `#233b39 #3f5f50 #567b5b #78945d #172b24 #a7bf71` | cold deep green                    |
+| sewer    | `#3a4136 #59624b #7d8857 #a5c64c #263027 #c4d46b` | moss grey-green, sickly glow       |
+| crypt    | `#241a33 #3a2f4a #5c4c74 #806b9c #d9d3bc #150f1c` | purple, bone white                 |
+| town     | `#4a2e1a #70421f #9c6331 #c5823b #e2ad57 #2b1b12` | timber brown, forge orange         |
+| glacier  | `#10263d #244763 #4c718d #7f9eb3 #b8cbd4 #e8f0ed` | dark polar-blue through snow-white |
+| workshop | `#1c110b #3a1e12 #6b3a1c #a85c28 #d4a06a #e07a30` | warm timber, ember glow            |
 
 These drive backdrops, sprite accents, and scene props so each Theme is coherent.
 
