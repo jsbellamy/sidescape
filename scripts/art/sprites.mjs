@@ -247,8 +247,8 @@ export const sprites = [
     source: "sprite-bone-archer.png",
     size: 48,
     alpha: "binary",
-    materialRampNames: ["blood", "skin", "leather"],
-    zoneNames: ["sewer", "town"],
+    materialRampNames: ["gold", "blood", "leather"],
+    zoneNames: ["meadow", "town"],
   },
   {
     name: "tomb-wight",
