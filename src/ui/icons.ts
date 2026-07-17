@@ -9,6 +9,8 @@ import adamantPlatelegsUrl from "../assets/icons/adamant-platelegs.png";
 import adamantShortbowUrl from "../assets/icons/adamant-shortbow.png";
 import adamantStaffUrl from "../assets/icons/adamant-staff.png";
 import adamantSwordUrl from "../assets/icons/adamant-sword.png";
+import airBlastRuneUrl from "../assets/icons/air-blast-rune.png";
+import airBoltRuneUrl from "../assets/icons/air-bolt-rune.png";
 import airRuneUrl from "../assets/icons/air-rune.png";
 import apprenticeStaffUrl from "../assets/icons/apprentice-staff.png";
 import attackPotionUrl from "../assets/icons/attack-potion.png";
@@ -26,10 +28,14 @@ import cookedPikeUrl from "../assets/icons/cooked-pike.png";
 import cookedShrimpUrl from "../assets/icons/cooked-shrimp.png";
 import cookedTroutUrl from "../assets/icons/cooked-trout.png";
 import cowhideUrl from "../assets/icons/cowhide.png";
+import earthBlastRuneUrl from "../assets/icons/earth-blast-rune.png";
+import earthBoltRuneUrl from "../assets/icons/earth-bolt-rune.png";
 import earthRuneUrl from "../assets/icons/earth-rune.png";
 import emeraldUrl from "../assets/icons/emerald.png";
 import emeraldAmuletUrl from "../assets/icons/emerald-amulet.png";
 import emeraldRingUrl from "../assets/icons/emerald-ring.png";
+import fireBlastRuneUrl from "../assets/icons/fire-blast-rune.png";
+import fireBoltRuneUrl from "../assets/icons/fire-bolt-rune.png";
 import fireRuneUrl from "../assets/icons/fire-rune.png";
 import fishingFrogUrl from "../assets/icons/fishing-frog.png";
 import fishingPotionUrl from "../assets/icons/fishing-potion.png";
@@ -40,6 +46,7 @@ import harralanderHerbUrl from "../assets/icons/harralander-herb.png";
 import hardLeatherBodyUrl from "../assets/icons/hard-leather-body.png";
 import hardLeatherChapsUrl from "../assets/icons/hard-leather-chaps.png";
 import hardLeatherCoifUrl from "../assets/icons/hard-leather-coif.png";
+import ironArrowUrl from "../assets/icons/iron-arrow.png";
 import ironBarUrl from "../assets/icons/iron-bar.png";
 import ironChainbodyUrl from "../assets/icons/iron-chainbody.png";
 import ironDaggerUrl from "../assets/icons/iron-dagger.png";
@@ -106,6 +113,8 @@ import steelSwordUrl from "../assets/icons/steel-sword.png";
 import strengthPotionUrl from "../assets/icons/strength-potion.png";
 import tarrominHerbUrl from "../assets/icons/tarromin-herb.png";
 import thickHideUrl from "../assets/icons/thick-hide.png";
+import waterBlastRuneUrl from "../assets/icons/water-blast-rune.png";
+import waterBoltRuneUrl from "../assets/icons/water-bolt-rune.png";
 import waterRuneUrl from "../assets/icons/water-rune.png";
 import wolfHideUrl from "../assets/icons/wolf-hide.png";
 
@@ -268,12 +277,23 @@ const icons: Record<string, string> = {
   // Ammo wave (#119) arrow tiers + element runes: source-driven icons conformed from committed
   // golden-* sources via scripts/art/icons.mjs (see docs/assets.md).
   "bronze-arrow": bronzeArrowUrl,
+  "iron-arrow": ironArrowUrl,
   "steel-arrow": steelArrowUrl,
   "mithril-arrow": mithrilArrowUrl,
   "air-rune": airRuneUrl,
   "water-rune": waterRuneUrl,
   "earth-rune": earthRuneUrl,
   "fire-rune": fireRuneUrl,
+  // Wave A icons (#360): Bolt/Blast rune tiers + iron-arrow. Icons registered ahead of items
+  // (#364/#365); stone-fixed / sigil-carries-tier / colour-carries-element.
+  "air-bolt-rune": airBoltRuneUrl,
+  "water-bolt-rune": waterBoltRuneUrl,
+  "earth-bolt-rune": earthBoltRuneUrl,
+  "fire-bolt-rune": fireBoltRuneUrl,
+  "air-blast-rune": airBlastRuneUrl,
+  "water-blast-rune": waterBlastRuneUrl,
+  "earth-blast-rune": earthBlastRuneUrl,
+  "fire-blast-rune": fireBlastRuneUrl,
   // Pets wave (#120) starter roster: source-driven icons conformed from committed golden-* sources
   // via scripts/art/icons.mjs (see docs/assets.md). Keyed by `PetDef.icon`, resolved through this
   // SAME registry as every `ItemDef.icon` — a pet isn't an Item, but its icon key is

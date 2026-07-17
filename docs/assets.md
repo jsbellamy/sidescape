@@ -285,6 +285,45 @@ to steel or mithril, while the wood shaft and pale fletching remain fixed. Eleme
 `golden-base-air-rune.png`, preserving one rounded carved-tablet silhouette while named-ramp remaps
 produce pale air, blue water, green earth, and orange fire variants.
 
+## Bolt/Blast rune icons + iron-arrow (Wave A, #360)
+
+Wave A slice 1 of 6 — art only (no items/spells). Nine icons from **two** compact bases and
+seven deterministic recolors. Contract for every future rune tier:
+
+| axis             | carried by           | values                                                  |
+| ---------------- | -------------------- | ------------------------------------------------------- |
+| "this is a rune" | the stone silhouette | identical across all twelve                             |
+| tier             | the central sigil    | spiral (Strike) → zigzag bolt → four-pointed star burst |
+| element          | colour               | steel / blue / green / ember                            |
+
+**The stone never changes. The sigil carved into it does.** Colour alone never carries tier.
+
+### Compact bases (Strike stone + carved sigil)
+
+First-pass image-gen ingest for Bolt/Blast drifted the stone (rounded proportions, cooler palette
+not matching Strike). Rework copied `golden-base-air-rune.png` pixel-for-pixel and repainted only
+the carved `forest[1]` sigil on the native 22×28 grid — zigzag for Bolt, four-pointed star for
+Blast — so outline, shading, and the five-colour Strike vocabulary (`forest[1]`, `water.base`,
+`meadow[0]`, `water.light`, `water.glint`) transfer verbatim. Sigil shapes were kept from the
+approved first-pass carvings.
+
+1. **Bolt** → `golden-base-air-bolt-rune.png` — Strike stone + zigzag lightning sigil. Grid **22×28**.
+2. **Blast** → `golden-base-air-blast-rune.png` — Strike stone + four thick wedge rays. Grid **22×28**.
+
+Both scoped in `SOURCE_PALETTES` as `{ materialRampNames: ["water"], zoneNames: ["meadow", "forest"] }`,
+matching `golden-base-air-rune.png`.
+
+### Derived icons
+
+- **Bolt family** (`water/air/earth/fire-bolt-rune`): share `golden-base-air-bolt-rune.png`;
+  `water-bolt-rune` has no recolor; air/earth/fire lift the Strike element maps verbatim.
+- **Blast family** (`water/air/earth/fire-blast-rune`): same maps on `golden-base-air-blast-rune.png`.
+- **`iron-arrow`**: recolor of `golden-base-bronze-arrow.png` — no new source. Uses the `steel` ramp
+  one stop lighter than `steel-arrow` (iron/steel share the ramp; value placement separates them).
+
+Registered in `src/ui/icons.ts` ahead of Items (#364/#365). Shipped under
+`src/assets/icons/{air,water,earth,fire}-{bolt,blast}-rune.png` and `iron-arrow.png`.
+
 ## Pet icons (Pets wave, #120)
 
 The four pets are source-driven production icons using their approved compact sources:
