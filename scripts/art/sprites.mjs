@@ -143,6 +143,22 @@ export const sprites = [
     zoneNames: ["sewer", "town"],
   },
   {
+    name: "giant-spider",
+    source: "sprite-giant-spider.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["skin", "leather", "moss"],
+    zoneNames: ["town"],
+  },
+  {
+    name: "dark-druid",
+    source: "sprite-dark-druid.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["gold", "blood", "ember", "adamant", "leather"],
+    zoneNames: ["forest", "sewer", "crypt", "town"],
+  },
+  {
     name: "hollow-warden",
     source: "sprite-hollow-warden.png",
     size: 64,

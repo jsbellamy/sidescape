@@ -32,6 +32,8 @@ describe("sprites", () => {
       "wolf",
       "goblin-warrior",
       "bandit",
+      "giant-spider",
+      "dark-druid",
       "hollow-warden",
       "giant-rat",
       "zombie",

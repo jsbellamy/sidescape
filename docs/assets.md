@@ -586,6 +586,25 @@ to bottom-anchored binary-alpha compact sources. They face right toward the play
 standard 12-color, three-pass finishing defaults. The previous #265 entry and every historical CC0
 provenance record remain historical context; only Cow's supplied source has been superseded.
 
+### Darkroot Forest giant-spider and dark-druid (#390)
+
+Giant Spider and Dark Druid extend the Darkroot Forest cast as two new original 48×48
+combat sprites. Canvas size is the deliberate scale lever: Lumbry's Spider stays 32×32,
+while Giant Spider uses 48 so it looms as the same family one tier up — recognisably kin,
+unmistakably bigger and meaner. Dark Druid matches the Area's 48px cohort (Bandit,
+Goblin Brute). Each compact source was recovered from one untouched built-in
+image-generation PNG on the ignored `sprite-gen-inbox` path after a passing dry-run
+ingest; no raw was resized, re-exported, downsampled, or hand-edited. Both are
+bottom-anchored binary-alpha sources that face right toward the left-facing player.
+
+Identity at 1×: Giant Spider is a wide low arachnid with eight thick spiny legs
+separated by negative space, a heavy bulbous abdomen with a pale angular marking, and
+a front-right eye/fang cluster; Dark Druid is a hooded forest caster in a teal-leaning
+`forest`-zone robe (ingest Stage-2 off-ramp 0.1% — did not collapse to brown leather),
+face lost in the hood, gripping a gnarled staff topped with an `ember` glow. Registry
+`materialRampNames` / `zoneNames` match the winning ingest audits exactly; both retain
+the standard `maxColors: 12` and three-pass finishing defaults.
+
 ### Darkroot Forest (#266)
 
 Wolf, Goblin Warrior, Bandit, and the dungeon-only Hollow Warden now form one original Darkroot

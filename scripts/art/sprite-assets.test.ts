@@ -28,6 +28,8 @@ const EXPECTED_SPRITES = [
   { name: "wolf", size: 32, alpha: "binary" },
   { name: "goblin-warrior", size: 32, alpha: "binary" },
   { name: "bandit", size: 48, alpha: "binary" },
+  { name: "giant-spider", size: 48, alpha: "binary" },
+  { name: "dark-druid", size: 48, alpha: "binary" },
   { name: "hollow-warden", size: 64, alpha: "binary" },
   { name: "giant-rat", size: 32, alpha: "binary" },
   { name: "zombie", size: 48, alpha: "binary" },
