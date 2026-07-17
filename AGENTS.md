@@ -134,6 +134,20 @@ Node-only work does not require Rust. Before pushing, run `npm run typecheck`
 and `npm test`; also run `npm run e2e` when the browser-degraded layout or its
 smoke is in scope.
 
+## Releasing
+
+Run the **Release** workflow from the Actions tab and choose a bump — `patch`,
+`minor`, or `major`. It derives the next version from the newest `app-v*` tag,
+tags the current commit, and drafts a GitHub release with unsigned macOS and
+Windows builds attached. Publish the draft when you are happy with it.
+
+Tags are the only source of truth for the version. The version fields in
+`package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` are
+deliberately pinned to `0.0.0` placeholders: CI stamps the real version in with
+`scripts/set-version.mjs` at build time and never commits the result, so no
+release commit has to land on the protected `main` branch. **Do not "fix" those
+`0.0.0` values** — a hand-maintained version there would only ever drift.
+
 ## Git and issue workflow
 
 - GitHub issues are the project tracker (`jsbellamy/sidescape`). External pull

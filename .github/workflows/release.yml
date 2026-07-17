@@ -1,5 +1,10 @@
 name: Release
 
+# Tags are the source of truth for the version. Nothing is committed to main:
+# this workflow reads the newest app-v* tag, bumps it, tags the current commit,
+# and stamps that version into the build. The committed version fields are
+# placeholders (0.0.0) — see scripts/set-version.mjs.
+
 on:
   workflow_dispatch:
     inputs:
@@ -23,41 +28,35 @@ jobs:
       tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: 26
-      - name: Bump version
+          fetch-depth: 0
+      - name: Compute next version
         id: bump
         run: |
           set -euo pipefail
-          version="$(npm version ${{ inputs.bump }} --no-git-tag-version)"
-          version="${version#v}"
-          node -e '
-            const fs = require("fs");
-            const v = process.argv[1];
-            const conf = "src-tauri/tauri.conf.json";
-            const json = JSON.parse(fs.readFileSync(conf, "utf8"));
-            json.version = v;
-            fs.writeFileSync(conf, JSON.stringify(json, null, 2) + "\n");
-          ' "$version"
-          # Only the [package] version at the top of the manifest.
-          perl -0pi -e 's/^version = "[^"]*"/version = "'"$version"'"/m' src-tauri/Cargo.toml
+          latest="$(git tag --list 'app-v*' --sort=-v:refname | head -n1)"
+          current="${latest#app-v}"
+          current="${current:-0.0.0}"
+          IFS=. read -r major minor patch <<< "$current"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          version="$major.$minor.$patch"
+          echo "$current -> $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=app-v$version" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Sync Cargo.lock
-        working-directory: src-tauri
-        run: cargo update --workspace --offline
-      - name: Commit and tag
+      - name: Tag release
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
-          git commit -m "Release ${{ steps.bump.outputs.tag }}"
-          git tag "${{ steps.bump.outputs.tag }}"
-          git push origin HEAD:${{ github.ref_name }}
-          git push origin "${{ steps.bump.outputs.tag }}"
+          tag="${{ steps.bump.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          git tag "$tag"
+          git push origin "$tag"
 
   release:
     needs: version
@@ -85,6 +84,8 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      # Never committed: the tag is authoritative, this just stamps the build.
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
