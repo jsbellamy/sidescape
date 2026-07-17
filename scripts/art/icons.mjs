@@ -175,8 +175,8 @@ const SOURCE_PALETTES = {
   // Wave icons (#386): silk / raw-cave-eel / raw-chicken — scopes from full-palette winners on
   // each committed compact source (no new material/zone ramps).
   "silk.png": {
-    materialRampNames: ["adamant", "leather", "moss", "skin", "steel"],
-    zoneNames: ["crypt", "glacier", "sewer"],
+    materialRampNames: ["leather", "skin"],
+    zoneNames: ["town"],
   },
   "raw-cave-eel.png": {
     materialRampNames: ["leather", "skin"],
