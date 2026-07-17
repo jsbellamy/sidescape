@@ -30,8 +30,6 @@ const GOLDEN_MONSTER_IDS = [
   "giant-rat",
   "zombie",
   "skeleton",
-  "sewer-slime",
-  "grave-robber",
   "hollow-warden",
   "sewer-king",
   "crypt-ghoul",
@@ -150,13 +148,7 @@ describe("Area content composition (#321): global collection ordering parity", (
     expect(forest.fishingSpotIds).toEqual(["trout-run"]);
 
     const sewers = content.areas.find((a) => a.id === "old-sewers")!;
-    expect(sewers.monsterIds).toEqual([
-      "giant-rat",
-      "zombie",
-      "skeleton",
-      "sewer-slime",
-      "grave-robber",
-    ]);
+    expect(sewers.monsterIds).toEqual(["giant-rat", "zombie", "skeleton"]);
     expect(sewers.fishingSpotIds).toEqual(["sewer-outflow"]);
 
     const crypt = content.areas.find((a) => a.id === "bone-crypt")!;

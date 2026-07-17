@@ -39,8 +39,8 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
     }
   });
 
-  it("Old Sewers' Monsters (giant-rat, zombie, skeleton, grave-robber) drop Emerald at a rare band", () => {
-    for (const id of ["giant-rat", "zombie", "skeleton", "grave-robber"]) {
+  it("Old Sewers' Monsters (giant-rat, zombie, skeleton) drop Emerald at a rare band", () => {
+    for (const id of ["giant-rat", "zombie", "skeleton"]) {
       const monster = content.monsters.find((m) => m.id === id)!;
       expect(monster.dropTable.some((e) => e.itemId === "emerald" && e.band === "rare")).toBe(true);
     }

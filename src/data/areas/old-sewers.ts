@@ -90,46 +90,6 @@ export const oldSewers: AreaContent = {
         { itemId: "steel-bar", qty: 1, chance: 0.3, band: "common" },
       ],
     },
-    {
-      id: "sewer-slime",
-      name: "Sewer Slime",
-      hp: 36,
-      attackLevel: 18,
-      defenceLevel: 12,
-      maxHit: 7,
-      attackSpeed: 6,
-      attackType: "crush",
-      // Amorphous: crush and stab bury themselves harmlessly in the mass; a blade cleaves it.
-      def: { stab: 14, slash: 4, crush: 18, ranged: 12, magic: 8 },
-      dropTable: [
-        { itemId: "gold", qty: 35, chance: 1, band: "guaranteed" },
-        { itemId: "steel-bar", qty: 1, chance: 0.25, band: "common" },
-        { itemId: "steel-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
-        { itemId: "tarromin-herb", qty: 1, chance: 0.15, band: "uncommon" },
-      ],
-    },
-    {
-      id: "grave-robber",
-      name: "Grave Robber",
-      hp: 44,
-      attackLevel: 26,
-      defenceLevel: 18,
-      maxHit: 9,
-      attackSpeed: 4,
-      attackType: "stab",
-      // Patched leather: turns a slash, does little against a thrust.
-      def: { stab: 12, slash: 14, crush: 10, ranged: 12, magic: 8 },
-      dropTable: [
-        { itemId: "gold", qty: 45, chance: 1, band: "guaranteed" },
-        // A living human plausibly carries a caught fish — see the drop-table pass, which removed
-        // raw-pike from this Area's undead. Do NOT move this drop onto an undead Monster.
-        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
-        { itemId: "steel-bar", qty: 1, chance: 0.25, band: "common" },
-        { itemId: "steel-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
-        { itemId: "harralander-herb", qty: 1, chance: 0.15, band: "uncommon" },
-        { itemId: "emerald", qty: 1, chance: 1 / 140, band: "rare" },
-      ],
-    },
   ],
   dungeons: [
     {
