@@ -30,8 +30,8 @@ describe("Jewelry content (#117): gems, amulet/ring Equipment, Crafting recipes"
     });
   });
 
-  it("Darkroot Forest's Monsters (wolf, goblin-warrior, bandit) drop Sapphire at a rare band", () => {
-    for (const id of ["wolf", "goblin-warrior", "bandit"]) {
+  it("Darkroot Forest's Monsters drop Sapphire at a rare band", () => {
+    for (const id of ["wolf", "goblin-warrior", "bandit", "giant-spider", "dark-druid"]) {
       const monster = content.monsters.find((m) => m.id === id)!;
       expect(monster.dropTable.some((e) => e.itemId === "sapphire" && e.band === "rare")).toBe(
         true,

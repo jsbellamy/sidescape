@@ -74,10 +74,17 @@ describe("Monster weak spots (Combat Depth #102 re-stat)", () => {
     }
   });
 
-  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden) plus the Zombie carry a weakElement", () => {
+  it("only bosses (hollow-warden, sewer-king, crypt-shade, frost-warden), Dark Druid, and the Zombie carry a weakElement", () => {
     const withWeakElement = content.monsters.filter((m) => m.weakElement).map((m) => m.id);
     expect(new Set(withWeakElement)).toEqual(
-      new Set(["zombie", "hollow-warden", "sewer-king", "crypt-shade", "frost-warden"]),
+      new Set([
+        "zombie",
+        "dark-druid",
+        "hollow-warden",
+        "sewer-king",
+        "crypt-shade",
+        "frost-warden",
+      ]),
     );
   });
 });
