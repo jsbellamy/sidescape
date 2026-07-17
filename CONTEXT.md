@@ -33,7 +33,7 @@ A piece of Equipment's or a Monster's defence bonus, broken out per **Attack Typ
 _Avoid_: defence bonus (singular, pre-Combat-Depth terminology), resistance
 
 **Offence stats (three-stat model)**:
-Equipment carries one of three mode-specific power stats, each summed across equipped gear slots: **Strength bonus** (`strBonus`, flat — melee max hit only), **Ranged Strength** (`rangedStr`, flat — ranged max hit, alongside arrow `rangedStr`), and **Magic damage** (`magicDamage`, percent — multiplies the cast Spell's `baseMaxHit`). A stat on gear for one mode never bleeds into another; melee reads `strBonus`, ranged reads `rangedStr`, magic reads `magicDamage`.
+Equipment carries one of three mode-specific power stats, each summed across equipped gear slots: **Strength bonus** (`strBonus`, flat — melee max hit only), **Ranged Strength** (`rangedStr`, flat — ranged max hit, alongside arrow `rangedStr`), and **Magic damage** (`magicDamage`, percent — multiplies the cast Spell's `baseMaxHit`). A stat on gear for one mode never bleeds into another; melee reads `strBonus`, ranged reads `rangedStr`, magic reads `magicDamage`. Item detail lines and tooltips surface all three with flat `+N` for Strength/Ranged Strength and `+N%` for Magic damage.
 _Avoid_: strBonus as a catch-all power stat (split across modes since #361/#362)
 
 **Spell**:
@@ -76,14 +76,14 @@ _Avoid_: loot (as a noun for a single item)
 Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
-An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus combat-mode offence bonuses — melee Strength (`strBonus`), Ranged Strength (`rangedStr`), and (on weapons) an **Attack Type** and attack bonus. Jewelry (amulet/ring) may carry melee and Ranged Strength bonuses; weapons carry the stat matching their combat mode. Equipment may declare `levelReq` — Skill levels that must be met to `equip()` the item; absent means no requirement. The gate binds on the action only: gear already worn when a save loads is never stripped for being under-levelled (grandfathering). Worn gear can be removed to empty via `unequip()`, returning it to the Bank — including grandfathered under-levelled gear (the one-way door from #363: unequip always succeeds; re-equipping then throws).
+An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus combat-mode offence bonuses — melee Strength (`strBonus`), Ranged Strength (`rangedStr`), and (on weapons) an **Attack Type** and attack bonus. Jewelry (amulet/ring) may carry melee and Ranged Strength bonuses; weapons carry the stat matching their combat mode. Equipment may declare `levelReq` — Skill levels that must be met to `equip()` the item; absent means no requirement. The gate binds on the action only: gear already worn when a save loads is never stripped for being under-levelled (grandfathering). Worn gear can be removed to empty via `unequip()`, returning it to the Bank — including grandfathered under-levelled gear (the one-way door from #363: unequip always succeeds; re-equipping then throws). The UI surfaces wear requirements in gear-chooser badges (`Lv N`), quiver chooser badges, and item detail/tooltip lines; the Engine gate remains the enforcement point.
 _Avoid_: gear (alone), armor (as the general term)
 
 **Gear Slot**:
 One of: weapon, shield, head, body, legs, amulet, ring.
 
 **Gear Tier**:
-Equipment progression rank: bronze → iron → steel → mithril → adamant → rune. Area gating references Gear Tiers. Each tier carries a wear requirement — the Skill level needed to equip ladder gear at that tier (1 / 5 / 10 / 20 / 30 / 40 in the governing Skill: Attack for melee weapons, Ranged for bows and arrows, Magic for staves, Defence for armour). This wear ladder is distinct from the Smithing ladder (1 / 15 / 30 / 45 / 60 / 75), which gates what you can make, not what you can wear.
+Equipment progression rank: bronze → iron → steel → mithril → adamant → rune. Area gating references Gear Tiers. Each tier carries a wear requirement — the Skill level needed to equip ladder gear at that tier (1 / 5 / 10 / 20 / 30 / 40 in the governing Skill: Attack for melee weapons, Ranged for bows and arrows, Magic for staves, Defence for armour). Wear requirements appear in the gear and quiver choosers and on item detail lines; the Engine still enforces them on `equip()` and `assignLoadoutSlot("quiver", …)`. This wear ladder is distinct from the Smithing ladder (1 / 15 / 30 / 45 / 60 / 75), which gates what you can make, not what you can wear.
 
 **Food**:
 An **Item** auto-eaten when the player's HP falls below a threshold, restoring HP. Eaten only via a **Food Slot** — never directly from the Bank.

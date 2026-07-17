@@ -147,7 +147,7 @@ export function createBankUi(options: BankUiOptions): BankUi {
         : "";
     return `<p class="detail-name">${items.name(stack.itemId)} ×${formatQty(stack.qty)}</p>
       ${items
-        .detailLines(stack.itemId)
+        .detailLines(stack.itemId, lastSnap?.player.skills)
         .map((line) => `<p class="detail-stat">${line}</p>`)
         .join("")}
       <div class="detail-actions">${equipBtn}${sellBtn}</div>`;

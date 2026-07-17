@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { fixtureContent } from "../core/testing/fixture-content";
+import { makeSnapshot } from "../core/testing/make-snapshot";
 import { resolveContent } from "../core/validate-content";
 import { itemIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
@@ -38,6 +39,62 @@ describe("createItemPresentation — detailLines", () => {
     expect(items.detailLines("bronze-sword")).toEqual([
       "slash +10 atk +30 str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
     ]);
+  });
+
+  it("surfaces rangedStr and magicDamage on equipment (#377)", () => {
+    expect(items.detailLines("bow")).toEqual([
+      "ranged +10 atk +30 ranged str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
+    ]);
+    const magicStaffContent = resolveContent({
+      ...fixtureContent,
+      items: [
+        ...fixtureContent.items,
+        {
+          kind: "equipment" as const,
+          id: "magic-staff",
+          name: "Magic Staff",
+          icon: "apprentice-staff",
+          slot: "weapon" as const,
+          attackType: "magic" as const,
+          atkBonus: 10,
+          magicDamage: 15,
+          def: { stab: 0, slash: 0, crush: 0, ranged: 0, magic: 0 },
+          attackSpeed: 4,
+          value: 20,
+        },
+      ],
+    });
+    const magicItems = createItemPresentation(magicStaffContent);
+    expect(magicItems.detailLines("magic-staff")).toEqual([
+      "magic +10 atk +15% magic dmg st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
+    ]);
+  });
+
+  it("appends a level requirement line in SKILL_NAMES order (#377)", () => {
+    expect(items.detailLines("high-sword")).toEqual([
+      "slash +50 atk +40 str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
+      "Requires: Attack 40",
+    ]);
+    expect(items.detailLines("dual-req-ring")).toEqual([
+      "+1 atk +1 str st 0 · sl 0 · cr 0 · rn 0 · mg 0",
+      "Requires: Attack 10 · Defence 10",
+    ]);
+  });
+
+  it("marks unmet requirements in detail lines when skills are passed (#377)", () => {
+    const skills = makeSnapshot().player.skills;
+    expect(items.detailLines("high-sword", skills)).toEqual([
+      "slash +50 atk +40 str st 0 · sl 0 · cr 0 · rn 0 · mg 0 spd 4t",
+      'Requires: <span class="req-unmet">Attack 40</span>',
+    ]);
+    const metAttack = {
+      ...skills,
+      attack: { level: 10, xp: skills.attack.xp },
+      defence: { level: 9, xp: skills.defence.xp },
+    };
+    expect(items.detailLines("dual-req-ring", metAttack)[1]).toBe(
+      'Requires: Attack 10 · <span class="req-unmet">Defence 10</span>',
+    );
   });
 
   it("formats def-only Equipment", () => {

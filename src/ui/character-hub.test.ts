@@ -9,6 +9,7 @@ import { makeSnapshot } from "../core/testing/make-snapshot";
 import { SKILL_NAMES } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
+import { xpForLevel } from "../core/xp";
 import { slotSilhouette } from "./icons";
 import { createCharacterHubUi } from "./character-hub";
 import type { CharacterHubUi } from "./character-hub";
@@ -321,6 +322,80 @@ describe("createCharacterHubUi — gear unequip (#375)", () => {
     const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
     tile.dispatchEvent(event);
     expect(commands.unequip).not.toHaveBeenCalled();
+  });
+});
+
+describe("createCharacterHubUi — gear level gating (#377)", () => {
+  it("disables gear above the player's level with an Lv N badge", () => {
+    const { host } = mountCharacterHub(1, {
+      bank: {
+        items: [
+          { itemId: "bronze-sword", qty: 1 },
+          { itemId: "high-sword", qty: 1 },
+        ],
+      },
+    });
+    host.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
+    const gatedBtn = host.querySelector<HTMLButtonElement>('[data-gear-assign="high-sword"]');
+    const plainBtn = host.querySelector<HTMLButtonElement>('[data-gear-assign="bronze-sword"]');
+    expect(gatedBtn?.disabled).toBe(true);
+    expect(gatedBtn?.querySelector(".slot-req")?.textContent).toBe("Lv 40");
+    expect(plainBtn?.disabled).toBe(false);
+  });
+
+  it("enables gated gear at the exact required level and equips on click", () => {
+    const { engine, host } = mountCharacterHub(1, {
+      player: { skills: { attack: { level: 40, xp: xpForLevel(40) } } },
+      bank: { items: [{ itemId: "high-sword", qty: 1 }] },
+    });
+    host.querySelector<HTMLButtonElement>('[data-slot="weapon"] [data-gear-add]')?.click();
+    const gatedBtn = host.querySelector<HTMLButtonElement>('[data-gear-assign="high-sword"]');
+    expect(gatedBtn?.disabled).toBe(false);
+    gatedBtn?.click();
+    expect(engine.snapshot().player.equipment.weapon).toBe("high-sword");
+  });
+
+  it("disables multi-skill gear when either requirement is unmet", () => {
+    const metAttackOnly = mountCharacterHub(1, {
+      player: {
+        skills: {
+          attack: { level: 10, xp: xpForLevel(10) },
+          defence: { level: 9, xp: xpForLevel(9) },
+        },
+      },
+      bank: { items: [{ itemId: "dual-req-ring", qty: 1 }] },
+    });
+    metAttackOnly.host
+      .querySelector<HTMLButtonElement>('[data-slot="ring"] [data-gear-add]')
+      ?.click();
+    expect(
+      metAttackOnly.host.querySelector<HTMLButtonElement>('[data-gear-assign="dual-req-ring"]')
+        ?.disabled,
+    ).toBe(true);
+
+    const bothMet = mountCharacterHub(2, {
+      player: {
+        skills: {
+          attack: { level: 10, xp: xpForLevel(10) },
+          defence: { level: 10, xp: xpForLevel(10) },
+        },
+      },
+      bank: { items: [{ itemId: "dual-req-ring", qty: 1 }] },
+    });
+    bothMet.host.querySelector<HTMLButtonElement>('[data-slot="ring"] [data-gear-add]')?.click();
+    const ringBtn = bothMet.host.querySelector<HTMLButtonElement>(
+      '[data-gear-assign="dual-req-ring"]',
+    );
+    expect(ringBtn?.disabled).toBe(false);
+    ringBtn?.click();
+    expect(bothMet.engine.snapshot().player.equipment.ring).toBe("dual-req-ring");
+  });
+
+  it("the Engine still throws when equip is called below levelReq", () => {
+    const { engine } = mountCharacterHub(1, {
+      bank: { items: [{ itemId: "high-sword", qty: 1 }] },
+    });
+    expect(() => engine.equip("high-sword")).toThrow("attack level too low: need 40");
   });
 });
 

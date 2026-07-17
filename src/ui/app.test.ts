@@ -2982,7 +2982,7 @@ describe("Rune Slot tile (#221) — collapses the pre-#221 four-Element Rune Pou
     root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
     const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
     expect(fireBtn?.disabled).toBe(true);
-    expect(fireBtn?.querySelector(".rune-req")?.textContent).toBe("Lv 13");
+    expect(fireBtn?.querySelector(".slot-req")?.textContent).toBe("Lv 13");
   });
 
   it("clicking a gated (disabled) chooser row does nothing — it cannot be loaded by clicking", () => {
@@ -3004,7 +3004,7 @@ describe("Rune Slot tile (#221) — collapses the pre-#221 four-Element Rune Pou
     root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
     const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
     expect(fireBtn?.disabled).toBe(false);
-    expect(fireBtn?.querySelector(".rune-req")).toBeNull();
+    expect(fireBtn?.querySelector(".slot-req")).toBeNull();
   });
 });
 

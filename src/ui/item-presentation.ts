@@ -1,9 +1,11 @@
 import { UNARMED_SPEED } from "../core/engine";
 import { ATTACK_TYPES } from "../core/types";
-import type { AmmoDef, AttackType, EquipmentDef, PotionDef } from "../core/types";
+import type { AmmoDef, AttackType, EquipmentDef, PotionDef, SkillName } from "../core/types";
+import type { Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { formatQty } from "./format";
 import { itemIcon } from "./icons";
+import { formatLevelReqDetailLine } from "./level-req";
 
 /** Abbreviated Attack Type labels for the compact defence-vector readout (#99). */
 const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
@@ -17,7 +19,7 @@ const ATTACK_TYPE_ABBR: Record<AttackType, string> = {
 export interface ItemPresentation {
   name(itemId: string): string;
   sellPrice(itemId: string): number | undefined;
-  detailLines(itemId: string): readonly string[];
+  detailLines(itemId: string, skills?: Snapshot["player"]["skills"]): readonly string[];
   iconMarkup(itemId: string): string;
   tileMarkup(itemId: string, qty: number): string;
 }
@@ -59,9 +61,20 @@ function equipmentStatParts(def: EquipmentDef): string[] {
   if (def.slot === "weapon" && def.attackType) parts.push(def.attackType);
   if (def.atkBonus) parts.push(`+${def.atkBonus} atk`);
   if (def.strBonus) parts.push(`+${def.strBonus} str`);
+  if (def.rangedStr) parts.push(`+${def.rangedStr} ranged str`);
+  if (def.magicDamage) parts.push(`+${def.magicDamage}% magic dmg`);
   parts.push(defVectorLabel(def.def));
   if (def.slot === "weapon") parts.push(`spd ${def.attackSpeed ?? UNARMED_SPEED}t`);
   return parts;
+}
+
+function appendLevelReqLine(
+  lines: string[],
+  levelReq: Partial<Record<SkillName, number>> | undefined,
+  skills?: Snapshot["player"]["skills"],
+): void {
+  if (!levelReq) return;
+  lines.push(formatLevelReqDetailLine(levelReq, skills));
 }
 
 export function createItemPresentation(content: ResolvedContent): ItemPresentation {
@@ -74,12 +87,15 @@ export function createItemPresentation(content: ResolvedContent): ItemPresentati
     return def && def.kind !== "currency" ? def.value : undefined;
   }
 
-  function detailLines(itemId: string): readonly string[] {
+  function detailLines(itemId: string, skills?: Snapshot["player"]["skills"]): readonly string[] {
     const def = content.itemsById.get(itemId);
     if (!def) return [];
     switch (def.kind) {
-      case "equipment":
-        return [equipmentStatParts(def).join(" ")];
+      case "equipment": {
+        const lines = [equipmentStatParts(def).join(" ")];
+        appendLevelReqLine(lines, def.levelReq, skills);
+        return lines;
+      }
       case "food": {
         const lines = [`Heals ${def.heals}`];
         if (def.value !== undefined) lines.push(`Worth ${def.value}g`);
@@ -91,8 +107,11 @@ export function createItemPresentation(content: ResolvedContent): ItemPresentati
         return [];
       case "potion":
         return potionDetailLines(def);
-      case "ammo":
-        return ammoDetailLines(def);
+      case "ammo": {
+        const lines = ammoDetailLines(def);
+        appendLevelReqLine(lines, def.levelReq, skills);
+        return lines;
+      }
     }
   }
 

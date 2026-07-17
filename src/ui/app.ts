@@ -358,7 +358,7 @@ export function mountApp(
    * (which has no detail strip of its own) still surfaces #99's defence-vector readout and every
    * other per-item stat purely through hover. */
   function fillTooltip(itemId: string): void {
-    const lines = items.detailLines(itemId);
+    const lines = items.detailLines(itemId, engine.snapshot().player.skills);
     el<HTMLElement>("#item-tooltip").innerHTML =
       `<p class="tooltip-name">${items.name(itemId)}</p>` +
       lines.map((line) => `<p class="tooltip-stat">${line}</p>`).join("");
