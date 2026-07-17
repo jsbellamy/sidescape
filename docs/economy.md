@@ -1,6 +1,6 @@
 # Economy reference
 
-SideScape's gold loop is OSRS-shaped: Monsters and Dungeons inject currency, the Bank and Vendor drain it, and every sellable Item carries a `value` that passive flows and player commands respect. **All figures below are tuning defaults**, not spec — a balance pass may retune them without changing the invariant rules encoded in `src/data/economy.test.ts`.
+SideScape's gold loop is OSRS-shaped: Monsters and Dungeons add Gold, the Bank and Vendor drain it, and every sellable Item carries a `value` that passive flows and player commands respect. **All figures below are tuning defaults**, not spec — a balance pass may retune them without changing the invariant rules encoded in `src/data/economy.test.ts`.
 
 ## Gold sources
 
