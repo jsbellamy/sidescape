@@ -7,6 +7,7 @@ import {
   registeredIconKeys,
   skillIcon,
   slotSilhouette,
+  statusIcon,
   tabIcon,
   type LoadoutSlotKind,
 } from "./icons";
@@ -177,5 +178,31 @@ describe("slotSilhouette registry (#286)", () => {
     for (const slot of [...gearSlots, ...loadoutSlotKinds]) {
       expect(itemIconUrls.has(slotSilhouette(slot))).toBe(false);
     }
+  });
+});
+
+// HUD status indicators (#374): assets ahead of the #376 consumer. Separate registry from
+// `itemIcon` — a status id is not an `ItemDef.icon` key.
+describe("statusIcon registry (#374)", () => {
+  it('resolves "no-food" to a real, non-empty asset URL distinct from skill-cooking', () => {
+    expect(() => statusIcon("no-food")).not.toThrow();
+    expect(statusIcon("no-food")).toEqual(expect.any(String));
+    expect(statusIcon("no-food").length).toBeGreaterThan(0);
+    expect(statusIcon("no-food")).not.toBe(skillIcon("cooking"));
+  });
+
+  it('is not an itemIcon key — itemIcon("status-no-food") throws', () => {
+    expect(() => itemIcon("status-no-food")).toThrow(/no entry/);
+  });
+
+  it("throws for an unknown status key", () => {
+    // @ts-expect-error — deliberately passing a key outside StatusIconKey.
+    expect(() => statusIcon("not-a-real-status")).toThrow(/no entry/);
+  });
+
+  it("keeps registeredIconKeys URL-distinctness including status-no-food vs skill-cooking", () => {
+    const allUrls = registeredIconKeys().map((key) => itemIcon(key));
+    expect(new Set(allUrls).size).toBe(allUrls.length);
+    expect(allUrls.includes(statusIcon("no-food"))).toBe(false);
   });
 });
