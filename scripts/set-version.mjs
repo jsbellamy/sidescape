@@ -44,7 +44,8 @@ editJson("src-tauri/tauri.conf.json", (json) => {
 
 // Only the [package] version at the top of the manifest, not dependencies'.
 editText("src-tauri/Cargo.toml", /^version = "[^"]*"/m, `version = "${version}"`);
-// The workspace member's own entry in the lock file.
-editText("src-tauri/Cargo.lock", /^(name = "sidescape"\nversion = )"[^"]*"/m, `$1"${version}"`);
+// The workspace member's own entry in the lock file. `\r?\n` because the
+// Windows release runner checks these files out with CRLF endings.
+editText("src-tauri/Cargo.lock", /^(name = "sidescape"\r?\nversion = )"[^"]*"/m, `$1"${version}"`);
 
 console.log(`set version ${version}`);
