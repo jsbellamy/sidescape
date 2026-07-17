@@ -30,20 +30,36 @@ import { PNG } from "pngjs";
  * scrollports" instruction — `.card-scroll` alone would be ambiguous, since Bank/World's own
  * scrollports are also real, also `.card-scroll`, and could legitimately want their own future
  * spec.
+ *
+ * #373: Bank's tile grid and Vendor list join the parametrized scroll-shadow cases; three
+ * regression tests below encode the Bank/Vendor shell clipping bug directly.
  */
 
 interface Scrollport {
   /** Human-readable name for this case's test titles. */
   name: string;
   /** Which Management destination to open via `[data-destination]` before sampling. */
-  destination: "workshop" | "activity";
-  /** The scrollport's own element id (never the generic, now-removed `#management-scroll`). */
+  destination: "workshop" | "activity" | "bank";
+  /** The scrollport's own element selector (never the generic, now-removed `#management-scroll`). */
   scrollId: string;
+  /** Extra steps after the destination opens, before overflow is forced. */
+  afterOpen?: (page: Page) => Promise<void>;
 }
 
 const SCROLLPORTS: Scrollport[] = [
   { name: "Workshop's recipe body", destination: "workshop", scrollId: "#workshop-recipes" },
   { name: "Activity's Recent Activity feed", destination: "activity", scrollId: "#feed" },
+  {
+    name: "Bank's tile grid",
+    destination: "bank",
+    scrollId: '[data-bank-page="bank"].card-scroll',
+  },
+  {
+    name: "Vendor's list",
+    destination: "bank",
+    scrollId: '[data-bank-page="vendor"]',
+    afterOpen: (page) => page.locator('[data-bankpage="vendor"]').click(),
+  },
 ];
 
 async function edgePixelIsDark(
@@ -87,11 +103,14 @@ async function openManagementCardWithOverflow(
   page: Page,
   destination: Scrollport["destination"],
   scrollId: string,
+  afterOpen?: (page: Page) => Promise<void>,
 ): Promise<void> {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
   await page.locator(`[data-destination="${destination}"]`).click();
   await expect(page.locator("#card-management")).toBeVisible();
+
+  if (afterOpen) await afterOpen(page);
 
   // Force deterministic overflow inside the real scrollport regardless of current save/bank
   // contents, so the test doesn't depend on gameplay state.
@@ -104,12 +123,48 @@ async function openManagementCardWithOverflow(
   }, scrollId);
 }
 
-for (const { name, destination, scrollId } of SCROLLPORTS) {
+async function openBankDestination(page: Page): Promise<void> {
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="bank"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
+}
+
+async function openBankVendor(page: Page): Promise<void> {
+  await openBankDestination(page);
+  await page.locator('[data-bankpage="vendor"]').click();
+}
+
+async function forceBankTileOverflow(page: Page, tileCount = 60): Promise<void> {
+  await page.evaluate((count) => {
+    const bank = document.querySelector("#bank") as HTMLElement;
+    while (bank.querySelectorAll(".tile").length < count) {
+      const tile = document.createElement("button");
+      tile.className = "tile";
+      tile.style.height = "40px";
+      bank.appendChild(tile);
+    }
+  }, tileCount);
+}
+
+function rectContains(
+  outer: { top: number; left: number; bottom: number; right: number },
+  inner: { top: number; left: number; bottom: number; right: number },
+): boolean {
+  return (
+    inner.top >= outer.top &&
+    inner.left >= outer.left &&
+    inner.bottom <= outer.bottom &&
+    inner.right <= outer.right
+  );
+}
+
+for (const { name, destination, scrollId, afterOpen } of SCROLLPORTS) {
   test.describe(`${name} (${scrollId})`, () => {
     test("overflowing scrollport shows only the bottom shadow when scrolled to top", async ({
       page,
     }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => (el.scrollTop = 0));
 
       expect(await edgePixelIsDark(page, scrollId, "top")).toBe(false);
@@ -117,7 +172,7 @@ for (const { name, destination, scrollId } of SCROLLPORTS) {
     });
 
     test("overflowing scrollport shows both shadows mid-scroll", async ({ page }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => {
         el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
       });
@@ -129,7 +184,7 @@ for (const { name, destination, scrollId } of SCROLLPORTS) {
     test("overflowing scrollport shows only the top shadow when scrolled to bottom", async ({
       page,
     }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => (el.scrollTop = el.scrollHeight));
 
       expect(await edgePixelIsDark(page, scrollId, "top")).toBe(true);
@@ -158,6 +213,85 @@ test("Activity's Recent Activity feed shows neither shadow on a fresh, empty boo
 
   expect(await edgePixelIsDark(page, "#feed", "top")).toBe(false);
   expect(await edgePixelIsDark(page, "#feed", "bottom")).toBe(false);
+});
+
+test("the Vendor list scrolls inside the card instead of overflowing it", async ({ page }) => {
+  await openBankVendor(page);
+
+  const card = page.locator("#card-management");
+  expect(await card.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+  const port = page.locator('[data-bank-page="vendor"]');
+  expect(await port.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  expect(await port.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
+});
+
+test("every Vendor row is reachable by scrolling", async ({ page }) => {
+  await openBankVendor(page);
+
+  const card = page.locator("#card-management");
+  const port = page.locator('[data-bank-page="vendor"]');
+  const lastRow = page.locator("[data-vendor-row]").last();
+
+  await port.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+
+  const cardRect = await card.boundingBox();
+  const rowRect = await lastRow.boundingBox();
+  if (!cardRect || !rowRect) throw new Error("missing bounding box");
+
+  expect(
+    rectContains(
+      {
+        top: cardRect.y,
+        left: cardRect.x,
+        bottom: cardRect.y + cardRect.height,
+        right: cardRect.x + cardRect.width,
+      },
+      {
+        top: rowRect.y,
+        left: rowRect.x,
+        bottom: rowRect.y + rowRect.height,
+        right: rowRect.x + rowRect.width,
+      },
+    ),
+  ).toBe(true);
+});
+
+test("Buy Bank Slots stays inside the card with a full Bank", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("sidescape-save-v1", JSON.stringify({ player: { gold: 10_000 } }));
+  });
+  await openBankDestination(page);
+  await forceBankTileOverflow(page);
+
+  const card = page.locator("#card-management");
+  const buySlots = page.locator("#buy-slots-btn");
+
+  const cardRect = await card.boundingBox();
+  const buttonRect = await buySlots.boundingBox();
+  if (!cardRect || !buttonRect) throw new Error("missing bounding box");
+
+  expect(
+    rectContains(
+      {
+        top: cardRect.y,
+        left: cardRect.x,
+        bottom: cardRect.y + cardRect.height,
+        right: cardRect.x + cardRect.width,
+      },
+      {
+        top: buttonRect.y,
+        left: buttonRect.x,
+        bottom: buttonRect.y + buttonRect.height,
+        right: buttonRect.x + buttonRect.width,
+      },
+    ),
+  ).toBe(true);
+
+  await expect(buySlots).toBeEnabled();
+  await buySlots.click();
 });
 
 test("management card keeps #138's opaque fill, border, radius, and shadow, and its scroll surfaces get a themed thin scrollbar", async ({
