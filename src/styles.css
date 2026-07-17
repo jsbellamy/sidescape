@@ -1501,9 +1501,9 @@ body {
 
 /* The World page's own fixed shell (#208): mirrors `.bank-page-body` (#207) — the progression
    rail (`.area-rail`, a `card-fixed`-equivalent non-scrolling strip) never scrolls away, only the
-   selected-Area detail (`.area-detail`, reuses `.card-scroll`) does. Sits alongside
-   `#management-scroll` as a direct flex child of `.management-card`, toggled by the same
-   `[data-management-page]` sync as every other destination. */
+   selected-Area detail (`.area-detail`, reuses `.card-scroll`) does. Sits as a direct flex child
+   of `.management-card`, toggled by the same `[data-management-page]` sync as every other
+   destination. */
 .world-page-body {
   display: flex;
   flex-direction: column;
@@ -1792,13 +1792,28 @@ body {
   font-weight: 700;
 }
 
-/* The expanded Bank/Vendor destination's own fixed shell (#207): unlike the other three
-   destination pages (World/Workshop/Activity, still one shared `.card-scroll`, see
-   `#management-scroll` below), the Management card's "bank" page never scrolls as a whole — only
-   its own `.card-fixed`/`.card-scroll` children do, so search/filters/sort/detail/buy-slots stay
-   put while the tile grid scrolls. Sits alongside `#management-scroll` as a direct flex child of
-   `.management-card`, toggled by the same `[data-management-page]` sync as every other
-   destination. */
+/* #207's `.bank-page-body` is rendered into this host by `createBankUi` (`src/ui/app.ts`'s
+   `#bank-destination-host`), not directly into the card — unlike `.world-page-body` and
+   `.workshop-page-body`, which really are direct children of `.management-card`. Without this
+   rule the host is a plain block box, `.bank-page-body`'s `flex: 1 1 auto; min-height: 0`
+   resolves against a non-flex parent and does nothing, and the shell sizes to its content:
+   the Bank/Vendor page then overflows the card and is silently clipped by
+   `.management-card { overflow: hidden }` — no scrollbar, and on a full Bank the
+   `#buy-slots-btn` "Buy Bank Slots" button is pushed outside the card entirely and becomes
+   unclickable. `display: contents` removes the host's own box so `.bank-page-body` becomes a
+   real direct flex child of `.management-card`, which is what the rule below has always
+   assumed. Do not give this host a background, border, padding, or size — `display: contents`
+   means it has no box to paint them on, and adding any would silently reintroduce the bug. */
+#bank-destination-host {
+  display: contents;
+}
+
+/* The expanded Bank/Vendor destination's own fixed shell (#207): the Management card's "bank"
+   page never scrolls as a whole — only its own `.card-fixed`/`.card-scroll` children do, so
+   search/filters/sort/detail/buy-slots stay put while the tile grid scrolls. Acts as a direct
+   flex child of `.management-card` by way of `#bank-destination-host`'s `display: contents`
+   above (see that rule for why the host cannot have its own box). Toggled by the same
+   `[data-management-page]` sync as every other destination. */
 .bank-page-body {
   display: flex;
   flex-direction: column;

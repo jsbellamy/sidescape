@@ -36,14 +36,27 @@ interface Scrollport {
   /** Human-readable name for this case's test titles. */
   name: string;
   /** Which Management destination to open via `[data-destination]` before sampling. */
-  destination: "workshop" | "activity";
-  /** The scrollport's own element id (never the generic, now-removed `#management-scroll`). */
+  destination: "workshop" | "activity" | "bank";
+  /** The scrollport's own element selector (id or attribute selector). */
   scrollId: string;
+  /** Extra steps after the destination opens, before overflow is forced. */
+  afterOpen?: (page: Page) => Promise<void>;
 }
 
 const SCROLLPORTS: Scrollport[] = [
   { name: "Workshop's recipe body", destination: "workshop", scrollId: "#workshop-recipes" },
   { name: "Activity's Recent Activity feed", destination: "activity", scrollId: "#feed" },
+  {
+    name: "Bank's tile grid",
+    destination: "bank",
+    scrollId: '[data-bank-page="bank"].card-scroll',
+  },
+  {
+    name: "Vendor's list",
+    destination: "bank",
+    scrollId: '[data-bank-page="vendor"]',
+    afterOpen: (page) => page.locator('[data-bankpage="vendor"]').click(),
+  },
 ];
 
 async function edgePixelIsDark(
@@ -87,11 +100,16 @@ async function openManagementCardWithOverflow(
   page: Page,
   destination: Scrollport["destination"],
   scrollId: string,
+  afterOpen?: (page: Page) => Promise<void>,
 ): Promise<void> {
   await page.goto("/");
   await page.locator("#menu-toggle").click();
   await page.locator(`[data-destination="${destination}"]`).click();
   await expect(page.locator("#card-management")).toBeVisible();
+
+  if (afterOpen) {
+    await afterOpen(page);
+  }
 
   // Force deterministic overflow inside the real scrollport regardless of current save/bank
   // contents, so the test doesn't depend on gameplay state.
@@ -104,12 +122,12 @@ async function openManagementCardWithOverflow(
   }, scrollId);
 }
 
-for (const { name, destination, scrollId } of SCROLLPORTS) {
+for (const { name, destination, scrollId, afterOpen } of SCROLLPORTS) {
   test.describe(`${name} (${scrollId})`, () => {
     test("overflowing scrollport shows only the bottom shadow when scrolled to top", async ({
       page,
     }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => (el.scrollTop = 0));
 
       expect(await edgePixelIsDark(page, scrollId, "top")).toBe(false);
@@ -117,7 +135,7 @@ for (const { name, destination, scrollId } of SCROLLPORTS) {
     });
 
     test("overflowing scrollport shows both shadows mid-scroll", async ({ page }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => {
         el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
       });
@@ -129,7 +147,7 @@ for (const { name, destination, scrollId } of SCROLLPORTS) {
     test("overflowing scrollport shows only the top shadow when scrolled to bottom", async ({
       page,
     }) => {
-      await openManagementCardWithOverflow(page, destination, scrollId);
+      await openManagementCardWithOverflow(page, destination, scrollId, afterOpen);
       await page.locator(scrollId).evaluate((el) => (el.scrollTop = el.scrollHeight));
 
       expect(await edgePixelIsDark(page, scrollId, "top")).toBe(true);
@@ -137,6 +155,91 @@ for (const { name, destination, scrollId } of SCROLLPORTS) {
     });
   });
 }
+
+// Regression tests for #373: the Bank/Vendor shell overflowing the card and silently clipping
+// content (including the "Buy Bank Slots" button). These tests encode the exact measurements that
+// were broken on `main` before the `#bank-destination-host { display: contents }` fix landed:
+// Vendor card scrollHeight was 1028 vs clientHeight 598, and #buy-slots-btn sat 76px below the
+// card's bottom edge with a full bank.
+
+async function openBankWithForced60Tiles(page: Page): Promise<void> {
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="bank"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
+  // Force 60 bank tiles to guarantee the tile grid overflows, independent of gameplay state.
+  await page.evaluate(() => {
+    const grid = document.querySelector('[data-bank-page="bank"].card-scroll') as HTMLElement;
+    for (let i = 0; i < 60; i++) {
+      const tile = document.createElement("div");
+      tile.className = "bank-tile";
+      tile.textContent = String(i);
+      grid.appendChild(tile);
+    }
+  });
+}
+
+test("the Vendor list scrolls inside the card instead of overflowing it", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="bank"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
+  await page.locator('[data-bankpage="vendor"]').click();
+
+  const card = page.locator("#card-management");
+  // The card must never overflow its own height — the "#206 Character never page-scrolls" invariant.
+  const cardClips = await card.evaluate((el) => el.scrollHeight <= el.clientHeight);
+  expect(cardClips).toBe(true);
+
+  const port = page.locator('[data-bank-page="vendor"]');
+  const portScrolls = await port.evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(portScrolls).toBe(true);
+});
+
+test("every Vendor row is reachable by scrolling", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#menu-toggle").click();
+  await page.locator('[data-destination="bank"]').click();
+  await expect(page.locator("#card-management")).toBeVisible();
+  await page.locator('[data-bankpage="vendor"]').click();
+
+  const port = page.locator('[data-bank-page="vendor"]');
+  // Scroll to the very bottom of the vendor list.
+  await port.evaluate((el) => (el.scrollTop = el.scrollHeight));
+
+  const cardBox = await page.locator("#card-management").boundingBox();
+  if (!cardBox) throw new Error("#card-management has no bounding box");
+
+  const rows = page.locator("[data-vendor-row]");
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+
+  const lastRow = rows.nth(count - 1);
+  const rowBox = await lastRow.boundingBox();
+  if (!rowBox) throw new Error("last [data-vendor-row] has no bounding box");
+
+  // The last row's bottom edge must be at or above the card's bottom edge.
+  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+});
+
+test("Buy Bank Slots stays inside the card and is clickable with a full Bank", async ({ page }) => {
+  await openBankWithForced60Tiles(page);
+
+  const cardBox = await page.locator("#card-management").boundingBox();
+  if (!cardBox) throw new Error("#card-management has no bounding box");
+
+  const btn = page.locator("#buy-slots-btn");
+  // Use toBeVisible() — the button may be disabled (no gold) on a fresh save, but disabled
+  // is orthogonal to clipping. toBeVisible() confirms it has a non-zero box and is not
+  // hidden by overflow — exactly the regression #373 fixes (button was 76px below card bottom).
+  await expect(btn).toBeVisible();
+
+  const btnBox = await btn.boundingBox();
+  if (!btnBox) throw new Error("#buy-slots-btn has no bounding box");
+
+  // The button's bottom edge must be within the card's bounds.
+  expect(btnBox.y + btnBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+});
 
 // "Non-overflowing scrollport shows neither shadow" only holds for Activity's feed: a fresh save
 // starts with zero feed entries, but Workshop's own Smithing recipe body has several real
