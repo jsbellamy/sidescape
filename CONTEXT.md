@@ -192,7 +192,8 @@ _Avoid_: death screen, grave
 The fixed 320×220 logical live stage shown while no management surface is open.
 It contains only Menu/drag/Close chrome and visual activity feedback: backdrop,
 actors, Production prop, non-numeric combat HP bars, transient effects, and the
-combat-only zero-Food warning. It also carries the live **Loot Zone** strip
+persistent zero-Food readiness badge (icon beside the Menu control, visible whenever total Food
+quantity is 0, in or out of combat). It also carries the live **Loot Zone** strip
 beneath the scene, the sole Loot Zone interface. It scales with the complete
 workspace at the 100%, 150%, and 200% **UiScale** stops and cannot be freely
 resized.

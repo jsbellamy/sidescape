@@ -10,7 +10,7 @@ import type { EngineEvent, SkillName } from "../core/types";
 import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
-import { skillIcon, slotSilhouette } from "./icons";
+import { skillIcon, slotSilhouette, statusIcon } from "./icons";
 import { PRODUCTION_SKILLS } from "./production";
 import type { WorkspaceChrome } from "./workspace-chrome";
 
@@ -153,6 +153,12 @@ function selectBankTile(root: HTMLElement, itemId: string): HTMLElement | null {
  * assertions. */
 function hoverTile(root: HTMLElement, el: Element): HTMLElement | null {
   el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  return root.querySelector<HTMLElement>("#item-tooltip");
+}
+
+/** Dispatches a bubbling `mouseout` on `el` after a hover, mirroring the tooltip hide path. */
+function unhoverTile(root: HTMLElement, el: Element): HTMLElement | null {
+  el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
   return root.querySelector<HTMLElement>("#item-tooltip");
 }
 
@@ -1229,7 +1235,7 @@ describe("Cards on glass — close interactions, drag regions, and Escape (#206)
     // issue wouldn't be in the set above, so any `data-*` attribute inside the widget that isn't
     // on this short, deliberately-inert allowlist is treated as an offender too. Widening the
     // allowlist is a conscious "this really is inert" decision, which is the point.
-    const INERT_DATA_ATTRS = new Set(["data-theme", "data-tauri-drag-region"]);
+    const INERT_DATA_ATTRS = new Set(["data-theme", "data-tauri-drag-region", "data-tip"]);
 
     const offenders = [...(widget as HTMLElement).querySelectorAll<HTMLElement>("*")]
       .filter((el) => {
@@ -3607,7 +3613,7 @@ describe("fixed compact live stage (#210)", () => {
     expect(root.querySelector("#titlebar")).toBeNull();
     expect(
       [...root.querySelectorAll("#widget-controls > *")].map((node) => node.id || node.textContent),
-    ).toEqual(["menu-toggle", "close-btn"]);
+    ).toEqual(["no-food-badge", "menu-toggle", "close-btn"]);
     for (const selector of [
       "#gold",
       "#food-slots",
@@ -3625,14 +3631,12 @@ describe("fixed compact live stage (#210)", () => {
     expect(root.querySelector("#loot-strip")).not.toBeNull();
   });
 
-  it("shows sprite-attached non-numeric HP bars and a zero-Food warning only in combat", () => {
+  it("shows sprite-attached non-numeric HP bars only in combat", () => {
     const { root } = mount(1);
-    expect(root.querySelector<HTMLElement>("#no-food-warning")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("#player-bar")?.hidden).toBe(true);
     root.querySelector<HTMLButtonElement>('[data-monster="dummy"]')?.click();
     expect(root.querySelector<HTMLElement>("#player-bar")?.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>("#monster-bar")?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>("#no-food-warning")?.hidden).toBe(false);
-    expect(root.querySelector("#no-food-warning")?.textContent).toBe("No active Food");
     expect(root.querySelector("#monster-sprite-wrap > #monster-bar")).not.toBeNull();
     expect(root.querySelector("#player-sprite-wrap > #player-bar")).not.toBeNull();
   });
@@ -3646,5 +3650,87 @@ describe("fixed compact live stage (#210)", () => {
     expect(settings?.querySelector("#export-save")).not.toBeNull();
     expect(settings?.querySelector("#import-save")).not.toBeNull();
     expect(settings?.querySelectorAll("[data-ui-scale]")).toHaveLength(3);
+  });
+});
+
+describe("no-Food readiness badge (#376)", () => {
+  it("removes the old text strip entirely", () => {
+    const { root } = mount(1);
+    expect(root.querySelector("#no-food-warning")).toBeNull();
+    expect(root.textContent).not.toContain("No active Food");
+  });
+
+  it("renders #no-food-badge before #menu-toggle with statusIcon('no-food'), role=status, and alt text", () => {
+    const { root } = mount(1);
+    const badge = root.querySelector<HTMLElement>("#no-food-badge");
+    const menuToggle = root.querySelector("#menu-toggle");
+    expect(badge).not.toBeNull();
+    expect(menuToggle).not.toBeNull();
+    expect(badge!.getAttribute("role")).toBe("status");
+    expect(
+      badge!.compareDocumentPosition(menuToggle!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const img = badge!.querySelector<HTMLImageElement>("img.tab-icon");
+    expect(img?.getAttribute("alt")).toBe("No Food assigned");
+    expect(img?.getAttribute("src")).toBe(statusIcon("no-food"));
+  });
+
+  it("shows the badge whenever total Food quantity is 0, in and out of combat", () => {
+    const { engine, root, app } = mount(1);
+    const badge = () => root.querySelector<HTMLElement>("#no-food-badge");
+    expect(badge()?.hidden).toBe(false);
+
+    engine.selectMonster("dummy");
+    app.render();
+    expect(badge()?.hidden).toBe(false);
+  });
+
+  it("hides the badge after assigning Food and shows it again after clearing", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "meat", qty: 5 }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    const badge = () => root.querySelector<HTMLElement>("#no-food-badge");
+    engine.assignLoadoutSlot("food", "meat", 0);
+    app.render();
+    expect(badge()?.hidden).toBe(true);
+
+    engine.clearLoadoutSlot("food", 0);
+    app.render();
+    expect(badge()?.hidden).toBe(false);
+  });
+
+  it("shows the badge when a Food Slot is assigned but drained to qty 0", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({
+        player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+      }),
+    );
+    const root = document.createElement("main");
+    mountApp(engine, root, resolveContent(fixtureContent), noopWindowChrome);
+    expect(root.querySelector<HTMLElement>("#no-food-badge")?.hidden).toBe(false);
+  });
+
+  it("shows #item-tooltip on badge hover and hides it on mouseout", () => {
+    const { root } = mount(1);
+    const badge = root.querySelector<HTMLElement>("#no-food-badge")!;
+    const tooltip = hoverTile(root, badge);
+    expect(tooltip?.hidden).toBe(false);
+    expect(tooltip?.querySelector(".tooltip-stat")?.textContent).toBe(
+      "No Food assigned — open the Character hub and fill a Food Slot to auto-eat in combat.",
+    );
+    expect(unhoverTile(root, badge)?.hidden).toBe(true);
+  });
+
+  it("is not styled as a clickable #widget-controls button", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    expect(css).toMatch(/#widget-controls button\s*{/);
+    expect(css.match(/#widget-controls button\s*{([^}]*)}/s)![1]).toMatch(/cursor:\s*pointer/);
+    expect(css.match(/#no-food-badge\s*{([^}]*)}/s)![1]).not.toMatch(/cursor:\s*pointer/);
   });
 });

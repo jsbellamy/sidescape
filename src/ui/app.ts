@@ -17,7 +17,7 @@ import type { LoadoutSlotUi } from "./loadout-slot";
 import { resolveTheme } from "./theme";
 import { createWorldPageUi } from "./world-page";
 import type { WorldPageUi } from "./world-page";
-import { skillIcon, tabIcon } from "./icons";
+import { skillIcon, statusIcon, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
 import type { WorkspaceChrome } from "./workspace-chrome";
 import { createCharacterHubUi } from "./character-hub";
@@ -426,7 +426,10 @@ export function mountApp(
     const combat = monster !== null;
     el<HTMLElement>("#player-bar").hidden = !combat;
     const foodQty = player.foodSlots.reduce((sum, slot) => sum + (slot?.qty ?? 0), 0);
-    el<HTMLElement>("#no-food-warning").hidden = !combat || foodQty > 0;
+    // #376: deliberately NOT gated on `combat` (it used to be `!combat || foodQty > 0`). This is a
+    // persistent readiness indicator, not a combat alarm — telling the player they have no Food only
+    // once a monster is already hitting them is too late to act on.
+    el<HTMLElement>("#no-food-badge").hidden = foodQty > 0;
 
     const monsterImg = el<HTMLImageElement>("#monster-sprite");
     const monsterBar = el<HTMLElement>("#monster-bar");
@@ -602,8 +605,15 @@ export function mountApp(
             <div id="player-splats" class="splat-layer"></div>
           </div>
         </div>
-        <div id="no-food-warning" role="status" title="No active Food" hidden>No active Food</div>
         <div id="widget-controls">
+          <span
+            id="no-food-badge"
+            role="status"
+            data-tip="No Food assigned — open the Character hub and fill a Food Slot to auto-eat in combat."
+            hidden
+          >
+            <img class="tab-icon pixel" src="${statusIcon("no-food")}" alt="No Food assigned" />
+          </span>
           <button id="menu-toggle" data-menu title="Menu" aria-label="Menu">
             <img class="tab-icon pixel" src="${tabIcon("character")}" alt="" />
           </button>
@@ -762,6 +772,16 @@ export function mountApp(
   // `mouseout` keeps the tooltip open while the pointer moves between a tile's own child elements
   // (e.g. its `<img>` and the qty badge `<span>`) instead of flickering.
   root.addEventListener("mouseover", (event) => {
+    const tipEl = (event.target as HTMLElement).closest<HTMLElement>("[data-tip]");
+    if (tipEl) {
+      const tip = tipEl.dataset["tip"];
+      if (tip) {
+        el<HTMLElement>("#item-tooltip").innerHTML = `<p class="tooltip-stat">${tip}</p>`;
+        positionTooltip(tipEl);
+        el<HTMLElement>("#item-tooltip").hidden = false;
+      }
+      return;
+    }
     const tile = (event.target as HTMLElement).closest<HTMLElement>("[data-item]");
     if (!tile) return;
     const itemId = tile.dataset["item"];
@@ -772,6 +792,13 @@ export function mountApp(
   });
 
   root.addEventListener("mouseout", (event) => {
+    const tipEl = (event.target as HTMLElement).closest<HTMLElement>("[data-tip]");
+    if (tipEl) {
+      const related = (event as MouseEvent).relatedTarget as Node | null;
+      if (related && tipEl.contains(related)) return;
+      el<HTMLElement>("#item-tooltip").hidden = true;
+      return;
+    }
     const tile = (event.target as HTMLElement).closest<HTMLElement>("[data-item]");
     if (!tile) return;
     const related = (event as MouseEvent).relatedTarget as Node | null;
