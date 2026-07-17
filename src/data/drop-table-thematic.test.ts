@@ -60,8 +60,8 @@ describe("Drop Table thematic pass (#388)", () => {
     });
   });
 
-  it("raw-pike is retained on giant-rat, frost-wolf, and frost-giant only among the affected Monsters", () => {
-    const keepers = ["giant-rat", "frost-wolf", "frost-giant"] as const;
+  it("raw-pike is retained on giant-rat, grave-robber, frost-wolf, and frost-giant only among the affected Monsters", () => {
+    const keepers = ["giant-rat", "grave-robber", "frost-wolf", "frost-giant"] as const;
     for (const monsterId of keepers) {
       const monster = content.monsters.find((m) => m.id === monsterId)!;
       expect(monster.dropTable.some((e) => e.itemId === "raw-pike")).toBe(true);
