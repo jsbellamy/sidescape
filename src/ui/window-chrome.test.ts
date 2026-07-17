@@ -36,6 +36,7 @@ function fakePort(
   height = 220,
   monitorWidth = 1920,
   monitorHeight = 1800,
+  scaleFactor = 1,
 ): FakeWindowPort {
   let rect = { x: 100, y: 100, width, height };
   const sizes: LogicalSize[] = [];
@@ -48,7 +49,7 @@ function fakePort(
       position: new PhysicalPosition(0, 0),
       size: new PhysicalSize(monitorWidth, monitorHeight),
     },
-    scaleFactor: 1,
+    scaleFactor,
   };
   const layout: WebviewLayoutPort = {
     viewportSize: () => ({ width: rect.width, height: rect.height }),
@@ -58,7 +59,7 @@ function fakePort(
     sizes,
     writes,
     layout,
-    scaleFactor: async () => 1,
+    scaleFactor: async () => scaleFactor,
     outerPosition: async () => new PhysicalPosition(rect.x, rect.y),
     outerSize: async () => new PhysicalSize(rect.width, rect.height),
     currentMonitor: async () => monitor,
@@ -78,7 +79,7 @@ function fakePort(
 
 beforeEach(() => vi.stubGlobal("localStorage", storage()));
 
-describe("local UI scale", () => {
+describe("manual-check: ui-scale", () => {
   it("tolerantly defaults invalid values and round-trips valid stops", () => {
     expect(loadUiScale()).toBe(1);
     localStorage.setItem(UI_SCALE_KEY, "1.25");
@@ -97,7 +98,7 @@ describe("local UI scale", () => {
   });
 });
 
-describe("WorkspaceChrome fixed scale", () => {
+describe("manual-check: relaunch", () => {
   it("boot overrides a restored expanded rect with the scaled compact rect", async () => {
     saveUiScale(1.5);
     const port = fakePort(912, 1242);
@@ -106,6 +107,17 @@ describe("WorkspaceChrome fixed scale", () => {
     await chrome.settled();
     expect(port.sizes[port.sizes.length - 1]).toMatchObject({ width: 480, height: 330 });
   });
+});
+
+describe("manual-check: narrow-monitor", () => {
+  it("derives capacity from logical monitor width when scaleFactor is not 1", async () => {
+    const port = fakePort(320, 220, 1214, 1800, 2);
+    const chrome = createTauriWindowChrome(document.createElement("main"), port, port.layout);
+    expect(await chrome.getCapacity()).toBe(1);
+  });
+});
+
+describe("WorkspaceChrome fixed scale", () => {
   it("applies a supported scale to the full workspace", async () => {
     const root = document.createElement("main");
     const port = fakePort();

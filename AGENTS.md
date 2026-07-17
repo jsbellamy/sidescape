@@ -176,14 +176,14 @@ Use the narrowest evidence that proves the stated behavior. The browser and
 the port-injected tests deliberately cover different surfaces; neither is a
 blanket substitute for the other.
 
-| Named check                       | Automated evidence                                                                                                                                                |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| upper-half / lower-half anchoring | `manual-check: upper-half` and `manual-check: lower-half` describes in `src/ui/window-chrome.test.ts`, run by `npm test`                                          |
-| narrow-monitor capacity           | `manual-check: narrow-monitor` describe in `src/ui/window-chrome.test.ts`, including scale-factor ≠ 1 cases                                                       |
-| resize persistence                | `manual-check: resize` describe in `src/ui/window-chrome.test.ts`                                                                                                 |
-| close/reopen                      | `manual-check: close/reopen` describe in `src/ui/window-chrome.test.ts` plus the reload-persistence spec in `e2e/browser-degraded.spec.ts`                        |
-| relaunch                          | `manual-check: relaunch` describe in `src/ui/window-chrome.test.ts`; it asserts boot applies stored compact geometry instead of the plugin-restored expanded rect |
-| visual layout evidence            | `browser-degraded-screenshots` from the CI `e2e` job: attach the relevant `e2e-screenshots/compact.png` and `e2e-screenshots/panel-open.png` to the PR            |
+| Named check                       | Automated evidence                                                                                                                                                                      |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| upper-half / lower-half anchoring | `manual-check: upper-half` and `manual-check: lower-half` describes in `src/ui/window-geometry.test.ts`, run by `npm test`                                                              |
+| narrow-monitor capacity           | `manual-check: narrow-monitor` describes in `src/ui/window-geometry.test.ts` (pure capacity math) and `src/ui/window-chrome.test.ts` (port-injected, including a scale-factor ≠ 1 case) |
+| UiScale persistence               | `manual-check: ui-scale` describe in `src/ui/window-chrome.test.ts` (tolerant defaulting, round-trip of the 1/1.5/2 stops, legacy free-resize geometry ignored)                         |
+| reload is session-only            | the reload assertion in `e2e/browser-degraded.spec.ts` (cards close on `page.reload()`; workspace state is deliberately not persisted) plus `manual-check: relaunch`                    |
+| relaunch                          | `manual-check: relaunch` describe in `src/ui/window-chrome.test.ts`; it asserts boot applies stored compact geometry instead of the plugin-restored expanded rect                       |
+| visual layout evidence            | `browser-degraded-screenshots` from the CI `e2e` job: attach the relevant `e2e-screenshots/compact.png` and `e2e-screenshots/panel-open.png` to the PR                                  |
 
 The `manual-check:` names are automated port-injected scenarios, not a demand
 to run Tauri manually. A named manual `npm run tauri dev` check, with the
