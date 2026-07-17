@@ -52,8 +52,6 @@ export const oldSewers: AreaContent = {
       weakElement: "fire",
       dropTable: [
         { itemId: "gold", qty: 40, chance: 1, band: "guaranteed" },
-        // #115: cooked-pike -> raw-pike.
-        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "steel-chainbody", qty: 1, chance: 1 / 32, band: "uncommon" },
         // Magic tier progression (#13): steel-tier staff, demoable from Old Sewers' own Monsters.
         { itemId: "steel-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
@@ -79,8 +77,6 @@ export const oldSewers: AreaContent = {
       def: { stab: 14, slash: 20, crush: 8, ranged: 12, magic: 10 },
       dropTable: [
         { itemId: "gold", qty: 50, chance: 1, band: "guaranteed" },
-        // #115: cooked-pike -> raw-pike.
-        { itemId: "raw-pike", qty: 1, chance: 0.28, band: "common" },
         { itemId: "steel-kiteshield", qty: 1, chance: 1 / 36, band: "uncommon" },
         { itemId: "steel-full-helm", qty: 1, chance: 1 / 150, band: "rare" },
         // Gap-fill slash weapon (#102): steel-sword also has a Smithing Recipe since #251.

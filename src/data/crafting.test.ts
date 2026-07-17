@@ -30,19 +30,12 @@ describe("Crafting content (#116): hides and ranged/light armour", () => {
     });
   });
 
-  it("Chicken and Cow drop Cowhide, Wolf drops Wolf Hide, Giant Rat drops Thick Hide", () => {
-    const chicken = content.monsters.find((m) => m.id === "chicken")!;
-    expect(chicken.dropTable).toContainEqual({
-      itemId: "cowhide",
-      qty: 1,
-      chance: 0.4,
-      band: "common",
-    });
+  it("Cow drops Cowhide, Wolf drops Wolf Hide, Giant Rat drops Thick Hide (chicken no longer supplies hide — #388)", () => {
     const cow = content.monsters.find((m) => m.id === "cow")!;
     expect(cow.dropTable).toContainEqual({
       itemId: "cowhide",
       qty: 1,
-      chance: 0.5,
+      chance: 0.65,
       band: "common",
     });
     const wolf = content.monsters.find((m) => m.id === "wolf")!;

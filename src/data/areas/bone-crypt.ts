@@ -24,8 +24,6 @@ export const boneCrypt: AreaContent = {
       def: { stab: 10, slash: 22, crush: 18, ranged: 16, magic: 14 },
       dropTable: [
         { itemId: "gold", qty: 90, chance: 1, band: "guaranteed" },
-        // #115: cooked-pike -> raw-pike.
-        { itemId: "raw-pike", qty: 1, chance: 0.28, band: "common" },
         { itemId: "mithril-dagger", qty: 1, chance: 1 / 30, band: "uncommon" },
         { itemId: "mithril-shortbow", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "mithril-full-helm", qty: 1, chance: 1 / 160, band: "rare" },
@@ -46,8 +44,6 @@ export const boneCrypt: AreaContent = {
       def: { stab: 24, slash: 28, crush: 12, ranged: 20, magic: 16 },
       dropTable: [
         { itemId: "gold", qty: 120, chance: 1, band: "guaranteed" },
-        // #115: cooked-pike -> raw-pike.
-        { itemId: "raw-pike", qty: 1, chance: 0.3, band: "common" },
         { itemId: "mithril-chainbody", qty: 1, chance: 1 / 30, band: "uncommon" },
         { itemId: "mithril-mace", qty: 1, chance: 1 / 32, band: "uncommon" },
         { itemId: "mithril-kiteshield", qty: 1, chance: 1 / 150, band: "rare" },

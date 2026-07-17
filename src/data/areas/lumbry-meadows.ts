@@ -20,12 +20,8 @@ export const lumbryMeadows: AreaContent = {
       def: { stab: 3, slash: 1, crush: 3, ranged: 2, magic: 2 },
       dropTable: [
         { itemId: "gold", qty: 2, chance: 1, band: "guaranteed" },
-        // #115: cooked-meat -> raw-beef (Cooking now sits between a beast drop and edible Food).
-        { itemId: "raw-beef", qty: 1, chance: 0.3, band: "common" },
-        { itemId: "bronze-dagger", qty: 1, chance: 1 / 24, band: "uncommon" },
-        // #116: hide drop (economy check comment sits on the Crafting recipes below, near cow's
-        // own cowhide entry — the reference kill-rate the arithmetic is worked against).
-        { itemId: "cowhide", qty: 1, chance: 0.4, band: "common" },
+        // #388: chicken drops its own meat — raw-chicken is its only source in the game.
+        { itemId: "raw-chicken", qty: 1, chance: 0.45, band: "common" },
         // #118: herb drop (economy check comment sits on the Herblore recipes below).
         { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
@@ -51,7 +47,8 @@ export const lumbryMeadows: AreaContent = {
         // Ranged and Magic starter weapons (#7): demoable from Lumbry Meadows' own Monsters.
         { itemId: "apprentice-staff", qty: 1, chance: 1 / 28, band: "uncommon" },
         // #116: hide drop — see the economy-check comment above the Crafting recipes below.
-        { itemId: "cowhide", qty: 1, chance: 0.5, band: "common" },
+        // #388: raised 0.5 -> 0.65 — chicken (hp 3, fastest kill) no longer supplies cowhide.
+        { itemId: "cowhide", qty: 1, chance: 0.65, band: "common" },
         // #118: herb drop — see the economy-check comment above the Herblore recipes below.
         { itemId: "guam-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
