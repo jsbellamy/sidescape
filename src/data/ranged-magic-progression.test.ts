@@ -333,9 +333,11 @@ describe("Magic tier progression (#13)", () => {
  * the per-cast rune cost (#119) and the x1.5 element-weakness upside on weak Monsters are priced
  * in — an exact DPS match isn't the bar, "roughly on par" is. */
 describe("Magic compensation tuning (#121)", () => {
-  it("spell baseMaxHit values are raised by the drop-only-gear compensation factor", () => {
-    const bySpell = Object.fromEntries(content.spells.map((s) => [s.id, s.baseMaxHit]));
-    expect(bySpell).toEqual({
+  it("Strike spell baseMaxHit values keep the #121 drop-only-gear compensation factor", () => {
+    const strikes = Object.fromEntries(
+      content.spells.filter((s) => s.id.endsWith("-strike")).map((s) => [s.id, s.baseMaxHit]),
+    );
+    expect(strikes).toEqual({
       "air-strike": 6,
       "water-strike": 9,
       "earth-strike": 12,
