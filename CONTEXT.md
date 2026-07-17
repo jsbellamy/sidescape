@@ -100,7 +100,7 @@ A **Potion** Item opened via the singular Potion Slot (a **Loadout Slot** kind);
 _Avoid_: elixir, flask
 
 **Pet**:
-An owned collectible dropped by activity — never an **Item**, never in the **Bank**. `PetDef` declares `target` (a **Skill** or `fishing-speed` / `production-speed`), `boostPct` (deliberately tiny), and `source` (`combat`, `fishing`, `production`, or `{ boss: monsterId }`). Combat/fishing/production pets roll at 1/2000 per qualifying action; boss pets at 1/300. Duplicate ownership is impossible (`ownedPets` set). Every owned pet's boost is always-on and boosts sum across the roster — no active-pet slot. Emits `pet-dropped`.
+An owned collectible dropped by activity — never an **Item**, never in the **Bank**. `PetDef` declares `target` (a **Skill** or `fishing-speed` / `production-speed`), `boostPct` (deliberately tiny), and `source` (`combat`, `fishing`, `production`, or `{ boss: monsterId }`). Combat/fishing/production pets roll at `PET_DROP_CHANCE`; boss pets at `BOSS_PET_DROP_CHANCE` (`src/core/engine.ts`). Duplicate ownership is impossible (`ownedPets` set). Every owned pet's boost is always-on and boosts sum across the roster — no active-pet slot. Emits `pet-dropped`.
 _Avoid_: companion, familiar
 
 **Material**:
@@ -123,11 +123,11 @@ The player's sole **Item** store — there is no separate carried inventory. Eve
 _Avoid_: storage, chest, warehouse, inventory
 
 **Loot Zone**:
-The small buffer (10 stacks) where combat Drops accumulate — kill Drops and Dungeon Chest items land here first, not straight in the Bank; Catches and Recipe outputs bypass it entirely and go straight to the Bank, unchanged. Auto-looted into the Bank when the player leaves combat, or manually via Loot all. Excess beyond its capacity is auto-sold for Gold (or discarded, if unsellable). Its sole UI is the Compact Widget's live Loot Zone strip; the Activity destination shows no Loot Zone view, only the **Loot Feed**.
+The small buffer (`LOOT_ZONE_CAPACITY` stacks; `src/core/engine.ts`) where combat Drops accumulate — kill Drops and Dungeon Chest items land here first, not straight in the Bank; Catches and Recipe outputs bypass it entirely and go straight to the Bank, unchanged. Auto-looted into the Bank when the player leaves combat, or manually via Loot all. Excess beyond its capacity is auto-sold for Gold (or discarded, if unsellable). Its sole UI is the Compact Widget's live Loot Zone strip; the Activity destination shows no Loot Zone view, only the **Loot Feed**.
 _Avoid_: inventory, loot bag
 
 **Bank Slot**:
-One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts with 100 Bank Slots.
+One unit of **Bank** capacity; each holds exactly one Item stack regardless of that stack's quantity. A fresh Bank starts at `BANK_START_CAPACITY` (`src/core/engine.ts`).
 
 **Gold**:
 The player's currency balance — a number on the player, not an Item stack, so it never occupies a **Bank Slot**. Currency Drops credit it directly; selling an Item, buying Bank Slots, and **Vendor** purchases are its other movements.
@@ -169,7 +169,7 @@ The single deep module that owns all game state and advances it one **Tick** per
 _Avoid_: game loop, simulator, game manager
 
 **Offline Progress**:
-On boot, elapsed away time is converted to **Ticks** and pumped through the **Engine** (`pumpOffline`, `src/ui/offline-progress.ts`), capped at `OFFLINE_CAP_TICKS = 48_000` (~8h; tuning, not spec — durations beyond the cap render "8h+"). Realizes ADR-0001's "pump N ticks on reopen" prediction; no new architecture.
+On boot, elapsed away time is converted to **Ticks** and pumped through the **Engine** (`pumpOffline`, `src/ui/offline-progress.ts`), capped at `OFFLINE_CAP_TICKS` (`src/ui/offline-progress.ts`; ~8h; tuning, not spec — durations beyond the cap render "8h+"). Realizes ADR-0001's "pump N ticks on reopen" prediction; no new architecture.
 _Avoid_: idle gains (as the general term — use Offline Progress)
 
 **Snapshot**:
