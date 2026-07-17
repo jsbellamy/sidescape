@@ -135,6 +135,7 @@ const NEW_ITEM_IDS = [
   "water-blast-rune",
   "earth-blast-rune",
   "fire-blast-rune",
+  "iron-arrow",
 ] as const;
 
 const PRE_251_RECIPE_IDS = [
