@@ -1253,10 +1253,14 @@ describe("Equipment and gates", () => {
     });
 
     it("a rejected equip mutates nothing and emits no equipped event", () => {
+      // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+      // calls a millisecond apart would flake this equality — pin the clock instead.
+      const now = () => 1_000_000;
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "high-sword", qty: 1 }] } }),
+        now,
       );
       const before = engine.snapshot();
       const equipped: string[] = [];
@@ -6875,10 +6879,14 @@ describe("Ammo + Vendor (#119)", () => {
     });
 
     it("throws when Ranged is below the arrow's levelReq and mutates nothing", () => {
+      // Fixed clock: snapshot() restamps savedAt (#69) on every call, so two real Date.now()
+      // calls a millisecond apart would flake this equality — pin the clock instead.
+      const now = () => 1_000_000;
       const engine = createEngine(
         fixtureContent,
         seededRng(1),
         makeSnapshot({ bank: { items: [{ itemId: "gated-arrow", qty: 5 }] } }),
+        now,
       );
       const before = engine.snapshot();
       expect(() => engine.assignLoadoutSlot("quiver", "gated-arrow")).toThrow(
