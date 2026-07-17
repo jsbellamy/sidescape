@@ -69,9 +69,10 @@ describe("sprites", () => {
   it("carries a native size for every mapped Monster that matches the art registry", () => {
     // The runtime size map (sprites.ts) is a hand-maintained parallel of the art build registry
     // (scripts/art/sprites.mjs); this guards them from drifting, so the on-screen box is always the
-    // real canvas x grain. `player` lives in the registry too but is served by playerSpriteSize.
+    // real canvas x grain. Player poses (`player`, `player-fishing`, …) live in the registry too
+    // but are served by playerSpriteSize / a follow-up wiring slice — not monsterSprites.
     for (const { name, size } of sprites) {
-      if (name === "player") continue;
+      if (name.startsWith("player")) continue;
       expect(monsterSpriteSize(name), name).toBe(size);
     }
     const registryPlayer = sprites.find((s) => s.name === "player");

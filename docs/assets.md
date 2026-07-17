@@ -539,6 +539,19 @@ scoping means adding it recolors nothing else. The regenerated `player.png` tuni
 This row supersedes only the historical Tiny Farm-derived player sprite documented above; that CC0
 provenance remains recorded as history.
 
+### Player fishing pose (#436)
+
+`player-fishing` is a second original-art player pose on the same 48×48 canvas and finishing budget
+as the standing `player` (`alpha: "binary"`, `sourceMaxColors`/`maxColors: 24`, `despecklePasses:
+0`). One untouched Cursor `GenerateImage` PNG (1024×1024, magenta key) was recovered via
+`npm run art:ingest-sprite -- --name player-fishing --size 48` into
+`scripts/art/sprite-sources/sprite-player-fishing.png`; Stage 2 emits
+`src/assets/sprites/player-fishing.png`. The figure faces left with a rod extended toward the
+water prop. Registry `materialRampNames` / `zoneNames` match the ingest dry-run audit
+(`gold`/`skin`/`leather`/`moss`; `sewer`/`crypt`/`town`) — not a copy of the standing player's
+ramp list — so Stage-2 vocabulary matches the cells that actually win. UI wiring is deliberately
+out of scope; the built PNG is committed but unreferenced until the follow-up slice.
+
 ### Lumbry Meadows spider and boar (#389)
 
 Spider and Boar extend the Lumbry Meadows starter cast as two new original 32×32 combat

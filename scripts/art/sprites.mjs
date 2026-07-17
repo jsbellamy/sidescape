@@ -62,6 +62,19 @@ export const sprites = [
     maxColors: 24,
     despecklePasses: 0,
   },
+  // Fishing pose (#436): same character identity and finishing budget as `player`, rod out,
+  // facing left. Art + registry only; UI wiring is a follow-up slice.
+  {
+    name: "player-fishing",
+    source: "sprite-player-fishing.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["gold", "skin", "leather", "moss"],
+    zoneNames: ["sewer", "crypt", "town"],
+    sourceMaxColors: 24,
+    maxColors: 24,
+    despecklePasses: 0,
+  },
   {
     name: "chicken",
     source: "sprite-chicken.png",
