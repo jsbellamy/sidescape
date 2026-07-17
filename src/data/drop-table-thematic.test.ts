@@ -10,6 +10,8 @@ const UNDEAD_MONSTER_IDS = [
   "skeleton",
   "crypt-ghoul",
   "bone-knight",
+  "bone-archer",
+  "tomb-wight",
   "ice-wraith",
 ] as const;
 

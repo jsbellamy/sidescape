@@ -61,17 +61,70 @@ describe("Bone Crypt content", () => {
     const boneCrypt = areas.find((a) => a.id === "bone-crypt");
     expect(boneCrypt).toBeDefined();
     expect(boneCrypt?.name).toBe("Bone Crypt");
-    expect(boneCrypt?.monsterIds).toEqual(["crypt-ghoul", "bone-knight"]);
+    expect(boneCrypt?.monsterIds).toEqual([
+      "crypt-ghoul",
+      "bone-knight",
+      "bone-archer",
+      "tomb-wight",
+    ]);
     expect(boneCrypt?.unlocked).toBe(false);
   });
 
   it("gates a fresh player out of Bone Crypt's open-world Monsters", () => {
-    expect(() => createEngine(content, seededRng(1)).selectMonster("crypt-ghoul")).toThrow(
-      /Bone Crypt is locked — defeat Sewer King/,
+    for (const monsterId of ["crypt-ghoul", "bone-knight", "bone-archer", "tomb-wight"]) {
+      expect(() => createEngine(content, seededRng(1)).selectMonster(monsterId)).toThrow(
+        /Bone Crypt is locked — defeat Sewer King/,
+      );
+    }
+  });
+
+  it("open-world Bone Crypt Monsters cover melee, ranged, and magic attack styles", () => {
+    const openWorldIds = content.areas.find((a) => a.id === "bone-crypt")!.monsterIds;
+    const attackTypes = new Set(
+      openWorldIds.map((id) => content.monsters.find((m) => m.id === id)!.attackType),
     );
-    expect(() => createEngine(content, seededRng(1)).selectMonster("bone-knight")).toThrow(
-      /Bone Crypt is locked — defeat Sewer King/,
+    expect(attackTypes.has("stab") || attackTypes.has("slash") || attackTypes.has("crush")).toBe(
+      true,
     );
+    expect(attackTypes.has("ranged")).toBe(true);
+    expect(attackTypes.has("magic")).toBe(true);
+  });
+
+  it("no open-world Bone Crypt Monster drops any raw fish", () => {
+    const rawFishIds = ["raw-pike", "raw-trout", "raw-cave-eel", "raw-icefin"];
+    const openWorldIds = content.areas.find((a) => a.id === "bone-crypt")!.monsterIds;
+    for (const monsterId of openWorldIds) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      for (const entry of monster.dropTable) {
+        expect(
+          rawFishIds,
+          `${monsterId} must not drop raw fish (found ${entry.itemId})`,
+        ).not.toContain(entry.itemId);
+      }
+    }
+  });
+
+  it("bone-archer and tomb-wight are open-world only: absent from every Dungeon's waves", () => {
+    for (const dungeon of content.dungeons) {
+      expect(dungeon.waves).not.toContain("bone-archer");
+      expect(dungeon.waves).not.toContain("tomb-wight");
+    }
+  });
+
+  it("bone-archer and tomb-wight Drop Tables carry guaranteed/common/uncommon bands (and rare for ruby)", () => {
+    for (const monsterId of ["bone-archer", "tomb-wight"]) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      const bands = new Set(monster.dropTable.map((e) => e.band));
+      expect(bands.has("guaranteed"), `${monsterId} missing guaranteed`).toBe(true);
+      expect(bands.has("common"), `${monsterId} missing common`).toBe(true);
+      expect(bands.has("uncommon"), `${monsterId} missing uncommon`).toBe(true);
+      for (const entry of monster.dropTable) {
+        const item = content.items.find((i) => i.id === entry.itemId);
+        expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
+      }
+    }
+    const tombWight = content.monsters.find((m) => m.id === "tomb-wight")!;
+    expect(tombWight.dropTable.some((e) => e.itemId === "ruby" && e.band === "rare")).toBe(true);
   });
 
   it("Crypt Ghoul and Bone Knight both drop mithril Equipment and mithril-bar", () => {
@@ -358,6 +411,49 @@ function mithrilGraduateSave() {
     },
   });
 }
+
+// #397: Bone Archer's first ranged attacker and Tomb Wight's first caster — Engine-seam kill smoke.
+describe("Bone Archer and Tomb Wight (#397)", () => {
+  it.each([
+    { monsterId: "bone-archer", goldQty: 100, rngSeed: 3971 },
+    { monsterId: "tomb-wight", goldQty: 110, rngSeed: 3972 },
+  ] as const)(
+    "a $monsterId kill lands its guaranteed gold Drop (seeded Rng, real Content)",
+    ({ monsterId, goldQty, rngSeed }) => {
+      const engine = createEngine(content, seededRng(rngSeed), mithrilGraduateSave());
+      engine.setAutoSellDuplicates(false);
+      expect(() => engine.selectMonster(monsterId)).not.toThrow();
+
+      let kills = 0;
+      const goldDrops: number[] = [];
+      engine.on("kill", (e) => {
+        if (e.monsterId === monsterId) kills++;
+      });
+      engine.on("drop", (e) => {
+        if (e.itemId === "gold") {
+          goldDrops.push(e.qty);
+          expect(e.band).toBe("guaranteed");
+        }
+      });
+
+      for (let i = 0; i < 50000 && kills === 0; i++) engine.tick();
+
+      expect(kills).toBeGreaterThan(0);
+      expect(goldDrops).toContain(goldQty);
+      expect(engine.snapshot().player.gold).toBeGreaterThanOrEqual(goldQty);
+    },
+  );
+
+  it("a player without Sewer King cleared cannot select bone-archer or tomb-wight", () => {
+    const engine = createEngine(content, seededRng(1), sewersGraduateSave());
+    expect(() => engine.selectMonster("bone-archer")).toThrow(
+      /Bone Crypt is locked — defeat Sewer King/,
+    );
+    expect(() => engine.selectMonster("tomb-wight")).toThrow(
+      /Bone Crypt is locked — defeat Sewer King/,
+    );
+  });
+});
 
 // Shade Crypt (#253): Bone Crypt's own Dungeon. skeleton/crypt-ghoul/bone-knight waves plus the
 // dungeon-only Crypt Shade boss, mirroring Sewer King's structure exactly.

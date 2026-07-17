@@ -21,7 +21,13 @@ describe("Adamant/rune gear reachability (#252/#253/#254)", () => {
   );
   const runeIds = new Set(content.items.filter((i) => i.id.startsWith("rune-")).map((i) => i.id));
 
-  const ADAMANT_OPEN_WORLD_MONSTER_IDS = new Set(["frost-wolf", "ice-wraith", "frost-giant"]);
+  const ADAMANT_OPEN_WORLD_MONSTER_IDS = new Set([
+    "frost-wolf",
+    "ice-wraith",
+    "frost-giant",
+    "ice-troll",
+    "rime-sorcerer",
+  ]);
   const ADAMANT_CHEST_DUNGEON_IDS = new Set(["shade-crypt", "frost-warden"]);
 
   it("the new tier actually exists (sanity: this guardrail isn't vacuously true)", () => {

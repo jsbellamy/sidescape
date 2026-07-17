@@ -51,6 +51,45 @@ export const boneCrypt: AreaContent = {
         { itemId: "mithril-bar", qty: 1, chance: 0.28, band: "common" },
       ],
     },
+    {
+      id: "bone-archer",
+      name: "Bone Archer",
+      hp: 72,
+      attackLevel: 38,
+      defenceLevel: 28,
+      maxHit: 14,
+      attackSpeed: 4,
+      attackType: "ranged",
+      // Bare bones: a crush blow shatters it; arrows and blades pass between the ribs.
+      def: { stab: 20, slash: 24, crush: 14, ranged: 18, magic: 16 },
+      dropTable: [
+        { itemId: "gold", qty: 100, chance: 1, band: "guaranteed" },
+        { itemId: "mithril-arrow", qty: 10, chance: 0.3, band: "common" },
+        { itemId: "mithril-bar", qty: 1, chance: 0.25, band: "common" },
+        { itemId: "mithril-shortbow", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "harralander-herb", qty: 1, chance: 0.15, band: "uncommon" },
+      ],
+    },
+    {
+      id: "tomb-wight",
+      name: "Tomb Wight",
+      hp: 78,
+      attackLevel: 42,
+      defenceLevel: 31,
+      maxHit: 16,
+      attackSpeed: 5,
+      attackType: "magic",
+      weakElement: "fire",
+      // Wrapped and half-corporeal: physical blows lose much of their bite; its own element does not.
+      def: { stab: 26, slash: 28, crush: 22, ranged: 24, magic: 16 },
+      dropTable: [
+        { itemId: "gold", qty: 110, chance: 1, band: "guaranteed" },
+        { itemId: "harralander-herb", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "mithril-bar", qty: 1, chance: 0.25, band: "common" },
+        { itemId: "mithril-staff", qty: 1, chance: 1 / 32, band: "uncommon" },
+        { itemId: "ruby", qty: 1, chance: 1 / 220, band: "rare" },
+      ],
+    },
   ],
   dungeons: [
     {
