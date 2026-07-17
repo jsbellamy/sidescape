@@ -199,6 +199,22 @@ export const sprites = [
     zoneNames: ["crypt", "town"],
   },
   {
+    name: "sewer-slime",
+    source: "sprite-sewer-slime.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["gold", "adamant", "skin", "moss"],
+    zoneNames: ["meadow", "sewer"],
+  },
+  {
+    name: "grave-robber",
+    source: "sprite-grave-robber.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["steel", "ember", "leather"],
+    zoneNames: ["town"],
+  },
+  {
     name: "crypt-shade",
     source: "sprite-crypt-shade.png",
     size: 64,

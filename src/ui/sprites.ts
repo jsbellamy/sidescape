@@ -15,10 +15,12 @@ import goblinUrl from "../assets/sprites/goblin.png";
 import goblinBruteUrl from "../assets/sprites/goblin-brute.png";
 import goblinChiefUrl from "../assets/sprites/goblin-chief.png";
 import goblinWarriorUrl from "../assets/sprites/goblin-warrior.png";
+import graveRobberUrl from "../assets/sprites/grave-robber.png";
 import hollowWardenUrl from "../assets/sprites/hollow-warden.png";
 import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
 import sewerKingUrl from "../assets/sprites/sewer-king.png";
+import sewerSlimeUrl from "../assets/sprites/sewer-slime.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
 import spiderUrl from "../assets/sprites/spider.png";
 import wolfUrl from "../assets/sprites/wolf.png";
@@ -76,6 +78,8 @@ const monsterSprites: Record<string, SpriteAsset> = {
   "giant-rat": { url: giantRatUrl, size: 32 },
   zombie: { url: zombieUrl, size: 48 },
   skeleton: { url: skeletonUrl, size: 48 },
+  "sewer-slime": { url: sewerSlimeUrl, size: 48 },
+  "grave-robber": { url: graveRobberUrl, size: 48 },
   "sewer-king": { url: sewerKingUrl, size: 48 },
   "crypt-shade": { url: cryptShadeUrl, size: 64 },
   "crypt-ghoul": { url: cryptGhoulUrl, size: 48 },

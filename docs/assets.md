@@ -621,6 +621,25 @@ cleanup defaults because the compact previews retained their defining silhouette
 This subsection supersedes only the historical CC0 Wolf, Goblin Warrior, and Bandit outputs recorded
 above. Their provenance remains preserved as historical context; Hollow Warden is new original art.
 
+### Old Sewers sewer-slime and grave-robber (#391)
+
+Sewer Slime and Grave Robber extend the Old Sewers cast as two new original 48×48
+combat sprites beside Zombie / Skeleton / Sewer King. Each compact source was
+recovered from one untouched built-in image-generation PNG on the ignored
+`sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized,
+re-exported, downsampled, or hand-edited. Both are bottom-anchored binary-alpha
+sources that face right toward the left-facing player.
+
+Identity at 1×: Sewer Slime is a hulking acid-green mass with a thick forward
+pseudopod, stump legs separated by negative space, and large cream bone/skull
+debris suspended inside so it does not read as a featureless blob; Grave Robber
+is a living hooded scavenger whose oversized steel shovel, bulging loot sack,
+and ember belt lantern keep him unmistakable beside Bandit. Registry
+`materialRampNames` / `zoneNames` match the winning ingest audits exactly
+(slime: `gold`/`adamant`/`skin`/`moss` + `meadow`/`sewer`; robber:
+`steel`/`ember`/`leather` + `town`); both retain the standard `maxColors: 12`
+and three-pass finishing defaults.
+
 ### Old Sewers (#267)
 
 Giant Rat, Zombie, Skeleton, and the dungeon-only Sewer King now form a coherent original Old

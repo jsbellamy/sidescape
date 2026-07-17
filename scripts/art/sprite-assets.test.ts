@@ -35,6 +35,8 @@ const EXPECTED_SPRITES = [
   { name: "zombie", size: 48, alpha: "binary" },
   { name: "skeleton", size: 48, alpha: "binary" },
   { name: "sewer-king", size: 48, alpha: "binary" },
+  { name: "sewer-slime", size: 48, alpha: "binary" },
+  { name: "grave-robber", size: 48, alpha: "binary" },
   { name: "crypt-shade", size: 64, alpha: "one-intermediate" },
   { name: "crypt-ghoul", size: 48, alpha: "binary" },
   { name: "bone-knight", size: 48, alpha: "binary" },
