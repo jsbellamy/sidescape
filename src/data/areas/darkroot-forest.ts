@@ -87,6 +87,47 @@ export const darkrootForest: AreaContent = {
         { itemId: "marrentill-herb", qty: 1, chance: 0.15, band: "uncommon" },
       ],
     },
+    {
+      id: "giant-spider",
+      name: "Giant Spider",
+      hp: 18,
+      attackLevel: 9,
+      defenceLevel: 6,
+      maxHit: 4,
+      attackSpeed: 4,
+      attackType: "stab",
+      // Chitin turns a crush blow; the joints do not stop a blade.
+      def: { stab: 5, slash: 2, crush: 7, ranged: 5, magic: 4 },
+      dropTable: [
+        { itemId: "gold", qty: 18, chance: 1, band: "guaranteed" },
+        // Silk: INTERIM (no recipe consumes it yet) — the higher rate is the tier ramp off Lumbry's
+        // spider at 0.35.
+        { itemId: "silk", qty: 1, chance: 0.45, band: "common" },
+        { itemId: "iron-dagger", qty: 1, chance: 1 / 28, band: "uncommon" },
+        { itemId: "marrentill-herb", qty: 1, chance: 0.15, band: "uncommon" },
+        { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
+      ],
+    },
+    {
+      id: "dark-druid",
+      name: "Dark Druid",
+      hp: 22,
+      attackLevel: 13,
+      defenceLevel: 9,
+      maxHit: 5,
+      attackSpeed: 5,
+      attackType: "magic",
+      weakElement: "fire",
+      // Robes turn nothing; his own element is his best defence.
+      def: { stab: 6, slash: 7, crush: 6, ranged: 6, magic: 10 },
+      dropTable: [
+        { itemId: "gold", qty: 22, chance: 1, band: "guaranteed" },
+        { itemId: "marrentill-herb", qty: 1, chance: 0.3, band: "common" },
+        { itemId: "iron-bar", qty: 1, chance: 0.25, band: "common" },
+        { itemId: "iron-staff", qty: 1, chance: 1 / 30, band: "uncommon" },
+        { itemId: "sapphire", qty: 1, chance: 1 / 96, band: "rare" },
+      ],
+    },
   ],
   fishingSpots: [
     {
