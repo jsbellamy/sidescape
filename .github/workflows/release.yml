@@ -1,10 +1,65 @@
 name: Release
 
+# Tags are the source of truth for the version. Nothing is committed to main:
+# this workflow reads the newest app-v* tag, bumps it, tags the current commit,
+# and stamps that version into the build. The committed version fields are
+# placeholders (0.0.0) — see scripts/set-version.mjs.
+
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute next version
+        id: bump
+        run: |
+          set -euo pipefail
+          latest="$(git tag --list 'app-v*' --sort=-v:refname | head -n1)"
+          current="${latest#app-v}"
+          current="${current:-0.0.0}"
+          IFS=. read -r major minor patch <<< "$current"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          version="$major.$minor.$patch"
+          echo "$current -> $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=app-v$version" >> "$GITHUB_OUTPUT"
+      - name: Tag release
+        run: |
+          set -euo pipefail
+          tag="${{ steps.bump.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+
   release:
+    needs: version
     permissions:
       contents: write
     strategy:
@@ -18,6 +73,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 26
@@ -27,12 +84,14 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      # Never committed: the tag is authoritative, this just stamps the build.
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "SideScape v__VERSION__"
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: "SideScape v${{ needs.version.outputs.version }}"
           releaseBody: "Unsigned personal-distribution builds for macOS and Windows."
           releaseDraft: true
           prerelease: false
