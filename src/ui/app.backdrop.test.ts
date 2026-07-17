@@ -141,6 +141,48 @@ describe("scene backdrop (#80)", () => {
     expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
   });
 
+  it("pins prop-left / player-right offset rules in the stylesheet (#433)", () => {
+    expect(stylesheet).toMatch(
+      /#activity-prop\s*\{[\s\S]*?background-position:\s*bottom 0 left 15%;/,
+    );
+    expect(stylesheet).toContain("#scene.prop-active #player-sprite-wrap");
+    expect(stylesheet).toMatch(
+      /#scene\.prop-active #player-sprite-wrap\s*\{[\s\S]*?transform:\s*translateX\(56px\);/,
+    );
+  });
+
+  it("sets prop-active on #scene while Smithing (or any Production / fishing prop) is visible, and clears it during combat", () => {
+    const smithingEngine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 5 }] } }),
+    );
+    const smithingRoot = document.createElement("main");
+    const smithingApp = mountApp(
+      smithingEngine,
+      smithingRoot,
+      resolvedFixtureContent,
+      noopWindowChrome,
+    );
+
+    const scene = smithingRoot.querySelector<HTMLElement>("#scene");
+    expect(scene?.classList.contains("prop-active")).toBe(false);
+
+    smithingEngine.selectRecipe("test-sword");
+    smithingApp.render();
+    expect(scene?.classList.contains("prop-active")).toBe(true);
+
+    const combatEngine = createEngine(meadowsContent, seededRng(1));
+    const combatRoot = document.createElement("main");
+    const combatApp = mountApp(combatEngine, combatRoot, resolvedMeadowsContent, noopWindowChrome);
+
+    combatEngine.selectMonster("chicken");
+    combatApp.render();
+    const combatScene = combatRoot.querySelector<HTMLElement>("#scene");
+    expect(combatScene?.classList.contains("prop-active")).toBe(false);
+    expect(combatRoot.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(true);
+  });
+
   it("switches to the town theme and shows the anvil prop when Smithing starts, switching cleanly from whatever theme was showing before", () => {
     const engine = createEngine(
       fixtureContent,
