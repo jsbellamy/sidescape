@@ -37,6 +37,7 @@ export function createLoadoutSlots(deps: {
   clearAt(kind: LoadoutKind, slotIndex?: number): void;
   eatFromSlotAt(slotIndex: number, food: FoodDef): number;
   autoEat(): void;
+  creditToFoodSlotIfHome(itemId: string, qty: number): boolean;
 } {
   const { state, resolved, emit, maxHp, level, checkLevelReq, bank } = deps;
   const { resolveItem, assertOwned, takeOwned, swapBackToBank, returnToBank } = bank;
@@ -187,6 +188,17 @@ export function createLoadoutSlots(deps: {
     return healed;
   }
 
+  /** Slot-as-home routing (#61): if `itemId` is assigned to a Food Slot, credits `qty` straight
+   * into that slot and reports true — Slots have no qty cap, so a slot-bound arrival never
+   * overflows. Returns false (no-op) when `itemId` isn't assigned anywhere, leaving the caller to
+   * fall back to its own Bank/Loot-Zone placement. */
+  function creditToFoodSlotIfHome(itemId: string, qty: number): boolean {
+    const slotIndex = state.foodSlots.findIndex((slot) => slot?.itemId === itemId);
+    if (slotIndex === -1) return false;
+    (state.foodSlots[slotIndex] as { itemId: string; qty: number }).qty += qty;
+    return true;
+  }
+
   /** Rewritten for Food Slots (#61): drains the lowest-index slot with qty > 0 until HP clears
    * the threshold or every slot runs dry — the old Content-order Bank scan is gone. Threshold
    * semantics (0 = off) unchanged. */
@@ -247,5 +259,6 @@ export function createLoadoutSlots(deps: {
     },
     eatFromSlotAt,
     autoEat,
+    creditToFoodSlotIfHome,
   };
 }

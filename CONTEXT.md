@@ -119,7 +119,7 @@ A Recipe-driven **Skill** trained by crafting — Smithing, Cooking, Crafting, a
 _Avoid_: craft skill, trade skill
 
 **Bank**:
-The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here, unless it's Food assigned to a **Food Slot**, which routes there instead; **Equipment** is worn directly from the Bank, while **Food** is eaten only via a Food Slot. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink.
+The player's sole **Item** store — there is no separate carried inventory. Every passive Item arrival (Catch, Recipe output, and — once swept out of the **Loot Zone** — Drop and Chest) lands here, unless it's Food assigned to a **Food Slot**, which routes there instead; **Equipment** is worn directly from the Bank, while **Food** is eaten only via a Food Slot. Holds one stack per distinct Item, up to its capacity in **Bank Slots**. Capacity is expanded by spending **Gold**, a gold sink. One shared implementation inside the Engine (`createBank`, `src/core/bank.ts`) owns all stack and Gold movement — arrivals route through it (Food-Slot homing consulted via the Loadout hook), and the Loot Zone, Vendor, and Bank-Slot-expansion flows are its operations.
 _Avoid_: storage, chest, warehouse, inventory
 
 **Loot Zone**:
