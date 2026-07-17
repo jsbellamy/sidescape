@@ -44,6 +44,8 @@ describe("sprites", () => {
       "crypt-shade",
       "crypt-ghoul",
       "bone-knight",
+      "bone-archer",
+      "tomb-wight",
       "frost-wolf",
       "ice-wraith",
       "frost-giant",

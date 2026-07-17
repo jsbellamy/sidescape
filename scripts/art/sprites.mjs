@@ -240,6 +240,24 @@ export const sprites = [
     materialRampNames: ["steel", "water", "rune", "skin"],
     zoneNames: ["meadow", "forest", "sewer", "crypt"],
   },
+  // Bone Crypt ranged / caster (#392): original-art recovered through the source-driven sprite pipeline.
+  // materialRampNames/zoneNames filled from ingest dry-run audits.
+  {
+    name: "bone-archer",
+    source: "sprite-bone-archer.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["blood", "skin", "leather"],
+    zoneNames: ["sewer", "town"],
+  },
+  {
+    name: "tomb-wight",
+    source: "sprite-tomb-wight.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["steel", "skin", "leather"],
+    zoneNames: ["sewer", "crypt"],
+  },
   // Frostspire (#269): original-art cast recovered through the source-driven sprite pipeline.
   // Canvas size is explicit visual scale (wolf 32, wraith 48, giant/warden 64), not a Boss-only
   // allowance. materialRampNames/zoneNames are filled from ingest dry-run audits.

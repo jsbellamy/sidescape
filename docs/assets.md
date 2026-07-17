@@ -640,6 +640,24 @@ and ember belt lantern keep him unmistakable beside Bandit. Registry
 `steel`/`ember`/`leather` + `town`); both retain the standard `maxColors: 12`
 and three-pass finishing defaults.
 
+### Bone Crypt bone-archer and tomb-wight (#392)
+
+Bone Archer and Tomb Wight extend the Bone Crypt cast as two new original 48×48
+combat sprites beside Crypt Ghoul / Bone Knight. Each compact source was
+recovered from one untouched built-in image-generation PNG on the ignored
+`sprite-gen-inbox` path after a passing dry-run ingest; no raw was resized,
+re-exported, downsampled, or hand-edited. Both are bottom-anchored binary-alpha
+sources that face right toward the left-facing player.
+
+Identity at 1×: Bone Archer is a bleached skeletal archer whose tall curved
+longbow (limb ≥2px) separates it from sword-bearing Skeleton; Tomb Wight is an
+upright wrapped caster with a raised hand wreathed in `crypt`-zone violet
+corpse-light (ingest Stage-2 off-ramp 0.7% — glow did not collapse to brown),
+distinct from hunched Crypt Ghoul. Registry `materialRampNames` / `zoneNames`
+match the winning ingest audits exactly (archer: `blood`/`skin`/`leather` +
+`sewer`/`town`; wight: `steel`/`skin`/`leather` + `sewer`/`crypt`); both retain
+the standard `maxColors: 12` and three-pass finishing defaults.
+
 ### Old Sewers (#267)
 
 Giant Rat, Zombie, Skeleton, and the dungeon-only Sewer King now form a coherent original Old

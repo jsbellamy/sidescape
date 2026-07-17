@@ -1,5 +1,6 @@
 import banditUrl from "../assets/sprites/bandit.png";
 import boarUrl from "../assets/sprites/boar.png";
+import boneArcherUrl from "../assets/sprites/bone-archer.png";
 import boneKnightUrl from "../assets/sprites/bone-knight.png";
 import chickenUrl from "../assets/sprites/chicken.png";
 import cowUrl from "../assets/sprites/cow.png";
@@ -23,6 +24,7 @@ import sewerKingUrl from "../assets/sprites/sewer-king.png";
 import sewerSlimeUrl from "../assets/sprites/sewer-slime.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
 import spiderUrl from "../assets/sprites/spider.png";
+import tombWightUrl from "../assets/sprites/tomb-wight.png";
 import wolfUrl from "../assets/sprites/wolf.png";
 import zombieUrl from "../assets/sprites/zombie.png";
 
@@ -84,6 +86,8 @@ const monsterSprites: Record<string, SpriteAsset> = {
   "crypt-shade": { url: cryptShadeUrl, size: 64 },
   "crypt-ghoul": { url: cryptGhoulUrl, size: 48 },
   "bone-knight": { url: boneKnightUrl, size: 48 },
+  "bone-archer": { url: boneArcherUrl, size: 48 },
+  "tomb-wight": { url: tombWightUrl, size: 48 },
   "frost-wolf": { url: frostWolfUrl, size: 32 },
   "ice-wraith": { url: iceWraithUrl, size: 48 },
   "frost-giant": { url: frostGiantUrl, size: 64 },
