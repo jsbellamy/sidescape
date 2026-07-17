@@ -18,6 +18,7 @@ const ALL_ZONES = Object.keys(zonePalettes);
 
 const EXPECTED_SPRITES = [
   { name: "player", size: 48, alpha: "binary" },
+  { name: "player-fishing", size: 48, alpha: "binary" },
   { name: "chicken", size: 32, alpha: "binary" },
   { name: "spider", size: 32, alpha: "binary" },
   { name: "boar", size: 32, alpha: "binary" },
