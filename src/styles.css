@@ -1315,12 +1315,16 @@ body {
   margin: 8px 0 3px;
 }
 
-/* Rune Slot chooser (#221): the "Lv N" badge on a gated (above-Magic-level) rune row, mirroring
- * the deleted #spell-row's own .spell-req badge. The row's own disabled state (dimmed, no pointer)
- * comes from the shared .potion-slot-chooser button styling below. */
-.rune-req {
+/* #377: `.rune-req` renamed — the requirement badge is shared by the Rune, Quiver, and Gear
+   choosers now, and only the Rune Slot's requirement comes from a Spell. */
+.slot-req {
   font-size: 9px;
   color: var(--text-dim);
+}
+
+/* An unmet level requirement in an item's detail/tooltip lines. */
+.req-unmet {
+  color: #d66;
 }
 
 .checkbox-row {

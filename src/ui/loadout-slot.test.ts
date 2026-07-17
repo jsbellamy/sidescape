@@ -214,7 +214,7 @@ describe("createLoadoutSlotUi — Rune-level gating", () => {
     root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
     const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
     expect(fireBtn?.disabled).toBe(true);
-    expect(fireBtn?.querySelector(".rune-req")?.textContent).toBe("Lv 13");
+    expect(fireBtn?.querySelector(".slot-req")?.textContent).toBe("Lv 13");
   });
 
   it("a rune the player is high enough level to cast renders enabled with no badge, and clicking it loads it", () => {
@@ -225,7 +225,7 @@ describe("createLoadoutSlotUi — Rune-level gating", () => {
     root.querySelector<HTMLButtonElement>("[data-rune-add]")?.click();
     const fireBtn = root.querySelector<HTMLButtonElement>('[data-rune-assign="fire-rune"]');
     expect(fireBtn?.disabled).toBe(false);
-    expect(fireBtn?.querySelector(".rune-req")).toBeNull();
+    expect(fireBtn?.querySelector(".slot-req")).toBeNull();
 
     fireBtn?.click();
     expect(engine.snapshot().player.runeSlot).toEqual({ itemId: "fire-rune", qty: 5 });
@@ -241,6 +241,47 @@ describe("createLoadoutSlotUi — Rune-level gating", () => {
     fireBtn?.click();
     expect(engine.snapshot().player.runeSlot).toBeNull();
     expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe("createLoadoutSlotUi — Quiver level gating (#377)", () => {
+  it("disables gated arrows below the required Ranged level with an Lv N badge", () => {
+    const { root } = mountLoadoutUi({
+      bank: {
+        items: [
+          { itemId: "arrow", qty: 5 },
+          { itemId: "gated-arrow", qty: 3 },
+        ],
+      },
+    });
+    root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
+    const gatedBtn = root.querySelector<HTMLButtonElement>('[data-quiver-assign="gated-arrow"]');
+    const plainBtn = root.querySelector<HTMLButtonElement>('[data-quiver-assign="arrow"]');
+    expect(gatedBtn?.disabled).toBe(true);
+    expect(gatedBtn?.querySelector(".slot-req")?.textContent).toBe("Lv 10");
+    expect(plainBtn?.disabled).toBe(false);
+    expect(plainBtn?.querySelector(".slot-req")).toBeNull();
+  });
+
+  it("enables a gated arrow at the exact required Ranged level and loads it on click", () => {
+    const { engine, root } = mountLoadoutUi({
+      player: { skills: { ranged: { level: 10, xp: xpForLevel(10) } } },
+      bank: { items: [{ itemId: "gated-arrow", qty: 3 }] },
+    });
+    root.querySelector<HTMLButtonElement>("[data-quiver-add]")?.click();
+    const gatedBtn = root.querySelector<HTMLButtonElement>('[data-quiver-assign="gated-arrow"]');
+    expect(gatedBtn?.disabled).toBe(false);
+    gatedBtn?.click();
+    expect(engine.snapshot().player.quiver).toEqual({ itemId: "gated-arrow", qty: 3 });
+  });
+
+  it("the Engine still throws when assignLoadoutSlot is called below levelReq", () => {
+    const { engine } = mountLoadoutUi({
+      bank: { items: [{ itemId: "gated-arrow", qty: 3 }] },
+    });
+    expect(() => engine.assignLoadoutSlot("quiver", "gated-arrow")).toThrow(
+      "ranged level too low: need 10",
+    );
   });
 });
 

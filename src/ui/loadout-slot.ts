@@ -13,6 +13,7 @@ import type { Snapshot } from "../core/types";
 import type { ResolvedContent } from "../core/validate-content";
 import { slotSilhouette, type LoadoutSlotKind } from "./icons";
 import { createItemPresentation } from "./item-presentation";
+import { unmetRequirement } from "./level-req";
 
 /** The slice of `Snapshot["player"]` every Loadout Slot kind's render/gating logic reads —
  * `skills` for the Rune Slot's Magic-level gate, the rest for each kind's own filled/empty state. */
@@ -231,15 +232,21 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
   function renderQuiver(
     quiver: LoadoutSlotPlayer["quiver"],
     bankItems: Snapshot["bank"]["items"],
+    skills: Snapshot["player"]["skills"],
   ): void {
     const arrowStacks = bankItems.filter((s) => {
       const def = content.itemsById.get(s.itemId);
       return def?.kind === "ammo" && def.ammoType === "arrow";
     });
-    const chooserItems: ChooserRow[] = arrowStacks.map((s) => ({
-      itemId: s.itemId,
-      label: `${items.name(s.itemId)} ×${s.qty}`,
-    }));
+    const chooserItems: ChooserRow[] = arrowStacks.map((s) => {
+      const def = content.itemsById.get(s.itemId);
+      const unmet = def?.kind === "ammo" ? unmetRequirement(def, skills) : undefined;
+      return {
+        itemId: s.itemId,
+        label: `${items.name(s.itemId)} ×${s.qty}${unmet ? ` <span class="slot-req">Lv ${unmet.need}</span>` : ""}`,
+        disabled: unmet !== undefined,
+      };
+    });
     const filledInner = quiver
       ? `<div class="tile" data-item="${quiver.itemId}">${items.tileMarkup(quiver.itemId, quiver.qty)}</div>`
       : "";
@@ -268,8 +275,9 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
   function renderRuneSlot(
     runeSlot: LoadoutSlotPlayer["runeSlot"],
     bankItems: Snapshot["bank"]["items"],
-    magicLevel: number,
+    skills: Snapshot["player"]["skills"],
   ): void {
+    const magicLevel = skills.magic.level;
     const runeStacks = bankItems.filter((s) => {
       const def = content.itemsById.get(s.itemId);
       return def?.kind === "ammo" && def.ammoType === "rune";
@@ -279,7 +287,7 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
       const gated = spell !== undefined && magicLevel < spell.levelReq;
       return {
         itemId: s.itemId,
-        label: `${items.name(s.itemId)} ×${s.qty}${gated ? ` <span class="rune-req">Lv ${spell.levelReq}</span>` : ""}`,
+        label: `${items.name(s.itemId)} ×${s.qty}${gated ? ` <span class="slot-req">Lv ${spell.levelReq}</span>` : ""}`,
         disabled: gated,
       };
     });
@@ -311,8 +319,8 @@ export function createLoadoutSlotUi(options: LoadoutSlotUiOptions): LoadoutSlotU
   function render(player: LoadoutSlotPlayer, bankItems: Snapshot["bank"]["items"]): void {
     renderFoodSlots(player.foodSlots, bankItems);
     renderPotionSlot(player.potionSlot, bankItems);
-    renderQuiver(player.quiver, bankItems);
-    renderRuneSlot(player.runeSlot, bankItems, player.skills.magic.level);
+    renderQuiver(player.quiver, bankItems, player.skills);
+    renderRuneSlot(player.runeSlot, bankItems, player.skills);
   }
 
   // Food Slot bar: dispatch order is load-bearing — unassign (✕) is checked before the slot-level

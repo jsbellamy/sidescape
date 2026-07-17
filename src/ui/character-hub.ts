@@ -16,6 +16,7 @@ import type {
 import type { ResolvedContent } from "../core/validate-content";
 import { slotSilhouette, tabIcon } from "./icons";
 import { createItemPresentation } from "./item-presentation";
+import { unmetRequirement } from "./level-req";
 import type { ManagementDestination } from "./app";
 import type { UiScale } from "./window-geometry";
 
@@ -255,10 +256,14 @@ export function createCharacterHubUi(options: CharacterHubUiOptions): CharacterH
               ${
                 stacks.length > 0
                   ? stacks
-                      .map(
-                        (s) =>
-                          `<button data-gear-assign="${s.itemId}">${items.name(s.itemId)} ×${s.qty}</button>`,
-                      )
+                      .map((s) => {
+                        const def = content.itemsById.get(s.itemId);
+                        const unmet =
+                          def?.kind === "equipment"
+                            ? unmetRequirement(def, player.skills)
+                            : undefined;
+                        return `<button data-gear-assign="${s.itemId}" ${unmet ? "disabled" : ""}>${items.name(s.itemId)} ×${s.qty}${unmet ? ` <span class="slot-req">Lv ${unmet.need}</span>` : ""}</button>`;
+                      })
                       .join("")
                   : `<p class="hint">No ${slot} Equipment in Bank</p>`
               }
