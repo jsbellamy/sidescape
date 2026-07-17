@@ -6,6 +6,13 @@ import { resolveContent } from "../core/validate-content";
 import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 
+const FROSTSPIRE_OPEN_WORLD_MONSTER_IDS = [
+  "frost-wolf",
+  "ice-wraith",
+  "frost-giant",
+  "ice-troll",
+  "rime-sorcerer",
+] as const;
 const FROST_WARDEN_WAVES = ["frost-wolf", "ice-wraith", "frost-giant", "frost-warden"];
 
 // #254: Frostspire, the 5th Area, plus its terminal Frost Warden Dungeon — the slice that retires
@@ -25,20 +32,20 @@ describe("Frostspire content", () => {
     const frostspire = areas.find((a) => a.id === "frostspire");
     expect(frostspire).toBeDefined();
     expect(frostspire?.name).toBe("Frostspire");
-    expect(frostspire?.monsterIds).toEqual(["frost-wolf", "ice-wraith", "frost-giant"]);
+    expect(frostspire?.monsterIds).toEqual([...FROSTSPIRE_OPEN_WORLD_MONSTER_IDS]);
     expect(frostspire?.unlocked).toBe(false);
   });
 
   it("gates a fresh player out of Frostspire's open-world Monsters", () => {
-    for (const monsterId of ["frost-wolf", "ice-wraith", "frost-giant"]) {
+    for (const monsterId of FROSTSPIRE_OPEN_WORLD_MONSTER_IDS) {
       expect(() => createEngine(content, seededRng(1)).selectMonster(monsterId)).toThrow(
         /Frostspire is locked — defeat Shade Crypt/,
       );
     }
   });
 
-  it("frost-wolf, ice-wraith, and frost-giant are statted above Crypt Shade (hp 110/atk 60/def 44/maxHit 22)", () => {
-    for (const id of ["frost-wolf", "ice-wraith", "frost-giant"]) {
+  it("frost-wolf through rime-sorcerer are statted above Crypt Shade (hp 110/atk 60/def 44/maxHit 22)", () => {
+    for (const id of FROSTSPIRE_OPEN_WORLD_MONSTER_IDS) {
       const monster = content.monsters.find((m) => m.id === id)!;
       expect(monster, id).toBeDefined();
       expect(monster.hp, `${id} hp`).toBeGreaterThan(110);
@@ -48,11 +55,11 @@ describe("Frostspire content", () => {
     }
   });
 
-  it("Frost Warden is dungeon-only: absent from every Area's monsterIds, and stronger than the open-world three", () => {
+  it("Frost Warden is dungeon-only: absent from every Area's monsterIds, and stronger than the open-world five", () => {
     expect(content.areas.some((a) => a.monsterIds.includes("frost-warden"))).toBe(false);
     const warden = content.monsters.find((m) => m.id === "frost-warden")!;
     expect(warden).toBeDefined();
-    for (const id of ["frost-wolf", "ice-wraith", "frost-giant"]) {
+    for (const id of FROSTSPIRE_OPEN_WORLD_MONSTER_IDS) {
       const monster = content.monsters.find((m) => m.id === id)!;
       expect(warden.hp).toBeGreaterThan(monster.hp);
       expect(warden.attackLevel).toBeGreaterThan(monster.attackLevel);
@@ -61,15 +68,34 @@ describe("Frostspire content", () => {
     }
   });
 
-  it("only Frost Warden carries a weakElement among the four new Monsters", () => {
-    for (const id of ["frost-wolf", "ice-wraith", "frost-giant"]) {
-      expect(content.monsters.find((m) => m.id === id)?.weakElement, id).toBeUndefined();
+  it("rime-sorcerer carries weakElement fire as an open-world caster, distinct from the Frost Warden boss", () => {
+    const sorcerer = content.monsters.find((m) => m.id === "rime-sorcerer")!;
+    const warden = content.monsters.find((m) => m.id === "frost-warden")!;
+    expect(sorcerer.weakElement).toBe("fire");
+    expect(warden.weakElement).toBe("fire");
+    expect(content.areas.some((a) => a.monsterIds.includes("rime-sorcerer"))).toBe(true);
+    expect(content.areas.some((a) => a.monsterIds.includes("frost-warden"))).toBe(false);
+    for (const dungeon of content.dungeons) {
+      expect(dungeon.waves, dungeon.id).not.toContain("rime-sorcerer");
     }
-    expect(content.monsters.find((m) => m.id === "frost-warden")?.weakElement).toBeDefined();
   });
 
-  it("frost-wolf, ice-wraith, and frost-giant each drop adamant Equipment and adamant-bar", () => {
-    for (const monsterId of ["frost-wolf", "ice-wraith", "frost-giant"]) {
+  it("only frost-wolf, ice-wraith, frost-giant, and ice-troll lack a weakElement among Frostspire's open-world five", () => {
+    for (const id of ["frost-wolf", "ice-wraith", "frost-giant", "ice-troll"] as const) {
+      expect(content.monsters.find((m) => m.id === id)?.weakElement, id).toBeUndefined();
+    }
+    expect(content.monsters.find((m) => m.id === "rime-sorcerer")?.weakElement).toBe("fire");
+  });
+
+  it("ice-troll and rime-sorcerer are absent from the Frost Warden Dungeon's waves", () => {
+    const dungeon = content.dungeons.find((d) => d.id === "frost-warden")!;
+    expect(dungeon.waves).toEqual(FROST_WARDEN_WAVES);
+    expect(dungeon.waves).not.toContain("ice-troll");
+    expect(dungeon.waves).not.toContain("rime-sorcerer");
+  });
+
+  it("frost-wolf through rime-sorcerer each drop adamant Equipment and adamant-bar", () => {
+    for (const monsterId of FROSTSPIRE_OPEN_WORLD_MONSTER_IDS) {
       const monster = content.monsters.find((m) => m.id === monsterId)!;
       let adamantEquipmentSeen = false;
       let adamantBarSeen = false;
@@ -85,16 +111,59 @@ describe("Frostspire content", () => {
     }
   });
 
-  it("appends Frostspire after Bone Crypt, its four Monsters after Crypt Shade, and Frost Warden after Shade Crypt (append-only ordering)", () => {
+  it("ice-troll and rime-sorcerer Drop Tables carry guaranteed, common, uncommon, and rare bands", () => {
+    for (const monsterId of ["ice-troll", "rime-sorcerer"] as const) {
+      const monster = content.monsters.find((m) => m.id === monsterId)!;
+      const bands = new Set(monster.dropTable.map((e) => e.band));
+      expect(bands.has("guaranteed"), `${monsterId} missing guaranteed`).toBe(true);
+      expect(bands.has("common"), `${monsterId} missing common`).toBe(true);
+      expect(bands.has("uncommon"), `${monsterId} missing uncommon`).toBe(true);
+      expect(bands.has("rare"), `${monsterId} missing rare`).toBe(true);
+      for (const entry of monster.dropTable) {
+        const item = content.items.find((i) => i.id === entry.itemId);
+        expect(item, `${monsterId} drops unknown item ${entry.itemId}`).toBeDefined();
+      }
+    }
+  });
+
+  it.each([
+    { monsterId: "ice-troll", goldQty: 210 },
+    { monsterId: "rime-sorcerer", goldQty: 220 },
+  ] as const)(
+    "a seeded kill of $monsterId grants its guaranteed gold Drop",
+    ({ monsterId, goldQty }) => {
+      const engine = createEngine(content, seededRng(398), adamantGraduateSave());
+      expect(() => engine.selectMonster(monsterId)).not.toThrow();
+
+      let kills = 0;
+      let guaranteedGold = 0;
+      engine.on("kill", (e) => {
+        if (e.monsterId === monsterId) kills++;
+      });
+      engine.on("drop", (e) => {
+        if (e.itemId === "gold" && e.qty === goldQty && e.band === "guaranteed") {
+          guaranteedGold++;
+        }
+      });
+      for (let i = 0; i < 40_000 && kills === 0; i++) engine.tick();
+
+      expect(kills).toBeGreaterThan(0);
+      expect(guaranteedGold).toBeGreaterThan(0);
+    },
+  );
+
+  it("appends Frostspire after Bone Crypt, its Monsters after Crypt Shade, and Frost Warden after Shade Crypt (append-only ordering)", () => {
     const areaIds = content.areas.map((a) => a.id);
     expect(areaIds.indexOf("bone-crypt")).toBeLessThan(areaIds.indexOf("frostspire"));
     expect(areaIds[areaIds.length - 1]).toBe("frostspire");
 
     const monsterIds = content.monsters.map((m) => m.id);
     const cryptShadeIdx = monsterIds.indexOf("crypt-shade");
-    for (const id of ["frost-wolf", "ice-wraith", "frost-giant", "frost-warden"]) {
+    for (const id of [...FROSTSPIRE_OPEN_WORLD_MONSTER_IDS, "frost-warden"]) {
       expect(monsterIds.indexOf(id)).toBeGreaterThan(cryptShadeIdx);
     }
+    expect(monsterIds.indexOf("ice-troll")).toBeLessThan(monsterIds.indexOf("rime-sorcerer"));
+    expect(monsterIds.indexOf("rime-sorcerer")).toBeLessThan(monsterIds.indexOf("frost-warden"));
 
     const dungeonIds = content.dungeons.map((d) => d.id);
     expect(dungeonIds.indexOf("shade-crypt")).toBeLessThan(dungeonIds.indexOf("frost-warden"));
