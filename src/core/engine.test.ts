@@ -1728,6 +1728,143 @@ describe("Equipment and gates", () => {
       );
     });
   });
+
+  describe("unequip (#375)", () => {
+    it("returns the worn item to the Bank and empties the slot", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword" } },
+        }),
+      );
+      engine.unequip("weapon");
+      const snap = engine.snapshot();
+      expect(snap.player.equipment.weapon).toBeNull();
+      expect(snap.bank.items).toEqual([{ itemId: "bronze-sword", qty: 1 }]);
+    });
+
+    it("preflight: full Bank with no existing stack throws 'bank is full' and mutates nothing", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { combatStyle: "aggressive", equipment: { weapon: "bronze-sword" } },
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+        }),
+      );
+      const before = engine.snapshot();
+      const unequipped: string[] = [];
+      engine.on("unequipped", (e) => unequipped.push(e.itemId));
+      expect(() => engine.unequip("weapon")).toThrow(/bank is full/i);
+      const after = engine.snapshot();
+      expect(after.player.equipment).toEqual(before.player.equipment);
+      expect(after.bank.items).toEqual(before.bank.items);
+      expect(after.player.combatStyle).toBe(before.player.combatStyle);
+      expect(unequipped).toEqual([]);
+    });
+
+    it("tops up an existing Bank stack even when the Bank is at capacity", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { weapon: "bronze-sword" } },
+          bank: {
+            items: [
+              { itemId: "bronze-sword", qty: 1 },
+              { itemId: "bar", qty: 1 },
+            ],
+            capacity: 2,
+          },
+        }),
+      );
+      engine.unequip("weapon");
+      expect(engine.snapshot().player.equipment.weapon).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual(
+        expect.arrayContaining([{ itemId: "bronze-sword", qty: 2 }]),
+      );
+    });
+
+    it("on an already-empty slot is a no-op: no throw, no event, no state change", () => {
+      const engine = freshEngine();
+      const before = engine.snapshot();
+      const unequipped: string[] = [];
+      engine.on("unequipped", (e) => unequipped.push(e.itemId));
+      engine.unequip("weapon");
+      expect(engine.snapshot()).toEqual(before);
+      expect(unequipped).toEqual([]);
+    });
+
+    it('unequip("weapon") on a bow remaps combat style rapid → aggressive', () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { combatStyle: "rapid", equipment: { weapon: "bow" } },
+        }),
+      );
+      engine.unequip("weapon");
+      expect(engine.snapshot().player.combatStyle).toBe("aggressive");
+      expect(engine.snapshot().player.equipment.weapon).toBeNull();
+    });
+
+    it("emits { type: 'unequipped', itemId } exactly once", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: { equipment: { head: "lucky-charm" } },
+        }),
+      );
+      const unequipped: string[] = [];
+      engine.on("unequipped", (e) => unequipped.push(e.itemId));
+      engine.unequip("head");
+      expect(unequipped).toEqual(["lucky-charm"]);
+    });
+
+    it("ignores levelReq: grandfathered gear can be unequipped; re-equipping then throws", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          player: {
+            skills: {
+              attack: { level: 3, xp: xpForLevel(3) },
+              strength: { level: 1, xp: xpForLevel(1) },
+              defence: { level: 1, xp: xpForLevel(1) },
+              hitpoints: { level: 1, xp: xpForLevel(1) },
+              fishing: { level: 1, xp: xpForLevel(1) },
+              smithing: { level: 1, xp: xpForLevel(1) },
+              ranged: { level: 1, xp: xpForLevel(1) },
+              magic: { level: 1, xp: xpForLevel(1) },
+              cooking: { level: 1, xp: xpForLevel(1) },
+              crafting: { level: 1, xp: xpForLevel(1) },
+              herblore: { level: 1, xp: xpForLevel(1) },
+            },
+            equipment: {
+              weapon: "high-sword",
+              shield: null,
+              head: null,
+              body: null,
+              legs: null,
+              amulet: null,
+              ring: null,
+            },
+          },
+        }),
+      );
+      engine.unequip("weapon");
+      expect(engine.snapshot().player.equipment.weapon).toBeNull();
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "high-sword", qty: 1 }]);
+      expect(() => engine.equip("high-sword")).toThrow(/attack level too low: need 40/);
+    });
+
+    it("throws on an unknown slot string", () => {
+      const engine = freshEngine();
+      expect(() => engine.unequip("boots" as "weapon")).toThrow(/unknown gear slot: boots/);
+    });
+  });
 });
 
 describe("Snapshot player.bonuses (#26)", () => {

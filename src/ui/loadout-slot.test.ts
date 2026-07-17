@@ -427,3 +427,70 @@ describe("createLoadoutSlotUi — per-instance locality", () => {
     expect(b.root.querySelector(".food-slot-chooser")).toBeNull();
   });
 });
+
+describe("createLoadoutSlotUi — right-click clear (#375)", () => {
+  it("right-click on filled Food, Potion, Quiver, and Rune slots clears them", () => {
+    const { engine, root } = mountLoadoutUi({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, { itemId: "meat", qty: 1 }, null],
+        potionSlot: { itemId: "strength-potion", qty: 2, charges: 2 },
+        quiver: { itemId: "arrow", qty: 5 },
+        runeSlot: { itemId: "air-rune", qty: 4 },
+      },
+    });
+
+    const foodTile = root.querySelector<HTMLElement>(".food-slot.filled[data-slot='1']")!;
+    const foodEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    expect(foodTile.dispatchEvent(foodEvent)).toBe(false);
+    expect(engine.snapshot().player.foodSlots[1]).toBeNull();
+
+    const potionTile = root.querySelector<HTMLElement>("#potion-slot .potion-slot-tile.filled")!;
+    const potionEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    expect(potionTile.dispatchEvent(potionEvent)).toBe(false);
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+
+    const quiverTile = root.querySelector<HTMLElement>("#quiver-slot .potion-slot-tile.filled")!;
+    const quiverEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    expect(quiverTile.dispatchEvent(quiverEvent)).toBe(false);
+    expect(engine.snapshot().player.quiver).toBeNull();
+
+    const runeTile = root.querySelector<HTMLElement>("#rune-slot .potion-slot-tile.filled")!;
+    const runeEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    expect(runeTile.dispatchEvent(runeEvent)).toBe(false);
+    expect(engine.snapshot().player.runeSlot).toBeNull();
+  });
+
+  it("right-click on empty Loadout slots does not call preventDefault", () => {
+    const { root } = mountLoadoutUi({
+      player: { foodSlots: [null, null, null] },
+    });
+    const emptyFood = root.querySelector<HTMLElement>(".food-slot.empty")!;
+    const foodEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    expect(emptyFood.dispatchEvent(foodEvent)).toBe(true);
+
+    for (const selector of ["#potion-slot", "#quiver-slot", "#rune-slot"]) {
+      const emptyTile = root.querySelector<HTMLElement>(`${selector} .potion-slot-tile.empty`)!;
+      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      expect(emptyTile.dispatchEvent(event)).toBe(true);
+    }
+  });
+
+  it("left-click ✕ still clears filled Loadout slots after right-click is added", () => {
+    const { engine, root } = mountLoadoutUi({
+      player: {
+        foodSlots: [{ itemId: "meat", qty: 3 }, null, null],
+        potionSlot: { itemId: "strength-potion", qty: 2, charges: 2 },
+        quiver: { itemId: "arrow", qty: 5 },
+        runeSlot: { itemId: "air-rune", qty: 4 },
+      },
+    });
+    root.querySelector<HTMLButtonElement>('[data-unassign="0"]')?.click();
+    expect(engine.snapshot().player.foodSlots[0]).toBeNull();
+    root.querySelector<HTMLButtonElement>("[data-potion-unassign]")?.click();
+    expect(engine.snapshot().player.potionSlot).toBeNull();
+    root.querySelector<HTMLButtonElement>("[data-quiver-unassign]")?.click();
+    expect(engine.snapshot().player.quiver).toBeNull();
+    root.querySelector<HTMLButtonElement>("[data-rune-unassign]")?.click();
+    expect(engine.snapshot().player.runeSlot).toBeNull();
+  });
+});

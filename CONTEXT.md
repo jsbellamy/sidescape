@@ -76,7 +76,7 @@ _Avoid_: loot (as a noun for a single item)
 Anything obtainable and storable in the **Bank**: **Equipment**, **Food**, or **Material**. Gold is tracked separately as a currency balance, not an Item stack — see **Gold**.
 
 **Equipment**:
-An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus combat-mode offence bonuses — melee Strength (`strBonus`), Ranged Strength (`rangedStr`), and (on weapons) an **Attack Type** and attack bonus. Jewelry (amulet/ring) may carry melee and Ranged Strength bonuses; weapons carry the stat matching their combat mode. Equipment may declare `levelReq` — Skill levels that must be met to `equip()` the item; absent means no requirement. The gate binds on the action only: gear already worn when a save loads is never stripped for being under-levelled (grandfathering).
+An **Item** worn in one of seven **Gear Slots**, granting a per-**Attack Type** **Defence Vector** plus combat-mode offence bonuses — melee Strength (`strBonus`), Ranged Strength (`rangedStr`), and (on weapons) an **Attack Type** and attack bonus. Jewelry (amulet/ring) may carry melee and Ranged Strength bonuses; weapons carry the stat matching their combat mode. Equipment may declare `levelReq` — Skill levels that must be met to `equip()` the item; absent means no requirement. The gate binds on the action only: gear already worn when a save loads is never stripped for being under-levelled (grandfathering). Worn gear can be removed to empty via `unequip()`, returning it to the Bank — including grandfathered under-levelled gear (the one-way door from #363: unequip always succeeds; re-equipping then throws).
 _Avoid_: gear (alone), armor (as the general term)
 
 **Gear Slot**:
@@ -255,7 +255,7 @@ restores the scaled closed Compact Widget.
 - A piece of **Equipment** occupies one **Gear Slot** and has one **Gear Tier**
 - A weapon's **Combat Mode** and active **Combat Style** together decide which **Skills** an attack's XP trains; Hitpoints always trickles
 - Combat advances one **Tick** at a time; each damaging hit grants XP to **Skills** according to the equipped weapon's **Combat Mode** and active **Combat Style**
-- The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch) and produces **Snapshots** for continuous state
+- The **Engine** emits events for happenings (kill, **Drop**, level-up, death, food eaten, Catch, equipped, unequipped) and produces **Snapshots** for continuous state
 - Death leads to **Respawn**, which leads back to fighting the same **Monster**
 - The **Bank** holds one Item stack per **Bank Slot** and is the player's sole Item store; **Gold** is tracked separately as a player-level balance, never a Bank stack
 - **Gold** sinks: **Bank Slot** expansion and **Vendor** purchases
