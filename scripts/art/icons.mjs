@@ -133,6 +133,10 @@ const SOURCE_PALETTES = {
     materialRampNames: ["blood", "ember", "gold"],
     zoneNames: ["town"],
   },
+  "golden-status-no-food.png": {
+    materialRampNames: ["blood", "ember", "gold"],
+    zoneNames: ["town"],
+  },
   "golden-skill-crafting-v2.png": {
     materialRampNames: ["ember", "gold", "steel", "water"],
     zoneNames: ["town", "sewer", "forest"],
@@ -286,6 +290,10 @@ export const icons = [
   {
     name: "skill-cooking",
     source: "golden-skill-cooking.png",
+  },
+  {
+    name: "status-no-food",
+    source: "golden-status-no-food.png",
   },
   {
     name: "skill-crafting",

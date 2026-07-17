@@ -130,6 +130,7 @@ import skillMagicUrl from "../assets/icons/skill-magic.png";
 import skillCookingUrl from "../assets/icons/skill-cooking.png";
 import skillCraftingUrl from "../assets/icons/skill-crafting.png";
 import skillHerbloreUrl from "../assets/icons/skill-herblore.png";
+import statusNoFoodUrl from "../assets/icons/status-no-food.png";
 import tabWorldUrl from "../assets/icons/tab-world.png";
 import tabSkillsUrl from "../assets/icons/tab-skills.png";
 import tabCharacterUrl from "../assets/icons/tab-character.png";
@@ -414,5 +415,23 @@ const slotSilhouettes: Record<GearSlot | LoadoutSlotKind, string> = {
 export function slotSilhouette(slot: GearSlot | LoadoutSlotKind): string {
   const url = slotSilhouettes[slot];
   if (!url) throw new Error(`icons.ts registry has no entry for slot silhouette "${slot}"`);
+  return url;
+}
+
+/** HUD status-indicator icons (#376) — keyed by an indicator id, deliberately separate from
+ * `icons`/`itemIcon` for the same reason `slotSilhouettes` is: a status indicator is not an
+ * `ItemDef.icon` key and inventing a fake item key for it would weaken `itemIcon`'s
+ * throw-on-unknown into an implicit fallback. Same "throw on unknown key, no placeholder"
+ * discipline as `itemIcon`/`skillIcon`/`tabIcon`/`slotSilhouette`. */
+export type StatusIconKey = "no-food";
+
+const statusIcons: Record<StatusIconKey, string> = {
+  "no-food": statusNoFoodUrl,
+};
+
+/** Resolves a HUD status-indicator id to its pixel-icon URL. Throws for an unknown key. */
+export function statusIcon(key: StatusIconKey): string {
+  const url = statusIcons[key];
+  if (!url) throw new Error(`icons.ts registry has no entry for status icon "${key}"`);
   return url;
 }

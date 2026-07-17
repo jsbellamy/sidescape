@@ -369,6 +369,13 @@ reusing `skillIcon`'s own URL for those four keys — see that file's `tabIcons`
 is assets + registries only; rendering the Skills panel and three-card workspace navigation with
 these icons is `#135`/`#136`.
 
+`status-no-food` (#374) is a source-driven HUD status-indicator icon — the cooking drumstick crossed
+out by a blood-red prohibition ring and slash — not an item icon. It is resolved through
+`statusIcon("no-food")` in `src/ui/icons.ts`, deliberately separate from `itemIcon`/`icons` for the
+same reason `slotSilhouette` is: a status indicator is not an `ItemDef.icon` key. Compact source
+`scripts/art/icon-sources/golden-status-no-food.png`; shipped as `src/assets/icons/status-no-food.png`.
+**#376** consumes it for the no-Food HUD badge.
+
 ### Bone Crypt's own cast: Crypt Ghoul and Bone Knight (#253)
 
 Shade Crypt (the Bone Crypt Dungeon) needed two new open-world Monsters to replace Crypt Shade,
