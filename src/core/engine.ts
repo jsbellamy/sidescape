@@ -1123,12 +1123,15 @@ export function createEngine(
     state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
   }
 
-  /** Adds `qty` of `itemId` to the Bank (#59): a top-up of an existing stack always fits (the
-   * #25 rule). A brand-new stack needed while the Bank is already at capacity is instead
-   * auto-sold (sellable) or discarded (unsellable) — the universal "passive flows auto-sell on
-   * overflow; player commands throw" rule. Never throws — this is only ever reached from a
-   * passive arrival (drop, Catch, craft output), never a player command. */
+  /** Adds `qty` of `itemId` to the Bank (#59), or to its assigned Food Slot when slot-homed
+   * (#61): a top-up of an existing stack always fits (the #25 rule). A brand-new stack needed
+   * while the Bank is already at capacity is instead auto-sold (sellable) or discarded
+   * (unsellable) — the universal "passive flows auto-sell on overflow; player commands throw"
+   * rule. Slot-first routing costs Bank capacity nothing — the Slot IS that Food's home. Never
+   * throws — this is only ever reached from a passive arrival (drop, Catch, craft output), never
+   * a player command. */
   function addToBank(itemId: string, qty: number): void {
+    if (creditToFoodSlotIfHome(itemId, qty)) return;
     if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
       const def = resolved.itemsById.get(itemId);
       const value = def ? sellValue(def) : undefined;
@@ -1219,16 +1222,6 @@ export function createEngine(
     if (slotIndex === -1) return false;
     (state.foodSlots[slotIndex] as { itemId: string; qty: number }).qty += qty;
     return true;
-  }
-
-  /** Routes one passive arrival to its home (#61, extends addToBank): a Food assigned to a Slot
-   * lands there instead of the Bank; anything else falls through to addToBank's normal top-up/
-   * overflow rules. Used by arrival paths outside the Loot Zone (fishing Catches) — combat Drops
-   * still buffer in the Loot Zone first and only route to a Slot at sweep time, see
-   * sweepLootZone below. */
-  function arriveAtHome(itemId: string, qty: number): void {
-    if (creditToFoodSlotIfHome(itemId, qty)) return;
-    addToBank(itemId, qty);
   }
 
   /** Moves every Loot Zone stack to its home (#60, extended by #61's Slot-as-home routing): a
@@ -1769,9 +1762,9 @@ export function createEngine(
       grantXp("fishing", spot.xp);
       emit({ type: "fish-caught", spotId: spot.id, itemId: spot.itemId, qty: 1 });
       // a Catch is always a raw Material (validateContent, #115), never Food or currency — no
-      // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so
-      // arriveAtHome always falls through to the ordinary Bank top-up/overflow rules.
-      arriveAtHome(spot.itemId, 1);
+      // Food Slot can ever match its itemId (only Food is ever assigned to a slot), so addToBank
+      // always falls through to the ordinary Bank top-up/overflow rules.
+      addToBank(spot.itemId, 1);
       // Pet roll (#120): a successful Catch (not merely an attempt — mirrors the "qualifying
       // action" language in the issue, distinct from the charge-decrement rule just above, which
       // fires on every attempt) is the "fishing" pet's qualifying action.
@@ -2257,12 +2250,15 @@ export function createEngine(
       if (!entry) throw new Error(`${itemId} is not sold by the vendor`);
       const cost = entry.price * qty;
       if (state.gold < cost) throw new Error(`not enough gold: need ${cost}`);
-      if (!hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
+      const slotHomed = creditToFoodSlotIfHome(itemId, qty);
+      if (!slotHomed && !hasRoomForNewStack(state.bank, state.bankCapacity, itemId)) {
         throw new Error("bank is full");
       }
 
       state.gold -= cost;
-      state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+      if (!slotHomed) {
+        state.bank.set(itemId, (state.bank.get(itemId) ?? 0) + qty);
+      }
       emit({ type: "item-bought", itemId, qty, gold: cost });
     },
     sell(itemId, qty = 1) {

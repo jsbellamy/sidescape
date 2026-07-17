@@ -69,10 +69,10 @@ export type AutoEatThreshold = (typeof AUTO_EAT_THRESHOLDS)[number];
 
 /** One of the FOOD_SLOT_COUNT (engine.ts) Active Food Slots (#61): a slot IS the assigned Food's
  * home — while assigned, its entire Bank stock lives here and every new arrival of that Food
- * (fishing Catches, Loot Zone sweeps) routes here instead of the Bank. `null` = unassigned. A
- * slot may sit at `qty: 0` while still assigned — the itemId persists (empty != unassigned), so
- * the next arrival refills it automatically. Slot order (array index) is auto-eat's draining
- * priority, 1→2→3. */
+ * (Cooking outputs, vendor buys, Loot Zone sweeps) routes here instead of the Bank. `null` =
+ * unassigned. A slot may sit at `qty: 0` while still assigned — the itemId persists (empty !=
+ * unassigned), so the next arrival refills it automatically. Slot order (array index) is
+ * auto-eat's draining priority, 1→2→3. */
 export type FoodSlot = { itemId: string; qty: number } | null;
 
 /** The single active-potion loadout slot (#118), sibling to FoodSlot above but singular (an
@@ -569,8 +569,9 @@ export interface Snapshot {
   /** The Loot Zone (#60): a small buffer, capped at LOOT_ZONE_CAPACITY stacks, that combat Drops
    * (kill Drops and Dungeon Chest items) land in on their way to the Bank, instead of going there
    * directly — a sibling store to `bank`, not a subset of it. Currency Drops still bypass it
-   * straight to `player.gold`; non-combat outputs (Catches, Smithing outputs) still go straight to
-   * the Bank, unchanged. Swept into the Bank on leaving combat, or on demand via `lootAll()`. */
+   * straight to `player.gold`; non-combat outputs (Catches, production outputs) go to the Bank
+   * via `addToBank`, which routes slot-assigned Food to its Slot first. Swept into the Bank (or
+   * a Food Slot, when assigned) on leaving combat, or on demand via `lootAll()`. */
   lootZone: { itemId: string; qty: number }[];
   areas: {
     id: string;

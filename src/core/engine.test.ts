@@ -1027,6 +1027,185 @@ describe("Active Food Slots (#61)", () => {
       expect(overflowEvents).toEqual([]);
       expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 4 });
     });
+
+    /** Fixture vendor does not sell Food by default; extend only for buy-routing tests. */
+    function contentWithMeatVendor() {
+      return {
+        ...fixtureContent,
+        vendor: [...fixtureContent.vendor, { itemId: "meat", price: 3 }],
+      };
+    }
+
+    /** Cooking recipe that spends "bar" and outputs "meat" — pairs with a single-stack full Bank. */
+    function contentWithStewRecipe() {
+      return {
+        ...fixtureContent,
+        recipes: [
+          ...fixtureContent.recipes,
+          {
+            id: "test-stew",
+            name: "Test Stew",
+            skill: "cooking" as const,
+            levelReq: 1,
+            inputs: [{ itemId: "bar", qty: 1 }],
+            outputItemId: "meat",
+            xp: 15,
+            craftTicks: 2,
+          },
+        ],
+      };
+    }
+
+    it("a Cooking completion routes to the assigned Slot, not the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "raw-fish", qty: 1 }] },
+          player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      engine.selectRecipe("test-cook");
+      for (let i = 0; i < 3; i++) engine.tick(); // test-cook.craftTicks === 3
+
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+      expect(engine.snapshot().bank.items).toEqual([]);
+    });
+
+    it("buy() routes to the assigned Slot, deducts gold, and emits item-bought", () => {
+      const engine = createEngine(
+        contentWithMeatVendor(),
+        seededRng(1),
+        makeSnapshot({
+          player: { gold: 100, foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      let event: { type: string; itemId: string; qty: number; gold: number } | undefined;
+      engine.on("item-bought", (e) => {
+        event = e;
+      });
+
+      engine.buy("meat", 10);
+
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 10 });
+      expect(engine.snapshot().bank.items).toEqual([]);
+      expect(engine.snapshot().player.gold).toBe(70);
+      expect(event).toEqual({ type: "item-bought", itemId: "meat", qty: 10, gold: 30 });
+    });
+
+    it("with a full Bank, Cooking an assigned Food credits the Slot before capacity is checked — no overflow-sold, gold unchanged", () => {
+      const engine = createEngine(
+        contentWithStewRecipe(),
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 2 }], capacity: 1 },
+          player: { gold: 50, foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      const overflowEvents: unknown[] = [];
+      engine.on("overflow-sold", (e) => overflowEvents.push(e));
+      engine.on("overflow-lost", (e) => overflowEvents.push(e));
+
+      engine.selectRecipe("test-stew");
+      for (let i = 0; i < 2; i++) engine.tick();
+
+      expect(overflowEvents).toEqual([]);
+      expect(engine.snapshot().player.gold).toBe(50);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
+    });
+
+    it("buy() into a full Bank succeeds for slot-homed Food and credits the Slot", () => {
+      const engine = createEngine(
+        contentWithMeatVendor(),
+        seededRng(1),
+        makeSnapshot({
+          player: { gold: 100, foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+          bank: { items: [{ itemId: "bar", qty: 1 }], capacity: 1 },
+        }),
+      );
+
+      expect(() => engine.buy("meat", 5)).not.toThrow();
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 5 });
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
+    });
+
+    it("unassigned Food from Cooking still lands in the Bank", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({ bank: { items: [{ itemId: "raw-fish", qty: 1 }] } }),
+      );
+      engine.selectRecipe("test-cook");
+      for (let i = 0; i < 3; i++) engine.tick();
+
+      expect(engine.snapshot().player.foodSlots).toEqual([null, null, null]);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "meat", qty: 1 }]);
+    });
+
+    it("unassigned Food at a full Bank still auto-sells on overflow", () => {
+      const engine = createEngine(
+        contentWithStewRecipe(),
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "bar", qty: 2 }], capacity: 1 },
+          player: { gold: 0 },
+        }),
+      );
+      const sold: unknown[] = [];
+      engine.on("overflow-sold", (e) => sold.push(e));
+
+      engine.selectRecipe("test-stew");
+      for (let i = 0; i < 2; i++) engine.tick();
+
+      expect(sold).toEqual([{ type: "overflow-sold", itemId: "meat", qty: 1, gold: 3 }]);
+      expect(engine.snapshot().player.gold).toBe(3);
+      expect(engine.snapshot().bank.items).toEqual([{ itemId: "bar", qty: 1 }]);
+    });
+
+    it("after cooking into an assigned Slot, the Bank holds no stack of that Food", () => {
+      const engine = createEngine(
+        fixtureContent,
+        seededRng(1),
+        makeSnapshot({
+          bank: { items: [{ itemId: "raw-fish", qty: 3 }] },
+          player: { foodSlots: [{ itemId: "meat", qty: 0 }, null, null] },
+        }),
+      );
+      engine.selectRecipe("test-cook");
+      for (let i = 0; i < 9; i++) engine.tick(); // three crafts
+
+      expect(engine.snapshot().bank.items.some((s) => s.itemId === "meat")).toBe(false);
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 3 });
+    });
+
+    it("auto-eat sees Food refilled by Cooking after the Slot was drained to 0", () => {
+      const engine = createEngine(
+        fiercerDummyContent(),
+        seededRng(42),
+        makeSnapshot({
+          bank: { items: [{ itemId: "raw-fish", qty: 1 }] },
+          player: {
+            hp: 10,
+            maxHp: 10,
+            autoEatThreshold: 0.5,
+            foodSlots: [{ itemId: "meat", qty: 0 }, null, null],
+            skills: { hitpoints: { level: 10, xp: xpForLevel(10) } },
+          },
+        }),
+      );
+      engine.selectRecipe("test-cook");
+      for (let i = 0; i < 3; i++) engine.tick();
+      expect(engine.snapshot().player.foodSlots[0]).toEqual({ itemId: "meat", qty: 1 });
+
+      let ate = 0;
+      engine.on("food-eaten", () => {
+        ate++;
+      });
+      engine.selectMonster("dummy");
+      for (let i = 0; i < 5000; i++) engine.tick();
+      expect(ate).toBeGreaterThan(0);
+    });
   });
 
   describe("save/load", () => {
