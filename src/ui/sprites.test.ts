@@ -50,6 +50,8 @@ describe("sprites", () => {
       "ice-wraith",
       "frost-giant",
       "frost-warden",
+      "ice-troll",
+      "rime-sorcerer",
     ];
     const urls = ids.map(monsterSprite);
 
@@ -87,6 +89,8 @@ describe("sprites", () => {
     expect(spriteEdgePx(monsterSpriteSize("ice-wraith")!)).toBe(96);
     expect(spriteEdgePx(monsterSpriteSize("frost-giant")!)).toBe(128);
     expect(spriteEdgePx(monsterSpriteSize("frost-warden")!)).toBe(128);
+    expect(spriteEdgePx(monsterSpriteSize("ice-troll")!)).toBe(128);
+    expect(spriteEdgePx(monsterSpriteSize("rime-sorcerer")!)).toBe(96);
   });
 });
 

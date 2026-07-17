@@ -482,7 +482,7 @@ The 20 combat sprites now regenerate through `scripts/art/sprites.mjs` as part o
 completion, and #266's Darkroot redraw). Its registry keeps the runtime ids and filenames in
 `src/ui/sprites.ts` unchanged while declaring each source's canvas and alpha policy explicitly:
 six sprites use 32×32 binary-alpha canvases, eleven use 48×48, and `hollow-warden`, `crypt-shade`,
-`frost-giant`, and `frost-warden` use 64×64. Canvas
+`frost-giant`, `frost-warden`, and `ice-troll` use 64×64. Canvas
 size is explicit visual scale rather than a Monster or Boss classification; `crypt-shade` may contain
 at most one intermediate alpha value, while every other entry is binary-alpha. The writer rejects invalid sources, projects colors onto the named
 house ramps, reduces each sprite to at most `maxColors` RGB colors, and despeckles color clusters
@@ -698,6 +698,26 @@ defining silhouettes; each row's `materialRampNames` / `zoneNames` match the win
 This subsection supersedes the historical CC0 Tiny Creatures Frost Wolf, Ice Wraith, Frost Giant,
 and Frost Warden outputs recorded under #254 above. That provenance remains preserved as historical
 context.
+
+### Frostspire open-world additions (#393)
+
+Ice Troll and Rime Sorcerer extend the Frostspire combat cast with two new original-art sprites —
+no MonsterDef / Drop Table / Area wiring in this slice. Each compact source was recovered from one
+untouched built-in image-generation PNG on the ignored `sprite-gen-inbox` path after a passing
+dry-run ingest; no raw was resized, re-exported, downsampled, or hand-edited. Ice Troll uses a
+looming 64×64 binary canvas (same visual scale as Frost Giant / Frost Warden); Rime Sorcerer uses a
+player-scale 48×48 binary canvas. Sources are bottom-anchored and face right toward the left-facing
+player. Both keep the standard `maxColors: 12` and three-pass cleanup defaults. Palette scopes
+match the winning ingest dry-run audits exactly:
+
+- **ice-troll** — `materialRampNames: ["steel","water"]`,
+  `zoneNames: ["meadow","sewer","crypt","glacier"]`
+- **rime-sorcerer** — `materialRampNames: ["steel","water","rune","skin","leather"]`,
+  `zoneNames: ["forest","crypt","glacier"]`
+
+At 1× the troll reads as a hunched long-armed bruiser with tusks and frost crust (distinct from the
+upright Frost Giant), and the sorcerer as a solid opaque hooded human with a thick crystalline staff
+(distinct from the incorporeal Ice Wraith and the 64 armored Frost Warden boss).
 
 ## Empty-slot reliefs (#306)
 

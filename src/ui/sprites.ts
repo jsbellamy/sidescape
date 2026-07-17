@@ -18,8 +18,10 @@ import goblinChiefUrl from "../assets/sprites/goblin-chief.png";
 import goblinWarriorUrl from "../assets/sprites/goblin-warrior.png";
 import graveRobberUrl from "../assets/sprites/grave-robber.png";
 import hollowWardenUrl from "../assets/sprites/hollow-warden.png";
+import iceTrollUrl from "../assets/sprites/ice-troll.png";
 import iceWraithUrl from "../assets/sprites/ice-wraith.png";
 import playerUrl from "../assets/sprites/player.png";
+import rimeSorcererUrl from "../assets/sprites/rime-sorcerer.png";
 import sewerKingUrl from "../assets/sprites/sewer-king.png";
 import sewerSlimeUrl from "../assets/sprites/sewer-slime.png";
 import skeletonUrl from "../assets/sprites/skeleton.png";
@@ -92,6 +94,8 @@ const monsterSprites: Record<string, SpriteAsset> = {
   "ice-wraith": { url: iceWraithUrl, size: 48 },
   "frost-giant": { url: frostGiantUrl, size: 64 },
   "frost-warden": { url: frostWardenUrl, size: 64 },
+  "ice-troll": { url: iceTrollUrl, size: 64 },
+  "rime-sorcerer": { url: rimeSorcererUrl, size: 48 },
 };
 
 /** Looks up a Monster's combat-scene sprite by id, or undefined if it has none. */

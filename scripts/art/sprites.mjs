@@ -293,6 +293,24 @@ export const sprites = [
     materialRampNames: ["steel", "water"],
     zoneNames: ["meadow", "forest", "crypt", "glacier"],
   },
+  // Frostspire open-world additions (#393): ice-troll (64) and rime-sorcerer (48).
+  // materialRampNames/zoneNames filled from ingest dry-run audits.
+  {
+    name: "ice-troll",
+    source: "sprite-ice-troll.png",
+    size: 64,
+    alpha: "binary",
+    materialRampNames: ["steel", "water"],
+    zoneNames: ["meadow", "sewer", "crypt", "glacier"],
+  },
+  {
+    name: "rime-sorcerer",
+    source: "sprite-rime-sorcerer.png",
+    size: 48,
+    alpha: "binary",
+    materialRampNames: ["steel", "water", "rune", "skin", "leather"],
+    zoneNames: ["forest", "crypt", "glacier"],
+  },
 ];
 
 /**
