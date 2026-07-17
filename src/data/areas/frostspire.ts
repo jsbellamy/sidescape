@@ -4,7 +4,7 @@ export const frostspire: AreaContent = {
   // Frostspire (#254): the 5th and terminal Area, gated by the Shade Crypt Dungeon (#253) hosted
   // in Bone Crypt. Adamant gear finally becomes obtainable here (open-world); rune is gated
   // behind this Area's own Frost Warden Dungeon (see dungeons below) — retires #252's interim.
-  // No Fishing Spot (out of scope, per the issue).
+  // Glacial Melt (#387) is Frostspire's Fishing Spot for raw-icefin.
   area: {
     id: "frostspire",
     name: "Frostspire",
@@ -110,6 +110,17 @@ export const frostspire: AreaContent = {
           dropTable: [{ itemId: "gold", qty: 260, chance: 1, band: "guaranteed" }],
         },
       ],
+    },
+  ],
+  fishingSpots: [
+    {
+      id: "glacial-melt",
+      name: "Glacial Melt",
+      levelReq: 60,
+      itemId: "raw-icefin",
+      xp: 150,
+      catchTicks: 5,
+      catchChance: 0.35,
     },
   ],
 };

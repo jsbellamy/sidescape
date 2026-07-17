@@ -118,4 +118,15 @@ export const boneCrypt: AreaContent = {
       ],
     },
   ],
+  fishingSpots: [
+    {
+      id: "flooded-ossuary",
+      name: "Flooded Ossuary",
+      levelReq: 45,
+      itemId: "raw-cave-eel",
+      xp: 110,
+      catchTicks: 5,
+      catchChance: 0.4,
+    },
+  ],
 };

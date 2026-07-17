@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createEngine } from "../core/engine";
 import { makeSnapshot } from "../core/testing/make-snapshot";
 import { seededRng } from "../core/rng";
+import { resolveContent } from "../core/validate-content";
+import { xpForLevel } from "../core/xp";
 import { content } from "./index";
 
 describe("Fishing content", () => {
@@ -187,5 +189,216 @@ describe("Cooking content (#115)", () => {
       chance: 1,
       band: "guaranteed",
     });
+  });
+});
+
+describe("Wave content (#387): chicken, silk, cave eel, icefin, and late-game Fishing Spots", () => {
+  it("resolveContent(content) does not throw with the seven new Items and three new Recipes", () => {
+    expect(() => resolveContent(content)).not.toThrow();
+  });
+
+  it("defines the seven new Items appended at the end of content.items", () => {
+    const ids = content.items.map((i) => i.id);
+    expect(ids[ids.length - 7]).toBe("raw-chicken");
+    expect(ids[ids.length - 1]).toBe("cooked-icefin");
+
+    expect(content.items.find((i) => i.id === "raw-chicken")).toEqual({
+      kind: "material",
+      id: "raw-chicken",
+      name: "Raw Chicken",
+      icon: "raw-chicken",
+      value: 1,
+    });
+    expect(content.items.find((i) => i.id === "silk")).toEqual({
+      kind: "material",
+      id: "silk",
+      name: "Silk",
+      icon: "silk",
+      value: 4,
+    });
+    expect(content.items.find((i) => i.id === "raw-cave-eel")).toEqual({
+      kind: "material",
+      id: "raw-cave-eel",
+      name: "Raw Cave Eel",
+      icon: "raw-cave-eel",
+      value: 5,
+    });
+    expect(content.items.find((i) => i.id === "raw-icefin")).toEqual({
+      kind: "material",
+      id: "raw-icefin",
+      name: "Raw Icefin",
+      icon: "raw-icefin",
+      value: 8,
+    });
+    expect(content.items.find((i) => i.id === "cooked-chicken")).toEqual({
+      kind: "food",
+      id: "cooked-chicken",
+      name: "Cooked Chicken",
+      icon: "cooked-chicken",
+      heals: 3,
+      value: 2,
+    });
+    expect(content.items.find((i) => i.id === "cooked-cave-eel")).toEqual({
+      kind: "food",
+      id: "cooked-cave-eel",
+      name: "Cooked Cave Eel",
+      icon: "cooked-cave-eel",
+      heals: 16,
+      value: 20,
+    });
+    expect(content.items.find((i) => i.id === "cooked-icefin")).toEqual({
+      kind: "food",
+      id: "cooked-icefin",
+      name: "Cooked Icefin",
+      icon: "cooked-icefin",
+      heals: 20,
+      value: 28,
+    });
+  });
+
+  it("pins Food content order: cooked-pike precedes cooked-cave-eel precedes cooked-icefin", () => {
+    const foodIds = content.items.filter((i) => i.kind === "food").map((i) => i.id);
+    expect(foodIds.indexOf("cooked-pike")).toBeLessThan(foodIds.indexOf("cooked-cave-eel"));
+    expect(foodIds.indexOf("cooked-cave-eel")).toBeLessThan(foodIds.indexOf("cooked-icefin"));
+  });
+
+  it("defines the three new Cooking Recipes immediately after cook-pike", () => {
+    const recipeIds = content.recipes.map((r) => r.id);
+    const pikeIdx = recipeIds.indexOf("cook-pike");
+    expect(recipeIds.slice(pikeIdx + 1, pikeIdx + 4)).toEqual([
+      "cook-chicken",
+      "cook-cave-eel",
+      "cook-icefin",
+    ]);
+
+    expect(content.recipes.find((r) => r.id === "cook-chicken")).toEqual({
+      id: "cook-chicken",
+      name: "Cook Chicken",
+      skill: "cooking",
+      levelReq: 1,
+      inputs: [{ itemId: "raw-chicken", qty: 1 }],
+      outputItemId: "cooked-chicken",
+      xp: 25,
+      craftTicks: 3,
+    });
+    expect(content.recipes.find((r) => r.id === "cook-cave-eel")).toEqual({
+      id: "cook-cave-eel",
+      name: "Cook Cave Eel",
+      skill: "cooking",
+      levelReq: 40,
+      inputs: [{ itemId: "raw-cave-eel", qty: 1 }],
+      outputItemId: "cooked-cave-eel",
+      xp: 120,
+      craftTicks: 4,
+    });
+    expect(content.recipes.find((r) => r.id === "cook-icefin")).toEqual({
+      id: "cook-icefin",
+      name: "Cook Icefin",
+      skill: "cooking",
+      levelReq: 55,
+      inputs: [{ itemId: "raw-icefin", qty: 1 }],
+      outputItemId: "cooked-icefin",
+      xp: 160,
+      craftTicks: 4,
+    });
+  });
+
+  it("every Area now has at least one Fishing Spot (composeContent-derived fishingSpotIds)", () => {
+    for (const area of content.areas) {
+      expect(area.fishingSpotIds?.length, `${area.id} has no Fishing Spot`).toBeGreaterThan(0);
+    }
+    expect(content.areas.find((a) => a.id === "old-sewers")?.fishingSpotIds).toEqual([
+      "sewer-outflow",
+    ]);
+    expect(content.areas.find((a) => a.id === "bone-crypt")?.fishingSpotIds).toEqual([
+      "flooded-ossuary",
+    ]);
+    expect(content.areas.find((a) => a.id === "frostspire")?.fishingSpotIds).toEqual([
+      "glacial-melt",
+    ]);
+  });
+
+  it("silk has no Crafting (or any) recipe consuming it — interim sell-only sink until magic robes", () => {
+    for (const recipe of content.recipes) {
+      for (const input of recipe.inputs) {
+        expect(input.itemId, `${recipe.id} consumes silk`).not.toBe("silk");
+      }
+    }
+  });
+
+  it("a fresh level-1 player with raw-chicken can select cook-chicken", () => {
+    const engine = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-chicken", qty: 1 }] } }),
+    );
+    expect(() => engine.selectRecipe("cook-chicken")).not.toThrow();
+  });
+
+  it("Fishing level gates hold for the three new spots when every Area is unlocked", () => {
+    const unlockedAreas = makeSnapshot({
+      player: {
+        completedDungeonIds: ["meadow-depths", "darkroot-hollow", "sewer-king", "shade-crypt"],
+      },
+    });
+    const engine = createEngine(content, seededRng(1), unlockedAreas);
+    expect(() => engine.selectFishingSpot("sewer-outflow")).toThrow(/fishing level 30/i);
+    expect(() => engine.selectFishingSpot("flooded-ossuary")).toThrow(/fishing level 45/i);
+    expect(() => engine.selectFishingSpot("glacial-melt")).toThrow(/fishing level 60/i);
+  });
+
+  it("Cooking level gates hold for cook-cave-eel (40) and cook-icefin (55)", () => {
+    const withEel = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-cave-eel", qty: 1 }] } }),
+    );
+    expect(() => withEel.selectRecipe("cook-cave-eel")).toThrow(/cooking level 40/i);
+
+    const withIcefin = createEngine(
+      content,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "raw-icefin", qty: 1 }] } }),
+    );
+    expect(() => withIcefin.selectRecipe("cook-icefin")).toThrow(/cooking level 55/i);
+  });
+
+  it("catch raw-cave-eel → cook-cave-eel → bank → Food Slot → eatFromSlot heals 16", () => {
+    const engine = createEngine(
+      content,
+      seededRng(7),
+      makeSnapshot({
+        player: {
+          hp: 10,
+          maxHp: 50,
+          skills: {
+            fishing: { level: 45, xp: xpForLevel(45) },
+            cooking: { level: 40, xp: xpForLevel(40) },
+            hitpoints: { level: 50, xp: xpForLevel(50) },
+          },
+          completedDungeonIds: ["meadow-depths", "darkroot-hollow", "sewer-king"],
+        },
+      }),
+    );
+    engine.selectFishingSpot("flooded-ossuary");
+
+    let caught = false;
+    for (let i = 0; i < 200 && !caught; i++) {
+      engine.tick();
+      caught = Boolean(engine.snapshot().bank.items.find((s) => s.itemId === "raw-cave-eel"));
+    }
+    expect(caught).toBe(true);
+
+    engine.selectRecipe("cook-cave-eel");
+    for (let i = 0; i < 4; i++) engine.tick();
+    expect(engine.snapshot().bank.items.find((s) => s.itemId === "cooked-cave-eel")?.qty).toBe(1);
+
+    engine.assignLoadoutSlot("food", "cooked-cave-eel", 0);
+    const healed: number[] = [];
+    engine.on("food-eaten", (e) => healed.push(e.healed));
+    engine.eatFromSlot(0);
+
+    expect(healed).toEqual([16]);
+    expect(engine.snapshot().player.hp).toBe(26);
   });
 });

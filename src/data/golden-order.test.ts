@@ -136,7 +136,19 @@ const NEW_ITEM_IDS = [
   "earth-blast-rune",
   "fire-blast-rune",
   "iron-arrow",
+  "raw-chicken",
+  "silk",
+  "raw-cave-eel",
+  "raw-icefin",
+  "cooked-chicken",
+  "cooked-cave-eel",
+  "cooked-icefin",
 ] as const;
+
+/** Cooking recipes #387 inserted immediately after cook-pike (indices 12-14); every pre-#251 id
+ * before cook-pike keeps its exact index, and every pre-#251 id from craft-leather-body onward is
+ * shifted right by three. */
+const WAVE_387_RECIPE_IDS = ["cook-chicken", "cook-cave-eel", "cook-icefin"] as const;
 
 const PRE_251_RECIPE_IDS = [
   "bronze-dagger",
@@ -220,11 +232,26 @@ describe("Golden order (#251): every pre-existing id keeps its exact array index
     });
   });
 
-  it("content.recipes: the pre-#251 ids occupy indices 0..27 unchanged, appended new ids follow at the end", () => {
+  it("content.recipes: pre-#251 ids through cook-pike keep their indices; #387 recipes follow; remaining pre-#251 ids follow shifted by three", () => {
     const currentIds = content.recipes.map((r) => r.id);
-    expect(currentIds).toEqual([...PRE_251_RECIPE_IDS, ...NEW_RECIPE_IDS]);
-    PRE_251_RECIPE_IDS.forEach((id, index) => {
+    const cookPikeIndex = PRE_251_RECIPE_IDS.indexOf("cook-pike");
+    const beforePike = PRE_251_RECIPE_IDS.slice(0, cookPikeIndex + 1);
+    const afterPike = PRE_251_RECIPE_IDS.slice(cookPikeIndex + 1);
+    expect(currentIds).toEqual([
+      ...beforePike,
+      ...WAVE_387_RECIPE_IDS,
+      ...afterPike,
+      ...NEW_RECIPE_IDS,
+    ]);
+    beforePike.forEach((id, index) => {
       expect(currentIds.indexOf(id), `"${id}" moved from its pre-#251 index ${index}`).toBe(index);
+    });
+    afterPike.forEach((id, index) => {
+      const expected = cookPikeIndex + 1 + WAVE_387_RECIPE_IDS.length + index;
+      expect(
+        currentIds.indexOf(id),
+        `"${id}" moved from its pre-#251 index ${cookPikeIndex + 1 + index}`,
+      ).toBe(expected);
     });
   });
 });
