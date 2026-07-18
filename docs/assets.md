@@ -187,24 +187,19 @@ Herblore). Art + `scripts/art` registration only — Theme wiring lands in a fol
 
 The activity overlays are original transparent 80×60 native-pixel assets under
 `src/assets/activity-overlays/`: Smithing's anvil, Cooking's campfire, Crafting's tanning rack,
-Herblore's cauldron, Fishing's shared planted rod/line/ripple (`activity-fishing-near.png`, interim),
-and five per-Theme fishing water props (#435) — meadow reedy pond, forest woodland stream, sewer
-outflow/grate pool, crypt flooded ossuary pool, and glacier ice hole — each quantized through
-`ingest-overlay.mjs --zone <Theme>`. The Theme props are **water-source only** (no planted rod);
-the player sprite holds the rod after #436. They are not CSS shapes and require no third-party
-provenance.
+and Herblore's cauldron. Fishing has no overlay — shoreline water is drawn into each Theme's
+`<theme>-near-fishing.png` backdrop variant (#451/#452); the player sprite holds the rod (#436).
 
 Backdrops use one native pixel per CSS pixel (160×120), while player/Monster sprites and activity
 overlays use the player grain: the overlay's 80×60 source is rendered at 2× as a 160×120 fixed,
 bottom-centred near-scene plane. Its subject is placed beside the separately-rendered player at
-native ground line y=50; it never embeds a player or maps Fishing variants per Area.
+native ground line y=50; it never embeds a player.
 
 `scripts/art/ingest-overlay.mjs` is the reproducible sibling of the icon ingest pipeline. It keys a
 flat-background source generation from the git-ignored `scripts/art/icon-gen-inbox/`, reuses
 `trace-core.mjs` to recover its chunky grid, then bottom-anchors the fitted subject onto a
 transparent 80×60 canvas. Run it manually (or `npm run art:overlay -- ...`) when an overlay needs
-adjustment. `scripts/art/overlays.mjs` records the committed placements, fits, and optional per-overlay
-`zone` Theme for fishing water props; `npm run
+adjustment. `scripts/art/overlays.mjs` records the committed placements and fits; `npm run
 art:overlays` rebuilds every entry once their raw inbox generations are present. `npm run art`
 rebuilds icons, sprites, and registered source-driven backdrop themes.
 

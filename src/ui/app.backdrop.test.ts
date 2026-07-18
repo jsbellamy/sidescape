@@ -22,23 +22,13 @@ const noopWindowChrome: WorkspaceChrome = {
 };
 
 describe("scene backdrop (#80)", () => {
-  it("uses one fixed, pixelated 2× near-scene overlay plane for every activity focus", () => {
-    const overlayNames = [
-      "anvil",
-      "cooking",
-      "crafting",
-      "cauldron",
-      "fishing-meadow",
-      "fishing-forest",
-      "fishing-sewer",
-      "fishing-crypt",
-      "fishing-glacier",
-    ];
+  it("uses one fixed, pixelated 2× near-scene overlay plane for every production activity focus", () => {
+    const overlayNames = ["anvil", "cooking", "crafting", "cauldron"];
     for (const name of overlayNames) {
       expect(stylesheet).toContain(`.prop-${name}`);
       expect(stylesheet).toContain(`url("./assets/activity-overlays/activity-${name}-near.png")`);
     }
-    expect(stylesheet).not.toContain("activity-fishing-near.png");
+    expect(stylesheet).not.toMatch(/\.prop-fishing-/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?inset:\s*0;/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?background-size:\s*160px 120px;/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?image-rendering:\s*pixelated;/);
@@ -149,23 +139,22 @@ describe("scene backdrop (#80)", () => {
 
     engine.selectFishingSpot("shrimp-pool"); // lumbry-meadows
     app.render();
-    expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe("meadow");
+    const backdrop = root.querySelector<HTMLElement>("#backdrop");
+    expect(backdrop?.dataset["theme"]).toBe("meadow");
+    expect(backdrop?.hasAttribute("data-fishing")).toBe(true);
     expect(root.querySelector<HTMLElement>("#scene")?.classList.contains("prop-active")).toBe(true);
-    expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe(
-      "prop-fishing-meadow",
-    );
-    expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(true);
   });
 
   it.each([
-    { spotId: "shrimp-pool", theme: "meadow", prop: "fishing-meadow" },
-    { spotId: "trout-run", theme: "forest", prop: "fishing-forest" },
-    { spotId: "sewer-outflow", theme: "sewer", prop: "fishing-sewer" },
-    { spotId: "flooded-ossuary", theme: "crypt", prop: "fishing-crypt" },
-    { spotId: "glacial-melt", theme: "glacier", prop: "fishing-glacier" },
+    { spotId: "shrimp-pool", theme: "meadow" },
+    { spotId: "trout-run", theme: "forest" },
+    { spotId: "sewer-outflow", theme: "sewer" },
+    { spotId: "flooded-ossuary", theme: "crypt" },
+    { spotId: "glacial-melt", theme: "glacier" },
   ])(
-    "shows the themed fishing prop for $spotId in the $theme Area (#439)",
-    ({ spotId, theme, prop }) => {
+    "swaps the near layer to the shoreline variant while fishing at $spotId (#452)",
+    ({ spotId, theme }) => {
       const engine = createEngine(
         content,
         seededRng(1),
@@ -182,8 +171,12 @@ describe("scene backdrop (#80)", () => {
       engine.selectFishingSpot(spotId);
       app.render();
 
-      expect(root.querySelector<HTMLElement>("#backdrop")?.dataset["theme"]).toBe(theme);
-      expect(root.querySelector<HTMLElement>("#activity-prop")?.className).toBe(`prop-${prop}`);
+      const backdrop = root.querySelector<HTMLElement>("#backdrop");
+      expect(backdrop?.dataset["theme"]).toBe(theme);
+      expect(backdrop?.hasAttribute("data-fishing")).toBe(true);
+      expect(root.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(true);
+      expect(stylesheet).toContain(`#backdrop[data-theme="${theme}"][data-fishing] .layer-near`);
+      expect(stylesheet).toContain(`url("./assets/backdrops/${theme}-near-fishing.png")`);
       expect(root.querySelector<HTMLElement>("#scene")?.classList.contains("prop-active")).toBe(
         true,
       );
@@ -200,7 +193,7 @@ describe("scene backdrop (#80)", () => {
     );
   });
 
-  it("sets prop-active on #scene while Smithing (or any Production / fishing prop) is visible, and clears it during combat", () => {
+  it("sets prop-active on #scene while Smithing or Fishing, and clears it during combat", () => {
     const smithingEngine = createEngine(
       fixtureContent,
       seededRng(1),
@@ -230,6 +223,42 @@ describe("scene backdrop (#80)", () => {
     const combatScene = combatRoot.querySelector<HTMLElement>("#scene");
     expect(combatScene?.classList.contains("prop-active")).toBe(false);
     expect(combatRoot.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(true);
+    expect(combatRoot.querySelector<HTMLElement>("#backdrop")?.hasAttribute("data-fishing")).toBe(
+      false,
+    );
+  });
+
+  it("does not set data-fishing during combat, idle, or Production", () => {
+    const idleEngine = createEngine(meadowsContent, seededRng(1));
+    const idleRoot = document.createElement("main");
+    const idleApp = mountApp(idleEngine, idleRoot, resolvedMeadowsContent, noopWindowChrome);
+    idleApp.render();
+    expect(idleRoot.querySelector<HTMLElement>("#backdrop")?.hasAttribute("data-fishing")).toBe(
+      false,
+    );
+
+    const combatEngine = createEngine(meadowsContent, seededRng(1));
+    const combatRoot = document.createElement("main");
+    const combatApp = mountApp(combatEngine, combatRoot, resolvedMeadowsContent, noopWindowChrome);
+    combatEngine.selectMonster("chicken");
+    combatApp.render();
+    expect(combatRoot.querySelector<HTMLElement>("#backdrop")?.hasAttribute("data-fishing")).toBe(
+      false,
+    );
+
+    const prodEngine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 5 }] } }),
+    );
+    const prodRoot = document.createElement("main");
+    const prodApp = mountApp(prodEngine, prodRoot, resolvedFixtureContent, noopWindowChrome);
+    prodEngine.selectRecipe("test-sword");
+    prodApp.render();
+    expect(prodRoot.querySelector<HTMLElement>("#backdrop")?.hasAttribute("data-fishing")).toBe(
+      false,
+    );
+    expect(prodRoot.querySelector<HTMLElement>("#activity-prop")?.hidden).toBe(false);
   });
 
   it("switches to the workshop theme and shows the anvil prop when Smithing starts, switching cleanly from whatever theme was showing before", () => {

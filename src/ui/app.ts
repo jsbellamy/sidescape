@@ -406,13 +406,16 @@ export function mountApp(
   function renderBackdrop(snap: Snapshot): void {
     const resolved = resolveTheme(snap, content, lastAreaId);
     if (resolved.areaId) lastAreaId = resolved.areaId;
-    el<HTMLElement>("#backdrop").dataset["theme"] = resolved.theme;
+    const backdropEl = el<HTMLElement>("#backdrop");
+    backdropEl.dataset["theme"] = resolved.theme;
+    backdropEl.toggleAttribute("data-fishing", Boolean(snap.fishing));
 
-    const prop = resolveProp(snap, resolved.theme);
+    const prop = resolveProp(snap);
     const propEl = el<HTMLElement>("#activity-prop");
+    const sceneEl = el<HTMLElement>("#scene");
     propEl.hidden = prop === null;
     propEl.className = prop ? `prop-${prop}` : "";
-    el<HTMLElement>("#scene").classList.toggle("prop-active", prop !== null);
+    sceneEl.classList.toggle("prop-active", prop !== null || Boolean(snap.fishing));
   }
 
   /** Renders the compact live stage. Persistent labels and numeric readouts live in cards. */
