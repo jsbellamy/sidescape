@@ -4,6 +4,7 @@ import type { ResolvedContent } from "../core/validate-content";
 import {
   monsterSprite,
   monsterSpriteSize,
+  playerFishingSprite,
   playerSprite,
   playerSpriteSize,
   spriteEdgePx,
@@ -461,6 +462,12 @@ export function mountApp(
       monsterBar.hidden = true;
       el("#monster-hp-fill").style.width = "0%";
       monsterImg.hidden = true;
+    }
+
+    const playerImg = el<HTMLImageElement>("#player-sprite");
+    const wantPlayerSprite = fishing ? playerFishingSprite : playerSprite;
+    if (playerImg.getAttribute("src") !== wantPlayerSprite) {
+      playerImg.setAttribute("src", wantPlayerSprite);
     }
   }
 

@@ -35,6 +35,8 @@ test("prop-active Smithing scene records dedicated screenshot evidence (#433)", 
 
 test("prop-active while fishing uses the same separation path (#433)", async ({ page }) => {
   await page.goto("/");
+  const standingSrc = await page.locator("#player-sprite").getAttribute("src");
+
   await page.locator("#menu-toggle").click();
   await page.locator('[data-destination="world"]').click();
   await page.locator('[data-spot="shrimp-pool"]').click();
@@ -42,6 +44,9 @@ test("prop-active while fishing uses the same separation path (#433)", async ({ 
   await expect(page.locator("#scene")).toHaveClass(/prop-active/);
   await expect(page.locator("#activity-prop")).toHaveClass(/prop-fishing-meadow/);
   await expect(page.locator("#backdrop")).toHaveAttribute("data-theme", "meadow");
+  const fishingSrc = await page.locator("#player-sprite").getAttribute("src");
+  expect(fishingSrc).toBeTruthy();
+  expect(fishingSrc).not.toBe(standingSrc);
 
   await page.locator("#menu-toggle").click();
   await expect(page.locator("#management-row")).toBeHidden();
