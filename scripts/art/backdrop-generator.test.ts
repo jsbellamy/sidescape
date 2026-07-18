@@ -89,7 +89,24 @@ describe("backdrop generator infrastructure (#263)", () => {
         near: { source: "glacier-near.png", alpha: "binary", maxColors: 48 },
       },
     });
-    expect(backdrops.map((entry) => entry.theme)).toEqual(["glacier", "workshop"]);
+    expect(backdrops.map((entry) => entry.theme)).toEqual([
+      "glacier",
+      "workshop",
+      "meadow",
+      "forest",
+      "sewer",
+      "crypt",
+      "glacier",
+    ]);
+    expect(backdrops.map((entry) => entry.variant ?? null)).toEqual([
+      null,
+      null,
+      "fishing",
+      "fishing",
+      "fishing",
+      "fishing",
+      "fishing",
+    ]);
   });
 
   it("writes exact <theme>-<layer>.png filenames for sky/mid/near", async () => {
