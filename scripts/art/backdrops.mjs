@@ -11,10 +11,26 @@ export const BACKDROP_HEIGHT = 120;
 /** Three exact periods are used for mechanical and human review. */
 export const REVIEW_PERIODS = 3;
 export const LAYER_NAMES = ["sky", "mid", "near"];
+export const VARIANT_LAYER_NAMES = ["near-fishing"];
+/** Layers accepted by backdrop ingest (`sky`/`mid`/`near` plus variant names). */
+export const INGEST_LAYER_NAMES = [...LAYER_NAMES, ...VARIANT_LAYER_NAMES];
+export const FISHING_VARIANT = "fishing";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const defaultSourceDir = resolve(moduleDir, "backdrop-sources");
-const layerAlpha = { sky: "opaque", mid: "binary", near: "binary" };
+const layerAlpha = { sky: "opaque", mid: "binary", near: "binary", "near-fishing": "binary" };
+
+function entryKey(def) {
+  return `${def.theme}:${def.variant ?? ""}`;
+}
+
+function isFishingVariantEntry(def) {
+  return def.variant === FISHING_VARIANT;
+}
+
+function layerNamesFor(def) {
+  return isFishingVariantEntry(def) ? VARIANT_LAYER_NAMES : LAYER_NAMES;
+}
 
 /** Approved compact sources; source layers are validated before every deterministic build. */
 export const backdrops = [
@@ -92,13 +108,20 @@ function assertLayers(def) {
     throw new Error("writeBackdrops: definition must be an object");
   if (!def.theme || typeof def.theme !== "string")
     throw new Error("writeBackdrops: theme is required");
+  if (def.variant !== undefined && def.variant !== FISHING_VARIANT) {
+    throw new Error(
+      `writeBackdrops: ${def.theme} has unknown variant ${JSON.stringify(def.variant)}`,
+    );
+  }
+  const expected = layerNamesFor(def);
   const declared = Object.keys(def.layers ?? {});
-  const missing = LAYER_NAMES.filter((name) => !declared.includes(name));
-  const extra = declared.filter((name) => !LAYER_NAMES.includes(name));
+  const missing = expected.filter((name) => !declared.includes(name));
+  const extra = declared.filter((name) => !expected.includes(name));
+  const label = isFishingVariantEntry(def) ? `${def.theme} (variant: fishing)` : def.theme;
   if (missing.length)
-    throw new Error(`writeBackdrops: ${def.theme} is missing layer(s) ${missing.join(", ")}`);
+    throw new Error(`writeBackdrops: ${label} is missing layer(s) ${missing.join(", ")}`);
   if (extra.length)
-    throw new Error(`writeBackdrops: ${def.theme} declares unknown layer(s) ${extra.join(", ")}`);
+    throw new Error(`writeBackdrops: ${label} declares unknown layer(s) ${extra.join(", ")}`);
 }
 
 function validateSourceFilename(source) {
@@ -132,7 +155,7 @@ export function validateBackdropDefinition(def) {
     }
     validateHslGamut(def.gamut, { label: `writeBackdrops: ${def.theme}.gamut` });
   }
-  for (const layerName of LAYER_NAMES) {
+  for (const layerName of layerNamesFor(def)) {
     const layer = def.layers[layerName];
     if (def.kind === "paint") {
       if (typeof layer !== "function")
@@ -214,7 +237,7 @@ function sourceReview(image) {
 
 async function prepareSourceDefinition(def, sourceDir) {
   const prepared = [];
-  for (const layerName of LAYER_NAMES) {
+  for (const layerName of layerNamesFor(def)) {
     const layer = def.layers[layerName];
     const path = resolve(sourceDir, layer.source);
     let image;
@@ -239,7 +262,7 @@ async function prepareSourceDefinition(def, sourceDir) {
 }
 
 function preparePaintDefinition(def) {
-  return LAYER_NAMES.map((layerName) => {
+  return layerNamesFor(def).map((layerName) => {
     const review = renderPeriodicLayer(def.layers[layerName]);
     assertHorizontalPeriod(review);
     return { layerName, review };
@@ -255,12 +278,15 @@ export async function writeBackdrops(
   destDir,
   { registry = backdrops, sourceDir = defaultSourceDir } = {},
 ) {
-  const seenThemes = new Set();
+  const seenEntries = new Set();
   for (const def of registry) {
     validateBackdropDefinition(def);
-    if (seenThemes.has(def.theme))
-      throw new Error(`writeBackdrops: duplicate theme ${JSON.stringify(def.theme)}`);
-    seenThemes.add(def.theme);
+    const key = entryKey(def);
+    if (seenEntries.has(key))
+      throw new Error(
+        `writeBackdrops: duplicate entry for theme ${JSON.stringify(def.theme)} variant ${JSON.stringify(def.variant ?? null)}`,
+      );
+    seenEntries.add(key);
     const prepared =
       def.kind === "source"
         ? await prepareSourceDefinition(def, sourceDir)

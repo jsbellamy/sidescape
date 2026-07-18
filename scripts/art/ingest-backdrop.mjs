@@ -6,7 +6,8 @@ import { PNG } from "pngjs";
 import {
   BACKDROP_HEIGHT,
   BACKDROP_WIDTH,
-  LAYER_NAMES,
+  FISHING_VARIANT,
+  INGEST_LAYER_NAMES,
   REVIEW_PERIODS,
   backdrops,
   validateBackdropDefinition,
@@ -53,10 +54,19 @@ function parseCrop(value, image) {
   return { x0, y0, x1, y1 };
 }
 
-function definitionFor(registry, theme) {
-  const def = registry.find((candidate) => candidate.theme === theme);
-  if (!def)
-    throw new Error(`${theme} is not registered; add its kind: source definition before ingesting`);
+function definitionFor(registry, theme, layer) {
+  const isVariantLayer = layer === "near-fishing";
+  const def = registry.find((candidate) => {
+    if (candidate.theme !== theme) return false;
+    if (isVariantLayer) return candidate.variant === FISHING_VARIANT;
+    return candidate.variant === undefined;
+  });
+  if (!def) {
+    const hint = isVariantLayer
+      ? `add a variant: ${FISHING_VARIANT} source definition before ingesting`
+      : "add its kind: source definition before ingesting";
+    throw new Error(`${theme} is not registered; ${hint}`);
+  }
   validateBackdropDefinition(def);
   if (def.kind !== "source")
     throw new Error(`${theme} is kind: paint; backdrop ingest requires kind: source`);
@@ -126,9 +136,11 @@ export function prepareBackdropIngest(input) {
     pitch = undefined,
     pitchY = undefined,
   } = input;
-  if (!LAYER_NAMES.includes(layer))
-    throw new Error(`unknown layer ${JSON.stringify(layer)}; expected sky, mid, or near`);
-  const def = definitionFor(registry, theme);
+  if (!INGEST_LAYER_NAMES.includes(layer))
+    throw new Error(
+      `unknown layer ${JSON.stringify(layer)}; expected ${INGEST_LAYER_NAMES.join(", ")}`,
+    );
+  const def = definitionFor(registry, theme, layer);
   const target = def.layers[layer];
   const tile = cropImage(image, crop ?? parseCrop(undefined, image));
   const keyed =
@@ -229,8 +241,9 @@ export async function writeBackdropIngestArtifacts({ sourcePath, oneXPath, strip
 
 export async function main(values = options(), { registry = backdrops } = {}) {
   if (!values.theme) throw new Error("--theme <theme> is required");
-  if (!values.layer) throw new Error("--layer <sky|mid|near> is required");
-  if (!LAYER_NAMES.includes(values.layer)) throw new Error("--layer must be sky, mid, or near");
+  if (!values.layer) throw new Error("--layer <sky|mid|near|near-fishing> is required");
+  if (!INGEST_LAYER_NAMES.includes(values.layer))
+    throw new Error(`--layer must be one of ${INGEST_LAYER_NAMES.join(", ")}`);
   const tolerance = Number(values.tolerance);
   const pitch = values.pitch === undefined ? undefined : Number(values.pitch);
   const pitchY = values["pitch-y"] === undefined ? undefined : Number(values["pitch-y"]);

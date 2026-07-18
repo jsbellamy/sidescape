@@ -703,3 +703,141 @@ describe("source-driven backdrop Theme gamut (#313)", () => {
     ).resolves.toEqual([sentinel, sentinel, sentinel]);
   });
 });
+
+function fishingVariantRegistry(gamut = PERMISSIVE_GAMUT) {
+  return [
+    ...sourceRegistry(gamut),
+    {
+      theme: "source-theme",
+      variant: "fishing" as const,
+      kind: "source" as const,
+      gamut,
+      layers: {
+        "near-fishing": {
+          source: "source-theme-near-fishing.png",
+          alpha: "binary" as const,
+          maxColors: 4,
+        },
+      },
+    },
+  ];
+}
+
+describe("fishing near-layer variant entries (#450)", () => {
+  it("accepts a variant entry and writes <theme>-near-fishing.png", async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-fishing-variant-"));
+    try {
+      await writeFixture(sourceDir, "source-theme-sky.png", 255);
+      await writeFixture(sourceDir, "source-theme-mid.png", 0);
+      await writeFixture(sourceDir, "source-theme-near.png", 255);
+      await writeFixture(sourceDir, "source-theme-near-fishing.png", 255);
+      await writeBackdrops(destDir, { registry: fishingVariantRegistry(), sourceDir });
+      const files = (await readdir(destDir)).sort();
+      expect(files).toEqual([
+        "source-theme-mid.png",
+        "source-theme-near-fishing.png",
+        "source-theme-near.png",
+        "source-theme-sky.png",
+      ]);
+      const input = PNG.sync.read(await readFile(join(sourceDir, "source-theme-near-fishing.png")));
+      const output = PNG.sync.read(await readFile(join(destDir, "source-theme-near-fishing.png")));
+      expect(Array.from(output.data)).toEqual(Array.from(input.data));
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows a glacier base entry and a fishing variant for the same theme", async () => {
+    const registry = [
+      ...sourceRegistry(),
+      {
+        theme: "source-theme",
+        variant: "fishing" as const,
+        kind: "source" as const,
+        gamut: PERMISSIVE_GAMUT,
+        layers: {
+          "near-fishing": {
+            source: "source-theme-near-fishing.png",
+            alpha: "binary" as const,
+            maxColors: 4,
+          },
+        },
+      },
+    ];
+    expect(() => registry.forEach((entry) => validateBackdropDefinition(entry))).not.toThrow();
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-fishing-coexist-"));
+    try {
+      await writeFixture(sourceDir, "source-theme-sky.png", 255);
+      await writeFixture(sourceDir, "source-theme-mid.png", 0);
+      await writeFixture(sourceDir, "source-theme-near.png", 255);
+      await writeFixture(sourceDir, "source-theme-near-fishing.png", 255);
+      await expect(writeBackdrops(destDir, { registry, sourceDir })).resolves.toBeUndefined();
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a base entry that declares near-fishing", () => {
+    const baseWithVariantLayer = {
+      ...sourceRegistry()[0]!,
+      layers: {
+        ...sourceRegistry()[0]!.layers,
+        "near-fishing": {
+          source: "source-theme-near-fishing.png",
+          alpha: "binary" as const,
+          maxColors: 4,
+        },
+      },
+    };
+    expect(() => validateBackdropDefinition(baseWithVariantLayer)).toThrow(/unknown layer/i);
+  });
+
+  it("rejects a fishing variant that declares sky/mid/near", () => {
+    const wrongVariant = {
+      theme: "source-theme",
+      variant: "fishing" as const,
+      kind: "source" as const,
+      gamut: PERMISSIVE_GAMUT,
+      layers: {
+        sky: { source: "source-theme-sky.png", alpha: "opaque" as const, maxColors: 4 },
+        mid: { source: "source-theme-mid.png", alpha: "binary" as const, maxColors: 4 },
+        near: { source: "source-theme-near.png", alpha: "binary" as const, maxColors: 4 },
+      },
+    };
+    expect(() => validateBackdropDefinition(wrongVariant)).toThrow(/missing layer/i);
+  });
+
+  it("rejects duplicate (theme, variant) pairs", async () => {
+    const duplicateVariant = fishingVariantRegistry();
+    duplicateVariant.push({ ...duplicateVariant[1]! });
+    const sourceDir = await mkdtemp(join(tmpdir(), "backdrop-fishing-dup-"));
+    try {
+      await writeFixture(sourceDir, "source-theme-sky.png", 255);
+      await writeFixture(sourceDir, "source-theme-mid.png", 0);
+      await writeFixture(sourceDir, "source-theme-near.png", 255);
+      await writeFixture(sourceDir, "source-theme-near-fishing.png", 255);
+      await expect(
+        writeBackdrops(destDir, { registry: duplicateVariant, sourceDir }),
+      ).rejects.toThrow(/duplicate entry/i);
+    } finally {
+      await rm(sourceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("ingests near-fishing with the same recovery semantics as near", () => {
+    const result = prepareBackdropIngest({
+      image: recoveredRaw("near", (x, y) =>
+        x < 20 || x >= 139 || y < 20 || y >= 99 ? null : [40, 50, 60],
+      ),
+      theme: "source-theme",
+      layer: "near-fishing",
+      registry: fishingVariantRegistry(),
+      pitch: 2,
+      pitchY: 2,
+    });
+    expect(result.compact.width).toBe(BACKDROP_WIDTH);
+    expect(result.compact.height).toBe(BACKDROP_HEIGHT);
+    expect(result.compact.data[3]).toBe(0);
+    expect(result.compact.data[(50 * BACKDROP_WIDTH + 50) * 4 + 3]).toBe(255);
+  });
+});
