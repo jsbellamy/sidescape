@@ -137,6 +137,7 @@ test("Frostspire Glacier backdrop evidence at native compact scale (#293)", asyn
               strength: { level: 70, xp: 737627 },
               defence: { level: 70, xp: 737627 },
               hitpoints: { level: 70, xp: 737627 },
+              fishing: { level: 60, xp: 737627 },
             },
             equipment: {
               weapon: "adamant-dagger",
@@ -162,9 +163,8 @@ test("Frostspire Glacier backdrop evidence at native compact scale (#293)", asyn
   await expect(page.locator("#management-row")).toBeHidden();
   await page.screenshot({ path: `${screenshots}/glacier-combat.png`, fullPage: true });
 
-  // Non-combat Glacier evidence: Frostspire has no Fishing spot, and Production forces town Theme.
-  // After real Frostspire combat, lastAreaId keeps glacier; select a Fishing spot in another Area
-  // to compose the native-scale fishing near-layer screenshot without leaving the retained Theme.
+  // Non-combat Glacier evidence: select Frostspire's glacial-melt Fishing spot for the
+  // glacier near-fishing near-layer screenshot while lastAreaId retains the glacier Theme.
   await page.locator("#menu-toggle").click();
   await page.locator('[data-destination="world"]').click();
   await page.locator('[data-area-select="frostspire"]').click();
