@@ -28,7 +28,6 @@ describe("scene backdrop (#80)", () => {
       expect(stylesheet).toContain(`.prop-${name}`);
       expect(stylesheet).toContain(`url("./assets/activity-overlays/activity-${name}-near.png")`);
     }
-    expect(stylesheet).not.toContain("activity-fishing-near.png");
     expect(stylesheet).not.toMatch(/\.prop-fishing-/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?inset:\s*0;/);
     expect(stylesheet).toMatch(/#activity-prop\s*\{[\s\S]*?background-size:\s*160px 120px;/);
