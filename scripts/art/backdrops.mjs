@@ -62,6 +62,73 @@ export const backdrops = [
       near: { source: "workshop-near.png", alpha: "binary", maxColors: 48 },
     },
   },
+  // Fishing shoreline near-layer variants (#451). Water drawn into the ground plane as
+  // full-width three-band tiles; each Theme declares its own gamut (glacier must equal base).
+  {
+    theme: "meadow",
+    kind: "source",
+    variant: "fishing",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [70, 230],
+      chromaticMaxSaturation: 70,
+    },
+    layers: {
+      "near-fishing": { source: "meadow-near-fishing.png", alpha: "binary", maxColors: 48 },
+    },
+  },
+  {
+    theme: "forest",
+    kind: "source",
+    variant: "fishing",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [70, 200],
+      chromaticMaxSaturation: 55,
+    },
+    layers: {
+      "near-fishing": { source: "forest-near-fishing.png", alpha: "binary", maxColors: 48 },
+    },
+  },
+  {
+    theme: "sewer",
+    kind: "source",
+    variant: "fishing",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [60, 160],
+      chromaticMaxSaturation: 45,
+    },
+    layers: {
+      "near-fishing": { source: "sewer-near-fishing.png", alpha: "binary", maxColors: 48 },
+    },
+  },
+  {
+    theme: "crypt",
+    kind: "source",
+    variant: "fishing",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [250, 300],
+      chromaticMaxSaturation: 45,
+    },
+    layers: {
+      "near-fishing": { source: "crypt-near-fishing.png", alpha: "binary", maxColors: 48 },
+    },
+  },
+  {
+    theme: "glacier",
+    kind: "source",
+    variant: "fishing",
+    gamut: {
+      neutralMaxSaturation: 20,
+      chromaticHueRange: [175, 240],
+      chromaticMaxSaturation: 65,
+    },
+    layers: {
+      "near-fishing": { source: "glacier-near-fishing.png", alpha: "binary", maxColors: 48 },
+    },
+  },
 ];
 
 export function renderPeriodicLayer(paint) {

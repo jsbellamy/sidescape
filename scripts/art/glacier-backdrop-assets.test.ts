@@ -26,7 +26,12 @@ const GLACIER_GAMUT = {
 const GLACIER_ANCHOR = ["#10263d", "#244763", "#4c718d", "#7f9eb3", "#b8cbd4", "#e8f0ed"];
 
 describe("Glacier source-driven backdrop assets (#293)", () => {
-  const glacier = backdrops.find((entry) => entry.theme === "glacier");
+  const glacier = backdrops.find(
+    (entry) => entry.theme === "glacier" && entry.variant === undefined,
+  );
+  const glacierFishing = backdrops.find(
+    (entry) => entry.theme === "glacier" && entry.variant === "fishing",
+  );
   const stylesheet = readFileSync("src/styles.css", "utf8");
   const artStyle = readFileSync("docs/art-style.md", "utf8");
 
@@ -36,7 +41,8 @@ describe("Glacier source-driven backdrop assets (#293)", () => {
   });
 
   it("registers Glacier as the first production source Theme with the pinned gamut and caps", () => {
-    expect(backdrops).toHaveLength(2);
+    // Base glacier + workshop, plus five fishing shoreline variants (#451).
+    expect(backdrops).toHaveLength(7);
     expect(backdrops[0]).toEqual({
       theme: "glacier",
       kind: "source",
@@ -48,6 +54,19 @@ describe("Glacier source-driven backdrop assets (#293)", () => {
       },
     });
     expect(glacier).toEqual(backdrops[0]);
+  });
+
+  it("pins the Glacier fishing variant gamut equal to the Glacier base entry (#451)", () => {
+    expect(glacierFishing).toEqual({
+      theme: "glacier",
+      kind: "source",
+      variant: "fishing",
+      gamut: GLACIER_GAMUT,
+      layers: {
+        "near-fishing": { source: "glacier-near-fishing.png", alpha: "binary", maxColors: 48 },
+      },
+    });
+    expect(glacierFishing!.gamut).toEqual(glacier!.gamut);
   });
 
   it("uses the pinned Glacier CSS fallbacks without changing shared drift contracts", () => {
