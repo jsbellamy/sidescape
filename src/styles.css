@@ -641,6 +641,9 @@ body {
     );
   animation: backdrop-drift 60s linear infinite;
 }
+#backdrop[data-theme="meadow"][data-fishing] .layer-near {
+  background-image: url("./assets/backdrops/meadow-near-fishing.png");
+}
 
 #backdrop[data-theme="forest"] .layer-sky {
   background-image:
@@ -657,6 +660,9 @@ body {
     url("./assets/backdrops/forest-near.png"),
     linear-gradient(to top, #0e1a10 0 var(--near-horizon), rgba(14, 26, 16, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
+}
+#backdrop[data-theme="forest"][data-fishing] .layer-near {
+  background-image: url("./assets/backdrops/forest-near-fishing.png");
 }
 
 #backdrop[data-theme="sewer"] .layer-sky {
@@ -675,6 +681,9 @@ body {
     linear-gradient(to top, #141410 0 var(--near-horizon), rgba(20, 20, 16, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
 }
+#backdrop[data-theme="sewer"][data-fishing] .layer-near {
+  background-image: url("./assets/backdrops/sewer-near-fishing.png");
+}
 
 #backdrop[data-theme="crypt"] .layer-sky {
   background-image:
@@ -691,6 +700,9 @@ body {
     url("./assets/backdrops/crypt-near.png"),
     linear-gradient(to top, #150f1c 0 var(--near-horizon), rgba(21, 15, 28, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
+}
+#backdrop[data-theme="crypt"][data-fishing] .layer-near {
+  background-image: url("./assets/backdrops/crypt-near-fishing.png");
 }
 
 #backdrop[data-theme="town"] .layer-sky {
@@ -726,6 +738,9 @@ body {
     url("./assets/backdrops/glacier-near.png"),
     linear-gradient(to top, #10263d 0 var(--near-horizon), rgba(16, 38, 61, 0) var(--tile-h));
   animation: backdrop-drift 60s linear infinite;
+}
+#backdrop[data-theme="glacier"][data-fishing] .layer-near {
+  background-image: url("./assets/backdrops/glacier-near-fishing.png");
 }
 
 /* Workshop interior (#434): Production backdrop theme. */
@@ -799,21 +814,6 @@ body {
 }
 .prop-cauldron {
   background-image: url("./assets/activity-overlays/activity-cauldron-near.png");
-}
-.prop-fishing-meadow {
-  background-image: url("./assets/activity-overlays/activity-fishing-meadow-near.png");
-}
-.prop-fishing-forest {
-  background-image: url("./assets/activity-overlays/activity-fishing-forest-near.png");
-}
-.prop-fishing-sewer {
-  background-image: url("./assets/activity-overlays/activity-fishing-sewer-near.png");
-}
-.prop-fishing-crypt {
-  background-image: url("./assets/activity-overlays/activity-fishing-crypt-near.png");
-}
-.prop-fishing-glacier {
-  background-image: url("./assets/activity-overlays/activity-fishing-glacier-near.png");
 }
 
 /* #433: when an activity prop is visible, separate prop (left) and player (right) horizontally. */

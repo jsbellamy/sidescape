@@ -1,4 +1,4 @@
-import type { Content, SkillName, Snapshot, Theme } from "../core/types";
+import type { Content, SkillName, Snapshot } from "../core/types";
 
 /** One Production Skill — a Recipe-driven Skill trained by crafting (see CONTEXT.md). Smithing
  * (#28/#113), Cooking (#115), Crafting (#116), and Herblore (#118) each get exactly one row here:
@@ -29,19 +29,14 @@ export type ProductionSkill = (typeof PRODUCTION_SKILLS)[number]["skill"];
  * separately-rendered player, and which one. Production props are theme-independent — descriptor-
  * backed (#181) off `production.skill` since #113 made production multi-skill: Smithing gets its
  * anvil, Cooking (#115) gets a range/campfire, Crafting (#116) gets a workbench/tanning rack,
- * Herblore (#118) gets a cauldron. Fishing props are theme-driven (#439): while fishing,
- * `resolveProp` takes the host Area's Theme (from `resolveTheme` in theme.ts) and yields
- * `fishing-<theme>` (meadow pond, forest stream, sewer outflow, crypt flooded pool, glacier ice
- * hole). Combat needs no overlay (the Monster is its foreground focus).
+ * Herblore (#118) gets a cauldron. Fishing shows no prop (#452): the shoreline lives in the
+ * themed near-layer variant instead. Combat needs no overlay (the Monster is its foreground focus).
  *
  * Returns a `prop-<key>` CSS class suffix (see styles.css), or null for "no prop this activity".
  */
-export function resolveProp(snap: Snapshot, theme: Theme): string | null {
+export function resolveProp(snap: Snapshot): string | null {
   const skill = snap.production?.skill;
-  return (
-    PRODUCTION_SKILLS.find((d) => d.skill === skill)?.prop ??
-    (snap.fishing ? `fishing-${theme}` : null)
-  );
+  return PRODUCTION_SKILLS.find((d) => d.skill === skill)?.prop ?? null;
 }
 
 /** Replaces the `renderScene` emoji ternary: the production scene label for `skill`, or the raw

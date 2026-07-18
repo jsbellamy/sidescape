@@ -5,17 +5,7 @@ import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 
 const overlaysDir = fileURLToPath(new URL("../assets/activity-overlays", import.meta.url));
-const overlays = [
-  "anvil",
-  "cooking",
-  "crafting",
-  "cauldron",
-  "fishing-meadow",
-  "fishing-forest",
-  "fishing-sewer",
-  "fishing-crypt",
-  "fishing-glacier",
-];
+const overlays = ["anvil", "cooking", "crafting", "cauldron"];
 
 describe("activity near-scene overlays (#141)", () => {
   for (const name of overlays) {
