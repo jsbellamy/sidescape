@@ -8,6 +8,7 @@ import { encodePng } from "../../scripts/art/write-png.mjs";
 import {
   monsterSprite,
   monsterSpriteSize,
+  playerFishingSprite,
   playerSprite,
   playerSpriteSize,
   SPRITE_GRAIN,
@@ -18,6 +19,12 @@ describe("sprites", () => {
   it("gives the player a sprite URL", () => {
     expect(playerSprite).toEqual(expect.any(String));
     expect(playerSprite.length).toBeGreaterThan(0);
+  });
+
+  it("gives the fishing pose a distinct URL from the standing pose", () => {
+    expect(playerFishingSprite).toEqual(expect.any(String));
+    expect(playerFishingSprite.length).toBeGreaterThan(0);
+    expect(playerFishingSprite).not.toBe(playerSprite);
   });
 
   it("maps every production Monster sprite, including dungeon-only bosses, to a distinct URL", () => {
@@ -70,7 +77,7 @@ describe("sprites", () => {
     // The runtime size map (sprites.ts) is a hand-maintained parallel of the art build registry
     // (scripts/art/sprites.mjs); this guards them from drifting, so the on-screen box is always the
     // real canvas x grain. Player poses (`player`, `player-fishing`, …) live in the registry too
-    // but are served by playerSpriteSize / a follow-up wiring slice — not monsterSprites.
+    // but are served by playerSpriteSize — not monsterSprites.
     for (const { name, size } of sprites) {
       if (name.startsWith("player")) continue;
       expect(monsterSpriteSize(name), name).toBe(size);

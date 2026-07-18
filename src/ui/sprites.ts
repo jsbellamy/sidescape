@@ -20,6 +20,7 @@ import graveRobberUrl from "../assets/sprites/grave-robber.png";
 import hollowWardenUrl from "../assets/sprites/hollow-warden.png";
 import iceTrollUrl from "../assets/sprites/ice-troll.png";
 import iceWraithUrl from "../assets/sprites/ice-wraith.png";
+import playerFishingUrl from "../assets/sprites/player-fishing.png";
 import playerUrl from "../assets/sprites/player.png";
 import rimeSorcererUrl from "../assets/sprites/rime-sorcerer.png";
 import sewerKingUrl from "../assets/sprites/sewer-king.png";
@@ -56,6 +57,9 @@ interface SpriteAsset {
  * Combat-scene sprite for the player. See docs/assets.md for provenance.
  */
 export const playerSprite: string = playerUrl;
+
+/** Fishing pose for the player. Same native canvas as `playerSprite` (48). */
+export const playerFishingSprite: string = playerFishingUrl;
 
 /** The player's native canvas edge (48 — the ingested original-art hero, #264). */
 export const playerSpriteSize = 48;

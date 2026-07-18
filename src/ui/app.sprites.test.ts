@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createEngine } from "../core/engine";
 import { fixtureContent } from "../core/testing/fixture-content";
 import { makeSnapshot } from "../core/testing/make-snapshot";
@@ -12,7 +12,7 @@ import { seededRng } from "../core/rng";
 import { resolveContent } from "../core/validate-content";
 import { mountApp } from "./app";
 import type { WorkspaceChrome } from "./workspace-chrome";
-import { playerSprite } from "./sprites";
+import { playerFishingSprite, playerSprite, spriteEdgePx, playerSpriteSize } from "./sprites";
 
 const resolvedMeadowsContent = resolveContent(meadowsContent);
 const resolvedDarkrootContent = resolveContent(darkrootContent);
@@ -166,5 +166,86 @@ describe("combat scene sprites", () => {
 
     const monsterImg = root.querySelector<HTMLImageElement>("#monster-sprite");
     expect(monsterImg?.hidden).toBe(true);
+  });
+});
+
+describe("player pose per activity", () => {
+  function playerImg(root: HTMLElement) {
+    return root.querySelector<HTMLImageElement>("#player-sprite");
+  }
+
+  it("shows the standing pose on idle boot", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerSprite);
+    expect(playerImg(root)?.style.getPropertyValue("--sprite-edge")).toBe(
+      `${spriteEdgePx(playerSpriteSize)}px`,
+    );
+  });
+
+  it("swaps to the fishing pose while fishing", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+
+    engine.selectFishingSpot("pond");
+    app.render();
+
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerFishingSprite);
+    expect(playerImg(root)?.style.getPropertyValue("--sprite-edge")).toBe(
+      `${spriteEdgePx(playerSpriteSize)}px`,
+    );
+  });
+
+  it("restores the standing pose when switching from fishing to combat", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+
+    engine.selectFishingSpot("pond");
+    app.render();
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerFishingSprite);
+
+    engine.selectMonster("dummy");
+    app.render();
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerSprite);
+  });
+
+  it("restores the standing pose when switching from fishing to production", () => {
+    const engine = createEngine(
+      fixtureContent,
+      seededRng(1),
+      makeSnapshot({ bank: { items: [{ itemId: "bar", qty: 5 }] } }),
+    );
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+
+    engine.selectFishingSpot("pond");
+    app.render();
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerFishingSprite);
+
+    engine.selectRecipe("test-sword");
+    app.render();
+    expect(playerImg(root)?.getAttribute("src")).toBe(playerSprite);
+  });
+
+  it("does not reassign the player sprite src on ticks where the pose is unchanged", () => {
+    const engine = createEngine(fixtureContent, seededRng(1));
+    const root = document.createElement("main");
+    const app = mountApp(engine, root, resolvedFixtureContent, noopWindowChrome);
+
+    engine.selectFishingSpot("pond");
+    app.render();
+
+    const img = playerImg(root)!;
+    const setAttribute = vi.spyOn(img, "setAttribute");
+
+    app.render();
+    app.render();
+
+    const srcAssignments = setAttribute.mock.calls.filter(([name]) => name === "src");
+    expect(srcAssignments).toHaveLength(0);
   });
 });
